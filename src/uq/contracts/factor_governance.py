@@ -69,13 +69,13 @@ class FactorRegistry:
 
     @staticmethod
     def validate_identities(manifest: dict[str, Any]) -> None:
-        from .gate_contracts import canonical_v2_identities
+        from .gate_contracts import factor_manifest_identities
 
         unsigned = {
             key: value for key, value in manifest.items()
             if key not in {"generation_id", "manifest_digest_sha256"}
         }
-        expected_generation, expected_digest = canonical_v2_identities(unsigned)
+        expected_generation, expected_digest = factor_manifest_identities(unsigned)
         if manifest["generation_id"] != expected_generation:
             raise ContractError("factor manifest generation mismatch")
         if manifest["manifest_digest_sha256"] != expected_digest:

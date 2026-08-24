@@ -516,26 +516,27 @@ Minimum acceptance:
 | ID | Requirement | Phase | Blocked By | Test ID | Status |
 |---|---|---|---|---|---|
 | F1 | Factor code cannot read unpublished canonical partitions. | 0/3 | None for single-date full-frame reads; range/filter semantics need Phase 2A | `test_factor_context_reads_published_data_only` | Partial: single-date case executable now |
-| F2 | Insufficient history emits null without failing unrelated rows. | 3 | Factor engine | TBD-F2 | Blocked |
-| F3 | Implementation change changes fingerprint and requires reviewed set-version action. | 2 | Registry/config governance | TBD-F3 | Blocked |
-| F4 | Identical locked-environment runs produce identical artifact checksums. | 4A/5 | Engine, serialization profile, factor store | TBD-F4 | Blocked |
-| F5 | Future-dated input cannot affect a historical partition. | 3 | Engine/input selection | TBD-F5 | Blocked |
-| F6 | Adjusted return factors do not use raw close. | 4 | Adjusted-input prerequisite and adjustment lineage gate | TBD-F6 | Blocked |
-| F7 | Immutable factor partitions reject overwrite. | 5 | Factor store | TBD-F7 | Blocked |
+| F2 | Insufficient history emits null without failing unrelated rows. | 3 | Factor engine | `tests/test_raw_price_engine.py::test_raw_price_factor_values_and_insufficient_history_nulls` | Passed for implemented raw-price subset |
+| F3 | Implementation change changes fingerprint and requires reviewed set-version action. | 2/6 | Registry/config governance | `tests/test_release_acceptance.py::test_f3_changed_semantics_cannot_reuse_old_version` | Passed |
+| F4 | Identical locked-environment runs produce identical artifact checksums. | 4A/5 | Engine, serialization profile, factor store | `tests/test_repro_staging.py::test_repeated_staging_outputs_are_byte_and_logically_identical`; `tests/test_release_acceptance.py::test_f4_identical_runs_produce_identical_artifacts` | Passed for covered locked environment; cross-platform logical only |
+| F5 | Future-dated input cannot affect a historical partition. | 3 | Engine/input selection | `tests/test_raw_price_engine.py::test_future_partition_cannot_affect_historical_compute` | Passed |
+| F6 | Adjusted return factors do not use raw close. | 4 | Adjusted-input prerequisite and adjustment lineage gate | `tests/test_adjusted_price_engine.py::test_raw_close_substitution_detected` plus shared negative suite | Passed for two-input implementation subset |
+| F7 | Immutable factor partitions reject overwrite. | 5 | Factor store | `tests/test_release_acceptance.py::test_f7_overwrite_rejected` | Passed |
 | F8a | Tampered canonical data prevents canonical reads. | 0 | External trust/path hardening | `tests/test_canonical_v2_runtime.py::test_reader_requires_external_anchor_and_path_identity` | Passed for canonical-v2 |
-| F8b | Tampered factor data prevents factor reads. | 5 | Factor store/reader | TBD-F8b | Blocked |
+| F8b | Tampered factor data prevents factor reads. | 5 | Factor store/reader | `tests/test_release_acceptance.py::test_f8b_tampered_data_prevents_factor_read` | Passed |
 | F9a | Tampered canonical manifest fails schema/digest/anchor/path verification. | 0 | canonical-v2 identity, external anchor, path identity | `tests/test_canonical_v2_runtime.py::test_generation_excludes_run_metadata`, `test_rejects_invalid_uuid_datetime_date_dtype_map` | Passed for canonical-v2 runtime |
-| F9b | Tampered factor manifest fails schema/digest/anchor/path verification. | 2/5 | Factor manifest schema/reader and store | `tests/test_factor_governance.py::test_manifest_identity_mutations_are_rejected` (schema/identity only) | Partial; store path blocked |
-| F10 | Changed semantics cannot reuse old semantic version. | 2 | Registry validation | TBD-F10 | Blocked |
-| F11 | Missing dependency rejects computation. | 2A/3 | Registry and engine interface | TBD-F11 | Blocked |
-| F12a | Canonical quality report missing/mismatch rejects publication/read binding. | 2 | `quality_report.v1` binding and canonical publication | TBD-F12a | Blocked |
-| F12b | Factor null rate above threshold rejects publication. | 5 | Factor quality gate/store | TBD-F12b | Blocked |
+| F8c | Factor partition physical path matches manifest identity. | 5 | Factor store reader | `tests/test_release_acceptance.py::test_factor_path_identity_rejects_copied_partition` | Passed |
+| F9b | Tampered factor manifest fails schema/digest/anchor/path verification. | 2/5 | Factor manifest schema/reader and store | `tests/test_factor_governance.py::test_manifest_identity_mutations_are_rejected`; `tests/test_release_acceptance.py::test_f9b_tampered_manifest_fails_verification`; `tests/test_release_acceptance.py::test_factor_path_identity_rejects_copied_partition` | Passed for schema, digest, and physical identity on the accepted-store path |
+| F10 | Changed semantics cannot reuse old semantic version. | 2/6 | Registry validation | `tests/test_release_acceptance.py::test_f3_changed_semantics_cannot_reuse_old_version` | Passed |
+| F11 | Missing dependency rejects computation. | 2A/3 | Registry and engine interface | `tests/test_raw_price_engine.py::test_duplicate_and_missing_keys_rejected`; `tests/test_adjusted_price_engine.py::test_missing_dependency_rejected` | Passed |
+| F12a | Quality report missing/mismatch rejects publication/read binding. | 2/5/6 | `quality_report.v1` binding and factor publication/read | `tests/test_release_acceptance.py::test_f12a_missing_quality_report_rejects_publication`; `test_f12a_mismatched_quality_report_rejects_publication`; `test_f12a_tampered_quality_report_rejects_publication`; `test_f12a_failed_quality_report_rejects_publication` | Passed for factor-v1 publication and accepted-store read path; canonical publication remains a separate gate |
+| F12b | Factor null rate above threshold rejects publication. | 5 | Factor quality gate/store | `tests/test_release_acceptance.py::test_null_rate_threshold_rejects_publication` | Passed |
 | F13a | Duplicate canonical keys reject canonical publication. | 0 | Canonical primary-key validation in publish/read path | `tests/test_canonical_v2_runtime.py::test_rejects_invalid_uuid_datetime_date_dtype_map` plus schema validation | Passed for canonical-v2 runtime |
-| F13b | Duplicate factor keys reject factor publication. | 5 | Factor quality gate/store | TBD-F13b | Blocked |
+| F13b | Duplicate factor keys reject factor publication. | 5 | Factor quality gate/store | `tests/test_release_acceptance.py::test_f13b_duplicate_keys_reject_publication` | Passed |
 | F14a | Stable canonical generation excludes run metadata and changes on content/lineage change. | 0 | canonical-v2 identities/golden vectors | `tests/test_canonical_v2_runtime.py::test_generation_excludes_run_metadata` | Passed |
-| F14b | Factor generation changes on any bound input/definition/artifact/quality/partition change. | 2/5 | Factor manifest/generation contract and store | `tests/test_factor_governance.py::test_reviewed_basic_v1_registry_loads_and_manifest_matches` (run metadata stability only) | Partial; full mutation matrix blocked |
+| F14b | Factor generation changes on bound content/lineage; report checksum changes manifest digest only. | 2/5 | Factor manifest/generation contract and store | `tests/test_release_acceptance.py::test_f14b_generation_changes_on_each_binding_change` | Passed for upstream generation/checksum, partition key, and digest-only quality checksum behavior; definition/artifact mutation remains registry-gated |
 
-F1 single-date canonical reads and Phase 0 sub-items F8a/F9a/F13a/F14a have executable runtime evidence. Phase 2 provides partial F9b/F14b governance evidence but does not complete factor-store acceptance. All remaining items stay release gates.
+Implemented release acceptance sub-items now have executable runtime evidence. Remaining release gates are canonical-publication F12a coverage and broader platform certification for F4; factor-v1 quality binding now has executable missing, mismatch, tamper, failed-report, and read-path evidence.
 
 ## 12. Explicit Non-Goals for v0
 

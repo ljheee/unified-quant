@@ -46,7 +46,8 @@
         "properties": {
           "name": {"type": "string"},
           "version": {"$ref": "#/$defs/semver"},
-          "implementation_fingerprint": {"$ref": "#/$defs/sha256"}
+          "implementation_fingerprint": {"$ref": "#/$defs/sha256"},
+          "minimum_history": {"type": "integer", "minimum": 0}
         }
       }
     },

@@ -67,6 +67,26 @@ def canonical_v2_identities(manifest_without_digests: dict[str, Any]) -> tuple[s
     return generation_id, sha256_json(digest_payload)
 
 
+def factor_manifest_identities(manifest_without_digests: dict[str, Any]) -> tuple[str, str]:
+    """Derive factor generation without the post-binding quality artifact checksum."""
+    generation_payload = {
+        key: value for key, value in manifest_without_digests.items()
+        if key not in {"run_id", "created_at", "trust_anchor_sha256"}
+    }
+    if isinstance(generation_payload.get("quality"), dict):
+        generation_payload["quality"] = {
+            key: value for key, value in generation_payload["quality"].items()
+            if key != "report_checksum_sha256"
+        }
+    generation_id = sha256_json(generation_payload)
+    digest_payload = {
+        key: value for key, value in manifest_without_digests.items()
+        if key != "manifest_digest_sha256"
+    }
+    digest_payload["generation_id"] = generation_id
+    return generation_id, sha256_json(digest_payload)
+
+
 def adjustment_snapshot_generation(payload: dict[str, Any]) -> str:
     stable = {key: value for key, value in payload.items() if key != "generation_id"}
     return sha256_json(stable)

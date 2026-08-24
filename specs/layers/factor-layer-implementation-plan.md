@@ -75,8 +75,9 @@ This is a gated plan, not a parallel roadmap.
 Current gate status:
 
 - Phase 0/1 gates have exited with green runtime evidence.
-- Phase 2 is in final remediation after independent review; it has not exited yet. The reviewed basic-v1 registry, manifest identity validation, universe governance, and quality report binding exist.
-- Phase 2A, `FactorEngine.compute()` implementation, raw-price factors, `FactorStore`, immutable factor partitions, and any factor/training computation chain remain blocked until Phase 2 exits and each downstream gate opens.
+- Phase 2 has exited after independent review remediation: reviewed basic-v1 registry, typed manifest identities, universe governance, quality binding, field decision table, and negative acceptance evidence are green.
+- Phase 2A has exited: typed request/result contracts, deterministic plan compilation, facade equivalence, and typed invalid-request tests are green. Calculation remains intentionally unimplemented.
+- Phase 3 raw-price factors are the next gate; `FactorStore` and immutable publication remain later gates.
 - Later phases remain gated by their declared contracts and acceptance criteria.
 Implementation status correction: the original Phase 0/1 blockers have been closed by canonical-v2 runtime work, persisted adjustment snapshot runtime, external-anchor/path validation, governed visibility, and exchange-style formula coverage. Gate reports are generated under ignored local `.gate/` evidence after each working-tree change.
 
@@ -420,9 +421,10 @@ Exit criteria:
 
 ## Immediate Next Actions
 
-Immediate actions are to close Phase 2 review evidence and re-run `scripts/run_gate.sh` after every working-tree change while CI uploads/archives `.gate/gate-report.json`, requirements, and digest; local `.gate/` remains ignored.
+Immediate action is to preserve the latest successful unified-gate evidence, then resolve the remaining release gate before declaring layer release.
 
-1. Implement typed loading/validation for `factor_manifest.v1.json`, then freeze factor-set/config schemas and registry.
-2. Add universe snapshot storage/reuse/error semantics and canonical quality binding.
-3. Expand planned F8b/F9b/F12a/b/F13a/b/F14a/b IDs into executable runtime tests as their phase opens.
-4. Preserve the frozen simplified facade + internal `FactorComputeRequest` API decision in source-spec §10 before opening Phase 2A or any factor calculation.
+1. Run and archive `scripts/run_gate.sh` outputs: `.gate/gate-report.json`, requirements artifact, and digest; CI must invoke the same runner.
+2. Keep factor-v1 F12a evidence aligned with the four report negative paths plus reader enforcement.
+3. Keep F4 scope explicit: certify only covered locked environments; compare other platforms through logical fingerprints only.
+4. Complete canonical-publication F12a coverage separately before claiming the broader canonical release gate.
+5. Before release, rerun the full suite plus focused contract reviews and update statuses only from recorded gate evidence.

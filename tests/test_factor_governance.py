@@ -52,14 +52,14 @@ def test_reviewed_basic_v1_registry_loads_and_manifest_matches():
     assert [item["name"] for item in definition.factors][0] == "volume_ratio_20d"
     registry.resolve_dependencies(definition)
     document = manifest()
-    from uq.contracts.gate_contracts import canonical_v2_identities
-    generation, digest = canonical_v2_identities({k:v for k,v in document.items() if k not in {"generation_id","manifest_digest_sha256"}})
+    from uq.contracts.gate_contracts import factor_manifest_identities
+    generation, digest = factor_manifest_identities({k:v for k,v in document.items() if k not in {"generation_id","manifest_digest_sha256"}})
     document.update(generation_id=generation, manifest_digest_sha256=digest)
     registry.validate_manifest(document)
     other = copy.deepcopy(document)
     other["run_id"] = "00000000-0000-4000-8000-000000000002"
     other["created_at"] = "2026-08-22T16:00:00+08:00"
-    new_generation, new_digest = canonical_v2_identities({k:v for k,v in other.items() if k not in {"generation_id","manifest_digest_sha256"}})
+    new_generation, new_digest = factor_manifest_identities({k:v for k,v in other.items() if k not in {"generation_id","manifest_digest_sha256"}})
     other.update(generation_id=new_generation, manifest_digest_sha256=new_digest)
     assert document["generation_id"] == other["generation_id"]
     assert document["manifest_digest_sha256"] != other["manifest_digest_sha256"]
@@ -92,8 +92,8 @@ def test_manifest_identity_mutations_are_rejected():
 
 
 def _finalize(document):
-    from uq.contracts.gate_contracts import canonical_v2_identities
-    generation, digest = canonical_v2_identities({k:v for k,v in document.items() if k not in {"generation_id","manifest_digest_sha256"}})
+    from uq.contracts.gate_contracts import factor_manifest_identities
+    generation, digest = factor_manifest_identities({k:v for k,v in document.items() if k not in {"generation_id","manifest_digest_sha256"}})
     document.update(generation_id=generation, manifest_digest_sha256=digest)
 
 
