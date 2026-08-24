@@ -192,7 +192,7 @@ For future announcement-driven datasets, factors must consume an explicit
 Fallback means “another complete eligible source”, not silently accepting an
 incomplete source.
 
-## 6. Merge Policy
+## 5A. Merge Policy Boundary
 
 Cross-source merging has three field classes:
 

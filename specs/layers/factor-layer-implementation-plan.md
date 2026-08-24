@@ -2,7 +2,7 @@
 
 Status: **gated implementation order v0.9; plan-exit contract preparation complete; Phase 0/1 gates exited**  
 Source spec: `specs/layers/factor-layer-spec.md`  
-Current boundary: `FactorContext`, canonical publication, and manifest governance prototype are implemented. `FactorRegistry`, `FactorEngine`, `FactorStore`, factor manifests, and the factor quality gate are not implemented.
+Current boundary: `FactorContext`, canonical-v2 publication, adjustment snapshot governance, `FactorRegistry`, factor manifest validation, and universe/quality artifact governance are implemented. `FactorEngine`, `FactorStore`, executable factors, and immutable factor partitions are not.
 
 ## 0. Scope and Non-Goals
 
@@ -26,7 +26,7 @@ The implementation plan intentionally narrows execution order but must preserve 
 | §3 Factor contract and versioning | Phase 2 registry/config governance; adjusted prerequisites remain deferred to Phase 4. |
 | §4 Decision-time semantics | Applied in Phase 2A request/window contracts and every publication phase. |
 | §5 Price adjustment rule | Phase 1 adjustment lineage and Phase 4 adjusted inputs. |
-| §6 Merge Policy | Explicitly out of scope for factor-layer v0; canonical routing owns merge policy. No factor implementation may bypass it. |
+| §5A Merge Policy Boundary | Explicitly out of scope for factor-layer v0; canonical routing owns merge policy. No factor implementation may bypass it. |
 | §6 Identity and Store Layout | Phase 5 immutable Hive-like store. |
 | §6A Manifest and generation contract | Sole machine schema in `config/schemas/manifests/factor_manifest.v1.json`; §6A is the human summary. Phase 2 enforces identities. |
 | §7 Initial Factor Set | Split by input readiness: raw-price subset in Phase 3, adjusted subset in Phase 4. |
@@ -76,9 +76,10 @@ Current gate status:
 
 - Phase 0/1 gates have exited with green runtime evidence.
 - Phase 2 is in final remediation after independent review; it has not exited yet. The reviewed basic-v1 registry, manifest identity validation, universe governance, and quality report binding exist.
-- Phase 2A remains blocked before any executable factor calculation.
+- Phase 2A, `FactorEngine.compute()` implementation, raw-price factors, `FactorStore`, immutable factor partitions, and any factor/training computation chain remain blocked until Phase 2 exits and each downstream gate opens.
 - Later phases remain gated by their declared contracts and acceptance criteria.
 Implementation status correction: the original Phase 0/1 blockers have been closed by canonical-v2 runtime work, persisted adjustment snapshot runtime, external-anchor/path validation, governed visibility, and exchange-style formula coverage. Gate reports are generated under ignored local `.gate/` evidence after each working-tree change.
+
 ## Phase 0 — Canonical Manifest Governance Gate
 
 Goal: make canonical lineage trustworthy enough to support factor publication.
@@ -184,7 +185,7 @@ Entry criteria:
 Tasks:
 
 1. Add `factor_manifest.v1.json` under `config/schemas/manifests/`. Required fields must include the five-tuple partition identity, decision/run-visible timestamps, ordered input bindings with upstream generation/checksum/schema identity, adjustment snapshot/effective-table binding when applicable, per-factor definitions/fingerprints, universe snapshot, output artifact/logical fingerprints, serialization profile ID, engine/package provenance, quality status/policy/report checksum, run ID, created timestamp, manifest digest, and content generation ID.
-   Before freezing the schema, produce a field decision table with columns field, origin (`source-spec §6A`, plan addition, rejected), type/format, required/null rule, identity participation, validation error, and fixture coverage. After review, update §6A once as the sole normative required-field list; this plan may summarize it but cannot define a competing list.
+   The approved field decision table is `specs/layers/contracts/factor-manifest-field-decision-v1.md`. `config/schemas/manifests/factor_manifest.v1.json` is the sole machine-enforceable required-field list; source-spec §6A is its human-readable summary and must not introduce competing fields.
 2. Add a reviewed factor-set definition/config schema, including member names, versions, dependencies, required columns, fingerprints, numeric policy, and quality policy binding.
 3. Verify no stale `turnover_20d` remains in normative tables, registry examples, or tests; the source-spec primary table already uses `volume_ratio_20d`. Keep only the explicit naming-history reference.
 4. Implement registry validation:
