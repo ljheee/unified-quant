@@ -253,7 +253,7 @@ def test_adjustment_golden_provenance_v2_official_cases():
     assert provenance["certification"] == "pending-authoritative-source"
 
     event_types = {case["event_type"] for case in provenance["cases"]}
-    assert event_types == {"cash", "cash_bonus_transfer", "bonus_transfer", "rights"}
+    assert event_types == {"cash", "cash_bonus_transfer", "rights"}
     for case in provenance["cases"]:
         for evidence_name in ("event_evidence", "pre_close_evidence", "reference_price_evidence"):
             evidence = case[evidence_name]
@@ -262,13 +262,15 @@ def test_adjustment_golden_provenance_v2_official_cases():
         if case["case_id"] == "szse-300866-2024-cash-transfer":
             assert case["pre_close_evidence"]["kind"] == "exchange-reference"
             assert "szse.cn/api/report/ShowReport/data" in case["pre_close_evidence"]["locator"]
-            assert case["reference_price_evidence"]["kind"] == "derived-formula"
-        if case["instrument"] in {"000725.XSHE", "003026.XSHE"}:
+            assert case["reference_price_evidence"]["kind"] == "exchange-reference"
+            assert case["reference_price_evidence"]["file_sha256"] == case["pre_close_evidence"]["file_sha256"]
+        if case["instrument"] in {"000725.XSHE", "003026.XSHE", "300475.XSHE"}:
             assert case["pre_close_evidence"]["kind"] == "exchange-reference"
             assert "szse.cn/api/report/ShowReport/data" in case["pre_close_evidence"]["locator"]
         if case["event_type"] == "rights":
-            assert case["inputs"]["rights_per_ten"] == 3.0
-            assert case["expected_ex_right_price"] == pytest.approx(11.1669230769)
+            assert case["instrument"] == "300475.XSHE"
+            assert case["inputs"]["rights_per_ten"] == 1.0
+            assert case["expected_ex_right_price"] == pytest.approx(18.2790909091)
             assert case["reference_price_evidence"]["kind"] == "derived-formula"
 
 

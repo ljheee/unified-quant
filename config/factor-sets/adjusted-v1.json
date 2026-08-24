@@ -1,0 +1,44 @@
+{
+  "set_definition_version": 1,
+  "factor_set": "adjusted",
+  "factor_version": "1.0.0",
+  "status": "reviewed",
+  "required_columns": [
+    "instrument",
+    "datetime",
+    "close",
+    "adj_factor"
+  ],
+  "quality_policy": "reject_all",
+  "quality_thresholds": {
+    "null_rate_maximum": 0.5,
+    "coverage_minimum": 0
+  },
+  "dependencies": [],
+  "factors": [
+    {
+      "name": "return_1d",
+      "version": "1.0.0",
+      "implementation_fingerprint": "5598203e3aab8ae2e012156ff88865100c3adb3cba4f63dca8b76073efd6a9e9",
+      "minimum_history": 2
+    },
+    {
+      "name": "return_5d",
+      "version": "1.0.0",
+      "implementation_fingerprint": "5598203e3aab8ae2e012156ff88865100c3adb3cba4f63dca8b76073efd6a9e9",
+      "minimum_history": 6
+    },
+    {
+      "name": "return_20d",
+      "version": "1.0.0",
+      "implementation_fingerprint": "5598203e3aab8ae2e012156ff88865100c3adb3cba4f63dca8b76073efd6a9e9",
+      "minimum_history": 21
+    },
+    {
+      "name": "volatility_20d",
+      "version": "1.0.0",
+      "implementation_fingerprint": "5598203e3aab8ae2e012156ff88865100c3adb3cba4f63dca8b76073efd6a9e9",
+      "minimum_history": 22
+    }
+  ]
+}

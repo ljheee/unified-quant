@@ -12,6 +12,8 @@ import pandas as pd
 
 from ..contracts.factor_governance import FactorRegistry, FactorSetDefinition
 from ..errors import ContractError
+from .adjusted_price import calculate_adjusted_factors
+from .raw_price import calculate_raw_price_factors
 
 
 DECISION_ZONE = ZoneInfo("Asia/Shanghai")
@@ -100,7 +102,7 @@ class FactorResult:
 
 
 class FactorEngine:
-    """Contract and deterministic planning facade; factor execution is implemented by phase-specific calculators."""
+    """Governed planning and execution facade for reviewed factor sets."""
 
     def __init__(self, root: Path, registry: FactorRegistry, *, run_visible_cutoff: datetime) -> None:
         self.root = root
@@ -261,3 +263,49 @@ class FactorEngine:
             if set(request.universe_binding) & {"__path__"} or not required_universe_fields <= set(request.universe_binding):
                 raise ContractError("invalid factor universe binding")
         return request
+
+    def execute(
+        self,
+        request: FactorComputeRequest,
+        frame: pd.DataFrame,
+        *,
+        adjustment_snapshot_ids: list[str] | None = None,
+        effective_date_table_checksums: list[str] | None = None,
+    ) -> FactorResult:
+        self.plan(request)
+        if request.definition.factor_set == "adjusted":
+            if adjustment_snapshot_ids is None or effective_date_table_checksums is None:
+                raise ContractError("adjusted factor execution requires governed adjustment lineage")
+            calculated = calculate_adjusted_factors(
+                frame,
+                adjustment_snapshot_ids=adjustment_snapshot_ids,
+                effective_date_table_checksums=effective_date_table_checksums,
+            )
+        elif request.definition.factor_set == "basic":
+            if frame.empty:
+                required = set(request.definition.document["required_columns"])
+                missing = sorted(required - set(frame.columns))
+                if missing:
+                    raise ContractError(f"missing raw-price input columns: {missing}")
+                calculated = frame.copy()
+                for item in request.definition.factors:
+                    calculated[item["name"]] = float("nan")
+            else:
+                calculated = calculate_raw_price_factors(frame)
+        else:
+            raise ContractError(f"unsupported governed factor set: {request.definition.factor_set}")
+        lineage = [
+            {
+                "factor_set": request.definition.factor_set,
+                "factor_version": request.definition.factor_version,
+                **(
+                    {}
+                    if adjustment_snapshot_ids is None or effective_date_table_checksums is None
+                    else {
+                        "adjustment_snapshot_id": adjustment_snapshot_ids[0],
+                        "effective_date_table_checksum": effective_date_table_checksums[0],
+                    }
+                ),
+            }
+        ]
+        return self.create_result(request, calculated, input_lineage=tuple(lineage))

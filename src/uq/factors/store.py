@@ -45,6 +45,8 @@ class FactorStore:
     def publish(
         self,
         *,
+        factor_set: str = "basic",
+        factor_version: str = "1.0.0",
         frame: pd.DataFrame,
         partition_date: date,
         input_dataset: str,
@@ -57,6 +59,8 @@ class FactorStore:
         upstream_created_at: str | datetime,
     ) -> Path:
         arguments = {
+            "factor_set": factor_set,
+            "factor_version": factor_version,
             "frame": frame,
             "partition_date": partition_date,
             "input_dataset": input_dataset,
@@ -68,15 +72,37 @@ class FactorStore:
             "effective_date_table_checksum": effective_date_table_checksum,
             "upstream_created_at": _iso_datetime(upstream_created_at),
         }
-        definition = self.registry.get("basic", "1.0.0")
+        definition = self.registry.get(factor_set, factor_version)
         local_quality = _validate_factor_frame(frame, definition)
-        if input_dataset != "bars_daily" or input_schema_version != "research-v1":
-            raise ContractError("factor input binding does not match reviewed factor set")
+        if definition.factor_set == "basic":
+            if input_dataset != "bars_daily" or input_schema_version != "research-v1":
+                raise ContractError("factor input binding does not match reviewed factor set")
+            if adjustment_snapshot_id is not None or effective_date_table_checksum is not None:
+                raise ContractError("raw-price factors cannot bind adjustment lineage")
+        elif definition.factor_set == "adjusted":
+            if input_dataset != "bars_adjusted" or input_schema_version != "adjusted-v1":
+                raise ContractError("adjusted factor input binding does not match reviewed factor set")
+            if adjustment_snapshot_id is None or effective_date_table_checksum is None:
+                raise ContractError("adjusted factors require governed adjustment lineage")
+        else:
+            raise ContractError(f"unsupported governed factor set: {factor_set}")
 
         artifact, data_checksum = serialize_factor_frame(frame)
         generation_id = factor_generation(**arguments)
         manifest = _manifest_without_identities(
-            **arguments, local_quality=local_quality, definition=definition, data_checksum=data_checksum
+            local_quality=local_quality,
+            frame=frame,
+            partition_date=partition_date,
+            input_dataset=input_dataset,
+            input_schema_version=input_schema_version,
+            upstream_generation_id=upstream_generation_id,
+            upstream_data_checksum=upstream_data_checksum,
+            quality_report_checksum=quality_report_checksum,
+            adjustment_snapshot_id=adjustment_snapshot_id,
+            effective_date_table_checksum=effective_date_table_checksum,
+            upstream_created_at=upstream_created_at,
+            definition=definition,
+            data_checksum=data_checksum,
         )
         manifest_generation, manifest_digest = factor_manifest_identities(manifest)
         if manifest_generation != generation_id:
@@ -86,8 +112,8 @@ class FactorStore:
         partition = self._partition(
             input_dataset=input_dataset,
             input_schema_version=input_schema_version,
-            factor_set="basic",
-            factor_version="1.0.0",
+            factor_set=factor_set,
+            factor_version=factor_version,
             partition_date=partition_date,
         )
         if partition.exists():
@@ -139,6 +165,8 @@ class FactorStore:
 
 def factor_generation(
     *,
+    factor_set: str = "basic",
+    factor_version: str = "1.0.0",
     frame: pd.DataFrame,
     partition_date: date,
     input_dataset: str,
@@ -151,7 +179,7 @@ def factor_generation(
     upstream_created_at: str | datetime,
 ) -> str:
     _, data_checksum = serialize_factor_frame(frame)
-    definition = FactorRegistry(Path(__file__).resolve().parents[3]).get("basic", "1.0.0")
+    definition = FactorRegistry(Path(__file__).resolve().parents[3]).get(factor_set, factor_version)
     unsigned = _manifest_without_identities(
         local_quality=_validate_factor_frame(frame, definition),
         frame=frame,
@@ -260,8 +288,8 @@ def _manifest_without_identities(
         "manifest_version": 1,
         "input_dataset": input_dataset,
         "input_schema_version": input_schema_version,
-        "factor_set": "basic",
-        "factor_version": "1.0.0",
+        "factor_set": definition.factor_set,
+        "factor_version": definition.factor_version,
         "partition_date": partition_date.isoformat(),
         "decision_time": decision_time.isoformat(),
         "run_visible_cutoff": decision_time.isoformat(),

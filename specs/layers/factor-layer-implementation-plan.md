@@ -1,8 +1,8 @@
 # Factor Layer Implementation Plan
 
-Status: **gated implementation order v0.9; plan-exit contract preparation complete; Phase 0/1 gates exited**  
+Status: **gated implementation order v0.9; Phase 0-5 local implementation complete; release certification pending**  
 Source spec: `specs/layers/factor-layer-spec.md`  
-Current boundary: the governed raw-price slice is implemented through `FactorContext`, canonical-v2 publication, adjustment snapshot governance, `FactorRegistry`, engine result semantics, executable factors, configured quality thresholds, quality-bound immutable `FactorStore` partitions, pinned staging golden vectors, freshness enforcement, and governed quarantine. Open items: remote execution of the declared cross-platform F4 matrix, authoritative exchange-golden provenance, and final release reconciliation. The local locked-environment gate and F4 contract are complete.
+Current boundary: governed raw-price and adjusted-factor slices are implemented through `FactorContext`, canonical-v2 publication, adjustment snapshot governance, reviewed adjusted-v1 registry definitions, `FactorRegistry`, engine execution/result semantics, executable factors, configured quality thresholds, quality-bound immutable `FactorStore` partitions, pinned staging golden vectors, freshness enforcement, and governed quarantine. Open items: remote execution of the declared cross-platform F4 matrix, direct official disclosure for three formula-derived adjustment reference prices, and final remote-evidence reconciliation. Local locked-environment gates and the F4 contract are complete.
 
 ## 0. Scope and Non-Goals
 
@@ -299,8 +299,7 @@ Goal: introduce one reviewed prerequisite and only then enable returns/volatilit
 
 Decision gate: choose exactly one path and record it in config/spec before coding:
 
-1. `bars_adjusted.research-v1`; or
-2. two-input engine consuming `bars_daily.research-v1` plus a governed adjustment snapshot dataset.
+Selected path: **two-input governed engine** consuming `bars_daily.research-v1` plus a typed adjustment snapshot binding. Runtime publication uses the `adjusted-v1` factor-set identity with input binding `bars_adjusted/adjusted-v1`, where `adj_factor` is the explicit second-input lineage; adjusted close is owned by the engine calculation, not published as an independent intermediate.
 
 Tasks:
 
@@ -399,7 +398,7 @@ Acceptance mapping:
 ## Remaining Release Evidence
 
 1. **F4 scoped certification:** `.github/workflows/ci.yml` runs macOS and Ubuntu across Python 3.11, 3.12, and 3.13 through `scripts/run_gate.sh`, uploads all gate artifacts plus an environment-cell marker, and fails unless every declared cell is observed. This workflow must pass remotely before changing F4 status beyond “declared/pending remote evidence”. Windows and unlisted CPU/BLAS cells remain not certified.
-2. **Authoritative adjustment golden provenance:** `adjustment_golden_provenance.v2.json` records multi-source evidence with file checksums, quoted locators, publication date, separate pre-close evidence, and conservative top-level certification. SZSE's archived quote API directly confirms prior closes for `300866`, `000725`, and `003026`; `002557` is outside that archive cutoff, while SSE exposes no free historical prior-close endpoint for `600081`. The fixture therefore remains `pending-authoritative-source` because certification requires every pre-close and expected reference price to be supported by direct official exchange/settlement evidence, not provider market data or formula derivation. Access constraints and captured response hashes are recorded in `specs/layers/contracts/adjustment-official-source-access-v1.md`. The corrected rights case derives `11.1669230769`; its observed open of `11.3100` is market data and must not be treated as the official reference price.
+2. **Authoritative adjustment golden provenance:** `adjustment_golden_provenance.v2.json` records multi-source evidence with file checksums, quoted locators, publication date, separate pre-close evidence, and conservative top-level certification. The reviewed cases now use direct SZSE archive evidence for `300866`, `300475`, `000725`, and `003026`; the constrained `002557` and `600081` cases were replaced rather than treated as authoritative. `300866`'s ex-date prior close directly matches its formula result and is certified as exchange-reference; the other expected prices remain formula-derived because their generic open/close/ex-day prior-close values do not equal those values. Access constraints and captured response hashes remain recorded in `specs/layers/contracts/adjustment-official-source-access-v1.md`.
 
 ## Risk Register
 
@@ -432,6 +431,6 @@ Immediate action is to preserve the latest successful unified-gate evidence, the
 
 1. Run and archive `scripts/run_gate.sh` outputs: `.gate/gate-report.json`, requirements artifact, and digest; CI must invoke the same runner.
 2. Keep canonical-v2 and factor-v1 F12a evidence aligned with the four report negative paths plus reader enforcement.
-3. Keep F4 scope explicit: the CI matrix declares macOS and Ubuntu across Python 3.11-3.13; certification remains pending until its f4-certification job succeeds on those six covered locked-environment cells. Other platforms remain `not certified` and are compared through logical fingerprints only.
-4. Canonical-publication F12a coverage is complete; do not claim broader release readiness until the full gate and remaining platform scope pass.
-5. Before release, rerun the full suite plus focused contract reviews and update statuses only from recorded gate evidence.
+3. Complete the remaining provenance gate by obtaining exchange/settlement-published reference prices for `300475`, `000725`, and `003026`; until then keep top-level provenance `pending-authoritative-source`.
+4. Run the declared CI remotely, archive all six gate artifacts, and require the `f4-certification` job to pass before changing F4 beyond “declared/pending remote evidence”.
+5. After both external gates pass, rerun the unified gate and reconcile Phase 6/release statuses only from recorded evidence.

@@ -11,6 +11,12 @@ from ..errors import ContractError
 
 _REQUIRED = ["instrument", "datetime", "close", "adj_factor"]
 _LINEAGE_VERSION = "adj_factor.exchange_v1"
+_FACTOR_FORMULAS = {
+    "return_1d": {"operation": "pct_change", "periods": 1},
+    "return_5d": {"operation": "pct_change", "periods": 5},
+    "return_20d": {"operation": "pct_change", "periods": 20},
+    "volatility_20d": {"operation": "rolling_std", "periods": 20, "input": "return_1d"},
+}
 
 
 def _validate_binding(frame: pd.DataFrame, adjustment_snapshot_id: str, effective_date_table_checksum: str) -> None:
@@ -55,7 +61,7 @@ def calculate_adjusted_factors(
     output["return_1d"] = per_instrument(adjusted_close, 1)
     output["return_5d"] = per_instrument(adjusted_close, 5)
     output["return_20d"] = per_instrument(adjusted_close, 20)
-    output["volatility_20d"] = per_instrument(adjusted_close.pct_change(1), 20, "volatility")
+    output["volatility_20d"] = per_instrument(output["return_1d"], 20, "volatility")
     output = output.sort_values(["instrument", "datetime"], kind="mergesort").reset_index(drop=True)
     if set(map(tuple, output[["instrument", "datetime"]].to_numpy())) != expected_keys:
         raise ContractError("factor output key reconciliation failed")
