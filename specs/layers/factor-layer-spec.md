@@ -522,21 +522,20 @@ Minimum acceptance:
 | F5 | Future-dated input cannot affect a historical partition. | 3 | Engine/input selection | TBD-F5 | Blocked |
 | F6 | Adjusted return factors do not use raw close. | 4 | Adjusted-input prerequisite and adjustment lineage gate | TBD-F6 | Blocked |
 | F7 | Immutable factor partitions reject overwrite. | 5 | Factor store | TBD-F7 | Blocked |
-| F8 | Tampered data prevents reads. | 0 canonical / 5 factor | Canonical reader exists; factor store absent | `test_reader_rejects_tampered_data` (canonical); TBD-F8-factor | Partial: canonical only |
-| F9 | Tampered manifest fails JSON Schema/generation verification, not merely data checksum. | 0 canonical / 2 factor | External anchor/path identity; factor manifest schema/reader | `test_reader_rejects_regenerated_manifest_without_anchor` (prototype); TBD-F9-factor | Partial: prototype only |
+| F8a | Tampered canonical data prevents canonical reads. | 0 | External trust/path hardening | `tests/test_canonical_v2_runtime.py::test_reader_requires_external_anchor_and_path_identity` | Passed for canonical-v2 |
+| F8b | Tampered factor data prevents factor reads. | 5 | Factor store/reader | TBD-F8b | Blocked |
+| F9a | Tampered canonical manifest fails schema/digest/anchor/path verification. | 0 | canonical-v2 identity, external anchor, path identity | `tests/test_canonical_v2_runtime.py::test_generation_excludes_run_metadata`, `test_rejects_invalid_uuid_datetime_date_dtype_map` | Passed for canonical-v2 runtime |
+| F9b | Tampered factor manifest fails schema/digest/anchor/path verification. | 2/5 | Factor manifest schema/reader and store | `tests/test_factor_governance.py::test_manifest_identity_mutations_are_rejected` (schema/identity only) | Partial; store path blocked |
 | F10 | Changed semantics cannot reuse old semantic version. | 2 | Registry validation | TBD-F10 | Blocked |
 | F11 | Missing dependency rejects computation. | 2A/3 | Registry and engine interface | TBD-F11 | Blocked |
-| F12 | Null-rate threshold rejection. | 2/5 | Quality report contract and quality gate | TBD-F12 | Blocked |
-| F13 | Duplicate keys reject publication. | 2/5 | Quality report contract and factor store | TBD-F13 | Blocked |
-| F14 | Generation ID changes when any bound input changes. | 0 canonical / 2 factor | Stable content identity, golden vectors, formal manifests | TBD-F14-canonical; TBD-F14-factor | Blocked |
+| F12a | Canonical quality report missing/mismatch rejects publication/read binding. | 2 | `quality_report.v1` binding and canonical publication | TBD-F12a | Blocked |
+| F12b | Factor null rate above threshold rejects publication. | 5 | Factor quality gate/store | TBD-F12b | Blocked |
+| F13a | Duplicate canonical keys reject canonical publication. | 0 | Canonical primary-key validation in publish/read path | `tests/test_canonical_v2_runtime.py::test_rejects_invalid_uuid_datetime_date_dtype_map` plus schema validation | Passed for canonical-v2 runtime |
+| F13b | Duplicate factor keys reject factor publication. | 5 | Factor quality gate/store | TBD-F13b | Blocked |
+| F14a | Stable canonical generation excludes run metadata and changes on content/lineage change. | 0 | canonical-v2 identities/golden vectors | `tests/test_canonical_v2_runtime.py::test_generation_excludes_run_metadata` | Passed |
+| F14b | Factor generation changes on any bound input/definition/artifact/quality/partition change. | 2/5 | Factor manifest/generation contract and store | `tests/test_factor_governance.py::test_reviewed_basic_v1_registry_loads_and_manifest_matches` (run metadata stability only) | Partial; full mutation matrix blocked |
 
-Only F1 is currently executable against production code. The remainder are
-release gates for the first factor-layer implementation, not claims about the
-current repository.
-
-F8/F9 status is limited to canonical-partition prototypes. They do not certify
-factor-store acceptance, and the current manifest anchor is not an external
-trust boundary.
+F1 single-date canonical reads and Phase 0 sub-items F8a/F9a/F13a/F14a have executable runtime evidence. Phase 2 provides partial F9b/F14b governance evidence but does not complete factor-store acceptance. All remaining items stay release gates.
 
 ## 12. Explicit Non-Goals for v0
 

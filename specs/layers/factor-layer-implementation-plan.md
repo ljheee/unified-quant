@@ -16,6 +16,31 @@ This plan covers only the first local-research factor layer described by the sou
 
 The first release target is a small deterministic raw-price factor set, followed by adjusted returns only after adjustment lineage is governed.
 
+## 0A. Source-Spec Coverage Map
+
+The implementation plan intentionally narrows execution order but must preserve all normative source-spec sections:
+
+| Source-spec section | Plan handling |
+|---|---|
+| §1 Purpose / §2 Boundaries | Governs component boundaries and non-goals; enforced across phases. |
+| §3 Factor contract and versioning | Phase 2 registry/config governance; adjusted prerequisites remain deferred to Phase 4. |
+| §4 Decision-time semantics | Applied in Phase 2A request/window contracts and every publication phase. |
+| §5 Price adjustment rule | Phase 1 adjustment lineage and Phase 4 adjusted inputs. |
+| §6 Merge Policy | Explicitly out of scope for factor-layer v0; canonical routing owns merge policy. No factor implementation may bypass it. |
+| §6 Identity and Store Layout | Phase 5 immutable Hive-like store. |
+| §6A Manifest and generation contract | Sole machine schema in `config/schemas/manifests/factor_manifest.v1.json`; §6A is the human summary. Phase 2 enforces identities. |
+| §7 Initial Factor Set | Split by input readiness: raw-price subset in Phase 3, adjusted subset in Phase 4. |
+| §8 Missing/non-tradable rows | Phase 3 row reconciliation and null policy. |
+| §8A Determinism | Phases 3, 4A, and 5 fingerprints/checksums. |
+| §9 Quality Gate | Phase 2 quality report contract plus Phase 5 runtime gate/publication. |
+| §10 Public API Shape | Normative simplified facade expanded through Phase 2A internal `FactorComputeRequest`. |
+| §11 Acceptance Tests | Acceptance matrix remains authoritative; statuses update as phases exit. |
+| §12–§14 Non-goals, run visibility, adjustment versioning | Carry as global constraints into later gates. |
+
+No omitted source-spec section is authorization to skip its constraint; if a plan gap is found, pause the affected gate and amend this map.
+
+
+
 ## 1. Execution Rules
 
 This is a gated plan, not a parallel roadmap.
@@ -49,9 +74,9 @@ This is a gated plan, not a parallel roadmap.
 
 Current gate status:
 
-- Phase 0 runtime and failure-path tests are complete; the unified gate is green.
-- Phase 1 persisted snapshots, typed reader/as-of selection, immutable artifacts, test-migration evidence, and exchange-style golden coverage are complete; the unified gate is green.
-- Phase 2-contract may proceed. Phase 2-runtime is now unblocked by the Phase 0/1 dependency, but must still satisfy its own registry/publication entry criteria.
+- Phase 0/1 gates have exited with green runtime evidence.
+- Phase 2 is in final remediation after independent review; it has not exited yet. The reviewed basic-v1 registry, manifest identity validation, universe governance, and quality report binding exist.
+- Phase 2A remains blocked before any executable factor calculation.
 - Later phases remain gated by their declared contracts and acceptance criteria.
 Implementation status correction: the original Phase 0/1 blockers have been closed by canonical-v2 runtime work, persisted adjustment snapshot runtime, external-anchor/path validation, governed visibility, and exchange-style formula coverage. Gate reports are generated under ignored local `.gate/` evidence after each working-tree change.
 ## Phase 0 — Canonical Manifest Governance Gate
