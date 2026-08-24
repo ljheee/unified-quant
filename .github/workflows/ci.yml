@@ -11,9 +11,10 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v3
       - run: scripts/run_gate.sh
       - run: uv run --no-sync python -c "import uq.adapters.mootdx_source, uq.adapters.tushare_free; print('real imports ok')"
       - name: Record certified environment cell
@@ -42,17 +43,31 @@ jobs:
       - name: Verify covered locked-environment cells
         run: |
           python3 - <<'PY'
-          import pathlib
+          import json, pathlib
 
           expected = {
               f"{os}/{python}"
               for os in ("macos-latest", "ubuntu-latest")
               for python in ("3.11", "3.12", "3.13")
           }
-          observed = {
-              path.read_text().strip()
-              for path in pathlib.Path("gate-reports").rglob("environment-cell.txt")
-          }
+          observed = set()
+          for directory in sorted(pathlib.Path("gate-reports").glob("gate-report-*")):
+              report_path = next(directory.rglob("gate-report.json"), None)
+              marker_path = next(directory.rglob("environment-cell.txt"), None)
+              if report_path is None or marker_path is None:
+                  raise SystemExit(f"incomplete F4 artifact: {directory}")
+              report = json.loads(report_path.read_text())
+              cell = marker_path.read_text().strip()
+              declared_python = cell.rsplit("/", 1)[1]
+              if report.get("git_commit") != "${{ github.sha }}":
+                  raise SystemExit(f"F4 report commit mismatch: {cell}")
+              if report.get("test_result") != "passed":
+                  raise SystemExit(f"F4 report not passed: {cell}")
+              if not report.get("python_version", "").startswith(declared_python + "."):
+                  raise SystemExit(
+                      f"Python version mismatch: cell={cell}, report={report.get('python_version')}"
+                  )
+              observed.add(cell)
           missing = sorted(expected - observed)
           if missing:
               raise SystemExit(f"missing F4 environment cells: {missing}")
