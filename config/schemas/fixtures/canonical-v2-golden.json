@@ -1,0 +1,28 @@
+{
+  "without_digests": {
+    "manifest_version": 2,
+    "dataset": "bars_daily",
+    "schema_version": "v2",
+    "partition_date": "2026-08-21",
+    "row_count": 1,
+    "columns": ["instrument", "datetime"],
+    "dtypes": {"instrument": "object", "datetime": "datetime64[ns]"},
+    "data_checksum_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schema_checksum_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "code_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "package_provenance": {"project_version": "0.1.0", "python_version": "3.12.13", "pandas_version": "2.1", "pyarrow_version": "14", "numpy_version": "2", "dependency_lock_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+    "run_id": "00000000-0000-4000-8000-000000000001",
+    "created_at": "2026-08-23T00:00:00Z",
+    "lineage": {},
+    "source_versions": {},
+    "quality_report_checksum": "",
+    "raw_artifacts": {}
+  },
+  "same_content_different_run": {
+    "run_id": "00000000-0000-4000-8000-000000000002",
+    "created_at": "2026-08-24T01:02:03Z"
+  },
+  "expected": {
+    "rule": "generation_id unchanged; manifest_digest_sha256 changes"
+  }
+}

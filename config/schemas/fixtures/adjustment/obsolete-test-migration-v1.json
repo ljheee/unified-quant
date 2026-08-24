@@ -1,0 +1,10 @@
+{
+  "migration_version": 1,
+  "removed_tests": [
+    {"test_id": "test_combined_action_matches_exchange_style_formula", "reason": "asserted rights-price-ignoring approximation"}
+  ],
+  "replacement_tests": [
+    {"test_id": "test_exchange_golden_formula_cases", "covers": ["cash-only", "rights-only", "combined"]}
+  ],
+  "rule": "first Phase 1 implementation commit must remove or rewrite every removed test and pass scripts/run_gate.sh"
+}

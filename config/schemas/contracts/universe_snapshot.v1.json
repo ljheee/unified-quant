@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/universe_snapshot.v1.json",
+  "title": "PIT universe snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "universe_version",
+    "universe_id",
+    "source",
+    "snapshot_time",
+    "visibility_time",
+    "valid_from",
+    "valid_to",
+    "members_artifact",
+    "membership_evidence",
+    "generation_id"
+  ],
+  "properties": {
+    "universe_version": {
+      "const": 1
+    },
+    "universe_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "snapshot_time": {
+      "$ref": "#/$defs/date_time"
+    },
+    "visibility_time": {
+      "$ref": "#/$defs/date_time"
+    },
+    "valid_from": {
+      "$ref": "#/$defs/real_date"
+    },
+    "valid_to": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/real_date"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "members_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "checksum_sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "membership_evidence": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generation_id": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "real_date": {
+      "type": "string",
+      "format": "date"
+    }
+  }
+}

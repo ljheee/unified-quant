@@ -1,0 +1,11 @@
+{
+  "migration_version": 1,
+  "removed_or_replaced": [
+    {
+      "removed_test_id": "test_adjustment_provider.py::test_cash_only_formula_matches_provider_factor_ratios",
+      "reason": "provider-only ratio comparison is supporting evidence, not Phase 1 golden coverage",
+      "replacement_test_id": "tests/test_adjustment_snapshot_runtime.py::test_exchange_formula_golden_cases",
+      "status": "replaced"
+    }
+  ]
+}

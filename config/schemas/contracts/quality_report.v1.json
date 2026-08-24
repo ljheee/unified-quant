@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/quality_report.v1.json",
+  "title": "Governed quality report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_version",
+    "binding_type",
+    "bound_generation_id",
+    "policy",
+    "status",
+    "checks",
+    "errors",
+    "warnings"
+  ],
+  "properties": {
+    "report_version": {
+      "const": 1
+    },
+    "binding_type": {
+      "enum": [
+        "canonical_v2",
+        "factor_v1"
+      ]
+    },
+    "bound_generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "policy": {
+      "enum": [
+        "reject_all",
+        "accept_with_warnings"
+      ]
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "warning",
+        "rejected"
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "threshold",
+          "observed",
+          "level",
+          "result"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{2,63}$"
+          },
+          "threshold": {},
+          "observed": {},
+          "level": {
+            "enum": [
+              "error",
+              "warning"
+            ]
+          },
+          "result": {
+            "enum": [
+              "passed",
+              "failed"
+            ]
+          }
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "passed"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "errors": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "policy": {
+            "const": "reject_all"
+          },
+          "checks": {
+            "type": "array",
+            "contains": {
+              "properties": {
+                "result": {
+                  "const": "failed"
+                },
+                "level": {
+                  "const": "error"
+                }
+              }
+            },
+            "required": [
+              "level",
+              "result"
+            ]
+          }
+        },
+        "required": [
+          "policy",
+          "checks"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "rejected"
+          }
+        }
+      }
+    }
+  ]
+}

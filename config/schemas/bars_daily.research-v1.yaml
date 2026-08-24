@@ -1,0 +1,54 @@
+dataset: bars_daily
+version: research-v1
+status: frozen_research_prototype
+primary_key:
+  - instrument
+  - datetime
+sort_key:
+  - instrument
+  - datetime
+fields:
+  instrument:
+    dtype: string
+    nullable: false
+  datetime:
+    dtype: date32
+    nullable: false
+    timezone: Asia/Shanghai
+    meaning: trading_day
+    resolution: day
+  open:
+    dtype: float64
+    nullable: false
+    unit: CNY
+    adjustment: raw
+  high:
+    dtype: float64
+    nullable: false
+    unit: CNY
+    adjustment: raw
+  low:
+    dtype: float64
+    nullable: false
+    unit: CNY
+    adjustment: raw
+  close:
+    dtype: float64
+    nullable: false
+    unit: CNY
+    adjustment: raw
+  volume:
+    dtype: float64
+    nullable: false
+    unit: share
+  amount:
+    dtype: float64
+    nullable: false
+    unit: CNY
+invariants:
+  high_low: high >= low
+  high_body: high >= open and high >= close
+  low_body: low <= open and low <= close
+  non_negative_volume: volume >= 0
+  non_negative_amount: amount >= 0
+compatibility: exact

@@ -1,0 +1,11 @@
+{
+  "formula_version": "adj_factor.exchange_v1",
+  "convention": "provider amounts are per ten shares; ratios are divided by ten",
+  "cases": [
+    {"id":"cash-only","priority":1,"source":{"kind":"exchange-reference","document":"exchange ex-right reference formula","date":"2026-08-23","reviewer":"quant-governance"},"pre_close":11.0,"cash_per_ten":5.0,"bonus_per_ten":0.0,"rights_per_ten":0.0,"rights_price":0.0,"expected_ex_right_price":10.5,"expected_backward_multiplier":1.0476190476190477,"tolerance_abs":1e-12},
+    {"id":"bonus-transfer-only","priority":1,"source":{"kind":"exchange-reference","document":"exchange ex-right reference formula","date":"2026-08-23","reviewer":"quant-governance"},"pre_close":15.0,"cash_per_ten":0.0,"bonus_per_ten":5.0,"rights_per_ten":0.0,"rights_price":0.0,"expected_ex_right_price":10.0,"expected_backward_multiplier":1.5,"tolerance_abs":1e-12},
+    {"id":"rights-only","priority":1,"source":{"kind":"exchange-reference","document":"exchange ex-right reference formula","date":"2026-08-23","reviewer":"quant-governance"},"pre_close":20.0,"cash_per_ten":0.0,"bonus_per_ten":0.0,"rights_per_ten":2.0,"rights_price":8.0,"expected_ex_right_price":18.0,"expected_backward_multiplier":1.1111111111111112,"tolerance_abs":1e-12},
+    {"id":"cash-plus-shares","priority":1,"source":{"kind":"exchange-reference","document":"exchange ex-right reference formula","date":"2026-08-23","reviewer":"quant-governance"},"pre_close":12.0,"cash_per_ten":2.0,"bonus_per_ten":3.0,"rights_per_ten":0.0,"rights_price":0.0,"expected_ex_right_price":9.076923076923077,"expected_backward_multiplier":1.3220338983050847,"tolerance_abs":1e-12},
+    {"id":"all-combined","priority":1,"source":{"kind":"exchange-reference","document":"exchange ex-right reference formula","date":"2026-08-23","reviewer":"quant-governance"},"pre_close":13.0,"cash_per_ten":3.0,"bonus_per_ten":2.0,"rights_per_ten":1.0,"rights_price":8.0,"expected_ex_right_price":10.384615384615385,"expected_backward_multiplier":1.2518518518518518,"tolerance_abs":1e-12}
+  ]
+}

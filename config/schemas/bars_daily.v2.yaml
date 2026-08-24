@@ -1,0 +1,83 @@
+dataset: bars_daily
+version: v2
+status: production_draft
+primary_key:
+  - instrument
+  - session_date
+sort_key:
+  - instrument
+  - session_date
+fields:
+  instrument:
+    dtype: string
+    pattern: '^[0-9]{6}\\.(XSHG|XSHE)$'
+    nullable: false
+  session_date:
+    dtype: date32
+    nullable: false
+    timezone: Asia/Shanghai
+    meaning: trading_day
+    resolution: day
+  open:
+    dtype: float64
+    nullable: false
+    unit: CNY
+    adjustment: raw
+  high:
+    dtype: float64
+    nullable: false
+    unit: CNY
+    adjustment: raw
+  low:
+    dtype: float64
+    nullable: false
+    unit: CNY
+    adjustment: raw
+  close:
+    dtype: float64
+    nullable: false
+    unit: CNY
+    adjustment: raw
+  volume:
+    dtype: float64
+    nullable: false
+    unit: share
+    zero_policy: allowed_only_for_non_trading_status
+  amount:
+    dtype: float64
+    nullable: false
+    unit: CNY
+  status:
+    dtype: string
+    enum: [trading, suspended, delisted, unknown]
+    default: unknown
+    nullable: false
+  limit_up:
+    dtype: float64
+    nullable: true
+    unit: CNY
+  limit_down:
+    dtype: float64
+    nullable: true
+    unit: CNY
+  adj_factor:
+    dtype: float64
+    nullable: true
+    unit: ratio
+    semantics: cumulative_adjustment_factor
+invariants:
+  high_low: high >= low
+  high_body: high >= open and high >= close
+  low_body: low <= open and low <= close
+  non_negative_volume: volume >= 0
+  non_negative_amount: amount >= 0
+  positive_adj_factor_when_present: "adj_factor.isna() or adj_factor > 0"
+  positive_limit_up_when_present: "limit_up.isna() or limit_up > 0"
+  positive_limit_down_when_present: "limit_down.isna() or limit_down > 0"
+compatibility: exact
+migration:
+  from: research-v1
+  rename:
+    datetime: session_date
+  add_defaults:
+    status: unknown

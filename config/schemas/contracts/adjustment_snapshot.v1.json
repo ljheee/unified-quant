@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/adjustment_snapshot.v1.json",
+  "title": "Corporate-action adjustment snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "snapshot_version",
+    "instrument",
+    "formula_version",
+    "visibility_time",
+    "event_artifact",
+    "effective_date_table",
+    "sessions",
+    "generation_id"
+  ],
+  "properties": {
+    "snapshot_version": {
+      "const": 1
+    },
+    "instrument": {
+      "type": "string",
+      "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$"
+    },
+    "formula_version": {
+      "const": "adj_factor.exchange_v1"
+    },
+    "visibility_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "checksum_sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "enum": [
+            "events.csv"
+          ]
+        },
+        "checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "effective_date_table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "checksum_sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "enum": [
+            "effective_dates.csv"
+          ]
+        },
+        "checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sessions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_date",
+        "end_date",
+        "checksum_sha256"
+      ],
+      "properties": {
+        "start_date": {
+          "$ref": "#/$defs/date"
+        },
+        "end_date": {
+          "$ref": "#/$defs/date"
+        },
+        "checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "generation_id": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "real_date_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+  }
+}

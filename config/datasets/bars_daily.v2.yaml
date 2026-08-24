@@ -1,0 +1,31 @@
+dataset: bars_daily
+schema_version: v2
+required_fields:
+  - instrument
+  - session_date
+  - open
+  - high
+  - low
+  - close
+  - volume
+  - amount
+  - status
+  - adj_factor
+owners:
+  adj_factor: tushare
+primary_source: tdx
+cross_validation:
+  close:
+    compare_with: tushare
+    max_abs_diff_pct: 0.001
+  volume:
+    compare_with: tushare
+    max_rel_diff_pct: 0.01
+sources:
+  tdx:
+    priority: 1
+    provides: [instrument, session_date, open, high, low, close, volume, amount, status]
+  tushare:
+    priority: 2
+    fallback: true
+    provides: [instrument, session_date, open, high, low, close, volume, amount, adj_factor]

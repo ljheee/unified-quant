@@ -1,0 +1,26 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: scripts/run_gate.sh
+      - run: uv run --no-sync python -c "import uq.adapters.mootdx_source, uq.adapters.tushare_free; print('real imports ok')"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-report-${{ matrix.python-version }}
+          path: |
+            .gate/gate-report.json
+            .gate/requirements.lock.txt
+            .gate/requirements.lock.txt.sha256
+          if-no-files-found: error

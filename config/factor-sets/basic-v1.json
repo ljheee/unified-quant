@@ -1,0 +1,44 @@
+{
+  "set_definition_version": 1,
+  "factor_set": "basic",
+  "factor_version": "1.0.0",
+  "status": "reviewed",
+  "required_columns": [
+    "instrument",
+    "datetime",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "amount"
+  ],
+  "quality_policy": "reject_all",
+  "dependencies": [],
+  "factors": [
+    {
+      "name": "volume_ratio_20d",
+      "version": "1.0.0",
+      "implementation_fingerprint": "bdcfb40395f1d51c210db6d56f65ccf3882a2b2fe5af2abd085db57746dbf56b",
+      "minimum_history": 20
+    },
+    {
+      "name": "amount_20d",
+      "version": "1.0.0",
+      "implementation_fingerprint": "ee2e7c611e3f35d17979f26ee80bca8b0a43171caf9f03bdd0a4e7e3f40a40c4",
+      "minimum_history": 20
+    },
+    {
+      "name": "range_ratio_1d",
+      "version": "1.0.0",
+      "implementation_fingerprint": "697813902e507e33de099a6b1ce07a68b80f5d1f1013a9b838c5a02cc006d25a",
+      "minimum_history": 1
+    },
+    {
+      "name": "close_location_1d",
+      "version": "1.0.0",
+      "implementation_fingerprint": "ac4161bac78e095e7aaa8e7824ab21d0a3ada292f2d713c2f567fe75e85d928f",
+      "minimum_history": 1
+    }
+  ]
+}

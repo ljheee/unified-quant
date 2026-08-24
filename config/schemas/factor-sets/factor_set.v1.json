@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/factor-sets/factor_set.v1.json",
+  "title": "Reviewed factor set definition v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "set_definition_version",
+    "factor_set",
+    "factor_version",
+    "status",
+    "required_columns",
+    "quality_policy",
+    "dependencies",
+    "factors"
+  ],
+  "properties": {
+    "set_definition_version": {
+      "const": 1
+    },
+    "factor_set": {
+      "type": "string",
+      "minLength": 1
+    },
+    "factor_version": {
+      "$ref": "#/$defs/semver"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "reviewed"
+      ]
+    },
+    "required_columns": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "quality_policy": {
+      "enum": [
+        "reject_all",
+        "accept_with_warnings"
+      ]
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[^/]+/\\d+\\.\\d+\\.\\d+$"
+      }
+    },
+    "factors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version",
+          "implementation_fingerprint",
+          "minimum_history"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "$ref": "#/$defs/semver"
+          },
+          "implementation_fingerprint": {
+            "$ref": "#/$defs/sha256"
+          },
+          "minimum_history": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  }
+}

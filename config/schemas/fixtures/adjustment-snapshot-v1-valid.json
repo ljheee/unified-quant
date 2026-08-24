@@ -1,0 +1,20 @@
+{
+  "snapshot_version": 1,
+  "instrument": "600000.XSHG",
+  "formula_version": "adj_factor.exchange_v1",
+  "visibility_time": "2026-08-21T16:00:00+08:00",
+  "event_artifact": {
+    "path": "events.csv",
+    "checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "effective_date_table": {
+    "path": "effective_dates.csv",
+    "checksum_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "sessions": {
+    "start_date": "2026-08-20",
+    "end_date": "2026-08-21",
+    "checksum_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  "generation_id": "placeholder"
+}

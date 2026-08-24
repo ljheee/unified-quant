@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/canonical_migration.v1.json",
+  "title": "Canonical v1 to v2 migration audit v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "migration_version", "action", "source_dataset", "source_schema_version",
+    "source_partition_path", "source_partition_date", "source_data_checksum_sha256",
+    "source_schema_checksum_sha256", "source_legacy_generation_id", "source_manifest_digest_sha256",
+    "target_dataset", "target_schema_version", "target_partition_path", "target_content_generation_id",
+    "target_manifest_digest_sha256", "migration_algorithm_version", "decision_time",
+    "run_visible_cutoff", "operator", "approval_reference", "mapping_checksum_sha256"
+  ],
+  "properties": {
+    "migration_version": {"const": 1},
+    "action": {"enum": ["read_only_legacy", "republish_v2"]},
+    "source_dataset": {"type": "string", "minLength": 1},
+    "source_schema_version": {"const": "v1"},
+    "source_partition_path": {"type": "string", "minLength": 1},
+    "source_partition_date": {"$ref": "#/$defs/date"},
+    "source_data_checksum_sha256": {"$ref": "#/$defs/sha256"},
+    "source_schema_checksum_sha256": {"$ref": "#/$defs/sha256"},
+    "source_legacy_generation_id": {"$ref": "#/$defs/sha256"},
+    "source_manifest_digest_sha256": {"$ref": "#/$defs/sha256"},
+    "target_dataset": {"type": "string", "minLength": 1},
+    "target_schema_version": {"const": "v2"},
+    "target_partition_path": {"type": "string", "minLength": 1},
+    "target_content_generation_id": {"$ref": "#/$defs/sha256"},
+    "target_manifest_digest_sha256": {"$ref": "#/$defs/sha256"},
+    "migration_algorithm_version": {"type": "string", "const": "canonical-migration.v1"},
+    "decision_time": {"$ref": "#/$defs/date_time"},
+    "run_visible_cutoff": {"$ref": "#/$defs/date_time"},
+    "operator": {"type": "string", "minLength": 1},
+    "approval_reference": {"type": "string", "minLength": 1},
+    "mapping_checksum_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+  }
+}
