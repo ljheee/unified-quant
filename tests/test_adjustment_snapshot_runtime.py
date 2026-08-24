@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -26,6 +26,39 @@ def test_exchange_formula_golden_cases():
         assert multiplier == pytest.approx(case["expected_backward_multiplier"], abs=case["tolerance_abs"])
         ex_right = case["pre_close"] / multiplier
         assert ex_right == pytest.approx(case["expected_ex_right_price"], abs=case["tolerance_abs"])
+
+
+def test_official_exchange_reference_prices():
+    provenance = json.loads(
+        Path("config/schemas/fixtures/adjustment/golden-provenance.v2.json").read_text()
+    )
+    deriver = XdxrAdjustmentDeriver()
+    for case in provenance["cases"]:
+        inputs = case["inputs"]
+        ex_day = date.fromisoformat(case["ex_date"])
+        pre_ex_day = ex_day - timedelta(days=1)
+        events = pd.DataFrame([{
+            "year": ex_day.year,
+            "month": ex_day.month,
+            "day": ex_day.day,
+            "category": 1,
+            "fenhong": inputs["cash_per_ten"],
+            "songzhuangu": inputs["bonus_per_ten"],
+            "peigu": inputs["rights_per_ten"],
+            "peigujia": inputs["rights_price"],
+        }])
+        ex_date = pd.Timestamp(ex_day)
+        pre_close = pd.Series(inputs["pre_close"], index=pd.DatetimeIndex([ex_date]))
+        derivation = deriver.derive(
+            case["instrument"], events,
+            [pd.Timestamp(pre_ex_day), ex_date],
+            pre_close,
+        )
+        pre_ex_multiplier = float(derivation.frame.iloc[0]["adj_factor"])
+        calculated_ex_price = inputs["pre_close"] / pre_ex_multiplier
+        assert calculated_ex_price == pytest.approx(
+            case["expected_ex_right_price"], abs=case["tolerance_abs"]
+        )
 
 
 def test_multiple_events_and_non_session_event_are_ordered():

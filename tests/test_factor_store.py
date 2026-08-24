@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -41,6 +41,7 @@ def kwargs():
         "upstream_generation_id": "a" * 64,
         "upstream_data_checksum": "b" * 64,
         "quality_report_checksum": "",
+        "upstream_created_at": datetime.fromisoformat("2026-08-19T16:00:00+08:00"),
     }
 
 
@@ -51,10 +52,10 @@ def quality_document(generation):
         "bound_generation_id": generation,
         "policy": "reject_all",
         "status": "passed",
-        "checks": [{
-            "name": "coverage", "threshold": 0, "observed": 0,
-            "level": "error", "result": "passed",
-        }],
+        "checks": [
+            {"name": "null_rate", "threshold": 0.5, "observed": 0.0, "level": "error", "result": "passed"},
+            {"name": "coverage", "threshold": 0.0, "observed": 1.0, "level": "error", "result": "passed"},
+        ],
         "errors": [],
         "warnings": [],
     }

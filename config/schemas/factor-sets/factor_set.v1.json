@@ -45,6 +45,15 @@
         "accept_with_warnings"
       ]
     },
+    "quality_thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["null_rate_maximum", "coverage_minimum"],
+      "properties": {
+        "null_rate_maximum": {"type": "number", "minimum": 0, "maximum": 1},
+        "coverage_minimum": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
     "dependencies": {
       "type": "array",
       "items": {

@@ -5,7 +5,7 @@ import json
 import os
 import shutil
 import uuid
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -17,7 +17,7 @@ import pyarrow.parquet as parquet
 from ..contracts.artifacts import QualityReportStore
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.factor_governance import FactorRegistry
-from ..contracts.gate_contracts import factor_manifest_identities, validate_contract_path
+from ..contracts.gate_contracts import canonical_json, factor_manifest_identities, validate_contract_path
 from ..errors import ContractError
 from .raw_price import logical_fingerprint
 from .repro_staging import SERIALIZATION_PROFILE, environment_profile
@@ -54,6 +54,7 @@ class FactorStore:
         quality_report_checksum: str,
         adjustment_snapshot_id: str | None = None,
         effective_date_table_checksum: str | None = None,
+        upstream_created_at: str | datetime,
     ) -> Path:
         arguments = {
             "frame": frame,
@@ -65,16 +66,17 @@ class FactorStore:
             "quality_report_checksum": quality_report_checksum,
             "adjustment_snapshot_id": adjustment_snapshot_id,
             "effective_date_table_checksum": effective_date_table_checksum,
+            "upstream_created_at": _iso_datetime(upstream_created_at),
         }
-        _validate_factor_frame(frame)
         definition = self.registry.get("basic", "1.0.0")
+        local_quality = _validate_factor_frame(frame, definition)
         if input_dataset != "bars_daily" or input_schema_version != "research-v1":
             raise ContractError("factor input binding does not match reviewed factor set")
 
         artifact, data_checksum = serialize_factor_frame(frame)
         generation_id = factor_generation(**arguments)
         manifest = _manifest_without_identities(
-            **arguments, definition=definition, data_checksum=data_checksum
+            **arguments, local_quality=local_quality, definition=definition, data_checksum=data_checksum
         )
         manifest_generation, manifest_digest = factor_manifest_identities(manifest)
         if manifest_generation != generation_id:
@@ -107,17 +109,21 @@ class FactorStore:
                 quality_report_path=(
                     self.root / "reports" / "factor_v1" / generation_id / "report.json"
                 )
-                quality_report=quality_report_store.read(
+                self.registry.validate_manifest(manifest)
+                quality_report = quality_report_store.read(
                     self.root, generation_id, binding_type="factor_v1"
                 )
+                accepted_statuses = {"passed"} if manifest["quality"]["policy"] == "reject_all" else {"passed", "warning"}
+                expected_report_status = local_quality["status"]
                 if (
-                    quality_report["policy"] != "reject_all"
-                    or quality_report["status"] != "passed"
+                    quality_report["policy"] != manifest["quality"]["policy"]
+                    or quality_report["status"] != expected_report_status
+                    or quality_report["status"] not in accepted_statuses
                     or file_sha256_bytes(quality_report_path.read_bytes())
                     != quality_report_checksum
+                    or not _reports_agree(local_quality, quality_report)
                 ):
                     raise ContractError("factor quality report rejects publication")
-                self.registry.validate_manifest(manifest)
 
                 (staging / "manifest.json").write_text(
                     json.dumps(manifest, sort_keys=True, indent=2) + "\n"
@@ -142,11 +148,12 @@ def factor_generation(
     quality_report_checksum: str,
     adjustment_snapshot_id: str | None = None,
     effective_date_table_checksum: str | None = None,
+    upstream_created_at: str | datetime,
 ) -> str:
-    _validate_factor_frame(frame)
     _, data_checksum = serialize_factor_frame(frame)
     definition = FactorRegistry(Path(__file__).resolve().parents[3]).get("basic", "1.0.0")
     unsigned = _manifest_without_identities(
+        local_quality=_validate_factor_frame(frame, definition),
         frame=frame,
         partition_date=partition_date,
         input_dataset=input_dataset,
@@ -156,6 +163,7 @@ def factor_generation(
         quality_report_checksum=quality_report_checksum,
         adjustment_snapshot_id=adjustment_snapshot_id,
         effective_date_table_checksum=effective_date_table_checksum,
+        upstream_created_at=upstream_created_at,
         definition=definition,
         data_checksum=data_checksum,
     )
@@ -176,7 +184,26 @@ def serialize_factor_frame(frame: pd.DataFrame) -> tuple[bytes, str]:
     return artifact, file_sha256_bytes(artifact)
 
 
-def _validate_factor_frame(frame: pd.DataFrame) -> None:
+def _iso_datetime(value: str | datetime) -> str:
+    return value if isinstance(value, str) else value.isoformat()
+
+
+def _reports_agree(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    def normalized(report: dict[str, Any]) -> dict[tuple[str, float], str]:
+        return {
+            (item["name"], float(item["threshold"])): item["result"]
+            for item in report.get("checks", [])
+        }
+
+    left_checks = normalized(left)
+    right_checks = normalized(right)
+    return bool(left_checks) and all(right_checks.get(key) == result for key, result in left_checks.items())
+
+
+def _validate_factor_frame(
+    frame: pd.DataFrame,
+    definition: Any | None = None,
+) -> dict[str, Any]:
     if frame.empty:
         raise ContractError("empty factor results cannot be published")
     required = {"instrument", "datetime"}
@@ -185,13 +212,33 @@ def _validate_factor_frame(frame: pd.DataFrame) -> None:
         raise ContractError(f"missing factor output columns: {missing}")
     if frame.duplicated(["instrument", "datetime"]).any():
         raise ContractError("duplicate factor keys reject publication")
+    thresholds = (definition.document.get("quality_thresholds", {}) if definition else {})
+    maximum_null_rate = float(thresholds.get("null_rate_maximum", 0.0))
+    minimum_coverage = float(thresholds.get("coverage_minimum", 1.0))
     value_columns = [column for column in frame.columns if column not in required]
-    if frame[value_columns].isna().all().any():
-        raise ContractError("factor null rate above threshold rejects publication")
+    observed_null_rate = float(frame[value_columns].isna().to_numpy().mean())
+    observed_coverage = 1.0 - observed_null_rate
+    warnings: list[str] = []
+    errors: list[str] = []
+    checks = [
+        {"name": "null_rate", "threshold": maximum_null_rate, "observed": observed_null_rate, "level": "error", "result": "passed" if observed_null_rate <= maximum_null_rate else "failed"},
+        {"name": "coverage", "threshold": minimum_coverage, "observed": observed_coverage, "level": "error", "result": "passed" if observed_coverage >= minimum_coverage else "failed"},
+    ]
+    for check in checks:
+        if check["result"] == "failed":
+            errors.append(f'{check["name"]} threshold failed')
+    return {
+        "status": "rejected" if errors else ("warning" if warnings else "passed"),
+        "policy": definition.document["quality_policy"] if definition else "reject_all",
+        "checks": checks,
+        "errors": errors,
+        "warnings": warnings,
+    }
 
 
 def _manifest_without_identities(
     *,
+    local_quality: dict[str, Any],
     frame: pd.DataFrame,
     partition_date: date,
     input_dataset: str,
@@ -201,12 +248,13 @@ def _manifest_without_identities(
     quality_report_checksum: str,
     adjustment_snapshot_id: str | None,
     effective_date_table_checksum: str | None,
+    upstream_created_at: str | datetime,
     definition: Any,
     data_checksum: str,
 ) -> dict[str, Any]:
     environment = environment_profile()
     decision_time = datetime.combine(
-        partition_date - timedelta(days=1), time(15, 0), tzinfo=ZoneInfo("Asia/Shanghai")
+        partition_date, time(15, 0), tzinfo=ZoneInfo("Asia/Shanghai")
     )
     return {
         "manifest_version": 1,
@@ -224,6 +272,7 @@ def _manifest_without_identities(
             "partition_date": partition_date.isoformat(),
             "manifest_generation_id": upstream_generation_id,
             "data_checksum_sha256": upstream_data_checksum,
+            "upstream_created_at": _iso_datetime(upstream_created_at),
             "adjustment_snapshot_id": adjustment_snapshot_id,
             "effective_date_table_checksum": effective_date_table_checksum,
         }],
@@ -245,8 +294,8 @@ def _manifest_without_identities(
         "run_id": str(uuid.uuid4()),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "quality": {
-            "status": "passed",
-            "policy": "reject_all",
+            "status": local_quality["status"],
+            "policy": definition.document["quality_policy"],
             "report_checksum_sha256": quality_report_checksum,
         },
     }
@@ -323,10 +372,10 @@ def read_factor_partition(partition: Path) -> pd.DataFrame:
     report_root = partition.parents[5]
     report_path = report_root / "reports" / "factor_v1" / manifest["generation_id"] / "report.json"
     report = QualityReportStore().read(report_root, manifest["generation_id"], binding_type="factor_v1")
+    accepted_statuses = {"passed"} if manifest["quality"]["policy"] == "reject_all" else {"passed", "warning"}
     if (
         report["policy"] != manifest["quality"]["policy"]
-        or report["status"] != "passed"
-        or report["policy"] != "reject_all"
+        or report["status"] not in accepted_statuses
         or file_sha256_bytes(report_path.read_bytes())
         != manifest["quality"]["report_checksum_sha256"]
     ):
@@ -334,9 +383,52 @@ def read_factor_partition(partition: Path) -> pd.DataFrame:
     return frame
 
 
-def quarantine_rejected(root: Path, frame: pd.DataFrame, reason: str) -> Path:
+def quarantine_rejected(root: Path, frame: pd.DataFrame, reason: str, *, operator: str = "factor-store") -> Path:
     directory = root / "quarantine" / uuid.uuid4().hex
-    directory.mkdir(parents=True)
-    (directory / "reason.txt").write_text(reason + "\n")
-    frame.to_parquet(directory / "rejected.parquet", index=False)
+    staging = directory.with_name(directory.name + ".staging")
+    staging.mkdir(parents=True)
+    try:
+        artifact = staging / "rejected.parquet"
+        frame.to_parquet(artifact, index=False)
+        created_at = datetime.now(timezone.utc).isoformat()
+        manifest = {
+            "quarantine_version": 1,
+            "reason": reason,
+            "operator": operator,
+            "created_at": created_at,
+            "row_count": len(frame),
+            "columns": list(frame.columns),
+            "data_checksum_sha256": file_sha256_bytes(artifact.read_bytes()),
+            "retention_policy": "manual-review; no automatic accepted promotion",
+        }
+        content = canonical_json(manifest)
+        (staging / "manifest.json").write_bytes(content)
+        (staging / "manifest.sha256").write_text(file_sha256_bytes(content) + "\n")
+        fsync_tree(staging)
+        os.replace(staging, directory)
+        fsync_dir(directory.parent)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
     return directory
+
+
+def read_quarantine_manifest(directory: Path) -> dict[str, Any]:
+    manifest_path = directory / "manifest.json"
+    digest_path = directory / "manifest.sha256"
+    try:
+        content = manifest_path.read_bytes()
+        recorded = digest_path.read_text().strip()
+    except FileNotFoundError as exc:
+        raise ContractError("missing quarantine governance files") from exc
+    if file_sha256_bytes(content) != recorded:
+        raise ContractError("tampered quarantine manifest")
+    try:
+        manifest = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ContractError("malformed quarantine manifest") from exc
+    if file_sha256_bytes((directory / "rejected.parquet").read_bytes()) != manifest.get("data_checksum_sha256"):
+        raise ContractError("tampered quarantine data")
+    if manifest.get("retention_policy") != "manual-review; no automatic accepted promotion":
+        raise ContractError("unsafe quarantine retention policy")
+    return manifest

@@ -4,9 +4,10 @@ on:
   pull_request:
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: ["macos-latest", "ubuntu-latest"]
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -15,12 +16,47 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: scripts/run_gate.sh
       - run: uv run --no-sync python -c "import uq.adapters.mootdx_source, uq.adapters.tushare_free; print('real imports ok')"
+      - name: Record certified environment cell
+        run: |
+          mkdir -p .gate/certification
+          printf '%s\n' "${{ matrix.os }}/${{ matrix.python-version }}" > .gate/certification/environment-cell.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: gate-report-${{ matrix.python-version }}
+          name: gate-report-${{ matrix.os }}-${{ matrix.python-version }}
           path: |
             .gate/gate-report.json
             .gate/requirements.lock.txt
             .gate/requirements.lock.txt.sha256
+            .gate/certification/environment-cell.txt
           if-no-files-found: error
+
+  f4-certification:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: gate-reports
+          pattern: gate-report-*
+      - name: Verify covered locked-environment cells
+        run: |
+          python3 - <<'PY'
+          import pathlib
+
+          expected = {
+              f"{os}/{python}"
+              for os in ("macos-latest", "ubuntu-latest")
+              for python in ("3.11", "3.12", "3.13")
+          }
+          observed = {
+              path.read_text().strip()
+              for path in pathlib.Path("gate-reports").rglob("environment-cell.txt")
+          }
+          missing = sorted(expected - observed)
+          if missing:
+              raise SystemExit(f"missing F4 environment cells: {missing}")
+          print("certified locked-environment cells:")
+          print("\n".join(sorted(observed)))
+          print("uncovered cells remain not certified")
+          PY

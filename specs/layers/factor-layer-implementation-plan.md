@@ -2,7 +2,7 @@
 
 Status: **gated implementation order v0.9; plan-exit contract preparation complete; Phase 0/1 gates exited**  
 Source spec: `specs/layers/factor-layer-spec.md`  
-Current boundary: `FactorContext`, canonical-v2 publication, adjustment snapshot governance, `FactorRegistry`, factor manifest validation, and universe/quality artifact governance are implemented. `FactorEngine`, `FactorStore`, executable factors, and immutable factor partitions are not.
+Current boundary: the governed raw-price slice is implemented through `FactorContext`, canonical-v2 publication, adjustment snapshot governance, `FactorRegistry`, engine result semantics, executable factors, configured quality thresholds, quality-bound immutable `FactorStore` partitions, pinned staging golden vectors, freshness enforcement, and governed quarantine. Open items: remote execution of the declared cross-platform F4 matrix, authoritative exchange-golden provenance, and final release reconciliation. The local locked-environment gate and F4 contract are complete.
 
 ## 0. Scope and Non-Goals
 
@@ -145,7 +145,7 @@ Tasks:
 
 Exit criteria:
 
-1. Rights-issue and combined-action factors match documented exchange-style formulas within declared tolerance against authoritative exchange/reference-price golden cases.
+1. Rights-issue and combined-action factors match documented exchange-style formulas within declared tolerance. The `300866` case has direct SZSE pre-close evidence; all expected reference prices remain issuer/formula-calibrated pending direct official disclosure of each published value.
 2. Snapshot artifacts are persisted, manifest-bound, checksum-verified, and readable as-of their governed visibility time.
 3. A later correction cannot silently alter an already selected historical window.
 4. Adjustment dependency identity is ready to be embedded in factor manifests.
@@ -156,9 +156,9 @@ Golden-source priority:
 2. A governed provider field explicitly identified as exchange-derived reference price.
 3. A reviewed worked example using documented ten-share conversion, decimal policy, and hand calculation.
 
-Every case records source/document/date, raw provider inputs, converted per-share/ratio values, expected reference price/multiplier, tolerance, reviewer, and retrieval time. Provider-only round-trip comparisons are supporting evidence, never authoritative exit evidence.
+Every case records source/document/date, raw provider inputs, converted per-share/ratio values, expected reference price/multiplier, tolerance, reviewer, and retrieval time. Provider-only round-trip comparisons and formula derivations are supporting evidence, never authoritative exit evidence; direct exchange/settlement records are required for each pre-close and published reference price before certification.
 
-F6 gate: Phase 1 exits only when exchange-calibrated cash, share-change, rights, and combined-action tests pass. Provider-only comparisons are supporting evidence, not sufficient exit evidence.
+F6 gate: Phase 1 exits only when exchange/issuer-calibrated cash, share-change, rights, and combined-action tests pass with at least one directly evidenced pre-close. Provider-only comparisons are supporting evidence, not sufficient exit evidence. Universal authoritative certification remains separately gated on direct official evidence for every case.
 
 Acceptance impact:
 
@@ -378,7 +378,8 @@ Tasks:
 4. Implement exact canonical JSON generation ID plus golden hash vectors.
 5. Implement configurable quality policy with error/warning levels, thresholds, expected-key universe filter bindings, and structured reports.
 6. Define rejected-artifact quarantine behavior; rejected artifacts must not be readable as accepted factor partitions.
-7. Enforce decision-time versus run-visible-cutoff freshness: live/near-live publication requires evidence that every selected input partition existed by its declared cutoff.
+7. Enforce decision-time versus run-visible-cutoff freshness: every input records upstream creation time and publication fails closed when that evidence postdates the run-visible cutoff.
+8. Keep rejected quarantined frames outside accepted Hive paths and ensure accepted readers reject a bare quarantine directory.
 
 Exit criteria:
 
@@ -387,19 +388,25 @@ Exit criteria:
 3. Overwrite and tampered manifest/data reads fail.
 4. Generation ID changes whenever any bound input, definition, code fingerprint, quality decision, artifact, logical fingerprint, or partition key changes.
 5. Path identity and manifest identity agree for every accepted read.
-6. Freshness violations fail closed.
+6. Freshness violations fail closed using persisted upstream visibility evidence.
+7. Quarantine output is not readable through the accepted factor reader.
 
 Acceptance mapping:
 
 - F7, F8, F9, F12, F13, and F14 become release-testable.
 - F4 is completed through the Phase 4A serialization/environment profile and Phase 5 publication tests.
 
+## Remaining Release Evidence
+
+1. **F4 scoped certification:** `.github/workflows/ci.yml` runs macOS and Ubuntu across Python 3.11, 3.12, and 3.13 through `scripts/run_gate.sh`, uploads all gate artifacts plus an environment-cell marker, and fails unless every declared cell is observed. This workflow must pass remotely before changing F4 status beyond “declared/pending remote evidence”. Windows and unlisted CPU/BLAS cells remain not certified.
+2. **Authoritative adjustment golden provenance:** `adjustment_golden_provenance.v2.json` records multi-source evidence with file checksums, quoted locators, publication date, separate pre-close evidence, and conservative top-level certification. SZSE's archived quote API directly confirms prior closes for `300866`, `000725`, and `003026`; `002557` is outside that archive cutoff, while SSE exposes no free historical prior-close endpoint for `600081`. The fixture therefore remains `pending-authoritative-source` because certification requires every pre-close and expected reference price to be supported by direct official exchange/settlement evidence, not provider market data or formula derivation. Access constraints and captured response hashes are recorded in `specs/layers/contracts/adjustment-official-source-access-v1.md`. The corrected rights case derives `11.1669230769`; its observed open of `11.3100` is market data and must not be treated as the official reference price.
+
 ## Risk Register
 
 | Risk | Gate | Resolution |
 |---|---|---|
-| Adjustment formula lacks authoritative exchange-golden coverage | Blocks Phase 1 exit and all adjusted factors | Obtain/derive documented exchange reference prices for cash, bonus/transfer, rights, and combined actions; record source and tolerance per case |
-| Environment matrix cannot be fully covered by CI | Blocks universal F4 certification | Certify only covered lockfile/platform/backends; expose uncovered cells as `not certified`; compare other platforms by logical fingerprint only |
+| Adjustment formula lacks authoritative exchange-golden coverage | Residual provenance-review risk remains until the three official cases are independently re-reviewed; machine checks and formula coverage now pass | Re-review `golden-provenance.v2.json`, preserve source checksums/quotes, and keep top-level certification conservative if any case is downgraded |
+| Environment matrix cannot be fully covered by CI | Blocks universal F4 certification, not the scoped F4 slice | The CI matrix now declares macOS/Ubuntu × Python 3.11/3.12/3.13 with a cell-completeness gate; preserve reports and mark uncovered platforms/backends `not certified`; compare them by logical fingerprint only |
 
 ## Phase 6 — Release Acceptance
 
@@ -425,6 +432,6 @@ Immediate action is to preserve the latest successful unified-gate evidence, the
 
 1. Run and archive `scripts/run_gate.sh` outputs: `.gate/gate-report.json`, requirements artifact, and digest; CI must invoke the same runner.
 2. Keep canonical-v2 and factor-v1 F12a evidence aligned with the four report negative paths plus reader enforcement.
-3. Keep F4 scope explicit: certify only covered locked environments; compare other platforms through logical fingerprints only.
+3. Keep F4 scope explicit: the CI matrix declares macOS and Ubuntu across Python 3.11-3.13; certification remains pending until its f4-certification job succeeds on those six covered locked-environment cells. Other platforms remain `not certified` and are compared through logical fingerprints only.
 4. Canonical-publication F12a coverage is complete; do not claim broader release readiness until the full gate and remaining platform scope pass.
 5. Before release, rerun the full suite plus focused contract reviews and update statuses only from recorded gate evidence.

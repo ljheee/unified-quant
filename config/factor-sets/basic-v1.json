@@ -14,6 +14,10 @@
     "amount"
   ],
   "quality_policy": "reject_all",
+  "quality_thresholds": {
+    "null_rate_maximum": 0.5,
+    "coverage_minimum": 0.0
+  },
   "dependencies": [],
   "factors": [
     {

@@ -1,0 +1,217 @@
+{
+  "profile": {
+    "profile_id": "parquet-v1",
+    "compression": "snappy",
+    "dictionary_enabled": true,
+    "row_group_size": 64000,
+    "column_order": [
+      "instrument",
+      "datetime",
+      "factor_columns"
+    ],
+    "sort_order": [
+      "instrument",
+      "datetime"
+    ],
+    "null_representation": "parquet_null",
+    "float_rounding_digits": 12,
+    "nan_policy": "parquet_null",
+    "signed_zero_policy": "preserve",
+    "infinity_policy": "reject_non_nullable",
+    "index": false,
+    "metadata_policy": "no_custom_arrow_schema_metadata"
+  },
+  "input_rows": [
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-01",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 1.0,
+      "amount": 10.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-02",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 2.0,
+      "amount": 20.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-03",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 3.0,
+      "amount": 30.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-04",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 4.0,
+      "amount": 40.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-05",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 5.0,
+      "amount": 50.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-06",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 6.0,
+      "amount": 60.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-07",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 7.0,
+      "amount": 70.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-08",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 8.0,
+      "amount": 80.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-09",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 9.0,
+      "amount": 90.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-10",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 10.0,
+      "amount": 100.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-11",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 11.0,
+      "amount": 110.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-12",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 12.0,
+      "amount": 120.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-13",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 13.0,
+      "amount": 130.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-14",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 14.0,
+      "amount": 140.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-15",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 15.0,
+      "amount": 150.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-16",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 16.0,
+      "amount": 160.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-17",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 17.0,
+      "amount": 170.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-18",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 18.0,
+      "amount": 180.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-19",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 19.0,
+      "amount": 190.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-20",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 20.0,
+      "amount": 200.0
+    },
+    {
+      "instrument": "600000.XSHG",
+      "datetime": "2026-08-21",
+      "high": 11.0,
+      "low": 9.0,
+      "close": 10.0,
+      "volume": 21.0,
+      "amount": 210.0
+    }
+  ],
+  "logical_fingerprint_sha256": "a563a00c207e1cf3c93e4ba256ab3f3055cce12b350b8d54bf2d1dbf3461df09",
+  "artifact_checksum_sha256_locked_environment": "f49826efae5e4e91ec065c09ca7bca3c3fbab1a8b2a9b02323fbf4b2b0066d8b"
+}

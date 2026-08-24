@@ -1,34 +1,181 @@
 {
   "canonical_manifest.v2.json": [
-    {"case": "invalid_date", "patch": {"partition_date": "2026-02-30"}},
-    {"case": "invalid_uuid", "patch": {"run_id": "not-a-uuid"}},
-    {"case": "bad_checksum", "patch": {"data_checksum_sha256": "xyz"}},
-    {"case": "missing_field", "remove": ["generation_id"]}
+    {
+      "case": "invalid_date",
+      "patch": {
+        "partition_date": "2026-02-30"
+      }
+    },
+    {
+      "case": "invalid_uuid",
+      "patch": {
+        "run_id": "not-a-uuid"
+      }
+    },
+    {
+      "case": "bad_checksum",
+      "patch": {
+        "data_checksum_sha256": "xyz"
+      }
+    },
+    {
+      "case": "missing_field",
+      "remove": [
+        "generation_id"
+      ]
+    }
   ],
   "canonical_migration.v1.json": [
-    {"case": "bad_action", "patch": {"action": "overwrite_v1"}},
-    {"case": "bad_schema", "patch": {"source_schema_version": "v3"}},
-    {"case": "missing_approval", "remove": ["approval_reference"]},
-    {"case": "bad_checksum", "patch": {"mapping_checksum_sha256": "short"}}
+    {
+      "case": "bad_action",
+      "patch": {
+        "action": "overwrite_v1"
+      }
+    },
+    {
+      "case": "bad_schema",
+      "patch": {
+        "source_schema_version": "v3"
+      }
+    },
+    {
+      "case": "missing_approval",
+      "remove": [
+        "approval_reference"
+      ]
+    },
+    {
+      "case": "bad_checksum",
+      "patch": {
+        "mapping_checksum_sha256": "short"
+      }
+    }
   ],
   "adjustment_snapshot.v1.json": [
-    {"case": "bad_symbol", "patch": {"instrument": "AAPL"}},
-    {"case": "bad_formula", "patch": {"formula_version": "adj_factor.derived_v4"}},
-    {"case": "bad_visibility_type", "patch": {"visibility_time": 123}},
-    {"case": "missing_generation", "remove": ["generation_id"]}
+    {
+      "case": "bad_symbol",
+      "patch": {
+        "instrument": "AAPL"
+      }
+    },
+    {
+      "case": "bad_formula",
+      "patch": {
+        "formula_version": "adj_factor.derived_v4"
+      }
+    },
+    {
+      "case": "bad_visibility_type",
+      "patch": {
+        "visibility_time": 123
+      }
+    },
+    {
+      "case": "missing_generation",
+      "remove": [
+        "generation_id"
+      ]
+    }
   ],
   "factor_manifest.v1.json": [
-    {"case": "extra_field", "patch": {"unexpected": true}},
-    {"case": "bad_semver", "patch": {"factor_version": "1.0"}},
-    {"case": "empty_inputs", "replace": {"inputs": []}},
-    {"case": "bad_quality_status", "patch": {"quality": {"status": "maybe", "policy": "reject_all", "report_checksum_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}
+    {
+      "case": "extra_field",
+      "patch": {
+        "unexpected": true
+      }
+    },
+    {
+      "case": "bad_semver",
+      "patch": {
+        "factor_version": "1.0"
+      }
+    },
+    {
+      "case": "empty_inputs",
+      "replace": {
+        "inputs": []
+      }
+    },
+    {
+      "case": "missing_input_visibility_evidence",
+      "patch": {
+        "inputs": [
+          {
+            "binding": "bars",
+            "dataset": "bars_daily",
+            "schema_version": "research-v1",
+            "partition_date": "2026-08-21",
+            "manifest_generation_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "data_checksum_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "schema_checksum_sha256": null,
+            "adjustment_snapshot_id": null,
+            "effective_date_table_checksum": null
+          }
+        ]
+      }
+    },
+    {
+      "case": "bad_quality_status",
+      "patch": {
+        "quality": {
+          "status": "maybe",
+          "policy": "reject_all",
+          "report_checksum_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    }
   ],
   "universe_snapshot.v1.json": [
-    {"case": "bad_checksum", "patch": {"members_artifact": {"path": "x.csv", "checksum_sha256": "nope"}}},
-    {"case": "missing_valid_from", "remove": ["valid_from"]}
+    {
+      "case": "bad_checksum",
+      "patch": {
+        "members_artifact": {
+          "path": "x.csv",
+          "checksum_sha256": "nope"
+        }
+      }
+    },
+    {
+      "case": "missing_valid_from",
+      "remove": [
+        "valid_from"
+      ]
+    }
   ],
   "quality_report.v1.json": [
-    {"case": "bad_binding", "patch": {"binding_type": "unknown"}},
-    {"case": "no_checks", "replace": {"checks": []}}
+    {
+      "case": "bad_binding",
+      "patch": {
+        "binding_type": "unknown"
+      }
+    },
+    {
+      "case": "no_checks",
+      "replace": {
+        "checks": []
+      }
+    }
+  ],
+  "adjustment_golden_provenance.v1.json": [
+    {
+      "case": "empty_locator",
+      "patch_cases": [
+        0
+      ],
+      "replace_source": {
+        "kind": "vendor-reference",
+        "publisher": "unapproved vendor",
+        "locator": "",
+        "retrieved_at_utc": "2026-08-24T00:00:00Z",
+        "license_or_terms": "unknown"
+      }
+    },
+    {
+      "case": "missing_reviewer_for_worked_example",
+      "remove_case_field": [
+        0,
+        "reviewer"
+      ]
+    }
   ]
 }

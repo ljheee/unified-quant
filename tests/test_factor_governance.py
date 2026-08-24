@@ -28,6 +28,7 @@ def manifest():
         "inputs": [{
             "binding": "bars", "dataset": "bars_daily", "schema_version": "research-v1",
             "partition_date": "2026-08-21", "manifest_generation_id": "b" * 64, "data_checksum_sha256": "c" * 64,
+            "upstream_created_at": "2026-08-21T16:00:00+08:00",
             "schema_checksum_sha256": None, "adjustment_snapshot_id": None, "effective_date_table_checksum": None,
         }],
         "factor_definitions": [

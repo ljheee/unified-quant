@@ -73,9 +73,26 @@ def test_adjustment_snapshot_generation_is_stable():
 def test_factor_manifest_contract():
     manifest = json.loads((FIXTURES / "factor-manifest-v1-valid.json").read_text())
     validate_contract_path(ROOT / "config/schemas/manifests/factor_manifest.v1.json", manifest)
+    assert manifest["inputs"][0]["upstream_created_at"] <= manifest["run_visible_cutoff"]
     invalid = dict(manifest); invalid["extra"] = True
     with pytest.raises(Exception):
         validate_contract("factor_manifest.v1.json", invalid)
+
+
+def test_factor_set_definition_contract():
+    from uq.contracts.factor_governance import _validate_factor_set
+
+    valid = json.loads((ROOT / "config/factor-sets/basic-v1.json").read_text())
+    _validate_factor_set(valid)
+    for case in (
+        {"status": "maybe"},
+        {"quality_policy": "maybe"},
+        {"dependencies": ["basic/1.0"]},
+        {"factors": [{**valid["factors"][0], "minimum_history": 0}]},
+        {"factors": [{**valid["factors"][0], "implementation_fingerprint": "short"}]},
+    ):
+        with pytest.raises(Exception):
+            _validate_factor_set({**valid, **case})
 
 
 def test_universe_and_quality_contracts():
@@ -100,6 +117,7 @@ def test_universe_and_quality_contracts():
 
 def test_all_contract_negative_fixtures():
     cases = json.loads((FIXTURES / "contract-negative-cases.json").read_text())
+    provenance = json.loads((FIXTURES / "adjustment/golden-provenance.v1.json").read_text())
     valid_payloads = {
         "factor_manifest.v1.json": json.loads((FIXTURES / "factor-manifest-v1-valid.json").read_text()),
         "canonical_manifest.v2.json": _canonical_v2_valid(),
@@ -108,6 +126,7 @@ def test_all_contract_negative_fixtures():
         "factor_manifest.v1.json": json.loads((FIXTURES / "factor-manifest-v1-valid.json").read_text()),
         "universe_snapshot.v1.json": _universe_valid(),
         "quality_report.v1.json": _quality_valid(),
+        "adjustment_golden_provenance.v1.json": provenance,
     }
     for schema_name, invalid_cases in cases.items():
         base = valid_payloads[schema_name]
@@ -117,6 +136,12 @@ def test_all_contract_negative_fixtures():
             base["generation_id"] = adjustment_snapshot_generation(base)
         for case in invalid_cases:
             payload = copy.deepcopy(base)
+            if "patch_cases" in case:
+                index = case["patch_cases"][0]
+                payload["cases"][index]["source"].update(case["replace_source"])
+            if "remove_case_field" in case:
+                index, field = case["remove_case_field"]
+                payload["cases"][index].pop(field, None)
             if "remove" in case:
                 for field in case["remove"]:
                     payload.pop(field, None)
@@ -201,3 +226,66 @@ def test_phase_1_test_migration_contract_is_preserved():
     assert replacement["status"] == "replaced"
     assert Path(ROOT / replacement["replacement_test_id"].split("::", 1)[0]).is_file()
     assert "test_exchange_formula_golden_cases" in (ROOT / replacement["replacement_test_id"].split("::", 1)[0]).read_text()
+
+
+def test_adjustment_golden_provenance_contract():
+    fixture_path = FIXTURES / "adjustment/golden-provenance.v1.json"
+    provenance = json.loads(fixture_path.read_text())
+    validate_contract("adjustment_golden_provenance.v1.json", provenance)
+    assert provenance["certification"] == "pending-authoritative-source"
+    assert all(case["source"]["kind"] != "exchange-reference" or case["source"]["locator"] for case in provenance["cases"])
+
+
+def test_authoritative_golden_certification_requires_published_source():
+    fixture_path = FIXTURES / "adjustment/golden-provenance.v1.json"
+    provenance = json.loads(fixture_path.read_text())
+    certified = copy.deepcopy(provenance)
+    certified["certification"] = "certified-authoritative-source"
+    with pytest.raises(Exception):
+        validate_contract("adjustment_golden_provenance.v1.json", certified)
+
+
+def test_adjustment_golden_provenance_v2_official_cases():
+    fixture_path = FIXTURES / "adjustment/golden-provenance.v2.json"
+    provenance = json.loads(fixture_path.read_text())
+    validate_contract("adjustment_golden_provenance.v2.json", provenance)
+    assert provenance["provenance_version"] == 2
+    assert provenance["certification"] == "pending-authoritative-source"
+
+    event_types = {case["event_type"] for case in provenance["cases"]}
+    assert event_types == {"cash", "cash_bonus_transfer", "bonus_transfer", "rights"}
+    for case in provenance["cases"]:
+        for evidence_name in ("event_evidence", "pre_close_evidence", "reference_price_evidence"):
+            evidence = case[evidence_name]
+            assert len(evidence["file_sha256"]) == 64
+            assert evidence["quoted_locator"]
+        if case["case_id"] == "szse-300866-2024-cash-transfer":
+            assert case["pre_close_evidence"]["kind"] == "exchange-reference"
+            assert "szse.cn/api/report/ShowReport/data" in case["pre_close_evidence"]["locator"]
+            assert case["reference_price_evidence"]["kind"] == "derived-formula"
+        if case["instrument"] in {"000725.XSHE", "003026.XSHE"}:
+            assert case["pre_close_evidence"]["kind"] == "exchange-reference"
+            assert "szse.cn/api/report/ShowReport/data" in case["pre_close_evidence"]["locator"]
+        if case["event_type"] == "rights":
+            assert case["inputs"]["rights_per_ten"] == 3.0
+            assert case["expected_ex_right_price"] == pytest.approx(11.1669230769)
+            assert case["reference_price_evidence"]["kind"] == "derived-formula"
+
+
+def test_adjustment_golden_provenance_v2_rejects_uncertified_reference_sources():
+    fixture_path = FIXTURES / "adjustment/golden-provenance.v2.json"
+    provenance = json.loads(fixture_path.read_text())
+    certified = copy.deepcopy(provenance)
+    certified["certification"] = "certified-authoritative-source"
+    with pytest.raises(Exception):
+        validate_contract("adjustment_golden_provenance.v2.json", certified)
+
+
+def test_adjustment_golden_provenance_v2_certification_accepts_direct_official_references():
+    fixture_path = FIXTURES / "adjustment/golden-provenance.v2.json"
+    provenance = copy.deepcopy(json.loads(fixture_path.read_text()))
+    provenance["certification"] = "certified-authoritative-source"
+    for case in provenance["cases"]:
+        case["pre_close_evidence"]["kind"] = "exchange-reference"
+        case["reference_price_evidence"]["kind"] = "exchange-reference"
+    validate_contract("adjustment_golden_provenance.v2.json", provenance)

@@ -7,7 +7,7 @@
   "partition_date": "2026-08-21",
   "decision_time": "2026-08-21T15:00:00+08:00",
   "run_visible_cutoff": "2026-08-23T09:30:00+08:00",
-  "inputs": [{"binding":"bars","dataset":"bars_daily","schema_version":"research-v1","partition_date":"2026-08-21","manifest_generation_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","data_checksum_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}],
+  "inputs": [{"binding":"bars","dataset":"bars_daily","schema_version":"research-v1","partition_date":"2026-08-21","manifest_generation_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","data_checksum_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","upstream_created_at":"2026-08-21T15:00:00+08:00"}],
   "factor_definitions": [{"name":"amount_20d","version":"1.0.0","implementation_fingerprint":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}],
   "universe_snapshot": null,
   "row_count": 1,

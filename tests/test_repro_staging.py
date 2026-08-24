@@ -1,12 +1,14 @@
 import json
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 import pandas as pd
 import pytest
 
 from uq.errors import ContractError
 from uq.factors.raw_price import calculate_raw_price_factors, logical_fingerprint
-from uq.factors.repro_staging import ReproStaging, assert_reproducible, environment_profile
+from uq.factors.repro_staging import SERIALIZATION_PROFILE, ReproStaging, assert_reproducible, environment_profile
 
 
 def factor_frame():
@@ -46,3 +48,15 @@ def test_staging_is_physically_isolated_from_accepted_paths(tmp_path):
     assert not (tmp_path / "factors").exists()
     accepted_candidates=list((tmp_path / "factors").glob("**/data.parquet")) if (tmp_path/"factors").exists() else []
     assert accepted_candidates==[]
+
+
+def test_raw_price_golden_vectors_and_profile_contract(tmp_path):
+    fixture=json.loads((ROOT / "config/schemas/fixtures/raw-price-golden.json").read_text())
+    assert SERIALIZATION_PROFILE == fixture["profile"]
+    assert environment_profile()["blas_backend"] not in {"", "unknown"}
+
+    rows=[{**row, "datetime":pd.Timestamp(row["datetime"])} for row in fixture["input_rows"]]
+    frame=calculate_raw_price_factors(pd.DataFrame(rows))
+    assert logical_fingerprint(frame)==fixture["logical_fingerprint_sha256"]
+    run=ReproStaging().write(tmp_path / "golden", frame, logical_fingerprint(frame))
+    assert run.artifact_checksum==fixture["artifact_checksum_sha256_locked_environment"]

@@ -7,7 +7,7 @@ Normative source: `config/schemas/manifests/factor_manifest.v1.json` is the sole
 | manifest_version | §6A + plan addition | const 1 | required | no | schema mistyped | valid/negative |
 | input_dataset/input_schema_version/factor_set/factor_version/partition_date | §6A five-tuple | string/semver/date | required | generation | missing/mistyped/date | valid/date-negative |
 | decision_time/run_visible_cutoff | §6A + plan addition | RFC3339 date-time | required | no | format/order | valid/order-negative |
-| inputs | §6A | ordered array | min 1 | generation | missing/bad binding/checksum | valid/negative |
+| inputs | §6A + freshness addition | ordered array with upstream `upstream_created_at` evidence | min 1 | generation and cutoff validation | missing/bad binding/checksum/late visibility | valid/negative/freshness-negative |
 | factor_definitions | §6A | array of typed definitions | min 1 | generation and registry match | mismatch/fingerprint change | valid/fingerprint-negative |
 | universe_snapshot | §6A | object or null | required nullable | generation when bound | mistyped/path/generation | valid/traversal-negative |
 | row_count/columns/dtypes | §6A | integer/array/map | required | integrity metadata | empty/dtype mismatch | valid/negative |

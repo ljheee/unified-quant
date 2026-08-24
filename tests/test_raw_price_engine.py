@@ -67,3 +67,15 @@ def test_logical_fingerprint_is_deterministic():
     left=calculate_raw_price_factors(frame)
     right=calculate_raw_price_factors(frame.copy())
     assert logical_fingerprint(left)==logical_fingerprint(right)
+
+
+def test_raw_price_factors_do_not_consume_adjustment_data():
+    base = bars([
+        {"instrument":"A","datetime":pd.Timestamp(2026,8,21),"high":2.0,"low":1.0,"close":1.5,"volume":3.0,"amount":7.0},
+    ])
+    polluted = base.copy()
+    polluted["adj_factor"] = [2.0]
+    left = calculate_raw_price_factors(base)
+    right = calculate_raw_price_factors(polluted)
+    pd.testing.assert_frame_equal(left, right)
+    assert "adj_factor" not in right.columns

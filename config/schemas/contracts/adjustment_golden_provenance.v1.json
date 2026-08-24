@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/adjustment_golden_provenance.v1.json",
+  "title": "Corporate-action golden provenance v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "provenance_version",
+    "certification",
+    "cases"
+  ],
+  "properties": {
+    "provenance_version": {
+      "const": 1
+    },
+    "certification": {
+      "type": "string",
+      "enum": [
+        "pending-authoritative-source",
+        "certified-authoritative-source"
+      ],
+      "description": "Only exchange/settlement-published evidence may use the certified value."
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "event_type",
+          "instrument",
+          "record_date",
+          "ex_date",
+          "inputs",
+          "expected_ex_right_price",
+          "tolerance_abs",
+          "source"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "event_type": {
+            "enum": [
+              "cash",
+              "bonus_transfer",
+              "rights",
+              "cash_bonus_transfer",
+              "combined"
+            ]
+          },
+          "instrument": {
+            "type": "string",
+            "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$"
+          },
+          "record_date": {
+            "$ref": "#/$defs/date"
+          },
+          "ex_date": {
+            "$ref": "#/$defs/date"
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "pre_close",
+              "cash_per_ten",
+              "bonus_per_ten",
+              "rights_per_ten",
+              "rights_price"
+            ],
+            "properties": {
+              "pre_close": {
+                "type": "number"
+              },
+              "cash_per_ten": {
+                "type": "number",
+                "minimum": 0
+              },
+              "bonus_per_ten": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rights_per_ten": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rights_price": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          },
+          "expected_ex_right_price": {
+            "type": "number"
+          },
+          "tolerance_abs": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "publisher",
+              "locator",
+              "retrieved_at_utc",
+              "license_or_terms"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "exchange-reference",
+                  "settlement-reference",
+                  "vendor-reference",
+                  "reviewed-worked-example"
+                ]
+              },
+              "publisher": {
+                "type": "string",
+                "minLength": 1
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1,
+                "not": {
+                  "const": ""
+                }
+              },
+              "retrieved_at_utc": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "license_or_terms": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "reviewer": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "source": {
+                  "properties": {
+                    "kind": {
+                      "const": "reviewed-worked-example"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "source"
+              ]
+            },
+            "then": {
+              "required": [
+                "reviewer"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "certification": {
+            "const": "certified-authoritative-source"
+          }
+        }
+      },
+      "required": [
+        "certification"
+      ],
+      "then": {
+        "properties": {
+          "cases": {
+            "contains": {
+              "required": [
+                "source"
+              ],
+              "properties": {
+                "source": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "exchange-reference",
+                        "settlement-reference"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ]
+}

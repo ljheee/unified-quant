@@ -47,13 +47,14 @@ class XdxrAdjustmentDeriver:
         pre_close_by_date = self._pre_close_by_date(pre_close)
         factors: list[float] = []
         cumulative = 1.0
-        for session in sorted(set(sessions), reverse=True):
+        session_values = pd.DatetimeIndex(sessions).unique().sort_values(ascending=False)
+        for session in session_values:
             factors.append(cumulative)
             on_session = (event_dates == pd.Timestamp(session)).to_numpy()
             for _, event in events[on_session].iterrows():
                 cumulative *= self._event_multiplier(event, pre_close_by_date.get(pd.Timestamp(session)))
         factors.reverse()
-        if len(factors) != len(sorted(set(sessions))):
+        if len(factors) != len(session_values):
             raise ValueError("derived factor count does not match sessions")
         session_dates = sorted(set(sessions))
         result = pd.DataFrame({

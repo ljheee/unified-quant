@@ -25,13 +25,14 @@
       "type": "array", "minItems": 1,
       "items": {
         "type": "object", "additionalProperties": false,
-        "required": ["binding", "dataset", "schema_version", "partition_date", "manifest_generation_id", "data_checksum_sha256"],
+        "required": ["binding", "dataset", "schema_version", "partition_date", "manifest_generation_id", "data_checksum_sha256", "upstream_created_at"],
         "properties": {
           "binding": {"enum": ["bars", "adjustment", "universe"]},
           "dataset": {"type": "string"}, "schema_version": {"type": "string"},
           "partition_date": {"$ref": "#/$defs/date"},
           "manifest_generation_id": {"$ref": "#/$defs/sha256"},
           "data_checksum_sha256": {"$ref": "#/$defs/sha256"},
+          "upstream_created_at": {"$ref": "#/$defs/date_time"},
           "schema_checksum_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
           "adjustment_snapshot_id": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
           "effective_date_table_checksum": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}

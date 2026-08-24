@@ -1,0 +1,30 @@
+{
+  "provenance_version": 1,
+  "certification": "pending-authoritative-source",
+  "cases": [
+    {
+      "case_id": "worked-example-cash-only",
+      "event_type": "cash",
+      "instrument": "600000.XSHG",
+      "record_date": "2026-08-22",
+      "ex_date": "2026-08-23",
+      "inputs": {
+        "pre_close": 11.0,
+        "cash_per_ten": 5.0,
+        "bonus_per_ten": 0.0,
+        "rights_per_ten": 0.0,
+        "rights_price": 0.0
+      },
+      "expected_ex_right_price": 10.5,
+      "tolerance_abs": 1e-12,
+      "source": {
+        "kind": "reviewed-worked-example",
+        "publisher": "internal quant governance",
+        "locator": "config/schemas/fixtures/adjustment/formula-golden.json#cash-only",
+        "retrieved_at_utc": "2026-08-24T00:00:00Z",
+        "license_or_terms": "repository internal review record"
+      },
+      "reviewer": "quant-governance"
+    }
+  ]
+}

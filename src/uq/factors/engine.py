@@ -7,6 +7,8 @@ import hashlib
 import json
 from typing import Any, Literal
 
+import pandas as pd
+
 
 from ..contracts.factor_governance import FactorRegistry, FactorSetDefinition
 from ..errors import ContractError
@@ -44,6 +46,8 @@ class FactorComputeRequest:
             raise ContractError("factor session dates must be non-empty and strictly ordered")
         if self.run_visible_cutoff < self.decision_time:
             raise ContractError("run visible cutoff precedes decision time")
+        if max(self.session_dates) > self.run_visible_cutoff.date():
+            raise ContractError("factor request contains input beyond visible cutoff")
         object.__setattr__(self, "request_metadata", {
             **self.request_metadata,
             "definition_factor_set": self.definition.factor_set,
@@ -85,6 +89,14 @@ class FactorResult:
     warnings: tuple[str, ...]
     errors: tuple[str, ...]
     null_policy: dict[str, Any]
+
+    def __post_init__(self) -> None:
+        if self.status == "rejected" and not self.errors:
+            raise ContractError("rejected factor result requires errors")
+        if self.status != "rejected" and self.errors:
+            raise ContractError("non-rejected factor result cannot contain errors")
+        if self.status == "warning" and not self.warnings:
+            raise ContractError("warning factor result requires warnings")
 
 
 class FactorEngine:
@@ -150,6 +162,98 @@ class FactorEngine:
             },
         ))
 
+
+    def create_result(
+        self,
+        request: FactorComputeRequest,
+        frame: pd.DataFrame,
+        *,
+        input_lineage: tuple[dict[str, Any], ...] = (),
+        quality_report: dict[str, Any] | None = None,
+        null_policy: dict[str, Any] | None = None,
+    ) -> FactorResult:
+        """Materialize governed empty/all-null/partial-result semantics."""
+        def check_results(report: dict[str, Any]) -> dict[tuple[str, float], str]:
+            return {
+                (item["name"], float(item["threshold"])): item["result"]
+                for item in report.get("checks", [])
+            }
+
+        expected_names = {item["name"] for item in request.definition.factors}
+        missing = sorted(expected_names - set(frame.columns))
+        if missing:
+            raise ContractError(f"factor result missing definitions: {missing}")
+        value_columns = [item["name"] for item in request.definition.factors]
+        thresholds = request.definition.document.get("quality_thresholds", {})
+        maximum_null_rate = float(thresholds.get("null_rate_maximum", 0.0))
+        minimum_coverage = float(thresholds.get("coverage_minimum", 1.0))
+        null_rates = {
+            column: float(frame[column].isna().mean()) if len(frame) else 1.0
+            for column in value_columns
+        }
+        failed_nulls = [column for column, rate in null_rates.items() if rate > maximum_null_rate]
+        observed_coverage = 1.0 - (sum(null_rates.values()) / len(value_columns))
+        coverage_failed = frame.empty or observed_coverage < minimum_coverage
+        warnings: list[str] = []
+        errors: list[str] = []
+        if frame.empty:
+            status = "empty"
+            if request.intent == "publication":
+                errors.append("empty factor results cannot be published")
+                status = "rejected"
+        elif failed_nulls:
+            status = "rejected"
+            errors.extend(f"null rate above maximum: {name}" for name in failed_nulls)
+        elif coverage_failed:
+            status = "rejected"
+            errors.append("coverage below minimum")
+        else:
+            partial = [column for column, rate in null_rates.items() if rate > 0]
+            if partial:
+                warnings.extend(f"insufficient history emits nulls: {name}" for name in partial)
+            status = "warning" if warnings and request.definition.document["quality_policy"] == "accept_with_warnings" else "passed"
+        local_report = {
+            "policy": request.definition.document["quality_policy"],
+            "status": status,
+            "checks": [
+                *[
+                    {"name": "null_rate", "threshold": maximum_null_rate, "observed": null_rates[name], "level": "error", "result": "failed" if name in failed_nulls else "passed"}
+                    for name in value_columns
+                ],
+                {"name": "coverage", "threshold": minimum_coverage, "observed": observed_coverage, "level": "error", "result": "failed" if coverage_failed else "passed"},
+            ],
+            "errors": errors,
+            "warnings": warnings,
+        }
+        report = quality_report or local_report
+        supplied_policy = report.get("policy")
+        expected_policy = request.definition.document["quality_policy"]
+        supplied_status = report.get("status")
+        if supplied_policy != expected_policy:
+            raise ContractError("factor result quality policy does not match reviewed definition")
+        if supplied_status != status:
+            raise ContractError("factor result quality status disagrees with local checks")
+        expected_checks = check_results(local_report)
+        supplied_checks = check_results(report)
+        if not supplied_checks or set(supplied_checks) != set(expected_checks) or any(
+            supplied_checks[key] != result for key, result in expected_checks.items()
+        ):
+            raise ContractError("factor result quality checks disagree with local computation")
+        return FactorResult(
+            frame=frame,
+            definitions=tuple(request.definition.factors),
+            input_lineage=input_lineage,
+            quality_report=report,
+            status=status,
+            warnings=tuple(warnings),
+            errors=tuple(errors),
+            null_policy={
+                "maximum_null_rate": maximum_null_rate,
+                "forward_fill": False,
+                "intent": request.intent,
+                "staging_only": request.intent == "dry_run",
+            },
+        )
 
     def plan(self, request: FactorComputeRequest) -> FactorComputeRequest:
         if request.universe_binding is not None:

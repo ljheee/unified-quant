@@ -88,6 +88,10 @@ class FactorRegistry:
         cutoff = datetime.fromisoformat(manifest["run_visible_cutoff"])
         if cutoff < decision_time:
             raise ContractError("run visible cutoff precedes decision time")
+        for item in manifest["inputs"]:
+            input_created_at = datetime.fromisoformat(item["upstream_created_at"])
+            if input_created_at > cutoff:
+                raise ContractError("upstream partition visibility violates factor run cutoff")
         definition = self.get(manifest["factor_set"], manifest["factor_version"])
         if manifest["quality"]["policy"] != definition.document["quality_policy"]:
             raise ContractError("factor manifest quality policy does not match reviewed definition")
