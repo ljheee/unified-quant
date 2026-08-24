@@ -20,6 +20,17 @@ Each successful job must preserve:
 The certification job must fail unless every declared cell has a successful
 report.
 
+## Certified Run 2026-08-24
+
+GitHub Actions run `32750572645` on commit
+`2acaa4dee562f9bf065844f7a9edebb179babb87` passed all six matrix jobs and the
+F4 aggregation job. Downloaded artifacts preserve each gate report, locked
+requirements file, requirements digest, and environment-cell marker. Reports
+record Python `3.11.9`, `3.12.10`, and `3.13.14` on macOS and Python `3.11.16`,
+`3.12.14`, and `3.13.15` on Ubuntu; all six requirements digests match. The
+certification job also verifies report commit, test result, artifact
+completeness, and that the reported Python version matches the declared cell.
+
 ## Claims
 
 - Covered cells may claim identical staged artifact checksums inside that cell.

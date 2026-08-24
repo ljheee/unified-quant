@@ -2,7 +2,7 @@
 
 Status: **gated implementation order v0.9; Phase 0-5 local implementation complete; release certification pending**  
 Source spec: `specs/layers/factor-layer-spec.md`  
-Current boundary: governed raw-price and adjusted-factor slices are implemented through `FactorContext`, canonical-v2 publication, adjustment snapshot governance, reviewed adjusted-v1 registry definitions, `FactorRegistry`, engine execution/result semantics, executable factors, configured quality thresholds, quality-bound immutable `FactorStore` partitions, pinned staging golden vectors, freshness enforcement, and governed quarantine. Open items: remote execution of the declared cross-platform F4 matrix, direct official disclosure for three formula-derived adjustment reference prices, and final remote-evidence reconciliation. Local locked-environment gates and the F4 contract are complete.
+Current boundary: governed raw-price and adjusted-factor slices are implemented through `FactorContext`, canonical-v2 publication, adjustment snapshot governance, reviewed adjusted-v1 registry definitions, `FactorRegistry`, engine execution/result semantics, executable factors, configured quality thresholds, quality-bound immutable `FactorStore` partitions, pinned staging golden vectors, freshness enforcement, and governed quarantine. Open items: direct official disclosure for three formula-derived adjustment reference prices and final release reconciliation. The declared six-cell F4 remote matrix is certified.
 
 ## 0. Scope and Non-Goals
 
@@ -397,7 +397,7 @@ Acceptance mapping:
 
 ## Remaining Release Evidence
 
-1. **F4 scoped certification:** `.github/workflows/ci.yml` runs macOS and Ubuntu across Python 3.11, 3.12, and 3.13 through `scripts/run_gate.sh`, uploads all gate artifacts plus an environment-cell marker, and fails unless every declared cell is observed. This workflow must pass remotely before changing F4 status beyond “declared/pending remote evidence”. Windows and unlisted CPU/BLAS cells remain not certified.
+1. **F4 scoped certification:** `.github/workflows/ci.yml` runs macOS and Ubuntu across Python 3.11, 3.12, and 3.13 through `scripts/run_gate.sh`, uploads all gate artifacts plus an environment-cell marker, and fails unless every declared cell has a matching successful report. Remote run `32750572645` on commit `2acaa4dee562f9bf065844f7a9edebb179babb87` passed the six matrix jobs and aggregation gate; its downloaded reports and hashes are retained under `.gate/ci-evidence-fixed/`. Windows and unlisted CPU/BLAS cells remain not certified.
 2. **Authoritative adjustment golden provenance:** `adjustment_golden_provenance.v2.json` records multi-source evidence with file checksums, quoted locators, publication date, separate pre-close evidence, and conservative top-level certification. The reviewed cases now use direct SZSE archive evidence for `300866`, `300475`, `000725`, and `003026`; the constrained `002557` and `600081` cases were replaced rather than treated as authoritative. `300866`'s ex-date prior close directly matches its formula result and is certified as exchange-reference; the other expected prices remain formula-derived because their generic open/close/ex-day prior-close values do not equal those values. Access constraints and captured response hashes remain recorded in `specs/layers/contracts/adjustment-official-source-access-v1.md`.
 
 ## Risk Register
@@ -432,5 +432,4 @@ Immediate action is to preserve the latest successful unified-gate evidence, the
 1. Run and archive `scripts/run_gate.sh` outputs: `.gate/gate-report.json`, requirements artifact, and digest; CI must invoke the same runner.
 2. Keep canonical-v2 and factor-v1 F12a evidence aligned with the four report negative paths plus reader enforcement.
 3. Complete the remaining provenance gate by obtaining exchange/settlement-published reference prices for `300475`, `000725`, and `003026`; until then keep top-level provenance `pending-authoritative-source`.
-4. Run the declared CI remotely, archive all six gate artifacts, and require the `f4-certification` job to pass before changing F4 beyond “declared/pending remote evidence”.
-5. After both external gates pass, rerun the unified gate and reconcile Phase 6/release statuses only from recorded evidence.
+4. After obtaining the remaining official adjustment reference prices, rerun the unified gate and reconcile Phase 6/release statuses only from recorded evidence.
