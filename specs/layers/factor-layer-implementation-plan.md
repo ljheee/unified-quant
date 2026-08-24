@@ -96,7 +96,7 @@ Tasks:
 2. Validate the complete physical-path triple: requested dataset, schema version, and partition date must equal manifest values.
 3. Formalize identity separation through an additive `canonical-v2` contract; do not reinterpret already published `canonical-v1` partitions. Required rules:
    - `manifest_digest_sha256`: canonical-JSON SHA-256 over the complete run-local manifest, including `run_id`, `created_at`, and trust metadata;
-   - `generation_id`: canonical-JSON SHA-256 over stable content fields and explicitly excludes `run_id`, `created_at`, trust metadata, and `manifest_digest_sha256`;
+   - `generation_id`: canonical-JSON SHA-256 over stable content fields and explicitly excludes `run_id`, `created_at`, trust metadata, `manifest_digest_sha256`, and post-binding `quality_report_checksum`;
    - writer/reader/schema/spec share one golden-vector fixture;
    - v1 partitions remain readable only under a compatibility reader that records their legacy identity and cannot enter factor publication until migrated or republished as v2;
    - same logical content with different run metadata keeps `generation_id` unchanged while `manifest_digest_sha256` changes.
@@ -424,7 +424,7 @@ Exit criteria:
 Immediate action is to preserve the latest successful unified-gate evidence, then resolve the remaining release gate before declaring layer release.
 
 1. Run and archive `scripts/run_gate.sh` outputs: `.gate/gate-report.json`, requirements artifact, and digest; CI must invoke the same runner.
-2. Keep factor-v1 F12a evidence aligned with the four report negative paths plus reader enforcement.
+2. Keep canonical-v2 and factor-v1 F12a evidence aligned with the four report negative paths plus reader enforcement.
 3. Keep F4 scope explicit: certify only covered locked environments; compare other platforms through logical fingerprints only.
-4. Complete canonical-publication F12a coverage separately before claiming the broader canonical release gate.
+4. Canonical-publication F12a coverage is complete; do not claim broader release readiness until the full gate and remaining platform scope pass.
 5. Before release, rerun the full suite plus focused contract reviews and update statuses only from recorded gate evidence.

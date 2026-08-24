@@ -62,13 +62,13 @@ class UniverseSnapshotStore:
 class QualityReportStore:
     def save(self, root: Path, report: dict[str, Any]) -> Path:
         validate_contract("quality_report.v1.json", report)
-        if report["binding_type"] != "factor_v1":
-            raise ContractError("quality report is not bound to factor run")
+        if report["binding_type"] not in {"factor_v1", "canonical_v2"}:
+            raise ContractError("unsupported quality report binding type")
         allowed_checks = {"duplicate_keys", "null_rate", "missing_dependency", "coverage", "semantic_version"}
         if any(item["name"] not in allowed_checks for item in report["checks"]):
             raise ContractError("unknown quality check taxonomy")
         content = json.dumps(report, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        directory = root / "reports" / "factor_v1" / report["bound_generation_id"]
+        directory = root / "reports" / report["binding_type"] / report["bound_generation_id"]
         if directory.exists():
             raise ContractError(f"immutable quality report already published: {directory}")
         staging = directory.with_name(f"{directory.name}.staging.{uuid.uuid4().hex}")
@@ -84,10 +84,10 @@ class QualityReportStore:
             raise
         return directory
 
-    def read(self, root: Path, bound_generation_id: str) -> dict[str, Any]:
+    def read(self, root: Path, bound_generation_id: str, *, binding_type: str) -> dict[str, Any]:
         if "/" in bound_generation_id or ".." in bound_generation_id:
             raise ContractError("unsafe quality report binding identity")
-        directory = root / "reports" / "factor_v1" / bound_generation_id
+        directory = root / "reports" / binding_type / bound_generation_id
         try:
             content = (directory / "report.json").read_bytes()
         except FileNotFoundError as exc:
@@ -104,8 +104,8 @@ class QualityReportStore:
         except json.JSONDecodeError as exc:
             raise ContractError("malformed quality report serialization") from exc
         validate_contract("quality_report.v1.json", report)
-        if report["binding_type"] != "factor_v1":
-            raise ContractError("quality report is not bound to factor run")
+        if report["binding_type"] != binding_type:
+            raise ContractError("quality report is not bound to requested type")
         allowed_checks = {"duplicate_keys", "null_rate", "missing_dependency", "coverage", "semantic_version"}
         if any(item["name"] not in allowed_checks for item in report["checks"]):
             raise ContractError("unknown quality check taxonomy")

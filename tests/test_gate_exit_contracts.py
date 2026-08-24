@@ -25,6 +25,12 @@ def test_canonical_v2_identity_excludes_run_metadata():
     generation_two, digest_two = canonical_v2_identities(second)
     assert generation_one == generation_two
     assert digest_one != digest_two
+
+    third = copy.deepcopy(first)
+    third["quality_report_checksum"] = "9" * 64
+    generation_three, digest_three = canonical_v2_identities(third)
+    assert generation_one == generation_three
+    assert digest_one != digest_three
     validate_contract("canonical_manifest.v2.json", {
         **first, "generation_id": generation_one, "manifest_digest_sha256": digest_one,
         "trust_anchor_sha256": sha256_bytes(generation_one.encode("ascii")),

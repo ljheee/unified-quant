@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 from pathlib import Path
 from datetime import date, datetime, timezone
@@ -12,6 +13,8 @@ from uq.contracts.canonical_v2 import (
     read_canonical_v2,
     sha256_bytes,
 )
+from uq.contracts.artifacts import QualityReportStore
+from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.contracts.schema import load_schema
 from uq.errors import ContractError
 
@@ -38,9 +41,34 @@ def schema():
     return load_schema("config/schemas/bars_daily.research-v1.yaml")
 
 
+def canonical_report(generation):
+    return {
+        "report_version": 1,
+        "binding_type": "canonical_v2",
+        "bound_generation_id": generation,
+        "policy": "reject_all",
+        "status": "passed",
+        "checks": [{
+            "name": "coverage", "threshold": 0, "observed": 0,
+            "level": "error", "result": "passed",
+        }],
+        "errors": [],
+        "warnings": [],
+    }
+
+
+def publish_with_quality(store, day, *, schema=None):
+    if schema is None:
+        schema = load_schema("config/schemas/bars_daily.research-v1.yaml")
+    generation = store.prepare_generation(schema, day, bars(), {}, {})
+    directory = QualityReportStore().save(store.root, canonical_report(generation))
+    checksum = file_sha256_bytes((directory / "report.json").read_bytes())
+    return store.publish(schema, day, bars(), {}, {}, quality_checksum=checksum)
+
+
 def publish(tmp_path):
     store = CanonicalV2Store(tmp_path)
-    store.publish(load_schema("config/schemas/bars_daily.research-v1.yaml"), date(2026, 8, 21), bars(), {}, {})
+    publish_with_quality(store, date(2026, 8, 21))
     return store
 
 
@@ -48,7 +76,7 @@ def test_generation_excludes_run_metadata(schema):
 
     roots = [Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp())]
     for root in roots:
-        CanonicalV2Store(root).publish(schema, date(2026, 8, 21), bars(), {}, {})
+        publish_with_quality(CanonicalV2Store(root), date(2026, 8, 21), schema=schema)
     left = json.loads((roots[0] / "canonical/bars_daily/research-v1/date=2026-08-21/manifest.json").read_text())
     right = json.loads((roots[1] / "canonical/bars_daily/research-v1/date=2026-08-21/manifest.json").read_text())
     assert left["generation_id"] == right["generation_id"]
@@ -72,6 +100,81 @@ def test_reader_requires_external_anchor_and_path_identity(tmp_path, schema):
         (copied / name).write_bytes((tmp_path / "canonical/bars_daily/research-v1/date=2026-08-21" / name).read_bytes())
     with pytest.raises(ContractError, match="physical path"):
         read_canonical_v2(tmp_path, schema, date(2026, 8, 22), expected_anchor=good_anchor)
+
+
+def test_canonical_publication_requires_bound_quality_report(tmp_path, schema):
+    store = CanonicalV2Store(tmp_path)
+    generation = store.prepare_generation(schema, date(2026, 8, 21), bars(), {}, {})
+    checksum = "0" * 64
+    with pytest.raises(ContractError, match="missing quality report"):
+        store.publish(schema, date(2026, 8, 21), bars(), {}, {}, quality_checksum=checksum)
+    assert not (tmp_path / "canonical" / schema.dataset / schema.version / "date=2026-08-21").exists()
+    assert generation
+
+
+def test_canonical_publication_rejects_wrong_binding_and_failed_report(tmp_path, schema):
+    day = date(2026, 8, 21)
+    store = CanonicalV2Store(tmp_path)
+    generation = store.prepare_generation(schema, day, bars(), {}, {})
+
+    wrong_generation = QualityReportStore().save(
+        tmp_path, {**canonical_report("f" * 64), "bound_generation_id": "e" * 64}
+    )
+    with pytest.raises(ContractError, match="quality report"):
+        store.publish(schema, day, bars(), {}, {}, quality_checksum=file_sha256_bytes((wrong_generation / "report.json").read_bytes()))
+
+    failed = QualityReportStore().save(
+        tmp_path,
+        {
+            **canonical_report(generation),
+            "status": "rejected",
+            "checks": [{**canonical_report(generation)["checks"][0], "result": "failed"}],
+            "errors": ["coverage failed"],
+        },
+    )
+    with pytest.raises(ContractError, match="canonical-v2 quality report rejects publication"):
+        store.publish(schema, day, bars(), {}, {}, quality_checksum=file_sha256_bytes((failed / "report.json").read_bytes()))
+    assert not (tmp_path / "canonical" / schema.dataset / schema.version / f"date={day.isoformat()}").exists()
+
+
+def test_canonical_publication_rejects_tampered_report(tmp_path, schema):
+    day = date(2026, 8, 21)
+    store = CanonicalV2Store(tmp_path)
+    generation = store.prepare_generation(schema, day, bars(), {}, {})
+    directory = QualityReportStore().save(tmp_path, canonical_report(generation))
+    path = directory / "report.json"
+    original = path.read_bytes()
+    path.write_bytes(original + b"tamper")
+    with pytest.raises(ContractError, match="tampered quality report bytes"):
+        store.publish(schema, day, bars(), {}, {}, quality_checksum=file_sha256_bytes(original))
+    path.write_bytes(original)
+    checksum = file_sha256_bytes(original)
+    partition = store.publish(schema, day, bars(), {}, {}, quality_checksum=checksum)
+    assert partition.exists()
+
+
+def test_canonical_read_rejects_missing_tampered_or_misbound_report(tmp_path, schema):
+    publish(tmp_path)
+    manifest_path = tmp_path / "canonical/bars_daily/research-v1/date=2026-08-21/manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    anchor = manifest["trust_anchor_sha256"]
+    report_root = tmp_path / "reports/canonical_v2" / manifest["generation_id"]
+
+    shutil.rmtree(report_root)
+    with pytest.raises(ContractError, match="missing quality report"):
+        read_canonical_v2(tmp_path, schema, date(2026, 8, 21), expected_anchor=anchor)
+    directory = QualityReportStore().save(tmp_path, canonical_report(manifest["generation_id"]))
+    report_path = directory / "report.json"
+
+    original = report_path.read_bytes()
+    report_path.write_bytes(original.replace(b'"coverage"', b'"coverage_x"'))
+    with pytest.raises(ContractError, match="tampered quality report bytes"):
+        read_canonical_v2(tmp_path, schema, date(2026, 8, 21), expected_anchor=anchor)
+
+    report_path.write_bytes(original)
+    directory.rename(tmp_path / "reports/canonical_v2/other")
+    with pytest.raises(ContractError, match="missing quality report"):
+        read_canonical_v2(tmp_path, schema, date(2026, 8, 21), expected_anchor=anchor)
 
 
 def test_rejects_invalid_uuid_datetime_date_dtype_map(schema):

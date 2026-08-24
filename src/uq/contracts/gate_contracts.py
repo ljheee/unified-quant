@@ -54,9 +54,13 @@ def validate_contract_path(schema_path: Path, payload: dict[str, Any]) -> None:
 
 
 def canonical_v2_identities(manifest_without_digests: dict[str, Any]) -> tuple[str, str]:
+    """Derive stable canonical content identity and complete run-local digest."""
     generation_payload = {
         key: value for key, value in manifest_without_digests.items()
-        if key not in {"run_id", "created_at", "trust_anchor_sha256", "manifest_digest_sha256"}
+        if key not in {
+            "run_id", "created_at", "trust_anchor_sha256",
+            "manifest_digest_sha256", "quality_report_checksum",
+        }
     }
     generation_id = sha256_json(generation_payload)
     digest_payload = {

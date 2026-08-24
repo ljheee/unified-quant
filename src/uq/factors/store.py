@@ -108,7 +108,7 @@ class FactorStore:
                     self.root / "reports" / "factor_v1" / generation_id / "report.json"
                 )
                 quality_report=quality_report_store.read(
-                    self.root, generation_id
+                    self.root, generation_id, binding_type="factor_v1"
                 )
                 if (
                     quality_report["policy"] != "reject_all"
@@ -322,7 +322,7 @@ def read_factor_partition(partition: Path) -> pd.DataFrame:
         raise ContractError("invalid factor artifact for logical verification") from exc
     report_root = partition.parents[5]
     report_path = report_root / "reports" / "factor_v1" / manifest["generation_id"] / "report.json"
-    report = QualityReportStore().read(report_root, manifest["generation_id"])
+    report = QualityReportStore().read(report_root, manifest["generation_id"], binding_type="factor_v1")
     if (
         report["policy"] != manifest["quality"]["policy"]
         or report["status"] != "passed"

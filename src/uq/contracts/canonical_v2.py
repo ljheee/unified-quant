@@ -109,12 +109,52 @@ def finalize_canonical_v2_identities(manifest_without_digests: dict[str, Any]) -
     }
 
 
+def serialize_canonical_v2(schema: Schema, frame: pd.DataFrame) -> tuple[bytes, pd.DataFrame]:
+    """Serialize the deterministic sorted artifact and return its readback frame."""
+    import io
+
+    buffer = io.BytesIO()
+    frame.sort_values(list(schema.sort_key)).to_parquet(buffer, index=False)
+    artifact = buffer.getvalue()
+    restored = pd.read_parquet(io.BytesIO(artifact))
+    schema.validate(restored)
+    return artifact, restored
+
+
 class CanonicalV2Store:
     """Publish immutable canonical-v2 partitions."""
 
     def __init__(self, root: Path, *, code_fingerprint: str | None = None) -> None:
         self.root = root
         self.code_fingerprint = code_fingerprint or sha256_json({"component": "CanonicalStore", "version": 2})
+
+    def prepare_generation(
+        self,
+        schema: Schema,
+        partition_date: date,
+        frame: pd.DataFrame,
+        lineage: dict[str, Any],
+        source_versions: dict[str, str],
+        raw_artifacts: dict[str, object] | None = None,
+    ) -> str:
+        """Return the quality-independent generation for deterministic binding."""
+        artifact, restored = serialize_canonical_v2(schema, frame)
+        data_checksum = file_sha256_bytes(artifact)
+        manifest = build_canonical_v2_manifest(
+            schema=schema,
+            partition_date=partition_date,
+            frame=restored,
+            code_fingerprint=self.code_fingerprint,
+            lineage=lineage,
+            source_versions=source_versions,
+            quality_checksum="0" * 64,
+            raw_artifacts=raw_artifacts,
+        )
+        manifest["data_checksum_sha256"] = data_checksum
+        manifest.pop("generation_id", None)
+        manifest.pop("manifest_digest_sha256", None)
+        manifest.pop("trust_anchor_sha256", None)
+        return finalize_canonical_v2_identities(manifest)["generation_id"]
 
     def publish(
         self,
@@ -123,7 +163,7 @@ class CanonicalV2Store:
         frame: pd.DataFrame,
         lineage: dict[str, Any],
         source_versions: dict[str, str],
-        quality_checksum: str = "",
+        quality_checksum: str,
         raw_artifacts: dict[str, object] | None = None,
     ) -> Path:
         schema.validate(frame)
@@ -153,6 +193,20 @@ class CanonicalV2Store:
             manifest.pop("manifest_digest_sha256", None)
             manifest.pop("trust_anchor_sha256", None)
             manifest = finalize_canonical_v2_identities(manifest)
+
+            from .artifacts import QualityReportStore
+
+            report_path = self.root / "reports" / "canonical_v2" / manifest["generation_id"] / "report.json"
+            report = QualityReportStore().read(
+                self.root, manifest["generation_id"], binding_type="canonical_v2"
+            )
+            if (
+                report["policy"] != "reject_all"
+                or report["status"] != "passed"
+                or file_sha256(report_path) != quality_checksum
+            ):
+                raise ContractError("canonical-v2 quality report rejects publication")
+
             from .gate_contracts import validate_contract
 
             validate_contract("canonical_manifest.v2.json", manifest)
@@ -193,6 +247,18 @@ def read_canonical_v2(
         raise ContractError("malformed canonical-v2 manifest") from exc
     validate_contract("canonical_manifest.v2.json", manifest)
     _validate_manifest(manifest, expected_anchor=expected_anchor)
+    from .artifacts import QualityReportStore
+
+    report_path = root / "reports" / "canonical_v2" / manifest["generation_id"] / "report.json"
+    report = QualityReportStore().read(
+        root, manifest["generation_id"], binding_type="canonical_v2"
+    )
+    if (
+        report["policy"] != "reject_all"
+        or report["status"] != "passed"
+        or file_sha256(report_path) != manifest["quality_report_checksum"]
+    ):
+        raise ContractError("canonical-v2 quality report rejects read")
     if (
         manifest["dataset"] != schema.dataset
         or manifest["schema_version"] != schema.version

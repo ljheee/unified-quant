@@ -139,13 +139,13 @@ def quality_report(generation="4" * 64):
 def test_quality_report_missing_wrong_binding_and_tamper(tmp_path):
     store = QualityReportStore()
     directory = store.save(tmp_path, quality_report())
-    assert store.read(tmp_path, "4" * 64)["status"] == "passed"
+    assert store.read(tmp_path, "4" * 64, binding_type="factor_v1")["status"] == "passed"
     with pytest.raises(ContractError, match="missing quality report"):
-        store.read(tmp_path, "5" * 64)
+        store.read(tmp_path, "5" * 64, binding_type="factor_v1")
 
     wrong = quality_report("6" * 64); wrong["binding_type"] = "canonical_v2"
-    with pytest.raises(ContractError, match="not bound to factor run"):
-        store.save(tmp_path, wrong)
+    store.save(tmp_path, wrong)
+    assert store.read(tmp_path, "6" * 64, binding_type="canonical_v2")["binding_type"] == "canonical_v2"
     wrong_taxonomy = quality_report("6" * 64); wrong_taxonomy["checks"][0]["name"] = "made_up"
     with pytest.raises(ContractError, match="unknown quality check taxonomy"):
         store.save(tmp_path, wrong_taxonomy)
@@ -154,7 +154,7 @@ def test_quality_report_missing_wrong_binding_and_tamper(tmp_path):
     original = path.read_bytes()
     path.write_bytes(original.replace(b"passed", b"warning"))
     with pytest.raises(ContractError, match="tampered quality report bytes"):
-        store.read(tmp_path, "4" * 64)
+        store.read(tmp_path, "4" * 64, binding_type="factor_v1")
 
 
 def test_universe_rejects_invalid_calendar_and_traversal(tmp_path):
@@ -179,7 +179,7 @@ def test_quality_reader_rejects_wrong_bound_generation(tmp_path):
     store = QualityReportStore()
     store.save(tmp_path, quality_report("4" * 64))
     with pytest.raises(ContractError, match="missing quality report"):
-        store.read(tmp_path, "7" * 64)
+        store.read(tmp_path, "7" * 64, binding_type="factor_v1")
 
 
 def test_quality_reader_rejects_existing_wrong_bound_report(tmp_path):
@@ -193,4 +193,4 @@ def test_quality_reader_rejects_existing_wrong_bound_report(tmp_path):
     path.write_bytes(content)
     (directory / "report.sha256").write_text(__import__("hashlib").sha256(content).hexdigest() + "\n")
     with pytest.raises(ContractError, match="bound to another run"):
-        store.read(tmp_path, "4" * 64)
+        store.read(tmp_path, "4" * 64, binding_type="factor_v1")
