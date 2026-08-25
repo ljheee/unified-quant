@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/qlib_dataset_export.v1.json",
+  "title": "Qlib governed dataset export manifest v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["contract_version","export_layout","files","provider_uri_sha256","calendar_checksum_sha256","instruments_checksum_sha256","feature_mapping_checksum_sha256","exporter_fingerprint","serialization_profile_id","empty_cache_precondition","run_id","created_at","manifest_digest_sha256","generation_id"],
+  "properties": {
+    "contract_version": {"const": 1},
+    "export_layout": {"type":"object","additionalProperties":false,"required":["root"],"properties":{"root":{"type":"string","minLength":1}}},
+    "files": {"type":"array","minItems":1,"uniqueItems":true,"items":{"type":"object","additionalProperties":false,"required":["path","checksum_sha256","byte_size"],"properties":{"path":{"type":"string","pattern":"^(?!/)(?!.*\\.\\.).+$"},"checksum_sha256":{"$ref":"#/$defs/sha256"},"byte_size":{"type":"integer","minimum":0}}}},
+    "provider_uri_sha256": {"$ref":"#/$defs/sha256"}, "calendar_checksum_sha256": {"$ref":"#/$defs/sha256"}, "instruments_checksum_sha256": {"$ref":"#/$defs/sha256"}, "feature_mapping_checksum_sha256": {"$ref":"#/$defs/sha256"}, "exporter_fingerprint": {"$ref":"#/$defs/sha256"}, "serialization_profile_id": {"type":"string","minLength":1}, "empty_cache_precondition": {"const": true},
+    "run_id": {"$ref":"#/$defs/uuid"}, "created_at": {"$ref":"#/$defs/date_time"}, "manifest_digest_sha256": {"$ref":"#/$defs/sha256"}, "generation_id": {"$ref":"#/$defs/sha256"}
+  },
+  "$defs":{"sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"uuid":{"type":"string","format":"uuid"},"date_time":{"type":"string","format":"date-time"}}
+}

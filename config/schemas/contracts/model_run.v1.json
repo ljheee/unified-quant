@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/model_run.v1.json",
+  "title": "Governed model run manifest v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["contract_version","run_content_generation_id","model_definition_generation_id","model_dataset_generation_id","qlib_export_generation_id","init_receipt_generation_id","code_fingerprint","environment_lock_sha256","determinism_controls","reproducibility_mode","run_id","created_at","manifest_digest_sha256","generation_id"],
+  "properties": {
+    "contract_version": {"const": 1}, "run_content_generation_id": {"$ref":"#/$defs/sha256"}, "model_definition_generation_id": {"$ref":"#/$defs/sha256"}, "model_dataset_generation_id": {"$ref":"#/$defs/sha256"}, "qlib_export_generation_id": {"$ref":"#/$defs/sha256"}, "init_receipt_generation_id": {"$ref":"#/$defs/sha256"}, "code_fingerprint": {"$ref":"#/$defs/sha256"}, "environment_lock_sha256": {"$ref":"#/$defs/sha256"},
+    "determinism_controls": {"type":"object","additionalProperties":false,"required":["threads","random_seed"],"properties":{"threads":{"type":"integer","minimum":1},"random_seed":{"type":"integer"}}},
+    "reproducibility_mode": {"enum":["byte_identical","logical_fingerprint"]}, "logical_tolerance": {"oneOf":[{"type":"null"},{"type":"number","minimum":0}]}, "run_id": {"$ref":"#/$defs/uuid"}, "created_at": {"$ref":"#/$defs/date_time"}, "manifest_digest_sha256": {"$ref":"#/$defs/sha256"}, "generation_id": {"$ref":"#/$defs/sha256"}
+  },
+  "$defs":{"sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"uuid":{"type":"string","format":"uuid"},"date_time":{"type":"string","format":"date-time"}}
+}

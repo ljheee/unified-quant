@@ -1,6 +1,6 @@
 # Model and Upstream Layers: TODO Specification
 
-Status: **early TODO design, not implemented**
+Status: **historical TODO design input; superseded by model-layer-spec v0.2.1**
 
 This document deliberately stays brief. Each section must become an independent
 versioned specification before implementation.

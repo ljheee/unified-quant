@@ -12,3 +12,8 @@ dist/
 data/
 !config/**
 .gate/
+
+/models/
+/predictions/
+/.qlib/
+qlib_data/

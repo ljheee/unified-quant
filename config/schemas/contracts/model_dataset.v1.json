@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/model_dataset.v1.json",
+  "title": "Governed model dataset manifest v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["contract_version","dataset_name","semantic_version","ordered_features","factor_set","factor_version","factor_generation_ids","label_set_name","label_generation_id","universe_snapshot_generation_id","split_policy","missing_policy","row_count","data_checksum_sha256","logical_fingerprint","code_fingerprint","serialization_profile_id","run_id","created_at","manifest_digest_sha256","generation_id"],
+  "properties": {
+    "contract_version": {"const": 1}, "dataset_name": {"type":"string","minLength":1}, "semantic_version": {"$ref":"#/$defs/semver"}, "ordered_features": {"type":"array","minItems":1,"uniqueItems":true,"items":{"type":"string","minLength":1}}, "factor_set": {"type":"string","minLength":1}, "factor_version": {"$ref":"#/$defs/semver"}, "factor_generation_ids": {"type":"array","minItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/sha256"}}, "label_set_name": {"type":"string","minLength":1}, "label_generation_id": {"$ref":"#/$defs/sha256"}, "universe_snapshot_generation_id": {"$ref":"#/$defs/sha256"},
+    "split_policy": {"type":"object","additionalProperties":false,"required":["purge_trading_days","embargo_trading_days","splits"],"properties":{"purge_trading_days":{"type":"integer","minimum":0},"embargo_trading_days":{"type":"integer","minimum":0},"splits":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["name","start_date","end_date"],"properties":{"name":{"enum":["train","validation","test"]},"start_date":{"$ref":"#/$defs/date"},"end_date":{"$ref":"#/$defs/date"}}}}}},
+    "missing_policy": {"enum":["fail_closed","declared_fill"]},
+    "row_count": {"type":"integer","minimum":0}, "data_checksum_sha256": {"$ref":"#/$defs/sha256"}, "logical_fingerprint": {"$ref":"#/$defs/sha256"}, "code_fingerprint": {"$ref":"#/$defs/sha256"}, "serialization_profile_id": {"type":"string","minLength":1}, "run_id": {"$ref":"#/$defs/uuid"}, "created_at": {"$ref":"#/$defs/date_time"}, "manifest_digest_sha256": {"$ref":"#/$defs/sha256"}, "generation_id": {"$ref":"#/$defs/sha256"}
+  },
+  "$defs":{"sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"uuid":{"type":"string","format":"uuid"},"semver":{"type":"string","pattern":"^\\d+\\.\\d+\\.\\d+$"},"date":{"type":"string","pattern":"^\\d{4}-\\d{2}-\\d{2}$"},"date_time":{"type":"string","format":"date-time"}}
+}

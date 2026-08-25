@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/model_artifact.v1.json",
+  "title": "Immutable model artifact manifest v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["contract_version","artifact_filename","artifact_checksum_sha256","byte_size","runtime_name","runtime_version","runtime_import_path","model_run_content_generation_id","serialization_profile_id","run_id","created_at","manifest_digest_sha256","generation_id"],
+  "properties": {
+    "contract_version": {"const": 1}, "artifact_filename": {"const":"artifact.bin"}, "artifact_checksum_sha256": {"$ref":"#/$defs/sha256"}, "byte_size": {"type":"integer","minimum":1}, "runtime_name": {"type":"string","minLength":1}, "runtime_version": {"type":"string","minLength":1}, "runtime_import_path": {"type":"string","minLength":1}, "model_run_content_generation_id": {"$ref":"#/$defs/sha256"}, "quality_report_checksum_sha256": {"$ref":"#/$defs/sha256"}, "serialization_profile_id": {"type":"string","minLength":1}, "run_id": {"$ref":"#/$defs/uuid"}, "created_at": {"$ref":"#/$defs/date_time"}, "manifest_digest_sha256": {"$ref":"#/$defs/sha256"}, "generation_id": {"$ref":"#/$defs/sha256"}
+  },
+  "$defs":{"sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"uuid":{"type":"string","format":"uuid"},"date_time":{"type":"string","format":"date-time"}}
+}
