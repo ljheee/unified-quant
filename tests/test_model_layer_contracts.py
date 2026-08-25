@@ -299,7 +299,7 @@ def test_cross_manifest_binding_resolver_passes_and_fails() -> None:
     result = resolve_bindings({"model_dataset": dataset, "label_set": label})
     assert result["errors"] == []
     wrong_label = {**label, "generation_id": "c" * 64}
-    with pytest.raises(ContractError, match="does not match"):
+    with pytest.raises(ContractError, match="mismatch"):
         resolve_bindings({"model_dataset": dataset, "label_set": wrong_label})
 
 

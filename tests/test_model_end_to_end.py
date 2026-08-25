@@ -146,7 +146,7 @@ class TestEndToEndPipeline:
             label_column="label",
         )
         artifact_store = ArtifactStore(tmp_path)
-        artifact_partition = artifact_store.publish(artifact_manifest, artifact_bytes)
+        artifact_partition = artifact_store.publish(artifact_manifest, artifact_bytes, quality_report_checksum="0" * 64)
         assert artifact_partition.is_dir()
 
         # Verify deterministic training

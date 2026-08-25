@@ -46,7 +46,7 @@ class QlibDatasetExporter:
         instruments: list[str],
         provider_uri: str,
     ) -> dict[str, Any]:
-        if not frame.empty is False and len(frame) == 0:
+        if frame.empty:
             raise ContractError("cannot export empty dataset")
         if not feature_mapping:
             raise ContractError("feature mapping cannot be empty")
@@ -96,20 +96,15 @@ class QlibDatasetExporter:
                 qlib_frame.to_parquet(data_path, index=False, compression="snappy")
 
                 # Build file list
-                files = []
+                # Verify all written files before building file list
                 for path in sorted(staging.rglob("*")):
-                    if path.is_file():
-                        rel = path.relative_to(staging).as_posix()
-                        files.append({
-                            "path": rel,
-                            "checksum_sha256": file_sha256_bytes(path.read_bytes()),
-                            "byte_size": path.stat().st_size,
-                        })
+                    if path.is_file() and path.stat().st_size == 0:
+                        raise ContractError(f"zero-byte export file: {path.name}")
 
                 manifest: dict[str, Any] = {
                     "contract_version": 1,
                     "export_layout": {"root": f"dataset={dataset_name}/generation={generation_id}"},
-                    "files": files,
+                    "files": [],
                     "provider_uri_sha256": _sha256_text(provider_uri),
                     "calendar_checksum_sha256": calendar_checksum,
                     "instruments_checksum_sha256": instruments_checksum,
@@ -126,8 +121,31 @@ class QlibDatasetExporter:
                 manifest["generation_id"] = gen
                 manifest["manifest_digest_sha256"] = digest
 
+                # Build complete file list including data.parquet and manifest itself
+                complete_files = []
+                for path in sorted(staging.rglob("*")):
+                    if path.is_file():
+                        rel = path.relative_to(staging).as_posix()
+                        complete_files.append({
+                            "path": rel,
+                            "checksum_sha256": file_sha256_bytes(path.read_bytes()),
+                            "byte_size": path.stat().st_size,
+                        })
+                manifest["files"] = complete_files
+                gen2, digest2 = model_manifest_identities(manifest, schema_name="qlib_dataset_export")
+                manifest["generation_id"] = gen2
+                manifest["manifest_digest_sha256"] = digest2
+
                 manifest_path = staging / "manifest.json"
                 manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+                # Readback verification
+                readback_manifest = json.loads(manifest_path.read_text())
+                if readback_manifest["generation_id"] != manifest["generation_id"]:
+                    raise ContractError("export manifest readback identity mismatch")
+                for entry in manifest["files"]:
+                    fp = staging / entry["path"]
+                    if not fp.is_file() or file_sha256_bytes(fp.read_bytes()) != entry["checksum_sha256"]:
+                        raise ContractError(f"export file verification failed: {entry['path']}")
                 fsync_tree(staging)
                 os.replace(staging, snapshot)
                 fsync_dir(snapshot.parent)
@@ -151,8 +169,7 @@ class QlibInitReceiptBuilder:
         cache_files_before: set[str],
         cache_files_after: set[str],
     ) -> dict[str, Any]:
-        from ..contracts.model_layer import sha256_json
-
+        
         expected_uri = export_manifest.get("provider_uri_sha256")
         actual_uri_digest = _sha256_text(resolved_provider_uri)
         if expected_uri != actual_uri_digest:

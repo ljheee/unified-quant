@@ -62,7 +62,7 @@ class TestArtifactStore:
             definition=_definition(), dataset_frame=_dataset(),
             feature_columns=["volume_ratio_20d"], label_column="label",
         )
-        partition = store.publish(manifest, artifact_bytes)
+        partition = store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
         assert partition.is_dir()
         loaded_manifest, loaded_bytes = store.read(manifest["model_run_content_generation_id"], manifest["generation_id"])
         assert loaded_bytes == artifact_bytes
@@ -71,15 +71,15 @@ class TestArtifactStore:
         store = ArtifactStore(tmp_path)
         trainer = ModelTrainer(tmp_path)
         manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")
-        store.publish(manifest, artifact_bytes)
+        store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
         with pytest.raises(ContractError, match="immutable"):
-            store.publish(manifest, artifact_bytes)
+            store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
 
     def test_tampered_artifact_rejected(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)
         trainer = ModelTrainer(tmp_path)
         manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")
-        partition = store.publish(manifest, artifact_bytes)
+        partition = store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
         (partition / "artifact.bin").write_bytes(b"tampered")
         with pytest.raises(ContractError, match="tampered"):
             store.read(manifest["model_run_content_generation_id"], manifest["generation_id"])

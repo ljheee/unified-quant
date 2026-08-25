@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import re
 from pathlib import Path
 from typing import Any, Mapping
@@ -41,16 +40,6 @@ def _reject_non_finite(value: Any) -> None:
             _reject_non_finite(item)
 
 
-def _safe_resolve(path: Path) -> Path:
-    try:
-        resolved = path.resolve(strict=True)
-    except (OSError, RuntimeError) as exc:
-        raise ContractError(f"unsafe or missing contract path: {path}") from exc
-    if any(item.is_symlink() for item in (path, *path.parents)):
-        raise ContractError("symbolic links are forbidden in accepted contracts")
-    return resolved
-
-
 def sha256_json(value: Any) -> str:
     return hashlib.sha256(canonical_json(value)).hexdigest()
 
@@ -73,7 +62,7 @@ def model_manifest_identities(payload: Mapping[str, Any], *, schema_name: str) -
 
 def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
     if schema_name == "model_quality_report":
-        _validate_quality_report(payload)
+        validate_contract("model_quality_report.v1.json", payload)
     elif schema_name in _SCHEMA_NAMES:
         validate_contract(f"{schema_name}.v1.json", payload)
     else:
@@ -94,14 +83,14 @@ class ModelContractLoader:
             raise ContractError(f"missing {schema_name} contract") from exc
         except OSError as exc:
             raise ContractError(f"unreadable {schema_name} contract") from exc
-        resolved = _safe_resolve(artifact_path)
+        resolved = self._safe_resolve(artifact_path)
         if self.accepted_root is not None:
-            root_resolved = _safe_resolve(self.accepted_root)
+            root_resolved = self._safe_resolve(self.accepted_root)
             try:
                 contained = resolved.is_relative_to(root_resolved)
             except ValueError:
                 contained = False
-            if not contained or resolved.is_symlink():
+            if not contained:
                 raise ContractError("accepted contract lies outside approved root")
         try:
             payload = json.loads(raw, parse_constant=lambda value: (_ for _ in ()).throw(
@@ -115,13 +104,22 @@ class ModelContractLoader:
         return payload
 
     @staticmethod
+    def _safe_resolve(path: Path) -> Path:
+        try:
+            resolved = path.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ContractError(f"unsafe or missing contract path: {path}") from exc
+        if any(item.is_symlink() for item in (path, *path.parents)):
+            raise ContractError("symbolic links are forbidden in accepted contracts")
+        return resolved
+
+    @staticmethod
     def validate(schema_name: str, payload: dict[str, Any]) -> None:
         if schema_name not in _MODEL_CONTRACT_FAMILIES:
             raise ContractError(f"unknown model contract family: {schema_name}")
         _reject_non_finite(payload)
         validate_model_contract(schema_name, payload)
-        if schema_name in {"accepted_factor_index_query",
-    "accepted_factor_index_response", "model_quality_report"}:
+        if schema_name in {"accepted_factor_index_query", "accepted_factor_index_response", "model_quality_report"}:
             if schema_name == "model_quality_report":
                 checksum_payload = {key: value for key, value in payload.items() if key != "report_checksum_sha256"}
                 if payload["report_checksum_sha256"] != sha256_json(checksum_payload):
@@ -168,33 +166,27 @@ class AcceptedFactorIndexContract:
         return self.list(query)
 
 
-def _validate_quality_report(report: dict[str, Any]) -> None:
-    validate_contract("model_quality_report.v1.json", report)
-
-
 def resolve_bindings(
     documents: dict[str, dict[str, Any]],
 ) -> dict[str, list[str]]:
-    """Validate cross-manifest generation bindings among model contracts.
-
-    ``documents`` keys are schema names; values are loaded manifest dicts.
-    Returns a report of resolved bindings; raises on any mismatch.
-    """
+    """Validate cross-manifest generation bindings among model contracts."""
     errors: list[str] = []
     dataset = documents.get("model_dataset")
     if dataset:
         label_gen = dataset.get("label_generation_id")
         label = documents.get("label_set")
-        if label and label.get("generation_id") != label_gen:
-            errors.append("model_dataset.label_generation_id does not match label_set.generation_id")
-        if label and label.get("name") != dataset.get("label_set_name"):
-            errors.append("model_dataset.label_set_name does not match label_set.name")
-
+        if label is None and "label_set" in [k for k in documents]:
+            pass
+        elif label is None and "label_set" not in documents:
+            pass  # label binding deferred when label_set document not provided
+        else:
+            if label.get("generation_id") != label_gen:
+                errors.append("label_generation_id mismatch")
+            if label.get("name") != dataset.get("label_set_name"):
+                errors.append("label_set_name mismatch")
         for factor_gen in dataset.get("factor_generation_ids", []):
-            # Factor manifests are upstream; we only verify non-null here.
             if not factor_gen or len(factor_gen) != 64:
-                errors.append(f"invalid factor_generation_id: {factor_gen[:16]}...")
-
+                errors.append("invalid factor_generation_id")
         universe_gen = dataset.get("universe_snapshot_generation_id")
         if not universe_gen or len(universe_gen) != 64:
             errors.append("missing or invalid universe_snapshot_generation_id")
@@ -204,32 +196,38 @@ def resolve_bindings(
         definition_gen = run.get("model_definition_generation_id")
         definition = documents.get("model_definition")
         if definition and definition.get("generation_id") != definition_gen:
-            errors.append("model_run.model_definition_generation_id does not match model_definition.generation_id")
+            errors.append("run.definition_generation_id mismatch")
         dataset_gen = run.get("model_dataset_generation_id")
         if dataset and dataset.get("generation_id") != dataset_gen:
-            errors.append("model_run.model_dataset_generation_id does not match model_dataset.generation_id")
+            errors.append("run.dataset_generation_id mismatch")
+        export_gen = run.get("qlib_export_generation_id")
+        export = documents.get("qlib_dataset_export")
+        if export and export.get("generation_id") != export_gen:
+            errors.append("run.qlib_export_generation_id mismatch")
 
     artifact = documents.get("model_artifact")
     if artifact:
         run_content_gen = artifact.get("model_run_content_generation_id")
         if run and run.get("run_content_generation_id") != run_content_gen:
-            errors.append("model_artifact.model_run_content_generation_id does not match model_run.run_content_generation_id")
+            errors.append("artifact.run_content_generation_id mismatch")
 
     prediction = documents.get("prediction_set")
     if prediction:
         artifact_gen = prediction.get("model_artifact_generation_id")
         if artifact and artifact.get("generation_id") != artifact_gen:
-            errors.append("prediction_set.model_artifact_generation_id does not match model_artifact.generation_id")
+            errors.append("prediction.artifact_generation_id mismatch")
         input_gen = prediction.get("input_dataset_generation_id")
         if dataset and dataset.get("generation_id") != input_gen:
-            errors.append("prediction_set.input_dataset_generation_id does not match model_dataset.generation_id")
+            errors.append("prediction.input_dataset_generation_id mismatch")
 
-    receipt = documents.get("qlib_init_receipt")
-    if receipt:
-        export_gen = receipt.get("export_generation_id")
-        export = documents.get("qlib_dataset_export")
-        if export and export.get("generation_id") != export_gen:
-            errors.append("qlib_init_receipt.export_generation_id does not match qlib_dataset_export.generation_id")
+    receipt_doc = documents.get("qlib_init_receipt")
+    if receipt_doc:
+        export_gen = receipt_doc.get("export_generation_id")
+        export_doc = documents.get("qlib_dataset_export")
+        if export_doc and export_doc.get("generation_id") != export_gen:
+            errors.append("receipt.export_generation_id mismatch")
+        if export_doc and receipt_doc.get("export_manifest_digest_sha256") != export_doc.get("manifest_digest_sha256"):
+            errors.append("receipt.export_manifest_digest_sha256 mismatch")
 
     if errors:
         raise ContractError("; ".join(errors))

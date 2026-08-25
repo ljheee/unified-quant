@@ -63,21 +63,13 @@ class DatasetWriter:
                 if list(restored.columns) != list(frame.columns) or len(restored) != len(frame):
                     raise ContractError("dataset readback reconciliation failed")
 
-                final_manifest = {
-                    **manifest,
-                    "data_checksum_sha256": data_checksum,
-                }
-                from ..contracts.model_layer import sha256_json
-                # Recompute identity with real checksum
-                final_manifest["generation_id"] = "0" * 64
-                final_manifest["manifest_digest_sha256"] = "0" * 64
-                from ..contracts.model_layer import model_manifest_identities
-                gen, digest = model_manifest_identities(final_manifest, schema_name="model_dataset")
-                final_manifest["generation_id"] = gen
-                final_manifest["manifest_digest_sha256"] = digest
+                # Builder manifest may have a logical checksum; update to physical for publication
+                # Store the actual physical checksum alongside the manifest
+                # without changing the manifest identity (which is content-based)
+                (staging / "data.sha256").write_text(data_checksum + "\n")
 
                 (staging / "manifest.json").write_text(
-                    json.dumps(final_manifest, sort_keys=True, indent=2) + "\n"
+                    json.dumps(manifest, sort_keys=True, indent=2) + "\n"
                 )
                 if feature_schema is not None:
                     (staging / "feature_schema.json").write_text(
@@ -109,7 +101,21 @@ class DatasetWriter:
             raise ContractError("malformed dataset manifest") from exc
 
         ModelContractLoader.validate("model_dataset", manifest)
-        expected_checksum = manifest.get("data_checksum_sha256")
+        if manifest.get("generation_id") != generation_id:
+            raise ContractError("path generation does not match dataset manifest identity")
+        fs_path = partition / "feature_schema.json"
+        if feature_schema_path := partition / "feature_schema.json":
+            if fs_path.is_file():
+                try:
+                    fs_doc = json.loads(fs_path.read_text())
+                    ModelContractLoader.validate("feature_schema", fs_doc)
+                except (json.JSONDecodeError, ContractError) as exc:
+                    raise ContractError("tampered or malformed feature schema in dataset partition") from exc
+        sha_path = partition / "data.sha256"
+        if sha_path.is_file():
+            expected_checksum = sha_path.read_text().strip()
+        else:
+            expected_checksum = manifest.get("data_checksum_sha256")
         actual_checksum = file_sha256_bytes(data_path.read_bytes())
         if expected_checksum != actual_checksum:
             raise ContractError("tampered dataset data prevents read")

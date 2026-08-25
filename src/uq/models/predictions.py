@@ -38,6 +38,9 @@ class PredictionBuilder:
     ) -> tuple[dict[str, Any], bytes]:
         if scores.empty:
             raise ContractError("cannot publish empty prediction set")
+        key_columns = ["instrument"] + (["datetime"] if "datetime" in scores.columns else [])
+        if scores.duplicated(key_columns).any():
+            raise ContractError(f"duplicate prediction keys on {key_columns}")
         score_columns = [c for c in scores.columns if c not in {"instrument", "datetime"}]
         for col in score_columns:
             if scores[col].isna().any() or not np.isfinite(scores[col].dropna()).all():
@@ -129,6 +132,8 @@ class PredictionBuilder:
             raise ContractError("malformed prediction manifest") from exc
 
         ModelContractLoader.validate("prediction_set", manifest)
+        if manifest.get("decision_date") != decision_date:
+            raise ContractError("decision date does not match prediction path partition")
         actual_checksum = file_sha256_bytes(data_path.read_bytes())
         if actual_checksum != manifest["data_checksum_sha256"]:
             raise ContractError("tampered prediction data prevents read")
