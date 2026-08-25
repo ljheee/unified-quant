@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/feature_schema.v1.json",
+  "title": "Feature schema subcontract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version","schema_version","columns"],
+  "properties": {
+    "contract_version": {"const": 1},
+    "schema_version": {"$ref":"#/$defs/semver"},
+    "columns": {
+      "type":"array","minItems":1,"uniqueItems":true,
+      "items":{
+        "type":"object","additionalProperties":false,
+        "required":["name","source_factor","dtype","unit","null_semantics","transform_status","forbidden_transforms","fingerprint_normalization"],
+        "properties":{
+          "name":{"type":"string","minLength":1},
+          "source_factor":{"type":"string","minLength":1},
+          "factor_set":{"type":"string"},
+          "factor_version":{"$ref":"#/$defs/semver"},
+          "dtype":{"enum":["float64","int64","string","bool"]},
+          "unit":{"type":"string","minLength":1},
+          "nullable":{"type":"boolean","default":true},
+          "null_semantics":{"enum":["native_null","zero_fill_forbidden","sentinel"]},
+          "transform_status":{"enum":["identity","standardized","ranked","winsorized"]},
+          "forbidden_transforms":{"type":"array","items":{"type":"string"}},
+          "fingerprint_normalization":{"enum":["round_12","none"]}
+        }
+      }
+    },
+    "run_id": {"$ref":"#/$defs/uuid"},
+    "created_at": {"$ref":"#/$defs/date_time"},
+    "manifest_digest_sha256": {"$ref":"#/$defs/sha256"},
+    "generation_id": {"$ref":"#/$defs/sha256"}
+  },
+  "$defs":{
+    "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "uuid":{"type":"string","format":"uuid"},
+    "semver":{"type":"string","pattern":"^\\d+\\.\\d+\\.\\d+$"},
+    "date_time":{"type":"string","format":"date-time"}
+  }
+}

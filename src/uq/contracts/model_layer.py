@@ -22,6 +22,7 @@ _SCHEMA_NAMES = {
     "qlib_dataset_export",
     "qlib_init_receipt",
     "prediction_set",
+    "feature_schema",
 }
 _RUN_LOCAL_FIELDS = {"run_id", "created_at"}
 _MODEL_CONTRACT_FAMILIES = {*_SCHEMA_NAMES, "model_quality_report"}
