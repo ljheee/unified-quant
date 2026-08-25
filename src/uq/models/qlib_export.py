@@ -118,10 +118,6 @@ class QlibDatasetExporter:
                     "generation_id": "0" * 64,
                     "manifest_digest_sha256": "0" * 64,
                 }
-                gen, digest = model_manifest_identities(manifest, schema_name="qlib_dataset_export")
-                manifest["generation_id"] = gen
-                manifest["manifest_digest_sha256"] = digest
-
                 # Build complete file list including data.parquet and manifest itself
                 complete_files = []
                 for path in sorted(staging.rglob("*")):
@@ -133,9 +129,10 @@ class QlibDatasetExporter:
                             "byte_size": path.stat().st_size,
                         })
                 manifest["files"] = complete_files
-                gen2, digest2 = model_manifest_identities(manifest, schema_name="qlib_dataset_export")
-                manifest["generation_id"] = gen2
-                manifest["manifest_digest_sha256"] = digest2
+                generation_id, digest = model_manifest_identities(manifest, schema_name="qlib_dataset_export")
+                manifest["generation_id"] = generation_id
+                manifest["manifest_digest_sha256"] = digest
+                ModelContractLoader.validate("qlib_dataset_export", manifest)
 
                 manifest_path = staging / "manifest.json"
                 manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
@@ -154,6 +151,31 @@ class QlibDatasetExporter:
             shutil.rmtree(staging, ignore_errors=True)
             raise
         return manifest
+
+    def read(self, dataset_name: str, generation_id: str) -> tuple[dict[str, Any], Path]:
+        snapshot = self.export_root / f"dataset={dataset_name}" / f"generation={generation_id}"
+        manifest_path = snapshot / "manifest.json"
+        if not snapshot.is_dir() or not manifest_path.is_file():
+            raise ContractError(f"unpublished or incomplete Qlib export: {snapshot}")
+        try:
+            manifest = json.loads(manifest_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise ContractError("malformed Qlib export manifest") from exc
+        ModelContractLoader.validate("qlib_dataset_export", manifest)
+        if manifest["generation_id"] != generation_id:
+            raise ContractError("path generation does not match Qlib export manifest identity")
+        actual_paths: set[str] = set()
+        for path in sorted(snapshot.rglob("*")):
+            if path.is_file() and path.name != "manifest.json":
+                actual_paths.add(path.relative_to(snapshot).as_posix())
+        expected_paths = {entry["path"] for entry in manifest["files"]}
+        if actual_paths != expected_paths:
+            raise ContractError("Qlib export file list mismatch")
+        for entry in manifest["files"]:
+            path = snapshot / entry["path"]
+            if file_sha256_bytes(path.read_bytes()) != entry["checksum_sha256"] or path.stat().st_size != entry["byte_size"]:
+                raise ContractError(f"tampered Qlib export file: {entry['path']}")
+        return manifest, snapshot
 
 
 class QlibInitReceiptBuilder:

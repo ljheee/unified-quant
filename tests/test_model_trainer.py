@@ -14,6 +14,25 @@ from uq.models.trainer import ArtifactStore, ModelTrainer
 DIGEST = "0" * 64
 
 
+def _quality_report(bound_generation_id: str = DIGEST) -> dict:
+    from uq.contracts.model_layer import sha256_json
+    report = {
+        "report_version": 1,
+        "binding_type": "model_artifact_v1",
+        "bound_generation_id": bound_generation_id,
+        "policy": "reject_all",
+        "status": "passed",
+        "checks": [
+            {"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}
+        ],
+        "errors": [],
+        "warnings": [],
+        "producer_code_fingerprint": DIGEST,
+    }
+    report["report_checksum_sha256"] = sha256_json(report)
+    return report
+
+
 def _dataset() -> pd.DataFrame:
     rng = np.random.RandomState(42)
     n = 50
@@ -62,7 +81,7 @@ class TestArtifactStore:
             definition=_definition(), dataset_frame=_dataset(),
             feature_columns=["volume_ratio_20d"], label_column="label",
         )
-        partition = store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
+        partition = store.publish(manifest, artifact_bytes, quality_report=_quality_report(manifest["model_run_content_generation_id"]))
         assert partition.is_dir()
         artifact_generation_id = partition.name.removeprefix("artifact_generation=")
         loaded_manifest, loaded_bytes = store.read(manifest["model_run_content_generation_id"], artifact_generation_id)
@@ -73,24 +92,26 @@ class TestArtifactStore:
         store = ArtifactStore(tmp_path)
         trainer = ModelTrainer(tmp_path)
         manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")
-        store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
+        store.publish(manifest, artifact_bytes, quality_report=_quality_report(manifest["model_run_content_generation_id"]))
         with pytest.raises(ContractError, match="immutable"):
-            store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
+            store.publish(manifest, artifact_bytes, quality_report=_quality_report(manifest["model_run_content_generation_id"]))
 
     def test_tampered_artifact_rejected(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)
         trainer = ModelTrainer(tmp_path)
         manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")
-        partition = store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
+        partition = store.publish(manifest, artifact_bytes, quality_report=_quality_report(manifest["model_run_content_generation_id"]))
         (partition / "artifact.bin").write_bytes(b"tampered")
         with pytest.raises(ContractError, match="tampered"):
             store.read(manifest["model_run_content_generation_id"], partition.name.removeprefix("artifact_generation="))
 
     def test_quarantine_rejects_accepted_read(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)
-        q_dir = store.quarantine("test rejection", artifact_bytes=b"data")
+        q_dir = store.quarantine("quality_failed", artifact_bytes=b"data")
         assert q_dir.is_dir()
         manifest = json.loads((q_dir / "manifest.json").read_text())
+        assert manifest["review_status"] == "rejected"
+        assert manifest["input_generations"] == {}
         assert manifest["retention_policy"] == "manual-review; no automatic accepted promotion"
 
     def test_deterministic_training_same_seed(self) -> None:

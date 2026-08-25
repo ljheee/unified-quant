@@ -17,6 +17,7 @@
     "actual_output_columns",
     "column_set_exact_match",
     "eligibility_policy",
+    "eligibility_status",
     "row_count",
     "data_checksum_sha256",
     "serialization_profile_id",
@@ -108,8 +109,10 @@
       "const": true
     },
     "eligibility_policy": {
-      "type": "string",
-      "minLength": 1
+      "const": "reviewed-v1"
+    },
+    "eligibility_status": {
+      "enum": ["passed", "rejected"]
     },
     "row_count": {
       "type": "integer",

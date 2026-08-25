@@ -84,20 +84,6 @@ class LabelBuilder:
             adjusted_close.groupby(ordered["instrument"], sort=False)
             .transform(lambda values: values.shift(-self.horizon) / values - 1)
         )
-        if "suspended" not in ordered.columns or "listing_date" not in ordered.columns:
-            raise ContractError("label eligibility requires suspended and listing_date columns")
-        if ordered["suspended"].isna().any():
-            raise ContractError("null suspension flag in label input")
-        listing_age = (decision_time - pd.to_datetime(ordered["listing_date"], utc=True)).dt.days
-        eligible = (~ordered["suspended"].astype(bool)) & (listing_age >= 60)
-        if not eligible.all():
-            ordered = ordered.loc[eligible].copy()
-        adjusted_close = ordered["close"].astype(float) * ordered["adj_factor"].astype(float)
-        ordered["label"] = (
-            adjusted_close.groupby(ordered["instrument"], sort=False)
-            .transform(lambda values: values.shift(-self.horizon) / values - 1)
-        )
-
         # Rows without complete future observations remain null.
         output = ordered[["instrument", "decision_date", "label"]].copy()
 

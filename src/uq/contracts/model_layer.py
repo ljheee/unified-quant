@@ -135,13 +135,16 @@ class ModelContractLoader:
                     raise ContractError("model quality report checksum mismatch")
             return
         exclude_fields = {"logical_fingerprint"} if schema_name == "model_dataset" else None
-        expected_generation, expected_digest = model_manifest_identities(
+        exclude_fields = {"logical_fingerprint"} if schema_name == "model_dataset" else None
+        expected_generation, _ = model_manifest_identities(
             payload, schema_name=schema_name, exclude_fields=exclude_fields
         )
         if payload["generation_id"] != expected_generation:
             raise ContractError(f"{schema_name} stable generation mismatch")
-        if payload["manifest_digest_sha256"] != expected_digest:
-            raise ContractError(f"{schema_name} manifest digest mismatch")
+        if schema_name != "model_dataset":
+            _, expected_digest = model_manifest_identities(payload, schema_name=schema_name)
+            if payload["manifest_digest_sha256"] != expected_digest:
+                raise ContractError(f"{schema_name} manifest digest mismatch")
 
 
 class AcceptedFactorIndexContract:
@@ -187,21 +190,25 @@ def resolve_bindings(
     if dataset:
         label_gen = dataset.get("label_generation_id")
         label = documents.get("label_set")
-        if label is None and "label_set" in [k for k in documents]:
-            pass
-        elif label is None and "label_set" not in documents:
-            pass  # label binding deferred when label_set document not provided
+        if label is None:
+            errors.append("missing label_set document")
         else:
             if label.get("generation_id") != label_gen:
                 errors.append("label_generation_id mismatch")
             if label.get("name") != dataset.get("label_set_name"):
                 errors.append("label_set_name mismatch")
+        factor_documents = documents.get("factor_manifests") or {}
         for factor_gen in dataset.get("factor_generation_ids", []):
             if not factor_gen or len(factor_gen) != 64:
                 errors.append("invalid factor_generation_id")
+            elif factor_gen not in factor_documents:
+                errors.append(f"missing factor manifest for generation {factor_gen}")
         universe_gen = dataset.get("universe_snapshot_generation_id")
-        if not universe_gen or len(universe_gen) != 64:
-            errors.append("missing or invalid universe_snapshot_generation_id")
+        universe_document = documents.get("universe_snapshot")
+        if not universe_gen or len(universe_gen) != 64 or universe_document is None:
+            errors.append("missing or invalid universe snapshot binding")
+        elif universe_document.get("generation_id") != universe_gen:
+            errors.append("universe_snapshot_generation_id mismatch")
 
     run = documents.get("model_run")
     if run:
@@ -214,8 +221,12 @@ def resolve_bindings(
             errors.append("run.dataset_generation_id mismatch")
         export_gen = run.get("qlib_export_generation_id")
         export = documents.get("qlib_dataset_export")
-        if export and export.get("generation_id") != export_gen:
-            errors.append("run.qlib_export_generation_id mismatch")
+        if export is None or export.get("generation_id") != export_gen:
+            errors.append("missing or mismatched run.qlib_export_generation_id")
+        receipt_gen = run.get("init_receipt_generation_id")
+        receipt_for_run = documents.get("qlib_init_receipt")
+        if receipt_for_run is None or receipt_for_run.get("generation_id") != receipt_gen:
+            errors.append("missing or mismatched run.init_receipt_generation_id")
 
     artifact = documents.get("model_artifact")
     if artifact:

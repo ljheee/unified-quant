@@ -60,7 +60,7 @@ def base_document(schema_name: str) -> dict:
             "seed_policy": {"base_seed": 7, "derivation": "fixed"}, "feature_schema_generation_id": digest,
             "compatible_dataset_versions": ["1.0.0"], "metrics": [{"name": "ic", "direction": "maximize"}],
             "selection_rule": "maximum validation ic", "quality_policy": "reject_all",
-            "serializer_version": "joblib-v1", "code_fingerprint": digest,
+            "serializer_version": "json-numpy-v1", "code_fingerprint": digest,
             "model_run_content_generation_id": digest,
         })
     elif schema_name == "model_artifact":
@@ -196,6 +196,7 @@ def _extended_document(schema_name: str) -> dict:
             "declared_output_columns": ["instrument", "score"],
             "actual_output_columns": ["instrument", "score"],
             "eligibility_policy": "reviewed-v1",
+            "eligibility_status": "passed",
             "row_count": 2,
             "data_checksum_sha256": digest,
             "column_set_exact_match": True,
@@ -297,11 +298,20 @@ def test_cross_manifest_binding_resolver_passes_and_fails() -> None:
         "universe_snapshot_generation_id": digest,
     }
     label = {"generation_id": "b" * 64, "name": "return_5d"}
-    result = resolve_bindings({"model_dataset": dataset, "label_set": label})
+    universe = {"generation_id": digest}
+    factor_manifest = {"generation_id": digest}
+    result = resolve_bindings({
+        "model_dataset": dataset,
+        "label_set": label,
+        "universe_snapshot": universe,
+        "factor_manifests": {digest: factor_manifest},
+    })
     assert result["errors"] == []
     wrong_label = {**label, "generation_id": "c" * 64}
     with pytest.raises(ContractError, match="mismatch"):
         resolve_bindings({"model_dataset": dataset, "label_set": wrong_label})
+    with pytest.raises(ContractError, match="missing"):
+        resolve_bindings({"model_dataset": dataset})
 
 
 def test_accepted_index_response_schema_validates() -> None:

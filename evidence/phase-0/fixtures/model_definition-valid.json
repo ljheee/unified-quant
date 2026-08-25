@@ -1,33 +1,33 @@
 {
-  "contract_version": 1,
-  "run_id": "00000000-0000-4000-8000-000000000001",
-  "created_at": "2026-01-30T07:00:00+00:00",
-  "manifest_digest_sha256": "ce606b1313ce436ea1c3e1bd81a2bae320db2b800885c24fa0e834137b5bd5b9",
-  "generation_id": "9e016e1eb39019050c0cc8e6f1ad992f60a4caa24ed4c87461370300db4eaab8",
-  "model_set": "baseline",
-  "model_version": "1.0.0",
-  "status": "reviewed",
   "algorithm": "regularized_linear",
+  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "compatible_dataset_versions": [
+    "1.0.0"
+  ],
+  "contract_version": 1,
+  "created_at": "2026-01-30T07:00:00+00:00",
+  "feature_schema_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "generation_id": "433f75b95b43e0005c719e8ca1364328b470891a2b148877fbe030baaae14089",
   "hyperparameters": {
     "alpha": 1.0
   },
+  "manifest_digest_sha256": "9bbd3af258aecea186489d17734097005dc5b3c3eb0433bfd3720b0670b851b3",
+  "metrics": [
+    {
+      "direction": "maximize",
+      "name": "ic"
+    }
+  ],
+  "model_run_content_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "model_set": "baseline",
+  "model_version": "1.0.0",
+  "quality_policy": "reject_all",
+  "run_id": "00000000-0000-4000-8000-000000000001",
   "seed_policy": {
     "base_seed": 7,
     "derivation": "fixed"
   },
-  "feature_schema_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
-  "compatible_dataset_versions": [
-    "1.0.0"
-  ],
-  "metrics": [
-    {
-      "name": "ic",
-      "direction": "maximize"
-    }
-  ],
   "selection_rule": "maximum validation ic",
-  "quality_policy": "reject_all",
-  "serializer_version": "joblib-v1",
-  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
-  "model_run_content_generation_id": "0000000000000000000000000000000000000000000000000000000000000000"
+  "serializer_version": "json-numpy-v1",
+  "status": "reviewed"
 }

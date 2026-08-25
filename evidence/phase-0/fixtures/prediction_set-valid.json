@@ -2,8 +2,8 @@
   "contract_version": 1,
   "run_id": "00000000-0000-4000-8000-000000000001",
   "created_at": "2026-01-30T07:00:00+00:00",
-  "manifest_digest_sha256": "2b2c806fcb633457854f66aace5912cefb96960c2101553b89efa2004e7e1829",
-  "generation_id": "33217f8471fcf2324212b968fc091949c8e756a8128ecc4c95501c5dabdf602e",
+  "manifest_digest_sha256": "e9fdf362ee9752053738545d7a5aff111d00e7cca65e900b496f801f31cb3be7",
+  "generation_id": "ed75afc6270afb97164640f83c030b6f62694e43aeeeb128908a99fbf173813d",
   "prediction_set_name": "daily",
   "model_artifact_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
   "model_artifact_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -30,5 +30,6 @@
   "eligibility_policy": "reviewed-v1",
   "row_count": 2,
   "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-  "serialization_profile_id": "uq-v1"
+  "serialization_profile_id": "uq-v1",
+  "eligibility_status": "passed"
 }

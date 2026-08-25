@@ -40,9 +40,9 @@ class ModelDefinitionBuilder:
         metrics: list[dict[str, Any]],
         selection_rule: str,
         quality_policy: str = "reject_all",
-        serializer_version: str = "joblib-v1",
+        serializer_version: str = "json-numpy-v1",
     ) -> dict[str, Any]:
-        if algorithm not in ("regularized_linear", "lightgbm"):
+        if algorithm != "regularized_linear":
             raise ContractError(f"unsupported algorithm: {algorithm}")
         if not metrics:
             raise ContractError("model definition requires at least one metric")

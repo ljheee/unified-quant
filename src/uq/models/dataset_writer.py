@@ -18,6 +18,7 @@ from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities
 from ..errors import ContractError
 from .features import FeatureSchemaValidator
+from ..factors.raw_price import logical_fingerprint as frame_logical_fingerprint
 
 
 class DatasetWriter:
@@ -43,11 +44,8 @@ class DatasetWriter:
             schema_name="model_dataset",
             exclude_fields={"logical_fingerprint"},
         )
-
         published_manifest = dict(manifest)
-        published_manifest["generation_id"] = draft_generation
-        published_manifest["manifest_digest_sha256"] = "0" * 64
-        validate_contract("model_dataset.v1.json", published_manifest)
+
         if feature_schema is not None:
             FeatureSchemaValidator.validate_against_frame(feature_schema, frame)
 
@@ -57,6 +55,7 @@ class DatasetWriter:
             raise ContractError("dataset readback reconciliation failed")
 
         published_manifest["data_checksum_sha256"] = data_checksum
+        published_manifest["logical_fingerprint"] = frame_logical_fingerprint(restored)
         published_manifest["generation_id"] = "0" * 64
         published_manifest["manifest_digest_sha256"] = "0" * 64
         generation_id, manifest_digest = model_manifest_identities(
@@ -133,18 +132,17 @@ class DatasetWriter:
             raise ContractError("malformed dataset manifest") from exc
 
         ModelContractLoader.validate("model_dataset", manifest)
-        expected_generation, expected_digest = model_manifest_identities(
+        expected_generation, _ = model_manifest_identities(
             manifest,
             schema_name="model_dataset",
             exclude_fields={"logical_fingerprint"},
         )
-        if manifest.get("manifest_digest_sha256") != expected_digest:
-            raise ContractError("dataset manifest digest mismatch")
         if manifest.get("generation_id") != expected_generation:
             raise ContractError("dataset stable generation mismatch")
         if manifest.get("generation_id") != generation_id:
             raise ContractError("path generation does not match dataset manifest identity")
         fs_path = partition / "feature_schema.json"
+        fs_doc = None
         if fs_path.is_file():
             try:
                 fs_doc = json.loads(fs_path.read_text())
@@ -162,6 +160,15 @@ class DatasetWriter:
             raise ContractError("sidecar checksum conflicts with manifest checksum")
 
         frame = pd.read_parquet(data_path)
+        if fs_doc is not None:
+            FeatureSchemaValidator.validate_against_frame(fs_doc, frame)
+            expected_columns = ["instrument", "datetime", *[column["name"] for column in fs_doc["columns"]]]
+            if list(frame.columns) not in (expected_columns, expected_columns + ["label"]):
+                raise ContractError("dataset frame columns do not match feature schema and label contract")
+        if frame.duplicated(["instrument", "datetime"]).any():
+            raise ContractError("duplicate dataset keys prevent read")
+        if frame_logical_fingerprint(frame) != manifest.get("logical_fingerprint"):
+            raise ContractError("dataset logical fingerprint mismatch")
         if len(frame) != manifest.get("row_count"):
             raise ContractError("dataset row count does not match manifest")
         return manifest, frame

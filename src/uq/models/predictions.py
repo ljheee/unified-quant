@@ -36,7 +36,7 @@ class PredictionBuilder:
         input_dataset_generation_id: str,
         decision_date: str,
         scores: pd.DataFrame,
-        eligibility_policy: str = "reviewed-v1",
+        eligibility_status: str,
     ) -> tuple[dict[str, Any], bytes]:
         from datetime import date as _date
         try:
@@ -75,7 +75,8 @@ class PredictionBuilder:
             "declared_output_columns": output_columns,
             "actual_output_columns": output_columns,
             "column_set_exact_match": True,
-            "eligibility_policy": eligibility_policy,
+            "eligibility_policy": "reviewed-v1",
+            "eligibility_status": eligibility_status,
             "row_count": len(scores),
             "data_checksum_sha256": data_checksum,
             "serialization_profile_id": "parquet-v1",
@@ -94,6 +95,8 @@ class PredictionBuilder:
         return manifest, artifact
 
     def publish(self, manifest: dict[str, Any], artifact_bytes: bytes) -> Path:
+        if manifest.get("eligibility_status") != "passed":
+            raise ContractError("prediction publication requires passed eligibility status")
         ModelContractLoader.validate("prediction_set", manifest)
         partition = (
             self.predictions_dir
@@ -143,6 +146,9 @@ class PredictionBuilder:
         ModelContractLoader.validate("prediction_set", manifest)
         if manifest.get("decision_date") != decision_date:
             raise ContractError("decision date does not match prediction path partition")
+        expected_generation, _ = model_manifest_identities(manifest, schema_name="prediction_set")
+        if manifest["generation_id"] != expected_generation:
+            raise ContractError("prediction stable generation mismatch")
         actual_checksum = file_sha256_bytes(data_path.read_bytes())
         if actual_checksum != manifest["data_checksum_sha256"]:
             raise ContractError("tampered prediction data prevents read")

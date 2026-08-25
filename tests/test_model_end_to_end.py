@@ -18,10 +18,11 @@ from uq.models.accepted_store import AcceptedFactorIndexRuntime
 from uq.models.dataset import DatasetBuilder, SplitValidator
 from uq.models.dataset_writer import DatasetWriter
 from uq.models.definition import MetricReport, ModelDefinitionBuilder
+from uq.models.labels import LabelBuilder
 from uq.models.features import FeatureSchemaBuilder
 from uq.models.predictions import PredictionBuilder
 from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
-from uq.contracts.model_layer import model_manifest_identities, resolve_bindings
+from uq.contracts.model_layer import sha256_json, resolve_bindings
 from uq.models.trainer import ArtifactStore, ModelRunBuilder, ModelTrainer
 
 
@@ -87,14 +88,32 @@ class TestEndToEndPipeline:
         feature_schema = fs_builder.build(factor_data, source_factor_set="basic", source_factor_version="1.0.0")
 
         # Add label column AFTER schema is built
-        factor_data["label"] = np.random.RandomState(7).randn(len(factor_data)) * 0.01
+        adjusted_frame = factor_data.copy()
+        rng = np.random.RandomState(7)
+        adjusted_frame["close"] = 10.0 + rng.randn(len(factor_data)) * 0.1
+        adjusted_frame["adj_factor"] = 1.0
+        adjusted_frame["suspended"] = False
+        adjusted_frame["listing_date"] = pd.Timestamp("2020-01-01", tz="UTC")
+        label_manifest = LabelBuilder(name="return_5d", semantic_version="1.0.0").build(
+            adjusted_frame,
+            upstream_bindings=[{
+                "binding": "adjusted_price",
+                "dataset": "e2e_adjusted_bars",
+                "schema_version": "adjusted-v1",
+                "partition_date": "2026-01-09",
+                "generation_id": DIGEST,
+                "data_checksum_sha256": DIGEST,
+                "visible_cutoff": "2026-01-09T15:00:00+08:00",
+            }],
+        )
+        factor_data["label"] = label_manifest["row_count"] * [None]
 
         # === Phase 1: Dataset build + write ===
         dataset_manifest = DatasetBuilder(dataset_name="e2e_slice", semantic_version="1.0.0").build(
             ordered_features=["volume_ratio_20d"],
             factor_set="basic", factor_version="1.0.0",
             factor_generation_ids=[factor_gen],
-            label_set_name="return_5d", label_generation_id=DIGEST,
+            label_set_name="return_5d", label_generation_id=label_manifest["generation_id"],
             universe_snapshot_generation_id=DIGEST,
             split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-09"}]},
             row_count=len(factor_data),
@@ -146,6 +165,9 @@ class TestEndToEndPipeline:
             receipt_manifest=receipt,
             environment_lock_sha256=DIGEST,
             determinism_controls={"random_seed": 42, "threads": 1},
+            label_manifest=label_manifest,
+            universe_snapshot={"generation_id": loaded_ds_manifest["universe_snapshot_generation_id"]},
+            factor_manifests={factor_gen: {"generation_id": factor_gen}},
         )
         # === Phase 4: Train + publish artifact ===
         trainer = ModelTrainer(tmp_path)
@@ -156,9 +178,23 @@ class TestEndToEndPipeline:
             label_column="label",
         )
         artifact_store = ArtifactStore(tmp_path)
+        artifact_quality_report = {
+            "report_version": 1,
+            "binding_type": "model_artifact_v1",
+            "bound_generation_id": artifact_manifest["model_run_content_generation_id"],
+            "policy": "reject_all",
+            "status": "passed",
+            "checks": [{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            "errors": [],
+            "warnings": [],
+            "producer_code_fingerprint": DIGEST,
+        }
+        artifact_quality_report["report_checksum_sha256"] = sha256_json({
+            key: value for key, value in artifact_quality_report.items() if key != "report_checksum_sha256"
+        })
         artifact_partition = artifact_store.publish(
             artifact_manifest, artifact_bytes,
-            quality_report_checksum=artifact_manifest.get("quality_report_checksum_sha256", "0" * 64),
+            quality_report=artifact_quality_report,
         )
         assert artifact_partition.is_dir()
 
@@ -182,6 +218,7 @@ class TestEndToEndPipeline:
             input_dataset_generation_id=loaded_ds_manifest["generation_id"],
             decision_date="2026-01-09",
             scores=scores,
+            eligibility_status="passed",
         )
         pred_partition = pred_builder.publish(pred_manifest, pred_artifact)
         assert pred_partition.is_dir()
@@ -194,6 +231,9 @@ class TestEndToEndPipeline:
         from uq.contracts.model_layer import resolve_bindings
         bindings_report = resolve_bindings({
             "model_dataset": loaded_ds_manifest,
+            "label_set": label_manifest,
+            "universe_snapshot": {"generation_id": loaded_ds_manifest["universe_snapshot_generation_id"]},
+            "factor_manifests": {factor_gen: {"generation_id": factor_gen}},
             "model_definition": definition,
             "qlib_dataset_export": export_manifest,
             "qlib_init_receipt": receipt,

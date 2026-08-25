@@ -84,10 +84,25 @@ class ArtifactStore:
         manifest: dict[str, Any],
         artifact_bytes: bytes,
         *,
-        quality_report_checksum: str | None = None,
+        quality_report: dict[str, Any],
     ) -> Path:
-        if quality_report_checksum is None:
+        ModelContractLoader.validate("model_quality_report", quality_report)
+        run_content_generation_id = manifest.get("model_run_content_generation_id")
+        if not isinstance(run_content_generation_id, str) or len(run_content_generation_id) != 64:
+            raise ContractError("artifact publication requires a validated model_run_content_generation_id")
+        if quality_report["binding_type"] != "model_artifact_v1" or quality_report["status"] == "rejected":
+            raise ContractError("quality report does not approve this artifact")
+        if quality_report["bound_generation_id"] != run_content_generation_id:
+            raise ContractError("quality report does not bind to the model run")
+        quality_report_checksum = sha256_json({
+            key: value for key, value in quality_report.items() if key != "report_checksum_sha256"
+        })
+        if quality_report["report_checksum_sha256"] != quality_report_checksum:
             raise ContractError("artifact publication requires an explicit quality report checksum")
+        report_dir = self.models_dir / "quality_reports"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        report_path = report_dir / f"{quality_report_checksum}.json"
+        report_path.write_text(json.dumps(quality_report, sort_keys=True, indent=2) + "\n")
         published_manifest = dict(manifest)
         published_manifest["quality_report_checksum_sha256"] = quality_report_checksum
         published_manifest["generation_id"] = "0" * 64
@@ -159,11 +174,16 @@ class ArtifactStore:
             raise ContractError("artifact byte size mismatch")
         if not isinstance(manifest.get("quality_report_checksum_sha256"), str) or len(manifest["quality_report_checksum_sha256"]) != 64:
             raise ContractError("missing artifact quality report checksum")
+        report_path = partition.parents[1] / "quality_reports" / f"{manifest['quality_report_checksum_sha256']}.json"
+        if not report_path.is_file():
+            raise ContractError("artifact quality report is unavailable")
         if manifest.get("generation_id") != artifact_generation_id:
             raise ContractError("path generation does not match manifest identity")
         return manifest, artifact_path.read_bytes()
 
     def quarantine(self, reason: str, *, artifact_bytes: bytes = b"", operator: str = "model-store") -> Path:
+        if reason not in {"quality_failed", "checksum_mismatch", "lineage_mismatch", "operator_rejected"}:
+            raise ContractError("quarantine reason is not in the approved taxonomy")
         directory = self.quarantine_dir / uuid.uuid4().hex
         staging = directory.with_name(directory.name + ".staging")
         staging.mkdir(parents=True)
@@ -174,6 +194,8 @@ class ArtifactStore:
                 "quarantine_version": 1,
                 "reason": reason,
                 "operator": operator,
+                "review_status": "rejected",
+                "input_generations": {},
                 "data_checksum_sha256": file_sha256_bytes(artifact_path.read_bytes()),
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "retention_policy": "manual-review; no automatic accepted promotion",
@@ -202,6 +224,9 @@ class ModelRunBuilder:
         receipt_manifest: dict[str, Any],
         environment_lock_sha256: str,
         determinism_controls: dict[str, Any],
+        label_manifest: dict[str, Any],
+        universe_snapshot: dict[str, Any],
+        factor_manifests: dict[str, dict[str, Any]],
         reproducibility_mode: str = "logical_fingerprint",
     ) -> dict[str, Any]:
         from ..contracts.model_layer import resolve_bindings
@@ -210,10 +235,14 @@ class ModelRunBuilder:
             "model_dataset": dataset_manifest,
             "qlib_dataset_export": export_manifest,
             "qlib_init_receipt": receipt_manifest,
+            "label_set": label_manifest,
+            "universe_snapshot": universe_snapshot,
         }
+        required_documents["factor_manifests"] = factor_manifests
         for family, document in required_documents.items():
-            ModelContractLoader.validate(family, document)
-        resolve_bindings(required_documents)
+            if family not in {"universe_snapshot", "factor_manifests"}:
+                ModelContractLoader.validate(family, document)
+        resolve_bindings(required_documents)  # type: ignore[arg-type]
         code_fingerprint = sha256_json({"component": "ModelRunBuilder", "version": 1})
         content_payload = {
             "definition": definition["generation_id"],
@@ -243,7 +272,7 @@ class ModelRunBuilder:
             "environment_lock_sha256": environment_lock_sha256,
             "determinism_controls": determinism_controls,
             "reproducibility_mode": reproducibility_mode,
-            "logical_tolerance": None,
+            **({"logical_tolerance": 1e-12} if reproducibility_mode == "logical_fingerprint" else {}),
             "run_id": str(uuid.uuid4()),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "generation_id": "0" * 64,

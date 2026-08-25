@@ -27,6 +27,6 @@
   ],
   "selection_rule": "maximum validation ic",
   "quality_policy": "reject_all",
-  "serializer_version": "joblib-v1",
+  "serializer_version": "json-numpy-v1",
   "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000"
 }

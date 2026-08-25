@@ -25,6 +25,7 @@ class TestPredictionBuilder:
             model_artifact_generation_id="a" * 64,
             model_artifact_checksum="b" * 64,
             input_dataset_generation_id="c" * 64,
+            eligibility_status="passed",
             decision_date="2026-02-15",
             scores=_scores(),
         )
@@ -39,6 +40,7 @@ class TestPredictionBuilder:
             model_artifact_generation_id="a" * 64,
             model_artifact_checksum="b" * 64,
             input_dataset_generation_id="c" * 64,
+            eligibility_status="passed",
             decision_date="2026-02-15",
             scores=_scores(),
         )
@@ -54,7 +56,7 @@ class TestPredictionBuilder:
             builder.build(
                 prediction_set_name="x", model_artifact_generation_id="a" * 64,
                 model_artifact_checksum="b" * 64, input_dataset_generation_id="c" * 64,
-                decision_date="2026-02-15", scores=scores,
+                eligibility_status="passed", decision_date="2026-02-15", scores=scores,
             )
 
     def test_immutable_overwrite_rejected(self, tmp_path) -> None:
@@ -62,7 +64,7 @@ class TestPredictionBuilder:
         manifest, artifact = builder.build(
             prediction_set_name="x", model_artifact_generation_id="a" * 64,
             model_artifact_checksum="b" * 64, input_dataset_generation_id="c" * 64,
-            decision_date="2026-02-15", scores=_scores(),
+            eligibility_status="passed", decision_date="2026-02-15", scores=_scores(),
         )
         builder.publish(manifest, artifact)
         with pytest.raises(ContractError, match="immutable"):
@@ -73,7 +75,7 @@ class TestPredictionBuilder:
         manifest, artifact = builder.build(
             prediction_set_name="x", model_artifact_generation_id="a" * 64,
             model_artifact_checksum="b" * 64, input_dataset_generation_id="c" * 64,
-            decision_date="2026-02-15", scores=_scores(),
+            eligibility_status="passed", decision_date="2026-02-15", scores=_scores(),
         )
         partition = builder.publish(manifest, artifact)
         (partition / "data.parquet").write_bytes(b"tampered")
@@ -86,5 +88,5 @@ class TestPredictionBuilder:
             builder.build(
                 prediction_set_name="x", model_artifact_generation_id="a" * 64,
                 model_artifact_checksum="b" * 64, input_dataset_generation_id="c" * 64,
-                decision_date="2026-02-15", scores=pd.DataFrame(columns=["instrument", "datetime", "score"]),
+                eligibility_status="passed", decision_date="2026-02-15", scores=pd.DataFrame(columns=["instrument", "datetime", "score"]),
             )
