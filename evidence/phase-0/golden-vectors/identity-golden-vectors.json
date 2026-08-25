@@ -1,0 +1,66 @@
+{
+  "label_set": {
+    "valid_fixture": "evidence/phase-0/fixtures/label_set-valid.json",
+    "generation_id": "37c98e4d96208eb286664025c0b8e3f4f95944b6dc6fb2c1abcfed165b914d20",
+    "manifest_digest_sha256": "79d4527d45b4fb72ca49562659ffb13f099024b075af56f97efab2af1450d098",
+    "run_metadata_change_stable": true,
+    "changed_run_generation_matches": true,
+    "negative_fixture": "evidence/phase-0/fixtures/label_set-negative.json"
+  },
+  "model_dataset": {
+    "valid_fixture": "evidence/phase-0/fixtures/model_dataset-valid.json",
+    "generation_id": "79d70a2a0cd1f6dd15fdb23aedf390cb88201c6fe1b69cce4081d9339a57fcf8",
+    "manifest_digest_sha256": "e5f88a0dbe4b5d525ea9032731e971d8afdbd72b091c566c39a148b9d4fbafa7",
+    "run_metadata_change_stable": true,
+    "changed_run_generation_matches": true,
+    "negative_fixture": "evidence/phase-0/fixtures/model_dataset-negative.json"
+  },
+  "model_definition": {
+    "valid_fixture": "evidence/phase-0/fixtures/model_definition-valid.json",
+    "generation_id": "28de91f4dd22bdb89d0b4b8094b111675fd9b3ce3c303fe382c37fa8991837f4",
+    "manifest_digest_sha256": "3886ec2448e2478312ea77fa1bea8de2e079d269ac6dc3707c5059e7d93c3cca",
+    "run_metadata_change_stable": true,
+    "changed_run_generation_matches": true,
+    "negative_fixture": "evidence/phase-0/fixtures/model_definition-negative.json"
+  },
+  "model_run": {
+    "valid_fixture": "evidence/phase-0/fixtures/model_run-valid.json",
+    "generation_id": "ba11188228efee00dfd065c4919ce03ef267e51255aae2340f1a2b4c9ce648ac",
+    "manifest_digest_sha256": "5169a9919be8d757c1472be2121eefb3f21867642592568091a9a0c14ea6eb5b",
+    "run_metadata_change_stable": true,
+    "changed_run_generation_matches": true,
+    "negative_fixture": "evidence/phase-0/fixtures/model_run-negative.json"
+  },
+  "model_artifact": {
+    "valid_fixture": "evidence/phase-0/fixtures/model_artifact-valid.json",
+    "generation_id": "49371504ae8fb90bd82532c7642ee507f8576bebf3c956be11fb398db97635fe",
+    "manifest_digest_sha256": "b6c7e1dd986ab558f24e23b16666424d588cba6bb3b5ac41138e9fd9270be10f",
+    "run_metadata_change_stable": true,
+    "changed_run_generation_matches": true,
+    "negative_fixture": "evidence/phase-0/fixtures/model_artifact-negative.json"
+  },
+  "qlib_dataset_export": {
+    "valid_fixture": "evidence/phase-0/fixtures/qlib_dataset_export-valid.json",
+    "generation_id": "6379ad080fddb9b507fddb839f9fa4290f16d6dc58c247f5678084b266819e1d",
+    "manifest_digest_sha256": "669a75c0a497435b2b649fb30eac0cee151561a4814bfd7f7bd2782e18a10b7f",
+    "run_metadata_change_stable": true,
+    "changed_run_generation_matches": true,
+    "negative_fixture": "evidence/phase-0/fixtures/qlib_dataset_export-negative.json"
+  },
+  "qlib_init_receipt": {
+    "valid_fixture": "evidence/phase-0/fixtures/qlib_init_receipt-valid.json",
+    "generation_id": "bb2ab76cd8621be53902f5f3b7c055bf041b99eb4fb961c200214f08775bb665",
+    "manifest_digest_sha256": "9d49119f02e16ee32163e8f96ed81a01a569e0d1e83f64ba2f6a9ce351667d0f",
+    "run_metadata_change_stable": true,
+    "changed_run_generation_matches": true,
+    "negative_fixture": "evidence/phase-0/fixtures/qlib_init_receipt-negative.json"
+  },
+  "prediction_set": {
+    "valid_fixture": "evidence/phase-0/fixtures/prediction_set-valid.json",
+    "generation_id": "33217f8471fcf2324212b968fc091949c8e756a8128ecc4c95501c5dabdf602e",
+    "manifest_digest_sha256": "2b2c806fcb633457854f66aace5912cefb96960c2101553b89efa2004e7e1829",
+    "run_metadata_change_stable": true,
+    "changed_run_generation_matches": true,
+    "negative_fixture": "evidence/phase-0/fixtures/prediction_set-negative.json"
+  }
+}

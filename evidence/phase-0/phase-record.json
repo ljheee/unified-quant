@@ -1,0 +1,52 @@
+{
+  "phase": 0,
+  "record_version": 1,
+  "status": "executable_pending_review",
+  "entry_criteria": [
+    {
+      "id": "E0-entry-source-blockers",
+      "test_id": "tests/test_model_layer_contracts.py",
+      "status": "passed"
+    },
+    {
+      "id": "E0-entry-schema-list",
+      "test_id": "tests/test_model_layer_contracts.py::test_all_families_have_valid_and_negative_fixtures_on_disk",
+      "status": "passed"
+    }
+  ],
+  "exit_criteria": [
+    {
+      "id": "E0-exit-all-schemas-validate",
+      "test_id": "tests/test_model_layer_contracts.py::test_all_families_have_valid_and_negative_fixtures_on_disk",
+      "status": "passed"
+    },
+    {
+      "id": "E0-exit-golden-vectors",
+      "test_id": "tests/test_model_layer_contracts.py::test_golden_vectors_cover_all_manifest_families",
+      "status": "passed"
+    },
+    {
+      "id": "E0-exit-loader-fail-closed",
+      "test_id": "tests/test_model_layer_contracts.py::test_typed_loader_rejects_absent_malformed_and_tampered_documents + test_loader_rejects_symlinked_contract + test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root",
+      "status": "passed"
+    },
+    {
+      "id": "E0-exit-query-contract",
+      "test_id": "tests/test_model_layer_contracts.py::test_accepted_index_contract_is_query_only_and_fails_closed + test_accepted_query_cursor_arity_is_validated + test_accepted_index_response_schema_validates",
+      "status": "passed"
+    },
+    {
+      "id": "E0-exit-cross-manifest-resolver",
+      "test_id": "tests/test_model_layer_contracts.py::test_cross_manifest_binding_resolver_passes_and_fails",
+      "status": "passed",
+      "note": "Contract-level binding shape only; factor upstream content resolution deferred to Phase 1 accepted-store runtime."
+    },
+    {
+      "id": "E0-exit-unified-gate-green-head-bound",
+      "test_id": "scripts/run_gate.sh",
+      "evidence_path": "evidence/phase-0/gate-reports/gate-report.json",
+      "status": "passed",
+      "bound_commit": "0e31b62280aa18b1adabad7d25d2ed401bf27b97"
+    }
+  ]
+}

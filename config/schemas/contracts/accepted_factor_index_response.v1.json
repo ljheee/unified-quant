@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/accepted_factor_index_response.v1.json",
+  "title": "Typed accepted-factor index/list response contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "entries",
+    "has_more"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "factor_set",
+          "factor_version",
+          "partition_date",
+          "generation_id",
+          "manifest_digest_sha256",
+          "data_checksum_sha256",
+          "quality_status"
+        ],
+        "properties": {
+          "factor_set": {
+            "type": "string"
+          },
+          "factor_version": {
+            "$ref": "#/$defs/semver"
+          },
+          "partition_date": {
+            "$ref": "#/$defs/date"
+          },
+          "generation_id": {
+            "$ref": "#/$defs/sha256"
+          },
+          "manifest_digest_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "data_checksum_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "quality_status": {
+            "enum": [
+              "passed",
+              "warning"
+            ]
+          },
+          "universe_snapshot_generation_id": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "next_cursor": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "has_more": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+  }
+}

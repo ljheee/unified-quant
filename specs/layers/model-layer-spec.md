@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v0.2.1; Phase 0 contract assets implemented; runtime not implemented**
+Status: **design v0.2.3; Phase 0 contract assets complete pending final review**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
@@ -92,6 +92,29 @@ durable artifacts when published. Each must use one of the identity contracts
 above or declare its own reviewed family before publication.
 
 `run_id` may appear in manifests only outside the stable generation payload.
+
+### Normative generation payload tables
+
+The loader derives every stable generation from the complete semantic
+manifest, excluding exactly `generation_id`, `manifest_digest_sha256`, and the
+family-specific fields below. Numbers use canonical JSON serialization with no
+non-finite values. Logical-fingerprint fallback means the recorded logical
+fingerprint is part of content identity when byte equality is not required.
+
+| Family | Excluded run-local fields | Logical fallback | Artifact checksum relationship |
+|---|---|---|---|
+| `label_set.v1` | `run_id`, `created_at` | no | `data_checksum_sha256` |
+| `model_dataset.v1` | `run_id`, `created_at` | yes | `data_checksum_sha256` |
+| `model_definition.v1` | `run_id`, `created_at` | no | none |
+| `model_run.v1` | `run_id`, `created_at` | no | none |
+| `model_artifact.v1` | `run_id`, `created_at` | no | `artifact_checksum_sha256` |
+| `qlib_dataset_export.v1` | `run_id`, `created_at` | no | `files[].checksum_sha256` |
+| `qlib_init_receipt.v1` | `run_id`, `created_at` | no | `cache_diff_checksum_sha256` |
+| `prediction_set.v1` | `run_id`, `created_at` | yes | `data_checksum_sha256` |
+
+`qlib_dataset_export.v1.files[].checksum_sha256` is individually required and
+the file-list checksum binds their order and contents. A schema version that
+changes any payload rule above requires a new contract version.
 
 ## 5. Label Contract
 

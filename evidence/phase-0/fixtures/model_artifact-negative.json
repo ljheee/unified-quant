@@ -1,0 +1,16 @@
+{
+  "contract_version": 1,
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "created_at": "2026-01-30T07:00:00+00:00",
+  "manifest_digest_sha256": "b6c7e1dd986ab558f24e23b16666424d588cba6bb3b5ac41138e9fd9270be10f",
+  "generation_id": "49371504ae8fb90bd82532c7642ee507f8576bebf3c956be11fb398db97635fe",
+  "artifact_filename": "artifact.bin",
+  "artifact_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "byte_size": 0,
+  "runtime_name": "qlib",
+  "runtime_version": "0.9.6",
+  "runtime_import_path": "qlib",
+  "model_run_content_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "quality_report_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "serialization_profile_id": "uq-artifact-v1"
+}

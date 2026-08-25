@@ -1,0 +1,20 @@
+{
+  "report_version": 1,
+  "binding_type": "model_artifact_v1",
+  "bound_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "policy": "reject_all",
+  "status": "passed",
+  "checks": [
+    {
+      "name": "artifact_readback",
+      "threshold": 1,
+      "observed": 1,
+      "level": "error",
+      "result": "passed"
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "report_checksum_sha256": "270f25d3efe364cdaa0bfb18d50c8c791af005e90fa9a07898b6f8c6c094aa48"
+}

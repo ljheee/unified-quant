@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v0.2.1; Phase 0 contract assets implemented; gate exit pending fresh successful evidence**
+Status: **gated implementation order v0.2.3; Phase 0 contract assets complete pending final review**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -46,11 +46,13 @@ Phases are gates, not suggestions:
    preserved evidence paths. Documentation text cannot override this field;
    an absent record means `blocked`.
 
-Implemented contract assets now include all nine manifest schemas plus the
-accepted-query schema, representative/golden/negative tests, and
-`ModelContractLoader`. The plan is still not exited because a fresh successful
-unified-gate report must be produced after these changes and preserved with its
-requirements snapshot/digest. All runtime phases remain paused.
+Implemented contract assets include all nine manifest schemas plus query
+request/response schemas, on-disk valid/negative fixtures for every family,
+golden vectors covering all manifest families, cross-manifest binding resolver
+(contract-level shape), and `ModelContractLoader`. Factor upstream content
+resolution (actual factor manifest lookup/checksum verification) is deferred to
+Phase 1 accepted-store runtime; Phase 0 validates generation format only.
+Evidence is preserved under `evidence/phase-0/`. All runtime phases stay paused.
 
 Factor-layer interface prerequisite: the model layer treats the existing
 `read_factor_partition(partition: Path)` as the accepted-partition read boundary
@@ -350,22 +352,27 @@ Exit requires:
 - successful unified gate locally and in the declared remote matrix;
 - no executable claim without implementation/test evidence.
 
-## Acceptance Matrix Baseline
+## Acceptance Matrix Expansion
 
-The source-spec §12 matrix is authoritative. Current TBD placeholders remain
-blocked until each phase freezes its concrete test IDs. Before any phase is
-declared executable, every row must be expanded into an M-ID expansion table
-with one row per sub-ID. Each expansion must record owning sub-phase, blocked-by
-list, exact automated test ID, fixture path, evidence path, and status
-(`blocked|in_progress|executable|passed`). At minimum:
+The source-spec §12 matrix is authoritative. Phase 0 sub-items are now expanded;
+later phases must expand their rows before entering implementation.
 
-- M1/M10/M11 into factor-binding, quarantine-isolation, and manifest-tamper cases;
-- M2/M3 into feature-PIT, label-PIT, purge, and embargo cases;
-- M4/M7 into dataset, adapter-export, and model-artifact reproducibility cases;
-- M6 into missing/mismatched/tampered/failed report cases;
-- M8 into provider-uri, calendar/universe, cache, and fetch-blocking cases;
-- M9 into generation-binding, finite-score, eligibility, output-column exact
-  match, and overwrite cases.
+| Sub-ID | Owning phase | Blocked by | Test ID | Fixture path | Evidence path | Status |
+|---|---|---|---|---|---|---|
+| M1a-factor-manifest-missing | 0 | none | test_cross_manifest_binding_resolver_passes_and_fails | evidence/phase-0/fixtures/model_dataset-negative.json | evidence/phase-0/phase-record.json | passed |
+| M1b-factor-checksum-tamper | 1 | Phase 0 exit | TBD-P1 | TBD | TBD | blocked |
+| M1c-wrong-generation-binding | 0 | none | test_cross_manifest_binding_resolver_passes_and_fails | evidence/phase-0/fixtures/prediction_set-negative.json | evidence/phase-0/phase-record.json | passed |
+| M5a-label-generation-change | 0 | none | test_golden_vectors_cover_all_manifest_families | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/phase-0/golden-vectors/identity-golden-vectors.json | passed |
+| M5b-dataset-generation-change | 0 | none | test_golden_vectors_cover_all_manifest_families | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/phase-0/golden-vectors/identity-golden-vectors.json | passed |
+| M8a-provider-uri-mismatch | 2A | Phase 1 exit | TBD-P2A | TBD | TBD | blocked |
+| M8b-calendar-tamper | 2A | Phase 1 exit | TBD-P2A | TBD | TBD | blocked |
+| M10a-quarantine-path-invisible | 4 | Phase 3 exit | TBD-P4 | TBD | TBD | blocked |
+| M11a-manifest-tamper-reject | 0 | none | test_typed_loader_rejects_absent_malformed_and_tampered_documents | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
+| M11b-path-mismatch-reject | 0 | none | test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
+| M11c-checksum-mismatch-reject | 0 | none | test_quality_report_checksum_and_binding_are_enforced | evidence/phase-0/fixtures/model_artifact-valid.json | evidence/phase-0/phase-record.json | passed |
+
+Phase 1+ sub-items remain `blocked` until their owning phase entry criteria pass
+and they are expanded with concrete test IDs and fixture paths.
 
 ## Immediate Next Actions
 

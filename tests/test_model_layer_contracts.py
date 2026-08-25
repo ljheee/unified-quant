@@ -131,3 +131,203 @@ def test_quality_report_checksum_and_binding_are_enforced() -> None:
     tampered = {**report, "bound_generation_id": "3" * 64}
     with pytest.raises(ContractError, match="checksum mismatch"):
         ModelContractLoader.validate("model_quality_report", tampered)
+
+
+def _extended_document(schema_name: str) -> dict:
+    digest = "1" * 64
+    common = {
+        "contract_version": 1,
+        "run_id": "00000000-0000-4000-8000-00000000000a",
+        "created_at": "2026-02-01T07:00:00+08:00",
+        "manifest_digest_sha256": digest,
+        "generation_id": digest,
+    }
+    if schema_name == "model_run":
+        common.update({
+            "run_content_generation_id": digest,
+            "model_definition_generation_id": digest,
+            "model_dataset_generation_id": digest,
+            "qlib_export_generation_id": digest,
+            "init_receipt_generation_id": digest,
+            "code_fingerprint": digest,
+            "environment_lock_sha256": digest,
+            "determinism_controls": {"threads": 1, "random_seed": 7},
+            "reproducibility_mode": "logical_fingerprint",
+            "logical_tolerance": 0.0,
+        })
+    elif schema_name == "qlib_dataset_export":
+        common["serialization_profile_id"] = "uq-v1"
+        common.update({
+            "export_layout": {"root": "exports/run"},
+            "files": [{"path": "calendars/day.txt", "checksum_sha256": digest, "byte_size": 4}],
+            "provider_uri_sha256": digest,
+            "calendar_checksum_sha256": digest,
+            "instruments_checksum_sha256": digest,
+            "feature_mapping_checksum_sha256": digest,
+            "exporter_fingerprint": digest,
+            "empty_cache_precondition": True,
+        })
+    elif schema_name == "qlib_init_receipt":
+        common.update({
+            "resolved_provider_uri_sha256": digest,
+            "export_generation_id": digest,
+            "export_manifest_digest_sha256": digest,
+            "file_list_checksum_sha256": digest,
+            "calendar_checksum_sha256": digest,
+            "instruments_checksum_sha256": digest,
+            "feature_mapping_checksum_sha256": digest,
+            "qlib_import_path": "qlib",
+            "qlib_version": "0.9.6",
+            "cache_root": ".cache/qlib",
+            "cache_diff_checksum_sha256": digest,
+            "no_ungoverned_source_assertion": True,
+        })
+    elif schema_name == "prediction_set":
+        common["serialization_profile_id"] = "uq-v1"
+        common.update({
+            "prediction_set_name": "daily",
+            "model_artifact_generation_id": digest,
+            "model_artifact_checksum_sha256": digest,
+            "input_dataset_generation_id": digest,
+            "decision_date": "2026-02-02",
+            "visible_cutoff": "2026-02-02T15:00:00+08:00",
+            "score_semantics": {"column": "score", "unit": "rank", "direction": "higher_better", "ranking_scope": "universe", "tie_policy": "instrument", "normalization": "none"},
+            "declared_output_columns": ["instrument", "score"],
+            "actual_output_columns": ["instrument", "score"],
+            "eligibility_policy": "reviewed-v1",
+            "row_count": 2,
+            "data_checksum_sha256": digest,
+            "column_set_exact_match": True,
+        })
+    return common
+
+
+@pytest.mark.parametrize("schema_name", ["model_run", "qlib_dataset_export", "qlib_init_receipt", "prediction_set"])
+def test_remaining_manifest_families_have_representative_and_negative_coverage(schema_name: str) -> None:
+    document = _extended_document(schema_name)
+    validate_contract(f"{schema_name}.v1.json", document)
+    generation, digest = model_manifest_identities(document, schema_name=schema_name)
+    assert generation != digest
+    invalid = copy.deepcopy(document)
+    if schema_name == "qlib_dataset_export":
+        invalid["files"][0]["path"] = "/absolute/path"
+    elif schema_name == "qlib_init_receipt":
+        invalid["no_ungoverned_source_assertion"] = False
+    elif schema_name == "prediction_set":
+        invalid["decision_date"] = "not-a-date"
+    else:
+        invalid["determinism_controls"]["threads"] = 0
+    with pytest.raises(ContractError):
+        validate_contract(f"{schema_name}.v1.json", invalid)
+
+
+def test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root(tmp_path: Path) -> None:
+    loader = ModelContractLoader(accepted_root=tmp_path / "accepted")
+    accepted = tmp_path / "accepted"; accepted.mkdir()
+    document = base_document("model_definition")
+    generation, digest = model_manifest_identities(document, schema_name="model_definition")
+    document["generation_id"] = generation; document["manifest_digest_sha256"] = digest
+    path = accepted / "definition.json"; path.write_text(json.dumps(document))
+    assert loader.load("model_definition", path)["generation_id"] == generation
+
+    outside = tmp_path / "outside.json"; outside.write_text(json.dumps(document))
+    with pytest.raises(ContractError, match="outside approved root"):
+        loader.load("model_definition", outside)
+
+    nan_document = copy.deepcopy(document)
+    if "hyperparameters" in nan_document:
+        pass
+    raw_nan = json.dumps(document).replace('"baseline"', "NaN")
+    (accepted / "nan.json").write_text(raw_nan)
+    with pytest.raises(ContractError, match="non-finite"):
+        loader.load("model_definition", accepted / "nan.json")
+
+    prediction = _extended_document("prediction_set")
+    prediction["decision_date"] = "2026-02-30"
+    with pytest.raises(ContractError):
+        validate_contract("prediction_set.v1.json", prediction)
+
+
+def test_accepted_query_cursor_arity_is_validated() -> None:
+    contract = AcceptedFactorIndexContract()
+    query = {
+        "contract_version": 1,
+        "filters": {},
+        "ordering": ["factor_set"],
+        "visibility": "accepted_only",
+        "pagination": {"limit": 10, "after_sort_key": ["a", "b"]},
+    }
+    with pytest.raises(ContractError, match="cursor"):
+        contract.list(query)
+
+
+EVIDENCE_DIR = ROOT / "evidence" / "phase-0"
+
+
+def test_all_families_have_valid_and_negative_fixtures_on_disk() -> None:
+    fixture_dir = EVIDENCE_DIR / "fixtures"
+    for family in ["label_set","model_dataset","model_definition","model_run","model_artifact","qlib_dataset_export","qlib_init_receipt","prediction_set"]:
+        valid_path = fixture_dir / f"{family}-valid.json"
+        negative_path = fixture_dir / f"{family}-negative.json"
+        assert valid_path.is_file(), f"missing valid fixture: {valid_path}"
+        assert negative_path.is_file(), f"missing negative fixture: {negative_path}"
+        valid_doc = json.loads(valid_path.read_text())
+        ModelContractLoader.validate(family, valid_doc)
+
+
+def test_golden_vectors_cover_all_manifest_families() -> None:
+    golden_path = EVIDENCE_DIR / "golden-vectors" / "identity-golden-vectors.json"
+    vectors = json.loads(golden_path.read_text())
+    expected = {"label_set","model_dataset","model_definition","model_run","model_artifact","qlib_dataset_export","qlib_init_receipt","prediction_set"}
+    assert set(vectors.keys()) == expected
+    for family, entry in vectors.items():
+        assert entry["run_metadata_change_stable"] is True
+        assert entry["changed_run_generation_matches"] is True
+
+
+def test_cross_manifest_binding_resolver_passes_and_fails() -> None:
+    from uq.contracts.model_layer import resolve_bindings
+    digest = "0" * 64
+    dataset = {
+        "generation_id": "a" * 64,
+        "label_generation_id": "b" * 64,
+        "label_set_name": "return_5d",
+        "factor_generation_ids": [digest],
+        "universe_snapshot_generation_id": digest,
+    }
+    label = {"generation_id": "b" * 64, "name": "return_5d"}
+    result = resolve_bindings({"model_dataset": dataset, "label_set": label})
+    assert result["errors"] == []
+    wrong_label = {**label, "generation_id": "c" * 64}
+    with pytest.raises(ContractError, match="does not match"):
+        resolve_bindings({"model_dataset": dataset, "label_set": wrong_label})
+
+
+def test_accepted_index_response_schema_validates() -> None:
+    from uq.contracts.gate_contracts import validate_contract
+    response = {
+        "contract_version": 1,
+        "entries": [{
+            "factor_set": "basic", "factor_version": "1.0.0",
+            "partition_date": "2026-01-30",
+            "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64,
+            "data_checksum_sha256": "0" * 64, "quality_status": "passed",
+            "universe_snapshot_generation_id": None,
+        }],
+        "next_cursor": None,
+        "has_more": False,
+    }
+    validate_contract("accepted_factor_index_response.v1.json", response)
+
+
+def test_quality_report_and_response_fixtures_exist_and_validate() -> None:
+    fixture_dir = EVIDENCE_DIR / "fixtures"
+    for name in ("model_quality_report", "accepted_factor_index_response"):
+        valid_path = fixture_dir / f"{name}-valid.json"
+        negative_path = fixture_dir / f"{name}-negative.json"
+        assert valid_path.is_file() and negative_path.is_file()
+        if name == "model_quality_report":
+            ModelContractLoader.validate(name, json.loads(valid_path.read_text()))
+        else:
+            from uq.contracts.gate_contracts import validate_contract
+            validate_contract(f"{name}.v1.json", json.loads(valid_path.read_text()))

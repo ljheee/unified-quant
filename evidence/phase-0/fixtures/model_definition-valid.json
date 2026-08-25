@@ -1,0 +1,32 @@
+{
+  "contract_version": 1,
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "created_at": "2026-01-30T07:00:00+00:00",
+  "manifest_digest_sha256": "3886ec2448e2478312ea77fa1bea8de2e079d269ac6dc3707c5059e7d93c3cca",
+  "generation_id": "28de91f4dd22bdb89d0b4b8094b111675fd9b3ce3c303fe382c37fa8991837f4",
+  "model_set": "baseline",
+  "model_version": "1.0.0",
+  "status": "reviewed",
+  "algorithm": "regularized_linear",
+  "hyperparameters": {
+    "alpha": 1.0
+  },
+  "seed_policy": {
+    "base_seed": 7,
+    "derivation": "fixed"
+  },
+  "feature_schema_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "compatible_dataset_versions": [
+    "1.0.0"
+  ],
+  "metrics": [
+    {
+      "name": "ic",
+      "direction": "maximize"
+    }
+  ],
+  "selection_rule": "maximum validation ic",
+  "quality_policy": "reject_all",
+  "serializer_version": "joblib-v1",
+  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000"
+}

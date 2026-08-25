@@ -1,0 +1,78 @@
+{
+  "index_version": 2,
+  "phase": 0,
+  "status": "executable_pending_review",
+  "entries": [
+    {
+      "type": "gate_report",
+      "path": "gate-reports/gate-report.json",
+      "requirements_path": "gate-reports/requirements.lock.txt",
+      "requirements_digest_path": "gate-reports/requirements.lock.txt.sha256",
+      "bound_commit": "0e31b62280aa18b1adabad7d25d2ed401bf27b97",
+      "note": "Refresh after final commit."
+    },
+    {
+      "type": "phase_record",
+      "path": "evidence/phase-0/phase-record.json",
+      "status": "executable_pending_review",
+      "test_ids_covered": [
+        "test_all_families_have_valid_and_negative_fixtures_on_disk",
+        "test_golden_vectors_cover_all_manifest_families",
+        "test_typed_loader_rejects_absent_malformed_and_tampered_documents",
+        "test_loader_rejects_symlinked_contract",
+        "test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root",
+        "test_accepted_index_contract_is_query_only_and_fails_closed",
+        "test_accepted_query_cursor_arity_is_validated",
+        "test_accepted_index_response_schema_validates",
+        "test_cross_manifest_binding_resolver_passes_and_fails",
+        "test_quality_report_checksum_and_binding_are_enforced"
+      ]
+    },
+    {
+      "type": "fixtures",
+      "path": "fixtures/",
+      "file_count": 20,
+      "families_covered": [
+        "label_set",
+        "model_dataset",
+        "model_definition",
+        "model_run",
+        "model_artifact",
+        "qlib_dataset_export",
+        "qlib_init_receipt",
+        "prediction_set",
+        "model_quality_report",
+        "accepted_factor_index_response"
+      ],
+      "pattern": "<family>-valid.json + <family>-negative.json"
+    },
+    {
+      "type": "golden_vectors",
+      "path": "golden-vectors/identity-golden-vectors.json",
+      "families_covered": [
+        "label_set",
+        "model_dataset",
+        "model_definition",
+        "model_run",
+        "model_artifact",
+        "qlib_dataset_export",
+        "qlib_init_receipt",
+        "prediction_set"
+      ],
+      "test_id": "test_golden_vectors_cover_all_manifest_families"
+    },
+    {
+      "type": "acceptance_matrix_expansion",
+      "path": "../../specs/layers/model-layer-implementation-plan.md#acceptance-matrix-expansion",
+      "phase_0_sub_items_passed": [
+        "M1a-factor-manifest-missing",
+        "M1c-wrong-generation-binding",
+        "M5a-label-generation-change",
+        "M5b-dataset-generation-change",
+        "M11a-manifest-tamper-reject",
+        "M11b-path-mismatch-reject",
+        "M11c-checksum-mismatch-reject"
+      ]
+    }
+  ]
+}
