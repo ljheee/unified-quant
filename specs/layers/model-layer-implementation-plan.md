@@ -376,16 +376,17 @@ and they are expanded with concrete test IDs and fixture paths.
 
 ## Immediate Next Actions
 
-1. Review/finalize the Phase 0 schemas listed above; do not re-draft already
-   existing files without checking repository state first.
-2. Complete normative payload tables and canonical identity helpers with golden
-   vectors for all durable artifact families.
-3. Complete representative/negative fixtures and typed loader failure paths.
-4. Finalize the accepted index/list API contract without runtime reads.
-5. Define machine-readable phase records while keeping all runtime phases paused.
-6. Preserve a successful unified gate report with resolved requirements and
-   digests before declaring gate-plan exit.
-7. Qlib remains excluded from production dependencies until Phase 0 exits and
+1. Rerun gate on final HEAD after any remaining commit.
+2. Refresh `evidence/phase-0/gate-reports/` with the new report, requirements
+   snapshot, and digest.
+3. Update phase record and evidence index to bind the new HEAD.
+4. After final review confirms no residual blocker, mark Phase 0 as exited in
+   the phase record.
+5. Then unfreeze Phase 1 label/dataset contract preparation (schemas,
+   validators, split policy); production dataset builds still require the
+   typed accepted-store index/list API to be implemented behind the frozen
+   Phase 0 contract.
+6. Qlib remains excluded from production dependencies until Phase 0 exits and
    the Phase 2A interface plus negative tests are frozen. Optional dev/model
    dependency work may begin only after that freeze; training/runtime use starts
    at Phase 3 or later under its own gate.

@@ -46,7 +46,7 @@
       "test_id": "scripts/run_gate.sh",
       "evidence_path": "evidence/phase-0/gate-reports/gate-report.json",
       "status": "passed",
-      "bound_commit": "a6adc854e5d4134ef4974802de4963e67b430ab7"
+      "bound_commit": "e01146d4331437304de75e246c82e664fc0e381a"
     }
   ]
 }
