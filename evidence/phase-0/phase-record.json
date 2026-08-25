@@ -1,7 +1,7 @@
 {
   "phase": 0,
   "record_version": 1,
-  "status": "executable_pending_review",
+  "status": "exited",
   "entry_criteria": [
     {
       "id": "E0-entry-source-blockers",
@@ -48,5 +48,6 @@
       "status": "passed",
       "bound_commit": "d0b27df3b39ce07fe46a9dbf2b22db925602cf74"
     }
-  ]
+  ],
+  "exited_at_commit": "5a7559084f9505ebc450d69ed22e8689a43fe19f"
 }

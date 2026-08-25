@@ -1,7 +1,7 @@
 {
   "index_version": 2,
   "phase": 0,
-  "status": "executable_pending_review",
+  "status": "exited",
   "entries": [
     {
       "type": "gate_report",

@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v0.2.3; Phase 0 contract assets complete pending final review**
+Status: **gated implementation order v1.0; Phase 0 exited; Phase 1 contract preparation open**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -380,9 +380,9 @@ and they are expanded with concrete test IDs and fixture paths.
 2. Refresh `evidence/phase-0/gate-reports/` with the new report, requirements
    snapshot, and digest.
 3. Update phase record and evidence index to bind the new HEAD.
-4. After final review confirms no residual blocker, mark Phase 0 as exited in
-   the phase record.
-5. Then unfreeze Phase 1 label/dataset contract preparation (schemas,
+4. ~~After final review confirms no residual blocker, mark Phase 0 as exited in
+   the phase record.~~ Done: Phase 0 exited at commit `5a75590`.
+5. Phase 1 label/dataset contract preparation is now open (schemas,
    validators, split policy); production dataset builds still require the
    typed accepted-store index/list API to be implemented behind the frozen
    Phase 0 contract.

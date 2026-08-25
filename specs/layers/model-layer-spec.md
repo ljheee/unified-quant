@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v0.2.3; Phase 0 contract assets complete pending final review**
+Status: **design v0.3; Phase 0 exited; Phase 1 label/dataset contracts open**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
