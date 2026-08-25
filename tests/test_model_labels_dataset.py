@@ -27,6 +27,8 @@ def _adjusted_frame(n_instruments: int = 2, n_days: int = 10) -> pd.DataFrame:
                 "datetime": date,
                 "close": 10.0 + i,
                 "adj_factor": 1.0 + 0.01 * i,
+                "suspended": False,
+                "listing_date": pd.Timestamp("2020-01-01", tz="UTC"),
             })
     return pd.DataFrame(rows)
 

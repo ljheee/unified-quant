@@ -13,8 +13,19 @@ from ..errors import ContractError
 class ModelDefinitionBuilder:
     """Build a reviewed model definition manifest."""
 
-    def __init__(self, *, code_fingerprint: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        run_content_generation_id: str,
+        reviewed: bool = False,
+        code_fingerprint: str | None = None,
+    ) -> None:
         self.code_fingerprint = code_fingerprint or sha256_json({"component": "ModelDefinitionBuilder", "version": 1})
+        if not isinstance(run_content_generation_id, str) or len(run_content_generation_id) != 64:
+            raise ContractError("model definition requires a valid model_run_content_generation_id")
+        if not reviewed:
+            raise ContractError("model definitions must be explicitly marked reviewed by an external reviewer")
+        self.run_content_generation_id = run_content_generation_id
 
     def build(
         self,
@@ -55,6 +66,7 @@ class ModelDefinitionBuilder:
             "selection_rule": selection_rule,
             "quality_policy": quality_policy,
             "serializer_version": serializer_version,
+            "model_run_content_generation_id": self.run_content_generation_id,
             "code_fingerprint": self.code_fingerprint,
             "run_id": str(uuid.uuid4()),
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -78,8 +90,13 @@ class MetricReport:
         *,
         metric_definitions: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        score_col = predictions.columns[-1]  # last non-key column is the score
-        label_col = actuals.columns[-1]      # last non-key column is the label
+        key_columns = {"instrument", "decision_date"}
+        pred_value_cols = [c for c in predictions.columns if c not in key_columns]
+        actual_value_cols = [c for c in actuals.columns if c not in key_columns]
+        if len(pred_value_cols) != 1 or len(actual_value_cols) != 1:
+            raise ContractError("predictions/actuals must have exactly one value column each")
+        score_col = pred_value_cols[0]
+        label_col = actual_value_cols[0]
         merged = predictions.merge(actuals, on=["instrument", "decision_date"], how="inner")
         if merged.empty:
             raise ContractError("no overlapping keys between predictions and actuals")

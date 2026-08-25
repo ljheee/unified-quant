@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import fcntl
 import os
 import shutil
 import uuid
@@ -36,6 +37,11 @@ class PredictionBuilder:
         scores: pd.DataFrame,
         eligibility_policy: str = "reviewed-v1",
     ) -> tuple[dict[str, Any], bytes]:
+        from datetime import date as _date
+        try:
+            _date.fromisoformat(decision_date)
+        except ValueError as exc:
+            raise ContractError(f"invalid decision_date: {decision_date}") from exc
         if scores.empty:
             raise ContractError("cannot publish empty prediction set")
         key_columns = ["instrument"] + (["datetime"] if "datetime" in scores.columns else [])
@@ -97,7 +103,6 @@ class PredictionBuilder:
         staging.mkdir(parents=True)
         lock_path = partition.parent / "publication.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        import fcntl
         with lock_path.open("a+") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
             try:

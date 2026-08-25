@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.3; phases 0–5 implemented; release blocked by CR remediation**
+Status: **gated implementation order v1.4; phases 0–5 implemented draft; release blocked by open CR items**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -13,7 +13,7 @@ This plan implements only the first local-research supervised slice:
 - one reviewed adjusted-return label family;
 - one reviewed factor-set binding;
 - deterministic time-based splits;
-- one Qlib-backed baseline model;
+- one deterministic NumPy ridge baseline with Qlib-compatible export/receipt provenance;
 - immutable dataset/model/prediction artifacts;
 - fail-closed lineage, quality, reproducibility, and isolation gates.
 

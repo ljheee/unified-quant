@@ -103,7 +103,7 @@ class TestDatasetWriter:
         frame = _factor_frame()
         partition = writer.write(manifest, frame)
         assert partition.is_dir()
-        loaded_manifest, loaded_frame = writer.read("research_slice", "1.0.0", manifest["generation_id"])
+        loaded_manifest, loaded_frame = writer.read("research_slice", "1.0.0", writer.last_published_manifest["generation_id"])
         assert list(loaded_frame.columns) == list(frame.columns)
 
     def test_immutable_overwrite_rejected(self, tmp_path: Path) -> None:
@@ -119,7 +119,7 @@ class TestDatasetWriter:
         partition = writer.write(manifest, _factor_frame())
         (partition / "data.parquet").write_bytes(b"tampered")
         with pytest.raises(ContractError, match="tampered"):
-            writer.read("research_slice", "1.0.0", manifest["generation_id"])
+            writer.read("research_slice", "1.0.0", writer.last_published_manifest["generation_id"])
 
     def test_end_to_end_with_accepted_store(self, tmp_path: Path) -> None:
         """Full chain: publish factor → accepted index → feature schema → dataset write."""
@@ -147,5 +147,5 @@ class TestDatasetWriter:
         writer = DatasetWriter(tmp_path)
         partition = writer.write(manifest, factor_data, feature_schema=schema)
         assert partition.is_dir()
-        _, loaded = writer.read("e2e_slice", "1.0.0", manifest["generation_id"])
+        _, loaded = writer.read("e2e_slice", "1.0.0", writer.last_published_manifest["generation_id"])
         assert len(loaded) == len(factor_data)

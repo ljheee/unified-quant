@@ -100,7 +100,7 @@ class TestEndToEndPipeline:
         )
         writer = DatasetWriter(tmp_path)
         ds_partition = writer.write(dataset_manifest, factor_data, feature_schema=feature_schema)
-        _, loaded_ds = writer.read("e2e_slice", "1.0.0", dataset_manifest["generation_id"])
+        _, loaded_ds = writer.read("e2e_slice", "1.0.0", writer.last_published_manifest["generation_id"])
 
         # === Phase 2A: Qlib export + init receipt ===
         exporter = QlibDatasetExporter(tmp_path / "qlib_exports")
@@ -126,7 +126,7 @@ class TestEndToEndPipeline:
         assert receipt["no_ungoverned_source_assertion"] is True
 
         # === Phase 3: Model definition ===
-        definition = ModelDefinitionBuilder().build(
+        definition = ModelDefinitionBuilder(run_content_generation_id="1" * 64, reviewed=True).build(
             algorithm="regularized_linear",
             hyperparameters={"alpha": 0.5},
             seed_policy={"base_seed": 42, "derivation": "fixed"},
@@ -146,7 +146,10 @@ class TestEndToEndPipeline:
             label_column="label",
         )
         artifact_store = ArtifactStore(tmp_path)
-        artifact_partition = artifact_store.publish(artifact_manifest, artifact_bytes, quality_report_checksum="0" * 64)
+        artifact_partition = artifact_store.publish(
+            artifact_manifest, artifact_bytes,
+            quality_report_checksum=artifact_manifest.get("quality_report_checksum_sha256", "0" * 64),
+        )
         assert artifact_partition.is_dir()
 
         # Verify deterministic training

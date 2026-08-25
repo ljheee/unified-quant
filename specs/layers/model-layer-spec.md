@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.0.1; phases 0–5 implemented; release blocked by CR findings**
+Status: **design v1.0.2; phases 0–5 implemented draft; release blocked**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`

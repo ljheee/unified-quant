@@ -23,7 +23,7 @@ def _common() -> dict:
 
 class TestModelDefinitionBuilder:
     def test_build_linear_model(self) -> None:
-        builder = ModelDefinitionBuilder()
+        builder = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True)
         manifest = builder.build(
             algorithm="regularized_linear",
             hyperparameters={"alpha": 1.0},
@@ -34,19 +34,19 @@ class TestModelDefinitionBuilder:
         assert manifest["status"] == "reviewed"
 
     def test_reject_unsupported_algorithm(self) -> None:
-        builder = ModelDefinitionBuilder()
+        builder = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True)
         with pytest.raises(ContractError, match="unsupported algorithm"):
             builder.build(algorithm="xgboost", hyperparameters={}, seed_policy={"base_seed": 0, "derivation": "fixed"}, **_common())
 
     def test_reject_empty_metrics(self) -> None:
-        builder = ModelDefinitionBuilder()
+        builder = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True)
         common = _common()
         common["metrics"] = []
         with pytest.raises(ContractError, match="at least one metric"):
             builder.build(algorithm="regularized_linear", hyperparameters={"alpha": 1.0}, seed_policy={"base_seed": 42, "derivation": "fixed"}, **common)
 
     def test_changed_hyperparams_new_generation(self) -> None:
-        builder = ModelDefinitionBuilder()
+        builder = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True)
         m1 = builder.build(algorithm="regularized_linear", hyperparameters={"alpha": 1.0}, seed_policy={"base_seed": 42, "derivation": "fixed"}, **_common())
         m2 = builder.build(algorithm="regularized_linear", hyperparameters={"alpha": 2.0}, seed_policy={"base_seed": 42, "derivation": "fixed"}, **_common())
         assert m1["generation_id"] != m2["generation_id"]

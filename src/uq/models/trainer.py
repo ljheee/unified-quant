@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import fcntl
 import json
 import os
 import shutil
@@ -18,7 +19,7 @@ from ..errors import ContractError
 
 
 class ModelTrainer:
-    """Train a regularized linear model on a governed dataset snapshot."""
+    """Train a deterministic NumPy ridge baseline with Qlib-compatible exports."""
 
     def __init__(self, store_root: Path | str) -> None:
         self.store_root = Path(store_root)
@@ -48,6 +49,10 @@ class ModelTrainer:
         artifact_bytes = json.dumps(model_state).encode()
         artifact_checksum = file_sha256_bytes(artifact_bytes)
 
+        run_content_generation_id = definition.get("model_run_content_generation_id")
+        if not isinstance(run_content_generation_id, str) or len(run_content_generation_id) != 64:
+            raise ContractError("model definition is not bound to a validated model_run_content_generation_id")
+
         manifest: dict[str, Any] = {
             "contract_version": 1,
             "artifact_filename": "artifact.bin",
@@ -56,8 +61,7 @@ class ModelTrainer:
             "runtime_name": "numpy_ridge",
             "runtime_version": np.__version__,
             "runtime_import_path": "uq.models.trainer",
-            "model_run_content_generation_id": definition["generation_id"],
-            
+            "model_run_content_generation_id": run_content_generation_id,
             "serialization_profile_id": "json-numpy-v1",
             "run_id": str(uuid.uuid4()),
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -84,19 +88,20 @@ class ArtifactStore:
     ) -> Path:
         if quality_report_checksum is None:
             raise ContractError("artifact publication requires an explicit quality report checksum")
-        manifest["quality_report_checksum_sha256"] = quality_report_checksum
-        manifest["generation_id"] = "0" * 64
-        manifest["manifest_digest_sha256"] = "0" * 64
-        generation_id, digest = model_manifest_identities(manifest, schema_name="model_artifact")
-        manifest["generation_id"] = generation_id
-        manifest["manifest_digest_sha256"] = digest
-        ModelContractLoader.validate("model_artifact", {**manifest, "generation_id": manifest.get("generation_id", "")})
+        published_manifest = dict(manifest)
+        published_manifest["quality_report_checksum_sha256"] = quality_report_checksum
+        published_manifest["generation_id"] = "0" * 64
+        published_manifest["manifest_digest_sha256"] = "0" * 64
+        generation_id, digest = model_manifest_identities(published_manifest, schema_name="model_artifact")
+        published_manifest["generation_id"] = generation_id
+        published_manifest["manifest_digest_sha256"] = digest
+        ModelContractLoader.validate("model_artifact", published_manifest)
         actual_checksum = file_sha256_bytes(artifact_bytes)
-        if manifest.get("artifact_checksum_sha256") != actual_checksum:
+        if published_manifest.get("artifact_checksum_sha256") != actual_checksum:
             raise ContractError("artifact checksum mismatch before publication")
 
-        run_gen = manifest["model_run_content_generation_id"]
-        artifact_gen = manifest["generation_id"]
+        run_gen = published_manifest["model_run_content_generation_id"]
+        artifact_gen = published_manifest["generation_id"]
         partition = (
             self.models_dir / f"run_generation={run_gen}" / f"artifact_generation={artifact_gen}"
         )
@@ -104,22 +109,21 @@ class ArtifactStore:
             raise ContractError(f"immutable artifact already exists: {partition}")
 
         staging = partition.with_name(f"{partition.name}.staging.{uuid.uuid4().hex[:8]}")
-        staging.mkdir(parents=True)
         lock_path = partition.parent / "publication.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        import fcntl
         with lock_path.open("a+") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
             try:
+                staging = partition.with_name(f"{partition.name}.staging.{uuid.uuid4().hex[:8]}")
+                staging.mkdir(parents=True)
                 (staging / "artifact.bin").write_bytes(artifact_bytes)
                 readback = (staging / "artifact.bin").read_bytes()
-                if file_sha256_bytes(readback) != manifest["artifact_checksum_sha256"]:
+                if file_sha256_bytes(readback) != published_manifest["artifact_checksum_sha256"]:
                     raise ContractError("artifact readback checksum mismatch")
 
-                final_manifest = dict(manifest)
+                final_manifest = dict(published_manifest)
                 (staging / "manifest.json").write_text(json.dumps(final_manifest, sort_keys=True, indent=2) + "\n")
                 fsync_tree(staging)
-                partition.parent.mkdir(parents=True, exist_ok=True)
                 os.replace(staging, partition)
                 fsync_dir(partition.parent)
             except Exception:
@@ -176,34 +180,44 @@ class ArtifactStore:
 
 
 class ModelRunBuilder:
-    """Build a model_run manifest linking definition, dataset, export, and receipt."""
+    """Build a model_run manifest after validating every supplied upstream document."""
 
     @staticmethod
     def build(
         *,
-        definition_generation_id: str,
-        dataset_generation_id: str,
-        qlib_export_generation_id: str,
-        init_receipt_generation_id: str,
+        definition: dict[str, Any],
+        dataset_manifest: dict[str, Any],
+        export_manifest: dict[str, Any],
+        receipt_manifest: dict[str, Any],
         environment_lock_sha256: str,
         determinism_controls: dict[str, Any],
         reproducibility_mode: str = "logical_fingerprint",
     ) -> dict[str, Any]:
+        from ..contracts.model_layer import resolve_bindings
+        required_documents = {
+            "model_definition": definition,
+            "model_dataset": dataset_manifest,
+            "qlib_dataset_export": export_manifest,
+            "qlib_init_receipt": receipt_manifest,
+        }
+        for family, document in required_documents.items():
+            ModelContractLoader.validate(family, document)
+        resolve_bindings(required_documents)
         code_fingerprint = sha256_json({"component": "ModelRunBuilder", "version": 1})
         content_payload = {
-            "definition": definition_generation_id,
-            "dataset": dataset_generation_id,
-            "export": qlib_export_generation_id,
-            "receipt": init_receipt_generation_id,
+            "definition": definition["generation_id"],
+            "dataset": dataset_manifest["generation_id"],
+            "export": export_manifest["generation_id"],
+            "receipt": receipt_manifest["generation_id"],
         }
         run_content_generation_id = sha256_json(content_payload)
         manifest: dict[str, Any] = {
             "contract_version": 1,
             "run_content_generation_id": run_content_generation_id,
-            "model_definition_generation_id": definition_generation_id,
-            "model_dataset_generation_id": dataset_generation_id,
-            "qlib_export_generation_id": qlib_export_generation_id,
-            "init_receipt_generation_id": init_receipt_generation_id,
+            "model_definition_generation_id": definition["generation_id"],
+            "model_dataset_generation_id": dataset_manifest["generation_id"],
+            "qlib_export_generation_id": export_manifest["generation_id"],
+            "init_receipt_generation_id": receipt_manifest["generation_id"],
             "code_fingerprint": code_fingerprint,
             "environment_lock_sha256": environment_lock_sha256,
             "determinism_controls": determinism_controls,

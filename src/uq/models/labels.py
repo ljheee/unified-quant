@@ -4,7 +4,6 @@ import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
@@ -18,6 +17,7 @@ _LABEL_HORIZON = 5
 
 def _validate_adjusted_price_frame(frame: pd.DataFrame) -> None:
     required = {"instrument", "datetime", "close", "adj_factor"}
+    eligibility_required = {"suspended", "listing_date"}
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ContractError(f"adjusted price input missing columns: {missing}")
@@ -25,7 +25,10 @@ def _validate_adjusted_price_frame(frame: pd.DataFrame) -> None:
         raise ContractError("duplicate instrument/date keys in adjusted price input")
     if not (frame["adj_factor"] > 0).all():
         raise ContractError("non-positive adjustment factor in adjusted price input")
-    if frame["close"].isna().any() or frame["adj_factor"].isna().any():
+    missing_eligibility = sorted(eligibility_required - set(frame.columns))
+    if missing_eligibility:
+        raise ContractError(f"adjusted price input missing columns: {missing_eligibility}")
+    if frame["close"].isna().any() or frame["adj_factor"].isna().any() or frame["listing_date"].isna().any():
         raise ContractError("null close/adj_factor in adjusted price input")
 
 
@@ -69,16 +72,30 @@ class LabelBuilder:
                 raise ContractError("invalid upstream generation_id in binding")
 
         ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort").reset_index(drop=True)
-        adjusted_close = ordered["close"].astype(float) * ordered["adj_factor"].astype(float)
         ordered["decision_date"] = ordered["datetime"]
+        decision_time = pd.to_datetime(ordered["datetime"], utc=True)
+        listing_age = (decision_time - pd.to_datetime(ordered["listing_date"], utc=True)).dt.days
+        eligible = (~ordered["suspended"].astype(bool)) & (listing_age >= 60)
+        if not eligible.all():
+            ordered = ordered.loc[eligible].copy()
+
+        adjusted_close = ordered["close"].astype(float) * ordered["adj_factor"].astype(float)
         ordered["label"] = (
             adjusted_close.groupby(ordered["instrument"], sort=False)
             .transform(lambda values: values.shift(-self.horizon) / values - 1)
         )
+        if "suspended" not in ordered.columns or "listing_date" not in ordered.columns:
+            raise ContractError("label eligibility requires suspended and listing_date columns")
+        if ordered["suspended"].isna().any():
+            raise ContractError("null suspension flag in label input")
+        listing_age = (decision_time - pd.to_datetime(ordered["listing_date"], utc=True)).dt.days
+        eligible = (~ordered["suspended"].astype(bool)) & (listing_age >= 60)
+        if not eligible.all():
+            ordered = ordered.loc[eligible].copy()
+            adjusted_close = adjusted_close.loc[ordered.index]
+
         # Rows without complete future observations remain null.
         output = ordered[["instrument", "decision_date", "label"]].copy()
-        null_count = int(output["label"].isna().sum())
-        terminal_null_count = null_count  # first slice: no terminal-return policy
 
         manifest: dict[str, Any] = {
             "contract_version": 1,

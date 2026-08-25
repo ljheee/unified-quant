@@ -5,6 +5,8 @@ import json
 import os
 import shutil
 import uuid
+import fcntl
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -63,7 +65,6 @@ class QlibDatasetExporter:
         staging.mkdir(parents=True)
         lock_path = snapshot.parent / "publication.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        import fcntl
         try:
             with lock_path.open("a+") as lock:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
@@ -113,7 +114,7 @@ class QlibDatasetExporter:
                     "serialization_profile_id": "parquet-v1",
                     "empty_cache_precondition": True,
                     "run_id": str(uuid.uuid4()),
-                    "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                     "generation_id": "0" * 64,
                     "manifest_digest_sha256": "0" * 64,
                 }
@@ -124,7 +125,7 @@ class QlibDatasetExporter:
                 # Build complete file list including data.parquet and manifest itself
                 complete_files = []
                 for path in sorted(staging.rglob("*")):
-                    if path.is_file():
+                    if path.is_file() and path.name != "manifest.json":
                         rel = path.relative_to(staging).as_posix()
                         complete_files.append({
                             "path": rel,
@@ -195,7 +196,7 @@ class QlibInitReceiptBuilder:
             "cache_diff_checksum_sha256": _sha256_text("\n".join(sorted(new_cache_files))),
             "no_ungoverned_source_assertion": True,
             "run_id": str(uuid.uuid4()),
-            "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }

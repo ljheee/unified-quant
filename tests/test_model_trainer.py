@@ -26,7 +26,7 @@ def _dataset() -> pd.DataFrame:
 
 
 def _definition() -> dict:
-    builder = ModelDefinitionBuilder()
+    builder = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True)
     return builder.build(
         algorithm="regularized_linear",
         hyperparameters={"alpha": 1.0},
@@ -64,8 +64,10 @@ class TestArtifactStore:
         )
         partition = store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
         assert partition.is_dir()
-        loaded_manifest, loaded_bytes = store.read(manifest["model_run_content_generation_id"], manifest["generation_id"])
+        artifact_generation_id = partition.name.removeprefix("artifact_generation=")
+        loaded_manifest, loaded_bytes = store.read(manifest["model_run_content_generation_id"], artifact_generation_id)
         assert loaded_bytes == artifact_bytes
+        assert loaded_manifest["generation_id"] != DIGEST
 
     def test_immutable_overwrite_rejected(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)
@@ -82,7 +84,7 @@ class TestArtifactStore:
         partition = store.publish(manifest, artifact_bytes, quality_report_checksum="0" * 64)
         (partition / "artifact.bin").write_bytes(b"tampered")
         with pytest.raises(ContractError, match="tampered"):
-            store.read(manifest["model_run_content_generation_id"], manifest["generation_id"])
+            store.read(manifest["model_run_content_generation_id"], partition.name.removeprefix("artifact_generation="))
 
     def test_quarantine_rejects_accepted_read(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)

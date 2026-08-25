@@ -24,6 +24,7 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
         self.store_root = Path(store_root)
         self._factors_dir = self.store_root / "factors"
         self._frames: dict[str, pd.DataFrame] = {}
+        self._tampered_generations: set[str] = set()
 
     def _scan_partitions(self) -> list[dict[str, Any]]:
         if not self._factors_dir.is_dir():
@@ -34,8 +35,9 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
             try:
                 manifest = json.loads(manifest_path.read_text())
                 frame = read_factor_partition(partition)
-            except (json.JSONDecodeError, OSError, ContractError):
-                continue  # unpublished/tampered/incomplete: silently skip
+            except (json.JSONDecodeError, OSError, ContractError) as exc:
+                self._tampered_generations.add(manifest_path.parent.name)
+                continue  # skip from index but track for explicit read rejection
             entry = {
                 "factor_set": manifest["factor_set"],
                 "factor_version": manifest["factor_version"],
@@ -95,6 +97,8 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
 
     def read(self, generation_id: str) -> pd.DataFrame:
         """Read the verified factor partition data by generation ID."""
+        if generation_id in self._tampered_generations:
+            raise ContractError(f"generation {generation_id[:12]}... has tampered or invalid partition data")
         if generation_id not in self._verified_generations:
             raise ContractError("generation not verified as accepted; call list/index first")
         return self._frames[generation_id]

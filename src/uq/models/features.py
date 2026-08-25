@@ -65,6 +65,9 @@ class FeatureSchemaValidator:
         actual_features = [c for c in frame.columns if c not in {"instrument", "datetime"}]
         if key_order != ["instrument", "datetime"]:
             raise ContractError("dataset key column order must be instrument then datetime")
+        extra_features = [c for c in actual_features if c not in expected_names]
+        if extra_features and "label" not in extra_features:
+            raise ContractError(f"unexpected extra feature columns in frame: {extra_features}")
         if expected_names != [c for c in actual_features if c in expected_names]:
             raise ContractError(
                 f"feature schema columns missing or reordered: expected {expected_names}, got {actual_features}"

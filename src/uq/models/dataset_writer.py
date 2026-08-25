@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import fcntl
 import json
 import os
 import shutil
@@ -13,7 +14,7 @@ import pyarrow as arrow
 import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
-from ..contracts.model_layer import ModelContractLoader
+from ..contracts.model_layer import ModelContractLoader, model_manifest_identities
 from ..errors import ContractError
 from .features import FeatureSchemaValidator
 
@@ -32,44 +33,50 @@ class DatasetWriter:
         *,
         feature_schema: dict[str, Any] | None = None,
     ) -> Path:
-        ModelContractLoader.validate("model_dataset", manifest)
+        published_manifest = dict(manifest)
+        ModelContractLoader.validate("model_dataset", published_manifest)
         if feature_schema is not None:
             FeatureSchemaValidator.validate_against_frame(feature_schema, frame)
 
-        dataset_name = manifest["dataset_name"]
-        semantic_version = manifest["semantic_version"]
-        generation_id = manifest["generation_id"]
+        artifact, data_checksum = self._serialize(frame)
+        restored = pd.read_parquet(io.BytesIO(artifact))
+        if list(restored.columns) != list(frame.columns) or len(restored) != len(frame):
+            raise ContractError("dataset readback reconciliation failed")
+
+        published_manifest["data_checksum_sha256"] = data_checksum
+        published_manifest["generation_id"] = "0" * 64
+        published_manifest["manifest_digest_sha256"] = "0" * 64
+        generation_id, manifest_digest = model_manifest_identities(
+            published_manifest, schema_name="model_dataset"
+        )
+        published_manifest["generation_id"] = generation_id
+        published_manifest["manifest_digest_sha256"] = manifest_digest
+        ModelContractLoader.validate("model_dataset", published_manifest)
+
+        dataset_name = published_manifest["dataset_name"]
+        semantic_version = published_manifest["semantic_version"]
         partition = (
             self._datasets_dir
             / f"dataset={dataset_name}"
             / f"version={semantic_version}"
-            / f"generation={generation_id}"
+            / f"generation={published_manifest['generation_id']}"
         )
         if partition.exists():
             raise ContractError(f"immutable dataset already exists: {partition}")
 
-        staging = partition.with_name(f"{partition.name}.staging.{uuid.uuid4().hex}")
-        staging.mkdir(parents=True)
         lock_path = partition.parent / "publication.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
 
-        import fcntl
         with lock_path.open("a+") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
             try:
-                artifact, data_checksum = self._serialize(frame)
+                staging = partition.with_name(f"{partition.name}.staging.{uuid.uuid4().hex}")
+                staging.mkdir(parents=True)
                 (staging / "data.parquet").write_bytes(artifact)
-                restored = pd.read_parquet(staging / "data.parquet")
-                if list(restored.columns) != list(frame.columns) or len(restored) != len(frame):
-                    raise ContractError("dataset readback reconciliation failed")
-
-                # Builder manifest may have a logical checksum; update to physical for publication
-                # Store the actual physical checksum alongside the manifest
-                # without changing the manifest identity (which is content-based)
                 (staging / "data.sha256").write_text(data_checksum + "\n")
 
                 (staging / "manifest.json").write_text(
-                    json.dumps(manifest, sort_keys=True, indent=2) + "\n"
+                    json.dumps(published_manifest, sort_keys=True, indent=2) + "\n"
                 )
                 if feature_schema is not None:
                     (staging / "feature_schema.json").write_text(
@@ -78,10 +85,17 @@ class DatasetWriter:
                 fsync_tree(staging)
                 os.replace(staging, partition)
                 fsync_dir(partition.parent)
+                self._last_published_manifest = dict(published_manifest)
             except Exception:
                 shutil.rmtree(staging, ignore_errors=True)
                 raise
         return partition
+
+    @property
+    def last_published_manifest(self) -> dict[str, Any]:
+        if not hasattr(self, "_last_published_manifest"):
+            raise ContractError("no dataset has been published by this writer")
+        return self._last_published_manifest
 
     def read(self, dataset_name: str, semantic_version: str, generation_id: str) -> tuple[dict[str, Any], pd.DataFrame]:
         partition = (
@@ -94,6 +108,9 @@ class DatasetWriter:
         data_path = partition / "data.parquet"
         if not manifest_path.is_file() or not data_path.is_file():
             raise ContractError(f"unpublished or incomplete dataset: {partition}")
+        sha_path = partition / "data.sha256"
+        if not sha_path.is_file():
+            raise ContractError(f"incomplete dataset checksum sidecar: {partition}")
 
         try:
             manifest = json.loads(manifest_path.read_text())
@@ -104,21 +121,21 @@ class DatasetWriter:
         if manifest.get("generation_id") != generation_id:
             raise ContractError("path generation does not match dataset manifest identity")
         fs_path = partition / "feature_schema.json"
-        if feature_schema_path := partition / "feature_schema.json":
-            if fs_path.is_file():
-                try:
-                    fs_doc = json.loads(fs_path.read_text())
-                    ModelContractLoader.validate("feature_schema", fs_doc)
-                except (json.JSONDecodeError, ContractError) as exc:
-                    raise ContractError("tampered or malformed feature schema in dataset partition") from exc
-        sha_path = partition / "data.sha256"
-        if sha_path.is_file():
-            expected_checksum = sha_path.read_text().strip()
-        else:
-            expected_checksum = manifest.get("data_checksum_sha256")
+        if fs_path.is_file():
+            try:
+                fs_doc = json.loads(fs_path.read_text())
+                ModelContractLoader.validate("feature_schema", fs_doc)
+            except (json.JSONDecodeError, ContractError) as exc:
+                raise ContractError("tampered or malformed feature schema in dataset partition") from exc
         actual_checksum = file_sha256_bytes(data_path.read_bytes())
-        if expected_checksum != actual_checksum:
-            raise ContractError("tampered dataset data prevents read")
+        manifest_checksum = manifest.get("data_checksum_sha256")
+        if manifest_checksum != actual_checksum:
+            raise ContractError("tampered dataset data prevents read (manifest checksum mismatch)")
+        sidecar_checksum = sha_path.read_text().strip()
+        if sidecar_checksum != actual_checksum:
+            raise ContractError("sidecar checksum does not match artifact bytes")
+        if sidecar_checksum != manifest_checksum:
+            raise ContractError("sidecar checksum conflicts with manifest checksum")
 
         frame = pd.read_parquet(data_path)
         if len(frame) != manifest.get("row_count"):
