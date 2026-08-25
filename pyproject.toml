@@ -25,6 +25,8 @@ real = [
 dev = [
   "pytest>=8",
   "pyarrow>=14",
+  "scikit-learn>=1.3",
+  "joblib>=1.3",
 ]
 
 [tool.setuptools.packages.find]
