@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.0; Phase 0 exited; Phase 1 contract preparation open**
+Status: **gated implementation order v1.1; Phases 0–5 implemented; Phase 6 release acceptance pending remote CI**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
