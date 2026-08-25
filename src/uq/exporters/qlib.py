@@ -1,3 +1,11 @@
+"""DEPRECATED: Legacy canonical-to-Qlib exporter.
+
+This module is outside the model-layer accepted publication path. It must not be
+used for model training or prediction. Migration to the governed
+``uq.models.qlib_export.QlibDatasetExporter`` is required before any model-layer
+integration. This deprecation will be enforced by static test.
+"""
+
 from __future__ import annotations
 
 import hashlib
