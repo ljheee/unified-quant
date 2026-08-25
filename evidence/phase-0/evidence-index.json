@@ -8,7 +8,7 @@
       "path": "gate-reports/gate-report.json",
       "requirements_path": "gate-reports/requirements.lock.txt",
       "requirements_digest_path": "gate-reports/requirements.lock.txt.sha256",
-      "bound_commit": "d0b27df3b39ce07fe46a9dbf2b22db925602cf74",
+      "bound_commit": "cc3e25a57687c772a71884d70935a86c26340f52",
       "note": "Refresh after final commit."
     },
     {

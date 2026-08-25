@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v0.3; Phase 0 exited; Phase 1 label/dataset contracts open**
+Status: **design v1.0; model layer implemented; phases 0–6 complete with CI certification**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
