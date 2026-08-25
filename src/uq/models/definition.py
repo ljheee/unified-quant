@@ -127,7 +127,7 @@ class MetricReport:
         if len(s) < 2:
             raise ContractError("insufficient samples for metric computation")
         if name == "ic":
-            return float(s.rank().corr(y.rank(), method="pearson"))
+            return float(s.corr(y, method="pearson"))
         elif name == "rank_ic":
             return float(s.rank().corr(y.rank(), method="pearson"))
         else:

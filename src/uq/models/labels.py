@@ -92,7 +92,11 @@ class LabelBuilder:
         eligible = (~ordered["suspended"].astype(bool)) & (listing_age >= 60)
         if not eligible.all():
             ordered = ordered.loc[eligible].copy()
-            adjusted_close = adjusted_close.loc[ordered.index]
+        adjusted_close = ordered["close"].astype(float) * ordered["adj_factor"].astype(float)
+        ordered["label"] = (
+            adjusted_close.groupby(ordered["instrument"], sort=False)
+            .transform(lambda values: values.shift(-self.horizon) / values - 1)
+        )
 
         # Rows without complete future observations remain null.
         output = ordered[["instrument", "decision_date", "label"]].copy()

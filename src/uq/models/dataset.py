@@ -24,6 +24,12 @@ class SplitValidator:
     ) -> None:
         if len(splits) < 2:
             raise ContractError("at least train and validation splits required")
+        names = [split["name"] for split in splits]
+        if len(names) != len(set(names)):
+            raise ContractError("duplicate split names")
+        required = {"train", "validation"}
+        if not required.issubset(names):
+            raise ContractError("splits must include train and validation")
         date_index = {date: index for index, date in enumerate(trading_dates)}
         ranges: list[tuple[str, int, int]] = []
         for split in splits:
@@ -42,6 +48,10 @@ class SplitValidator:
                         f"purge/embargo violation between {prev_name} and {name}"
                     )
             ranges.append((name, start_idx, end_idx))
+        ordered_ranges = sorted(ranges, key=lambda item: item[1])
+        for (_, start_a, end_a), (_, start_b, end_b) in zip(ordered_ranges, ordered_ranges[1:]):
+            if start_b <= end_a:
+                raise ContractError("overlapping split intervals")
 
 
 class DatasetBuilder:
@@ -102,7 +112,11 @@ class DatasetBuilder:
         }
         manifest["generation_id"] = "0" * 64
         manifest["manifest_digest_sha256"] = "0" * 64
-        generation_id, manifest_digest = model_manifest_identities(manifest, schema_name="model_dataset")
+        generation_id, manifest_digest = model_manifest_identities(
+            manifest,
+            schema_name="model_dataset",
+            exclude_fields={"logical_fingerprint"},
+        )
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest
         ModelContractLoader.validate("model_dataset", manifest)

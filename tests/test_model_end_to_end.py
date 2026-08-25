@@ -21,7 +21,8 @@ from uq.models.definition import MetricReport, ModelDefinitionBuilder
 from uq.models.features import FeatureSchemaBuilder
 from uq.models.predictions import PredictionBuilder
 from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
-from uq.models.trainer import ArtifactStore, ModelTrainer
+from uq.contracts.model_layer import model_manifest_identities, resolve_bindings
+from uq.models.trainer import ArtifactStore, ModelRunBuilder, ModelTrainer
 
 
 def _publish_factor(root: Path) -> None:
@@ -101,6 +102,7 @@ class TestEndToEndPipeline:
         writer = DatasetWriter(tmp_path)
         ds_partition = writer.write(dataset_manifest, factor_data, feature_schema=feature_schema)
         _, loaded_ds = writer.read("e2e_slice", "1.0.0", writer.last_published_manifest["generation_id"])
+        loaded_ds_manifest = writer.last_published_manifest
 
         # === Phase 2A: Qlib export + init receipt ===
         exporter = QlibDatasetExporter(tmp_path / "qlib_exports")
@@ -126,7 +128,7 @@ class TestEndToEndPipeline:
         assert receipt["no_ungoverned_source_assertion"] is True
 
         # === Phase 3: Model definition ===
-        definition = ModelDefinitionBuilder(run_content_generation_id="1" * 64, reviewed=True).build(
+        provisional_definition = ModelDefinitionBuilder(run_content_generation_id="1" * 64, reviewed=True).build(
             algorithm="regularized_linear",
             hyperparameters={"alpha": 0.5},
             seed_policy={"base_seed": 42, "derivation": "fixed"},
@@ -137,6 +139,14 @@ class TestEndToEndPipeline:
             selection_rule="max validation ic",
         )
 
+        run_manifest, definition = ModelRunBuilder.build(
+            definition=provisional_definition,
+            dataset_manifest=loaded_ds_manifest,
+            export_manifest=export_manifest,
+            receipt_manifest=receipt,
+            environment_lock_sha256=DIGEST,
+            determinism_controls={"random_seed": 42, "threads": 1},
+        )
         # === Phase 4: Train + publish artifact ===
         trainer = ModelTrainer(tmp_path)
         artifact_manifest, artifact_bytes = trainer.train(
@@ -169,7 +179,7 @@ class TestEndToEndPipeline:
             prediction_set_name="daily_e2e",
             model_artifact_generation_id=artifact_manifest["generation_id"],
             model_artifact_checksum=artifact_manifest["artifact_checksum_sha256"],
-            input_dataset_generation_id=dataset_manifest["generation_id"],
+            input_dataset_generation_id=loaded_ds_manifest["generation_id"],
             decision_date="2026-01-09",
             scores=scores,
         )
@@ -183,7 +193,12 @@ class TestEndToEndPipeline:
         # === Cross-manifest binding verification ===
         from uq.contracts.model_layer import resolve_bindings
         bindings_report = resolve_bindings({
-            "model_dataset": dataset_manifest,
+            "model_dataset": loaded_ds_manifest,
+            "model_definition": definition,
+            "qlib_dataset_export": export_manifest,
+            "qlib_init_receipt": receipt,
+            "model_run": run_manifest,
+            "model_artifact": artifact_manifest,
             "prediction_set": pred_manifest,
         })
         assert bindings_report["errors"] == []
@@ -211,5 +226,8 @@ class TestEndToEndPipeline:
                 data_path.write_bytes(original + b"x")
                 break
         
-        results = runtime.list(query)
-        assert len(results) == 0  # tampered partition silently skipped by accepted reader
+        with pytest.raises(ContractError, match="tampered"):
+            runtime.list(query)
+        runtime._tampered_generations.add(gen)
+        with pytest.raises(ContractError, match="tampered or invalid"):
+            runtime.read(gen)

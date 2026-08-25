@@ -30,8 +30,7 @@
       "const": 1
     },
     "prediction_set_name": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "#/$defs/path_segment"
     },
     "model_artifact_generation_id": {
       "$ref": "#/$defs/sha256"
@@ -137,6 +136,11 @@
     }
   },
   "$defs": {
+    "path_segment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {"enum": [".", ".."]}
+    },
     "sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"

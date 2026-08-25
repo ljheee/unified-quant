@@ -61,6 +61,7 @@ def base_document(schema_name: str) -> dict:
             "compatible_dataset_versions": ["1.0.0"], "metrics": [{"name": "ic", "direction": "maximize"}],
             "selection_rule": "maximum validation ic", "quality_policy": "reject_all",
             "serializer_version": "joblib-v1", "code_fingerprint": digest,
+            "model_run_content_generation_id": digest,
         })
     elif schema_name == "model_artifact":
         common.update({

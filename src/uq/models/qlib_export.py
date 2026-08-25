@@ -170,16 +170,22 @@ class QlibInitReceiptBuilder:
         cache_files_before: set[str],
         cache_files_after: set[str],
     ) -> dict[str, Any]:
-        
         expected_uri = export_manifest.get("provider_uri_sha256")
         actual_uri_digest = _sha256_text(resolved_provider_uri)
         if expected_uri != actual_uri_digest:
             raise ContractError("resolved provider URI does not match export manifest binding")
 
-        new_cache_files = cache_files_after - cache_files_before
-        unexpected_sources = [f for f in new_cache_files if "qlib_data" in f or "yahoo" in f]
-        if unexpected_sources:
-            raise ContractError(f"ungoverned source detected in cache: {unexpected_sources[:3]}")
+        allowed_cache_root = str(Path(cache_root).resolve())
+        new_cache_files = {
+            path for path in (cache_files_after - cache_files_before)
+            if Path(path).resolve().is_relative_to(allowed_cache_root)
+        }
+        outside_cache = [
+            path for path in (cache_files_after - cache_files_before)
+            if not Path(path).resolve().is_relative_to(allowed_cache_root)
+        ]
+        if outside_cache:
+            raise ContractError(f"governed runtime wrote cache outside approved root: {outside_cache[:3]}")
 
         receipt: dict[str, Any] = {
             "contract_version": 1,

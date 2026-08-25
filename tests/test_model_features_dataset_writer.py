@@ -110,6 +110,9 @@ class TestDatasetWriter:
         writer = DatasetWriter(tmp_path)
         manifest = self._build_manifest()
         writer.write(manifest, _factor_frame())
+        published_manifest = writer.last_published_manifest
+        with pytest.raises(ContractError, match="immutable"):
+            writer.write(dict(published_manifest), _factor_frame())
         with pytest.raises(ContractError, match="immutable dataset already exists"):
             writer.write(manifest, _factor_frame())
 

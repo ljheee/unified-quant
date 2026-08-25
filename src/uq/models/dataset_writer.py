@@ -14,6 +14,7 @@ import pyarrow as arrow
 import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
+from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities
 from ..errors import ContractError
 from .features import FeatureSchemaValidator
@@ -33,8 +34,20 @@ class DatasetWriter:
         *,
         feature_schema: dict[str, Any] | None = None,
     ) -> Path:
+        draft_manifest = dict(manifest)
+        draft_manifest["data_checksum_sha256"] = "0" * 64
+        draft_manifest["generation_id"] = "0" * 64
+        draft_manifest["manifest_digest_sha256"] = "0" * 64
+        draft_generation, _ = model_manifest_identities(
+            draft_manifest,
+            schema_name="model_dataset",
+            exclude_fields={"logical_fingerprint"},
+        )
+
         published_manifest = dict(manifest)
-        ModelContractLoader.validate("model_dataset", published_manifest)
+        published_manifest["generation_id"] = draft_generation
+        published_manifest["manifest_digest_sha256"] = "0" * 64
+        validate_contract("model_dataset.v1.json", published_manifest)
         if feature_schema is not None:
             FeatureSchemaValidator.validate_against_frame(feature_schema, frame)
 
@@ -47,11 +60,13 @@ class DatasetWriter:
         published_manifest["generation_id"] = "0" * 64
         published_manifest["manifest_digest_sha256"] = "0" * 64
         generation_id, manifest_digest = model_manifest_identities(
-            published_manifest, schema_name="model_dataset"
+            published_manifest,
+            schema_name="model_dataset",
+            exclude_fields={"logical_fingerprint"},
         )
         published_manifest["generation_id"] = generation_id
         published_manifest["manifest_digest_sha256"] = manifest_digest
-        ModelContractLoader.validate("model_dataset", published_manifest)
+        validate_contract("model_dataset.v1.json", published_manifest)
 
         dataset_name = published_manifest["dataset_name"]
         semantic_version = published_manifest["semantic_version"]
@@ -59,7 +74,7 @@ class DatasetWriter:
             self._datasets_dir
             / f"dataset={dataset_name}"
             / f"version={semantic_version}"
-            / f"generation={published_manifest['generation_id']}"
+            / f"generation={generation_id}"
         )
         if partition.exists():
             raise ContractError(f"immutable dataset already exists: {partition}")
@@ -118,6 +133,15 @@ class DatasetWriter:
             raise ContractError("malformed dataset manifest") from exc
 
         ModelContractLoader.validate("model_dataset", manifest)
+        expected_generation, expected_digest = model_manifest_identities(
+            manifest,
+            schema_name="model_dataset",
+            exclude_fields={"logical_fingerprint"},
+        )
+        if manifest.get("manifest_digest_sha256") != expected_digest:
+            raise ContractError("dataset manifest digest mismatch")
+        if manifest.get("generation_id") != expected_generation:
+            raise ContractError("dataset stable generation mismatch")
         if manifest.get("generation_id") != generation_id:
             raise ContractError("path generation does not match dataset manifest identity")
         fs_path = partition / "feature_schema.json"

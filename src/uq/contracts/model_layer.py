@@ -44,7 +44,12 @@ def sha256_json(value: Any) -> str:
     return hashlib.sha256(canonical_json(value)).hexdigest()
 
 
-def model_manifest_identities(payload: Mapping[str, Any], *, schema_name: str) -> tuple[str, str]:
+def model_manifest_identities(
+    payload: Mapping[str, Any],
+    *,
+    schema_name: str,
+    exclude_fields: set[str] | None = None,
+) -> tuple[str, str]:
     """Return stable content generation and complete manifest digest."""
     if schema_name not in _SCHEMA_NAMES:
         raise ContractError(f"unknown model contract family: {schema_name}")
@@ -54,13 +59,17 @@ def model_manifest_identities(payload: Mapping[str, Any], *, schema_name: str) -
         if not isinstance(value, str) or not _SHA256.fullmatch(value):
             raise ContractError(f"{schema_name} missing valid {key}")
         del document[key]
-    generation_payload = {key: value for key, value in document.items() if key not in _RUN_LOCAL_FIELDS}
+    excluded_fields = _RUN_LOCAL_FIELDS | (exclude_fields or set())
+    generation_payload = {key: value for key, value in document.items() if key not in excluded_fields}
     generation_id = sha256_json(generation_payload)
     manifest_digest = sha256_json({**document, "generation_id": generation_id})
     return generation_id, manifest_digest
 
 
 def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
+    if schema_name == "model_dataset":
+        validate_contract("model_dataset.v1.json", payload)
+        return
     if schema_name == "model_quality_report":
         validate_contract("model_quality_report.v1.json", payload)
     elif schema_name in _SCHEMA_NAMES:
@@ -125,7 +134,10 @@ class ModelContractLoader:
                 if payload["report_checksum_sha256"] != sha256_json(checksum_payload):
                     raise ContractError("model quality report checksum mismatch")
             return
-        expected_generation, expected_digest = model_manifest_identities(payload, schema_name=schema_name)
+        exclude_fields = {"logical_fingerprint"} if schema_name == "model_dataset" else None
+        expected_generation, expected_digest = model_manifest_identities(
+            payload, schema_name=schema_name, exclude_fields=exclude_fields
+        )
         if payload["generation_id"] != expected_generation:
             raise ContractError(f"{schema_name} stable generation mismatch")
         if payload["manifest_digest_sha256"] != expected_digest:

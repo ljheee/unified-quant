@@ -15,6 +15,7 @@ import pyarrow as arrow
 import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
+from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
 from ..errors import ContractError
 
@@ -86,7 +87,10 @@ class PredictionBuilder:
         generation_id, manifest_digest = model_manifest_identities(manifest, schema_name="prediction_set")
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest
-        ModelContractLoader.validate("prediction_set", manifest)
+        validate_contract("prediction_set.v1.json", manifest)
+        expected_generation, expected_digest = model_manifest_identities(manifest, schema_name="prediction_set")
+        if manifest["generation_id"] != expected_generation or manifest["manifest_digest_sha256"] != expected_digest:
+            raise ContractError("prediction manifest identity mismatch")
         return manifest, artifact
 
     def publish(self, manifest: dict[str, Any], artifact_bytes: bytes) -> Path:
@@ -145,6 +149,16 @@ class PredictionBuilder:
         frame = pd.read_parquet(data_path)
         if list(frame.columns) != manifest.get("actual_output_columns"):
             raise ContractError("prediction column mismatch on read")
+        if len(frame) != manifest.get("row_count"):
+            raise ContractError("prediction row count does not match manifest")
+        key_columns = ["instrument"] + (["datetime"] if "datetime" in frame.columns else [])
+        if frame.duplicated(key_columns).any():
+            raise ContractError("duplicate prediction keys on read")
+        score_column = manifest["score_semantics"]["column"]
+        if score_column not in frame.columns:
+            raise ContractError("declared prediction score column missing")
+        if frame[score_column].isna().any() or not np.isfinite(frame[score_column].dropna()).all():
+            raise ContractError("non-finite prediction scores on read")
         return manifest, frame
 
     @staticmethod

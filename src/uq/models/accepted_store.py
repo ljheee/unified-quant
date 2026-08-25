@@ -37,7 +37,9 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
                 frame = read_factor_partition(partition)
             except (json.JSONDecodeError, OSError, ContractError) as exc:
                 self._tampered_generations.add(manifest_path.parent.name)
-                continue  # skip from index but track for explicit read rejection
+                raise ContractError(
+                    f"tampered or invalid accepted factor partition: {partition}: {exc}"
+                ) from exc
             entry = {
                 "factor_set": manifest["factor_set"],
                 "factor_version": manifest["factor_version"],

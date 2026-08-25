@@ -49,7 +49,7 @@ class ModelTrainer:
         artifact_bytes = json.dumps(model_state).encode()
         artifact_checksum = file_sha256_bytes(artifact_bytes)
 
-        run_content_generation_id = definition.get("model_run_content_generation_id")
+        run_content_generation_id = definition["model_run_content_generation_id"]
         if not isinstance(run_content_generation_id, str) or len(run_content_generation_id) != 64:
             raise ContractError("model definition is not bound to a validated model_run_content_generation_id")
 
@@ -99,6 +99,8 @@ class ArtifactStore:
         actual_checksum = file_sha256_bytes(artifact_bytes)
         if published_manifest.get("artifact_checksum_sha256") != actual_checksum:
             raise ContractError("artifact checksum mismatch before publication")
+        if len(published_manifest.get("quality_report_checksum_sha256", "")) != 64:
+            raise ContractError("invalid quality report checksum binding")
 
         run_gen = published_manifest["model_run_content_generation_id"]
         artifact_gen = published_manifest["generation_id"]
@@ -148,6 +150,15 @@ class ArtifactStore:
         actual = file_sha256_bytes(artifact_path.read_bytes())
         if expected != actual:
             raise ContractError("tampered artifact data prevents read")
+        expected_generation, expected_digest = model_manifest_identities(
+            manifest, schema_name="model_artifact"
+        )
+        if manifest.get("generation_id") != expected_generation or manifest.get("manifest_digest_sha256") != expected_digest:
+            raise ContractError("artifact manifest identity mismatch")
+        if manifest.get("byte_size") != artifact_path.stat().st_size:
+            raise ContractError("artifact byte size mismatch")
+        if not isinstance(manifest.get("quality_report_checksum_sha256"), str) or len(manifest["quality_report_checksum_sha256"]) != 64:
+            raise ContractError("missing artifact quality report checksum")
         if manifest.get("generation_id") != artifact_generation_id:
             raise ContractError("path generation does not match manifest identity")
         return manifest, artifact_path.read_bytes()
@@ -211,10 +222,20 @@ class ModelRunBuilder:
             "receipt": receipt_manifest["generation_id"],
         }
         run_content_generation_id = sha256_json(content_payload)
+        bound_definition = dict(definition)
+        bound_definition["model_run_content_generation_id"] = run_content_generation_id
+        bound_definition["generation_id"] = "0" * 64
+        bound_definition["manifest_digest_sha256"] = "0" * 64
+        definition_generation_id, definition_manifest_digest = model_manifest_identities(
+            bound_definition, schema_name="model_definition"
+        )
+        bound_definition["generation_id"] = definition_generation_id
+        bound_definition["manifest_digest_sha256"] = definition_manifest_digest
+
         manifest: dict[str, Any] = {
             "contract_version": 1,
             "run_content_generation_id": run_content_generation_id,
-            "model_definition_generation_id": definition["generation_id"],
+            "model_definition_generation_id": definition_generation_id,
             "model_dataset_generation_id": dataset_manifest["generation_id"],
             "qlib_export_generation_id": export_manifest["generation_id"],
             "init_receipt_generation_id": receipt_manifest["generation_id"],
@@ -232,4 +253,4 @@ class ModelRunBuilder:
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest
         ModelContractLoader.validate("model_run", manifest)
-        return manifest
+        return manifest, bound_definition
