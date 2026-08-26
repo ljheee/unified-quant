@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.6; phases 0–5 implemented draft. Runtime gates pass at commit 8213233aa72522145b959ee5f04a163e4f02cc32 across the local cell and remote six-cell matrix; release remains blocked pending reviewed external quality reports and final reconciliation.**
+Status: **gated implementation order v1.7; phases 0–5 implemented draft. External reviewed-quality-report enforcement is complete; release remains blocked until fresh final-HEAD local/remote gates and release reconciliation pass.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -402,3 +402,20 @@ CI run `32929762689` is invalid duplicated evidence and remains quarantined. Val
 Publishers no longer synthesize `passed` reports. Dataset, export, run, receipt, and prediction publication requires an externally supplied report whose canonical checksum participates in manifest digest identity. Existing artifacts must be republished before any release claim.
 
 The valid six-cell archive contains distinct platform/Python reports bound to implementation commit `8213233aa72522145b959ee5f04a163e4f02cc32`; it proves environment execution only and does not approve self-produced quality reports.
+
+
+## External Review Implementation Status
+
+Implemented in this slice:
+
+- reviewed registry `config/model-quality-reviews.v1.json`;
+- immutable external decisions with deterministic signatures;
+- mechanical binding to stable subject generations;
+- required external decisions for dataset/export/receipt/run/prediction;
+- artifact publication restricted to reviewed v2 reports;
+- missing/wrong-binding/signature negative tests;
+- non-empty train/validation split coverage;
+- prediction publish-time artifact revalidation;
+- immutable `external_quality_reviews` governance storage.
+
+Release still requires a successful final-HEAD unified gate and remote matrix after this behavior change.

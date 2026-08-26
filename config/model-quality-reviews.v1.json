@@ -1,0 +1,37 @@
+{
+  "registry_version": 1,
+  "status": "reviewed",
+  "reviewer": "external-model-quality-reviewer-v1",
+  "bindings": {
+    "model_dataset_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": ["passed", "warning"],
+      "allowed_checks": ["row_count", "schema_reconciliation", "readback_reconciliation", "null_rate"]
+    },
+    "qlib_dataset_export_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": ["passed", "warning"],
+      "allowed_checks": ["export_files_verified"]
+    },
+    "model_artifact_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": ["passed", "warning"],
+      "allowed_checks": ["artifact_checksum", "artifact_readback"]
+    },
+    "qlib_init_receipt_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": ["passed", "warning"],
+      "allowed_checks": ["runtime_cache_boundary"]
+    },
+    "model_run_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": ["passed", "warning"],
+      "allowed_checks": ["upstream_lineage_resolved"]
+    },
+    "prediction_set_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": ["passed", "warning"],
+      "allowed_checks": ["finite_scores", "eligibility_coverage"]
+    }
+  }
+}

@@ -13,7 +13,7 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
-from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
 from ..errors import ContractError
 
 
@@ -88,8 +88,15 @@ class ArtifactStore:
         quality_report: dict[str, Any],
     ) -> Path:
         ModelContractLoader.validate("model_quality_report", quality_report)
-        if quality_report["binding_type"] != "model_artifact_v1" or quality_report["status"] == "rejected":
-            raise ContractError("quality report does not approve this artifact")
+        if (
+            quality_report.get("report_version") != 2
+            or quality_report["binding_type"] != "model_artifact_v1"
+            or quality_report["status"] == "rejected"
+            or not quality_report.get("reviewer")
+            or not quality_report.get("subject_content_sha256")
+            or not quality_report.get("review_signature_sha256")
+        ):
+            raise ContractError("artifact requires an externally reviewed v2 quality report")
         quality_report_checksum = sha256_json({
             key: value for key, value in quality_report.items() if key != "report_checksum_sha256"
         })
@@ -258,6 +265,7 @@ class ModelRunBuilder:
         label_manifest: dict[str, Any],
         universe_snapshot: dict[str, Any],
         factor_manifests: dict[str, dict[str, Any]],
+        quality_decision: dict[str, Any],
         reproducibility_mode: str = "logical_fingerprint",
         store_root: Path | str = ".",
     ) -> dict[str, Any]:
@@ -311,23 +319,19 @@ class ModelRunBuilder:
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
-        unsigned_report={
-            "report_version":1,"binding_type":"model_run_v1","bound_generation_id":"pending","policy":"reject_all","status":"passed",
-            "checks":[{"name":"upstream_lineage_resolved","threshold":0,"observed":0,"level":"error","result":"passed"}],
-            "errors":[],"warnings":[],"producer_code_fingerprint":code_fingerprint,
-        }
-        provisional=dict(manifest);provisional["generation_id"]="0"*64;provisional["manifest_digest_sha256"]="0"*64
-        generation_id,_=model_manifest_identities(provisional,schema_name="model_run",exclude_fields={"quality_report_checksum_sha256"})
-        unsigned_report["bound_generation_id"]=generation_id
-        report={**unsigned_report,"report_checksum_sha256":sha256_json(unsigned_report)}
-        manifest["quality_report_checksum_sha256"]=sha256_json(unsigned_report)
-        report_dir=Path(store_root)/"model_quality_reports";report_dir.mkdir(parents=True,exist_ok=True)
-        rp=report_dir/f"{manifest['quality_report_checksum_sha256']}.json"
-        if not rp.exists():
-            rs=rp.with_suffix(f".staging.{uuid.uuid4().hex}");rs.write_text(json.dumps(report,sort_keys=True,indent=2)+"\n");os.replace(rs,rp);fsync_dir(report_dir)
-        
-        _,manifest_digest=model_manifest_identities(manifest,schema_name="model_run",exclude_fields={"quality_report_checksum_sha256"})
+        generation_id,_=model_manifest_identities(manifest,schema_name="model_run",exclude_fields={"quality_report_checksum_sha256"})
+        bound_report, report_checksum = bind_reviewed_quality_decision(
+            quality_decision,binding_type="model_run_v1",
+            subject_generation_id=generation_id,
+            subject_content_sha256=sha256_json({key:value for key,value in manifest.items() if key not in {"quality_report_checksum_sha256","generation_id","manifest_digest_sha256","run_id","created_at"}}),
+        )
+        governance_dir=Path(store_root)/"external_quality_reviews";governance_dir.mkdir(parents=True,exist_ok=True)
+        report_path=governance_dir/f"{report_checksum}.json"
+        report_staging=report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
+        report_staging.write_text(json.dumps(bound_report,sort_keys=True,indent=2)+"\n");os.replace(report_staging,report_path);fsync_dir(governance_dir)
+        manifest["quality_report_checksum_sha256"]=report_checksum
         manifest["generation_id"] = generation_id
+        _,manifest_digest=model_manifest_identities(manifest,schema_name="model_run",exclude_fields={"quality_report_checksum_sha256"})
         manifest["manifest_digest_sha256"] = manifest_digest
         ModelContractLoader.validate("model_run", manifest)
         return manifest, bound_definition

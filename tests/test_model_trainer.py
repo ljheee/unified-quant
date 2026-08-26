@@ -26,21 +26,17 @@ def _stable_artifact_generation(manifest: dict) -> str:
 
 
 def _quality_report(bound_generation_id: str = DIGEST) -> dict:
-    from uq.contracts.model_layer import sha256_json
-    report = {
-        "report_version": 1,
-        "binding_type": "model_artifact_v1",
-        "bound_generation_id": bound_generation_id,
-        "policy": "reject_all",
-        "status": "passed",
-        "checks": [
-            {"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}
-        ],
-        "errors": [],
-        "warnings": [],
-        "producer_code_fingerprint": DIGEST,
-    }
-    report["report_checksum_sha256"] = sha256_json(report)
+    from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision
+    decision = create_reviewed_quality_decision(
+        binding_type="model_artifact_v1", policy="reject_all", status="passed",
+        checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+    )
+    report, _ = bind_reviewed_quality_decision(
+        decision, binding_type="model_artifact_v1",
+        subject_generation_id=bound_generation_id,
+        subject_content_sha256=bound_generation_id,
+    )
     return report
 
 

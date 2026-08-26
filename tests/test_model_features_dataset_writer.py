@@ -12,21 +12,18 @@ from uq.errors import ContractError
 from uq.models.accepted_store import AcceptedFactorIndexRuntime
 from uq.models.dataset import DatasetBuilder
 from uq.models.dataset_writer import DatasetWriter
-from uq.contracts.model_layer import sha256_json
+from uq.contracts.model_layer import create_reviewed_quality_decision, sha256_json
 from uq.models.features import FeatureSchemaBuilder, FeatureSchemaValidator
 
 DIGEST = "0" * 64
 
 
 def _quality_report() -> dict:
-    report = {
-        "report_version": 1, "binding_type": "model_dataset_v1", "bound_generation_id": DIGEST,
-        "policy": "reject_all", "status": "passed",
-        "checks": [{"name": "row_count", "threshold": 0, "observed": 6, "level": "error", "result": "passed"}],
-        "errors": [], "warnings": [], "producer_code_fingerprint": DIGEST,
-    }
-    report["report_checksum_sha256"] = sha256_json(report)
-    return report
+    return create_reviewed_quality_decision(
+        binding_type="model_dataset_v1", policy="reject_all", status="passed",
+        checks=[{"name": "row_count", "threshold": 6, "observed": 40, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+    )
 
 
 def _factor_frame() -> pd.DataFrame:
@@ -128,9 +125,9 @@ class TestDatasetWriter:
         writer.write(manifest, frame, feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"), quality_report=_quality_report())
         published_manifest = writer.last_published_manifest
         with pytest.raises(ContractError, match="immutable"):
-            writer.write(dict(published_manifest), _factor_frame(), feature_schema=FeatureSchemaBuilder().build(_factor_frame(), source_factor_set="basic", source_factor_version="1.0.0"))
+            writer.write(dict(published_manifest), _factor_frame(), feature_schema=FeatureSchemaBuilder().build(_factor_frame(), source_factor_set="basic", source_factor_version="1.0.0"), quality_report=_quality_report())
         with pytest.raises(ContractError, match="immutable dataset already exists"):
-            writer.write(manifest, _factor_frame(), feature_schema=FeatureSchemaBuilder().build(_factor_frame(), source_factor_set="basic", source_factor_version="1.0.0"))
+            writer.write(manifest, _factor_frame(), feature_schema=FeatureSchemaBuilder().build(_factor_frame(), source_factor_set="basic", source_factor_version="1.0.0"), quality_report=_quality_report())
 
     def test_tampered_data_rejected_on_read(self, tmp_path: Path) -> None:
         writer = DatasetWriter(tmp_path)
@@ -155,6 +152,28 @@ class TestDatasetWriter:
         assert (first_partition / "data.parquet").read_bytes() == (second_partition / "data.parquet").read_bytes()
         assert first_manifest["generation_id"] == second_manifest["generation_id"]
         assert first_manifest["logical_fingerprint"] == second_manifest["logical_fingerprint"]
+
+    def test_missing_external_quality_decision_rejected(self, tmp_path: Path) -> None:
+        manifest = self._build_manifest()
+        frame = _factor_frame()
+        with pytest.raises(ContractError, match="externally reviewed quality decision"):
+            DatasetWriter(tmp_path).write(
+                manifest, frame,
+                feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"),
+                quality_report=None,
+            )
+
+    def test_wrong_binding_external_quality_decision_rejected(self, tmp_path: Path) -> None:
+        manifest = self._build_manifest()
+        frame = _factor_frame()
+        decision = _quality_report()
+        decision["binding_type"] = "prediction_set_v1"
+        with pytest.raises(ContractError, match="does not match model_dataset_v1"):
+            DatasetWriter(tmp_path).write(
+                manifest, frame,
+                feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"),
+                quality_report=decision,
+            )
 
     def test_split_purge_embargo_violation_fails_closed_on_write(self, tmp_path: Path) -> None:
         manifest = self._build_manifest()

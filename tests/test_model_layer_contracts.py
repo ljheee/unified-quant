@@ -127,13 +127,13 @@ def _quality_report() -> dict:
 
 def test_quality_report_checksum_and_binding_are_enforced() -> None:
     from uq.contracts.model_layer import ModelContractLoader
+    from uq.contracts.gate_contracts import validate_contract as validate_v1
     report = _quality_report()
     report["report_checksum_sha256"] = sha256_json({key: value for key, value in report.items() if key != "report_checksum_sha256"})
-    ModelContractLoader.validate("model_quality_report", report)
+    validate_v1("model_quality_report.v1.json", report)
     tampered = {**report, "bound_generation_id": "3" * 64}
     with pytest.raises(ContractError, match="checksum mismatch"):
-        ModelContractLoader.validate("model_quality_report", tampered)
-
+        ModelContractLoader.validate("model_quality_report.v1", tampered)
 
 def _extended_document(schema_name: str) -> dict:
     digest = "1" * 64
@@ -337,8 +337,6 @@ def test_quality_report_and_response_fixtures_exist_and_validate() -> None:
         valid_path = fixture_dir / f"{name}-valid.json"
         negative_path = fixture_dir / f"{name}-negative.json"
         assert valid_path.is_file() and negative_path.is_file()
-        if name == "model_quality_report":
-            ModelContractLoader.validate(name, json.loads(valid_path.read_text()))
-        else:
-            from uq.contracts.gate_contracts import validate_contract
-            validate_contract(f"{name}.v1.json", json.loads(valid_path.read_text()))
+        from uq.contracts.gate_contracts import validate_contract as validate_schema
+        schema_name = "model_quality_report.v1.json" if name == "model_quality_report" else f"{name}.v1.json"
+        validate_schema(schema_name, json.loads(valid_path.read_text()))

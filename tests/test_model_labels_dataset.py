@@ -157,7 +157,7 @@ class TestDatasetBuilder:
             factor_generation_ids=[DIGEST],
             label_set_name="return_5d", label_generation_id=DIGEST,
             universe_snapshot_generation_id=DIGEST,
-            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-01", "end_date": "2026-01-28"}]},
+            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-12"}, {"name": "validation", "start_date": "2026-01-23", "end_date": "2026-01-26"}]},
             row_count=100,
         )
         assert len(manifest["generation_id"]) == 64
@@ -169,7 +169,7 @@ class TestDatasetBuilder:
             factor_set="basic", factor_version="1.0.0", factor_generation_ids=[DIGEST],
             label_set_name="return_5d", label_generation_id=DIGEST,
             universe_snapshot_generation_id=DIGEST,
-            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-01", "end_date": "2026-01-28"}]},
+            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-12"}, {"name": "validation", "start_date": "2026-01-23", "end_date": "2026-01-26"}]},
             row_count=100,
         )
         m1 = builder.build(ordered_features=["volume_ratio_20d"], **common)

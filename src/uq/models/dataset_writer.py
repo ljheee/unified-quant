@@ -15,7 +15,7 @@ import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
-from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
 from ..errors import ContractError
 from .dataset import SplitValidator
 from .features import FeatureSchemaValidator
@@ -39,19 +39,8 @@ class DatasetWriter:
     ) -> Path:
         published_manifest = dict(manifest)
 
-        if quality_report is not None:
-            ModelContractLoader.validate("model_quality_report", quality_report)
-            if quality_report["binding_type"] != "model_dataset_v1" or quality_report["status"] not in {"passed", "warning"}:
-                raise ContractError("dataset quality report does not approve publication")
-        else:
-            quality_report = {
-                "report_version": 1, "binding_type": "model_dataset_v1",
-                "bound_generation_id": "0" * 64, "policy": "reject_all", "status": "passed",
-                "checks": [{"name": "readback_reconciliation", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-                "errors": [], "warnings": [],
-                "producer_code_fingerprint": sha256_json({"component": "DatasetWriter", "version": 1}),
-            }
-            quality_report["report_checksum_sha256"] = sha256_json(quality_report)
+        if quality_report is None:
+            raise ContractError("dataset publication requires an externally reviewed quality decision")
 
         FeatureSchemaValidator.validate_against_frame(feature_schema, frame)
         policy = published_manifest["split_policy"]
@@ -70,23 +59,23 @@ class DatasetWriter:
         published_manifest["logical_fingerprint"] = frame_logical_fingerprint(restored)
         published_manifest["generation_id"] = "0" * 64
         published_manifest["manifest_digest_sha256"] = "0" * 64
-        report_checksum = sha256_json({
-            key: value for key, value in quality_report.items() if key != "report_checksum_sha256"
-        })
-        generation_id, manifest_digest = model_manifest_identities(
+        generation_id, _ = model_manifest_identities(
             published_manifest,
             schema_name="model_dataset",
             exclude_fields={"logical_fingerprint", "quality_report_checksum_sha256"},
         )
+        bound_report, report_checksum = bind_reviewed_quality_decision(
+            quality_report, binding_type="model_dataset_v1",
+            subject_generation_id=generation_id,
+            subject_content_sha256=generation_id,
+        )
+        quality_report_path = self.root / "external_quality_reviews" / f"{report_checksum}.json"
+        quality_report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_staging = quality_report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
+        report_staging.write_text(json.dumps(bound_report, sort_keys=True, indent=2) + "\n")
+        os.replace(report_staging, quality_report_path)
+        fsync_dir(quality_report_path.parent)
         published_manifest["generation_id"] = generation_id
-        unsigned_report = {
-            **{key: value for key, value in quality_report.items() if key != "report_checksum_sha256"},
-            "bound_generation_id": generation_id,
-        }
-        quality_report = {**unsigned_report, "report_checksum_sha256": sha256_json(unsigned_report)}
-        report_checksum = sha256_json({
-            key: value for key, value in quality_report.items() if key != "report_checksum_sha256"
-        })
         published_manifest["quality_report_checksum_sha256"] = report_checksum
         _, manifest_digest = model_manifest_identities(
             published_manifest,
@@ -169,11 +158,13 @@ class DatasetWriter:
 
         ModelContractLoader.validate("model_dataset", manifest)
         self._validate_bound_quality_report(manifest)
-        expected_generation, _ = model_manifest_identities(
+        expected_generation, expected_digest = model_manifest_identities(
             manifest,
             schema_name="model_dataset",
             exclude_fields={"logical_fingerprint", "quality_report_checksum_sha256"},
         )
+        if manifest.get("manifest_digest_sha256") != expected_digest:
+            raise ContractError("dataset manifest digest mismatch")
         if manifest.get("generation_id") != expected_generation:
             raise ContractError("dataset stable generation mismatch")
         if manifest.get("generation_id") != generation_id:
@@ -218,7 +209,7 @@ class DatasetWriter:
 
     def _validate_bound_quality_report(self, manifest: dict[str, Any]) -> None:
         checksum = manifest.get("quality_report_checksum_sha256")
-        path = self.root / "model_quality_reports" / f"{checksum}.json"
+        path = self.root / "external_quality_reviews" / f"{checksum}.json"
         try:
             report = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError) as exc:
@@ -230,6 +221,9 @@ class DatasetWriter:
             or report["binding_type"] != "model_dataset_v1"
             or report["bound_generation_id"] != manifest["generation_id"]
             or report["status"] not in {"passed", "warning"}
+            or report.get("report_version") != 2
+            or not report.get("reviewer")
+            or report.get("subject_content_sha256") != manifest["generation_id"]
         ):
             raise ContractError("dataset quality report rejects read")
 

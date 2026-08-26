@@ -22,7 +22,7 @@ from uq.models.labels import LabelBuilder
 from uq.models.features import FeatureSchemaBuilder
 from uq.models.predictions import PredictionBuilder
 from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
-from uq.contracts.model_layer import sha256_json, resolve_bindings
+from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision, sha256_json, resolve_bindings
 from uq.models.trainer import ArtifactStore, ModelRunBuilder, ModelTrainer
 
 
@@ -99,6 +99,46 @@ def _publish_universe(root: Path) -> dict:
 DIGEST = "0" * 64
 
 
+def dataset_decision() -> dict:
+    return create_reviewed_quality_decision(
+        binding_type="model_dataset_v1", policy="reject_all", status="passed",
+        checks=[{"name": "row_count", "threshold": 0, "observed": 60, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+    )
+
+
+def export_decision() -> dict:
+    return create_reviewed_quality_decision(
+        binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
+        checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+    )
+
+
+def receipt_decision() -> dict:
+    return create_reviewed_quality_decision(
+        binding_type="qlib_init_receipt_v1", policy="reject_all", status="passed",
+        checks=[{"name": "runtime_cache_boundary", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+    )
+
+
+def run_decision() -> dict:
+    return create_reviewed_quality_decision(
+        binding_type="model_run_v1", policy="reject_all", status="passed",
+        checks=[{"name": "upstream_lineage_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+    )
+
+
+def prediction_decision() -> dict:
+    return create_reviewed_quality_decision(
+        binding_type="prediction_set_v1", policy="reject_all", status="passed",
+        checks=[{"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+    )
+
+
 
 class TestEndToEndPipeline:
     def test_full_chain_from_factor_to_prediction(self, tmp_path: Path) -> None:
@@ -165,7 +205,7 @@ class TestEndToEndPipeline:
             row_count=len(factor_data),
         )
         writer = DatasetWriter(tmp_path)
-        ds_partition = writer.write(dataset_manifest, factor_data, feature_schema=feature_schema)
+        ds_partition = writer.write(dataset_manifest, factor_data, feature_schema=feature_schema, quality_report=dataset_decision())
         _, loaded_ds = writer.read("e2e_slice", "1.0.0", writer.last_published_manifest["generation_id"])
         loaded_ds_manifest = writer.last_published_manifest
 
@@ -179,7 +219,7 @@ class TestEndToEndPipeline:
             frame=factor_data[["instrument", "datetime", "volume_ratio_20d"]],
             feature_mapping=feature_mapping,
             calendar_dates=calendar_dates, instruments=instruments,
-            provider_uri="file:///test/exports",
+            provider_uri="file:///test/exports", quality_decision=export_decision(),
         )
         receipt_builder = QlibInitReceiptBuilder()
         cache_before = {"/tmp/.cache/old_file"}
@@ -190,6 +230,7 @@ class TestEndToEndPipeline:
             cache_root=str(tmp_path / ".cache"), 
             cache_files_before=cache_before, cache_files_after=cache_after,
             verified_export=exporter.read("e2e_slice", export_manifest["generation_id"]),
+            governance_root=tmp_path, quality_decision=receipt_decision(),
         )
         assert receipt["no_ungoverned_source_assertion"] is True
 
@@ -215,7 +256,7 @@ class TestEndToEndPipeline:
             label_manifest=label_manifest,
             universe_snapshot=universe_manifest,
             factor_manifests={factor_gen: factor_document},
-            store_root=tmp_path,
+            quality_decision=run_decision(), store_root=tmp_path,
         )
         # === Phase 4: Train + publish artifact ===
         trainer = ModelTrainer(tmp_path)
@@ -231,20 +272,15 @@ class TestEndToEndPipeline:
             {**artifact_manifest, "generation_id": DIGEST, "manifest_digest_sha256": DIGEST},
             schema_name="model_artifact", exclude_fields={"quality_report_checksum_sha256"},
         )[0]
-        artifact_quality_report = {
-            "report_version": 1,
-            "binding_type": "model_artifact_v1",
-            "bound_generation_id": artifact_generation,
-            "policy": "reject_all",
-            "status": "passed",
-            "checks": [{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-            "errors": [],
-            "warnings": [],
-            "producer_code_fingerprint": DIGEST,
-        }
-        artifact_quality_report["report_checksum_sha256"] = sha256_json({
-            key: value for key, value in artifact_quality_report.items() if key != "report_checksum_sha256"
-        })
+        artifact_quality_report, _ = bind_reviewed_quality_decision(
+            create_reviewed_quality_decision(
+                binding_type="model_artifact_v1", policy="reject_all", status="passed",
+                checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+                errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            ),
+            binding_type="model_artifact_v1", subject_generation_id=artifact_generation,
+            subject_content_sha256=artifact_generation,
+        )
         artifact_partition = artifact_store.publish(
             artifact_manifest, artifact_bytes,
             quality_report=artifact_quality_report,
@@ -272,7 +308,7 @@ class TestEndToEndPipeline:
             run_generation_id=artifact_manifest["model_run_content_generation_id"], artifact_store=None,
             decision_date="2026-01-09",
             scores=scores,
-            eligibility_status="passed",
+            eligibility_status="passed", quality_decision=prediction_decision(),
         )
         pred_partition = pred_builder.publish(pred_manifest, pred_artifact)
         assert pred_partition.is_dir()

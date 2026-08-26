@@ -30,6 +30,13 @@ class SplitValidator:
             missing = sorted(declared - set(trading_dates) - covered_dates)
             if missing:
                 raise ContractError(f"split boundaries are not reconciled with dataset calendar: {missing}")
+            for split in splits:
+                covered_split = [
+                    value for value in trading_dates
+                    if split["start_date"] <= value <= split["end_date"]
+                ]
+                if not covered_split:
+                    raise ContractError(f"split {split['name']} has no dataset observations")
         names = [split["name"] for split in splits]
         if len(names) != len(set(names)):
             raise ContractError("duplicate split names")

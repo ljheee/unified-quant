@@ -16,7 +16,7 @@ import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
-from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
 from ..errors import ContractError
 from .trainer import ArtifactStore
 
@@ -41,6 +41,7 @@ class PredictionBuilder:
         decision_date: str,
         scores: pd.DataFrame,
         eligibility_status: str,
+        quality_decision: dict[str, Any],
     ) -> tuple[dict[str, Any], bytes]:
         from datetime import date as _date
         try:
@@ -101,21 +102,17 @@ class PredictionBuilder:
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
-        unsigned_report={
-            "report_version":1,"binding_type":"prediction_set_v1","bound_generation_id":"pending","policy":"reject_all","status":"passed",
-            "checks":[{"name":"finite_scores","threshold":0,"observed":0,"level":"error","result":"passed"}],
-            "errors":[],"warnings":[],"producer_code_fingerprint":sha256_json({"component":"PredictionBuilder","version":1}),
-        }
-        provisional=dict(manifest);provisional["generation_id"]="0"*64;provisional["manifest_digest_sha256"]="0"*64
-        generation_id,_=model_manifest_identities(provisional,schema_name="prediction_set",exclude_fields={"quality_report_checksum_sha256"})
-        unsigned_report["bound_generation_id"]=generation_id
-        report={**unsigned_report,"report_checksum_sha256":sha256_json(unsigned_report)}
-        report_checksum=sha256_json(unsigned_report)
+        generation_id,_=model_manifest_identities(manifest,schema_name="prediction_set",exclude_fields={"quality_report_checksum_sha256"})
+        bound_report, report_checksum = bind_reviewed_quality_decision(
+            quality_decision,binding_type="prediction_set_v1",
+            subject_generation_id=generation_id,
+            subject_content_sha256=sha256_json({key:value for key,value in manifest.items() if key not in {"quality_report_checksum_sha256","generation_id","manifest_digest_sha256","run_id","created_at"}}),
+        )
+        governance_dir=self.root/"external_quality_reviews";governance_dir.mkdir(parents=True,exist_ok=True)
+        report_path=governance_dir/f"{report_checksum}.json"
+        report_staging=report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
+        report_staging.write_text(json.dumps(bound_report,sort_keys=True,indent=2)+"\n");os.replace(report_staging,report_path);fsync_dir(governance_dir)
         manifest["quality_report_checksum_sha256"]=report_checksum
-        report_dir=self.root/"model_quality_reports";report_dir.mkdir(parents=True,exist_ok=True)
-        rp=report_dir/f"{report_checksum}.json"
-        if not rp.exists():
-            rs=rp.with_suffix(f".staging.{uuid.uuid4().hex}");rs.write_text(json.dumps(report,sort_keys=True,indent=2)+"\n");os.replace(rs,rp);fsync_dir(self.root)
         _,manifest_digest=model_manifest_identities(manifest,schema_name="prediction_set",exclude_fields={"quality_report_checksum_sha256"})
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest
@@ -139,6 +136,9 @@ class PredictionBuilder:
         if partition.exists():
             raise ContractError(f"immutable prediction already exists: {partition}")
 
+        self.artifact_store.read(
+            manifest["model_run_generation_id"], manifest["model_artifact_generation_id"]
+        )
         staging = partition.with_name(f"{partition.name}.staging.{uuid.uuid4().hex[:8]}")
         staging.mkdir(parents=True)
         lock_path = partition.parent / "publication.lock"
@@ -183,7 +183,7 @@ class PredictionBuilder:
         if manifest["generation_id"] != expected_generation:
             raise ContractError("prediction stable generation mismatch")
         checksum=manifest["quality_report_checksum_sha256"]
-        try: report=json.loads((self.root/"model_quality_reports"/f"{checksum}.json").read_text())
+        try: report=json.loads((self.root/"external_quality_reviews"/f"{checksum}.json").read_text())
         except (OSError,json.JSONDecodeError) as exc: raise ContractError("prediction quality report unavailable") from exc
         ModelContractLoader.validate("model_quality_report",report)
         actual=sha256_json({k:v for k,v in report.items() if k!="report_checksum_sha256"})

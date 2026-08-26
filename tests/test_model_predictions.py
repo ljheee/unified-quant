@@ -7,10 +7,19 @@ import pytest
 
 from uq.errors import ContractError
 from uq.models.definition import ModelDefinitionBuilder
+from uq.contracts.model_layer import create_reviewed_quality_decision
 from uq.models.predictions import PredictionBuilder
 from uq.models.trainer import ArtifactStore, ModelTrainer
 
 DIGEST = "0" * 64
+
+
+def prediction_decision() -> dict:
+    return create_reviewed_quality_decision(
+        binding_type="prediction_set_v1", policy="reject_all", status="passed",
+        checks=[{"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+    )
 
 
 def _scores(n: int = 10) -> pd.DataFrame:
@@ -45,13 +54,16 @@ class TestPredictionBuilder:
         from uq.contracts.model_layer import model_manifest_identities, sha256_json
         candidate = {**artifact_manifest, "generation_id": DIGEST, "manifest_digest_sha256": DIGEST}
         generation, _ = model_manifest_identities(candidate, schema_name="model_artifact", exclude_fields={"quality_report_checksum_sha256"})
-        report = {
-            "report_version": 1, "binding_type": "model_artifact_v1", "bound_generation_id": generation,
-            "policy": "reject_all", "status": "passed",
-            "checks": [{"name": "artifact_readback", "threshold": 1, "observed": 1, "level": "error", "result": "passed"}],
-            "errors": [], "warnings": [], "producer_code_fingerprint": DIGEST,
-        }
-        report["report_checksum_sha256"] = sha256_json(report)
+        from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision
+        decision = create_reviewed_quality_decision(
+            binding_type="model_artifact_v1", policy="reject_all", status="passed",
+            checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+        )
+        report, _ = bind_reviewed_quality_decision(
+            decision, binding_type="model_artifact_v1",
+            subject_generation_id=generation, subject_content_sha256=generation,
+        )
         partition = ArtifactStore(root).publish(artifact_manifest, artifact_bytes, quality_report=report)
         return (
             partition.name.removeprefix("artifact_generation="),
@@ -73,7 +85,7 @@ class TestPredictionBuilder:
             model_artifact_generation_id=artifact_generation_id,
             model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
             run_generation_id=run_generation_id, eligibility_status="passed",
-            decision_date="2026-02-15", scores=_scores(),
+            decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision(),
         )
         return builder, manifest, artifact
 
@@ -86,7 +98,7 @@ class TestPredictionBuilder:
             model_artifact_generation_id=artifact_generation_id,
             model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
             run_generation_id=run_generation_id, eligibility_status="passed",
-            decision_date="2026-02-15", scores=_scores(),
+            decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision(),
         )
         assert len(manifest["generation_id"]) == 64
         assert builder.publish(manifest, artifact).is_dir()
@@ -107,6 +119,7 @@ class TestPredictionBuilder:
                 model_artifact_generation_id="a" * 64, model_artifact_checksum="b" * 64,
                 input_dataset_generation_id="c" * 64, run_generation_id=DIGEST,
                 eligibility_status="passed", decision_date="2026-02-15", scores=scores,
+                quality_decision=prediction_decision(),
             )
 
     def test_immutable_overwrite_rejected(self, tmp_path) -> None:
@@ -122,6 +135,20 @@ class TestPredictionBuilder:
         with pytest.raises(ContractError, match="tampered"):
             builder.read(manifest["generation_id"], "2026-02-15")
 
+    def test_tampered_artifact_before_build_rejected(self, tmp_path) -> None:
+        builder = PredictionBuilder(tmp_path)
+        artifact_generation_id, checksum, run_generation_id = self._publish_artifact(tmp_path)
+        partition = tmp_path / "models" / f"run_generation={run_generation_id}" / f"artifact_generation={artifact_generation_id}"
+        (partition / "artifact.bin").write_bytes(b"tampered")
+        with pytest.raises(ContractError, match="accepted model artifact|tampered"):
+            builder.build(
+                prediction_set_name="blocked", artifact_store=None,
+                model_artifact_generation_id=artifact_generation_id,
+                model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
+                run_generation_id=run_generation_id, eligibility_status="passed",
+                decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision(),
+            )
+
     def test_empty_scores_rejected(self, tmp_path) -> None:
         with pytest.raises(ContractError, match="empty"):
             PredictionBuilder(tmp_path).build(
@@ -130,4 +157,5 @@ class TestPredictionBuilder:
                 input_dataset_generation_id="c" * 64, run_generation_id=DIGEST,
                 eligibility_status="passed", decision_date="2026-02-15",
                 scores=pd.DataFrame(columns=["instrument", "datetime", "score"]),
+                quality_decision=None,
             )

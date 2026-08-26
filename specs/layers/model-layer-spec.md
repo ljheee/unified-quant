@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.0.3; phases 0–5 implemented draft; release blocked**
+Status: **design v1.0.4; phases 0–5 implemented draft; release blocked pending reviewed external quality reports**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
@@ -306,6 +306,20 @@ to manual-review quarantine and are invisible to accepted readers.
 Quarantine manifests must record reason taxonomy, input generations, checksums,
 review status, and retention policy. In-place promotion is forbidden; recovery
 requires a new run/artifact generation.
+
+### External Quality Review Contract
+
+Publication quality decisions are external inputs, not publisher outputs.
+`model_quality_report.v2` binds a reviewer-approved decision to the stable
+subject generation using `subject_content_sha256` and
+`review_signature_sha256`. Publishers may mechanically bind an unchanged
+decision but cannot create, mutate, or re-sign review conclusions. The bound
+report checksum is recorded by the manifest and stored in an immutable
+governance root; cache directories are never quality-report storage.
+
+Because report binding participates in durable manifest identity, changing a
+review decision requires republishing a new artifact generation under the v1
+republish rule; existing partitions are immutable and cannot be edited.
 
 ## 10. Quality Gate
 

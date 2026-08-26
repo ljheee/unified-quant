@@ -13,7 +13,7 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
-from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
 from ..errors import ContractError
 
 
@@ -47,6 +47,7 @@ class QlibDatasetExporter:
         calendar_dates: list[str],
         instruments: list[str],
         provider_uri: str,
+        quality_decision: dict[str, Any],
     ) -> dict[str, Any]:
         if frame.empty:
             raise ContractError("cannot export empty dataset")
@@ -125,20 +126,17 @@ class QlibDatasetExporter:
                             "byte_size": path.stat().st_size,
                         })
                 manifest["files"] = complete_files
-                unsigned_report={
-                    "report_version":1,"binding_type":"qlib_dataset_export_v1","bound_generation_id":"pending","policy":"reject_all","status":"passed",
-                    "checks":[{"name":"export_files_verified","threshold":0,"observed":0,"level":"error","result":"passed"}],
-                    "errors":[],"warnings":[],"producer_code_fingerprint":self.exporter_fingerprint,
-                }
                 export_generation_id,_=model_manifest_identities(
                     manifest,
                     schema_name="qlib_dataset_export",
                     exclude_fields={"export_layout","quality_report_checksum_sha256"},
                 )
                 manifest["export_layout"]["root"] = f"dataset={dataset_name}/generation={export_generation_id}"
-                quality_report={**unsigned_report,"bound_generation_id":export_generation_id}
-                quality_report={**quality_report,"report_checksum_sha256":sha256_json(quality_report)}
-                report_checksum=sha256_json({k:v for k,v in quality_report.items() if k!="report_checksum_sha256"})
+                quality_report, report_checksum = bind_reviewed_quality_decision(
+                    quality_decision, binding_type="qlib_dataset_export_v1",
+                    subject_generation_id=export_generation_id,
+                    subject_content_sha256=sha256_json({**manifest, "export_layout": {"root": ""}}),
+                )
                 manifest["quality_report_checksum_sha256"]=report_checksum
                 manifest["generation_id"]=export_generation_id
                 _, digest = model_manifest_identities(
@@ -149,6 +147,14 @@ class QlibDatasetExporter:
                 manifest["manifest_digest_sha256"] = digest
                 ModelContractLoader.validate("qlib_dataset_export", manifest)
 
+                report_dir=self.export_root/"external_quality_reviews"
+                report_dir.mkdir(parents=True,exist_ok=True)
+                report_path=report_dir/f"{report_checksum}.json"
+                report_staging=report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
+                report_staging.write_text(json.dumps(quality_report,sort_keys=True,indent=2)+"\n")
+                os.replace(report_staging,report_path)
+                fsync_dir(report_dir)
+
                 snapshot = self.export_root / f"dataset={dataset_name}" / f"generation={export_generation_id}"
                 if snapshot.exists():
                     raise ContractError(f"immutable Qlib export already exists: {snapshot}")
@@ -156,9 +162,6 @@ class QlibDatasetExporter:
 
                 manifest_path = staging / "manifest.json"
                 manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
-                report_dir=self.export_root/"model_quality_reports"; report_dir.mkdir(parents=True,exist_ok=True)
-                rp=report_dir/f"{report_checksum}.json"
-                rs=rp.with_suffix(f".staging.{uuid.uuid4().hex}"); rs.write_text(json.dumps(quality_report,sort_keys=True,indent=2)+"\n"); os.replace(rs,rp); fsync_dir(report_dir)
                 # Readback verification
                 readback_manifest = json.loads(manifest_path.read_text())
                 if readback_manifest["generation_id"] != manifest["generation_id"]:
@@ -187,8 +190,8 @@ class QlibDatasetExporter:
         ModelContractLoader.validate("qlib_dataset_export", manifest)
         if manifest["generation_id"] != generation_id:
             raise ContractError("path generation does not match Qlib export manifest identity")
-        checksum=manifest.get("quality_report_checksum_sha256"); rp=self.export_root/"model_quality_reports"/f"{checksum}.json"
-        try: report=json.loads(rp.read_text())
+        checksum=manifest.get("quality_report_checksum_sha256"); report_path=self.export_root/"external_quality_reviews"/f"{checksum}.json"
+        try: report=json.loads(report_path.read_text())
         except (OSError,json.JSONDecodeError) as exc: raise ContractError("Qlib export quality report unavailable") from exc
         ModelContractLoader.validate("model_quality_report",report)
         actual=sha256_json({k:v for k,v in report.items() if k!="report_checksum_sha256"})
@@ -222,6 +225,8 @@ class QlibInitReceiptBuilder:
         cache_files_before: set[str],
         cache_files_after: set[str],
         verified_export: tuple[dict[str, Any], Path],
+        governance_root: Path | str,
+        quality_decision: dict[str, Any],
     ) -> dict[str, Any]:
         verified_manifest, _ = verified_export
         if (
@@ -229,9 +234,8 @@ class QlibInitReceiptBuilder:
             or verified_manifest["manifest_digest_sha256"] != export_manifest["manifest_digest_sha256"]
         ):
             raise ContractError("verified export manifest does not match receipt input")
-        expected_uri = export_manifest.get("provider_uri_sha256")
         actual_uri_digest = _sha256_text(resolved_provider_uri)
-        if expected_uri != actual_uri_digest:
+        if export_manifest.get("provider_uri_sha256") != actual_uri_digest:
             raise ContractError("resolved provider URI does not match export manifest binding")
 
         cache_root_path = Path(cache_root)
@@ -269,22 +273,23 @@ class QlibInitReceiptBuilder:
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
-        unsigned_report={
-            "report_version":1,"binding_type":"qlib_init_receipt_v1","bound_generation_id":"pending","policy":"reject_all","status":"passed",
-            "checks":[{"name":"runtime_cache_boundary","threshold":0,"observed":0,"level":"error","result":"passed"}],
-            "errors":[],"warnings":[],"producer_code_fingerprint":sha256_json({"component":"QlibInitReceiptBuilder","version":1}),
-        }
-        provisional=dict(receipt);provisional["generation_id"]="0"*64;provisional["manifest_digest_sha256"]="0"*64
-        gen,_=model_manifest_identities(provisional,schema_name="qlib_init_receipt",exclude_fields={"quality_report_checksum_sha256"})
-        unsigned_report["bound_generation_id"]=gen
-        report={**unsigned_report,"report_checksum_sha256":sha256_json(unsigned_report)}
-        receipt["quality_report_checksum_sha256"]=sha256_json(unsigned_report)
-        # persist under export root's sibling? Builder lacks root. Store in verified snapshot parent.
-        report_dir=Path(cache_root)/"model_quality_reports"
-        report_dir.mkdir(parents=True,exist_ok=True)
-        rp=report_dir/f"{receipt['quality_report_checksum_sha256']}.json"
-        rst=rp.with_suffix(f".staging.{uuid.uuid4().hex}");rst.write_text(json.dumps(report,sort_keys=True,indent=2)+"\n");os.replace(rst,rp)
-        receipt["generation_id"] = gen
+        generation_id,_=model_manifest_identities(
+            receipt,schema_name="qlib_init_receipt",exclude_fields={"quality_report_checksum_sha256"}
+        )
+        quality_report, report_checksum = bind_reviewed_quality_decision(
+            quality_decision,binding_type="qlib_init_receipt_v1",
+            subject_generation_id=generation_id,
+            subject_content_sha256=sha256_json({key:value for key,value in receipt.items() if key not in {"generation_id","manifest_digest_sha256","run_id","created_at"}}),
+        )
+        governance_dir = Path(governance_root) / "external_quality_reviews"
+        governance_dir.mkdir(parents=True, exist_ok=True)
+        report_path = governance_dir / f"{report_checksum}.json"
+        report_staging = report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
+        report_staging.write_text(json.dumps(quality_report,sort_keys=True,indent=2)+"\n")
+        os.replace(report_staging,report_path)
+
+        receipt["quality_report_checksum_sha256"]=report_checksum
+        receipt["generation_id"] = generation_id
         _, digest = model_manifest_identities(receipt, schema_name="qlib_init_receipt", exclude_fields={"quality_report_checksum_sha256"})
         receipt["manifest_digest_sha256"] = digest
         ModelContractLoader.validate("qlib_init_receipt", receipt)

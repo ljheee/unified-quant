@@ -10,8 +10,25 @@ import pytest
 from uq.errors import ContractError
 from uq.models.dataset_writer import DatasetWriter
 from uq.models.features import FeatureSchemaBuilder
+from uq.contracts.model_layer import create_reviewed_quality_decision
 from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
 
+
+
+def export_decision() -> dict:
+    return create_reviewed_quality_decision(
+        binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
+        checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+    )
+
+
+def receipt_decision() -> dict:
+    return create_reviewed_quality_decision(
+        binding_type="qlib_init_receipt_v1", policy="reject_all", status="passed",
+        checks=[{"name": "runtime_cache_boundary", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+    )
 
 def _dataset_frame() -> pd.DataFrame:
     dates = pd.bdate_range("2026-01-05", periods=3)
@@ -35,7 +52,7 @@ class TestQlibDatasetExporter:
             dataset_name="research_slice", generation_id="a" * 64,
             frame=frame, feature_mapping=FEATURE_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
-            provider_uri="file:///tmp/exports",
+            provider_uri="file:///tmp/exports", quality_decision=export_decision(),
         )
         assert len(manifest["generation_id"]) == 64
         assert manifest["empty_cache_precondition"] is True
@@ -48,7 +65,7 @@ class TestQlibDatasetExporter:
             dataset_name="research_slice", generation_id="a" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
-            provider_uri="file:///tmp",
+            provider_uri="file:///tmp", quality_decision=export_decision(),
         )
         exporter.export(**common)
         with pytest.raises(ContractError, match="already exists"):
@@ -60,7 +77,7 @@ class TestQlibDatasetExporter:
             dataset_name="x", generation_id="b" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
-            provider_uri="file:///correct",
+            provider_uri="file:///correct", quality_decision=export_decision(),
         )
         builder = QlibInitReceiptBuilder()
         verified_export = exporter.read("x", manifest["generation_id"])
@@ -68,8 +85,9 @@ class TestQlibDatasetExporter:
             builder.build(
                 export_manifest=manifest, resolved_provider_uri="file:///wrong",
                 qlib_import_path="qlib", qlib_version="0.9.6",
-                cache_root=".cache", cache_files_before=set(), cache_files_after=set(),
-                verified_export=verified_export,
+                cache_root=str(Path(".cache").resolve()), cache_files_before=set(), cache_files_after=set(),
+                verified_export=verified_export, governance_root=tmp_path,
+                quality_decision=receipt_decision(),
             )
 
     def test_receipt_passes_with_matching_uri(self, tmp_path: Path) -> None:
@@ -78,7 +96,7 @@ class TestQlibDatasetExporter:
             dataset_name="x", generation_id="c" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
-            provider_uri="file:///data",
+            provider_uri="file:///data", quality_decision=export_decision(),
         )
         verified_export = exporter.read("x", manifest["generation_id"])
         receipt = QlibInitReceiptBuilder().build(
@@ -86,7 +104,8 @@ class TestQlibDatasetExporter:
             qlib_import_path="qlib", qlib_version="0.9.6",
             cache_root=str(tmp_path / ".cache"), cache_files_before=set(),
             cache_files_after={str(tmp_path / ".cache/qlib/calendar.pkl")},
-            verified_export=verified_export,
+            verified_export=verified_export, governance_root=tmp_path,
+            quality_decision=receipt_decision(),
         )
         assert receipt["no_ungoverned_source_assertion"] is True
 
@@ -97,7 +116,7 @@ class TestQlibDatasetExporter:
             dataset_name="tamper_case", generation_id="d" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
-            provider_uri="file:///data",
+            provider_uri="file:///data", quality_decision=export_decision(),
         )
         _, snapshot = exporter.read("tamper_case", manifest["generation_id"])
         calendar = snapshot / "calendars" / "day.txt"
@@ -112,7 +131,7 @@ class TestQlibDatasetExporter:
             dataset_name="partial", generation_id="e" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
-            provider_uri="file:///data",
+            provider_uri="file:///data", quality_decision=export_decision(),
         )
         _, snapshot = exporter.read("partial", manifest["generation_id"])
         (snapshot / "data.parquet").unlink()
@@ -126,7 +145,7 @@ class TestQlibDatasetExporter:
             dataset_name="feature-order", generation_id="f" * 64,
             frame=frame, feature_mapping=FEATURE_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
-            provider_uri="file:///data",
+            provider_uri="file:///data", quality_decision=export_decision(),
         )
         _, snapshot = exporter.read("feature-order", manifest["generation_id"])
         mutated = pd.read_parquet(snapshot / "data.parquet")
@@ -135,7 +154,7 @@ class TestQlibDatasetExporter:
         with pytest.raises(ContractError, match="tampered Qlib export file: data.parquet"):
             exporter.read("feature-order", manifest["generation_id"])
 
-    def test_cache_substitution_outside_approved_root_rejected(self) -> None:
+    def test_cache_substitution_outside_approved_root_rejected(self, tmp_path: Path) -> None:
         builder = QlibInitReceiptBuilder()
         export_manifest = {
             "generation_id": "0" * 64,
@@ -154,7 +173,8 @@ class TestQlibDatasetExporter:
                 qlib_import_path="qlib", qlib_version="0.9.6",
                 cache_root="/tmp/approved-cache",
                 cache_files_before=set(), cache_files_after={"/tmp/outside/rogue.bin"},
-                verified_export=(verified_manifest, Path("/tmp/approved-export")),
+                verified_export=(verified_manifest, Path("/tmp/approved-export")), governance_root=tmp_path,
+                quality_decision=receipt_decision(),
             )
 
     def test_external_cache_writes_are_recorded_in_receipt(self, tmp_path: Path) -> None:
@@ -165,7 +185,7 @@ class TestQlibDatasetExporter:
             dataset_name="cache", generation_id="1" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
-            provider_uri="file:///data",
+            provider_uri="file:///data", quality_decision=export_decision(),
         )
         receipt = QlibInitReceiptBuilder().build(
             export_manifest=manifest, resolved_provider_uri="file:///data",
@@ -174,6 +194,7 @@ class TestQlibDatasetExporter:
             cache_files_before=set(),
             cache_files_after={str(cache_file)},
             verified_export=QlibDatasetExporter(tmp_path / "exports").read("cache", manifest["generation_id"]),
+            governance_root=tmp_path, quality_decision=receipt_decision(),
         )
         assert receipt["no_ungoverned_source_assertion"] is True
 

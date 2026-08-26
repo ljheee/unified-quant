@@ -26,7 +26,7 @@ _SCHEMA_NAMES = {
 }
 _RUN_LOCAL_FIELDS = {"run_id", "created_at"}
 _QUALITY_BOUND_FIELDS = {
-    "model_dataset": {"quality_report_checksum_sha256"},
+    "model_dataset": {"quality_report_checksum_sha256", "logical_fingerprint"},
     "model_run": {"quality_report_checksum_sha256"},
     "qlib_dataset_export": {"export_layout", "quality_report_checksum_sha256"},
     "qlib_init_receipt": {"quality_report_checksum_sha256"},
@@ -76,16 +76,10 @@ def model_manifest_identities(
 
 def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
     if schema_name == "model_dataset":
-        if payload.get("quality_report_checksum_sha256") == "0" * 64:
-            provisional = {key: value for key, value in payload.items() if key != "quality_report_checksum_sha256"}
-            schema_path = Path(__file__).resolve().parents[3] / "config/schemas/contracts/model_dataset.v1.json"
-            required = json.loads(schema_path.read_text())["required"]
-            if all(field == "quality_report_checksum_sha256" or field in provisional for field in required):
-                return
         validate_contract("model_dataset.v1.json", payload)
         return
     if schema_name == "model_quality_report":
-        validate_contract("model_quality_report.v1.json", payload)
+        validate_contract("model_quality_report.v2.json", payload)
     elif schema_name in _SCHEMA_NAMES:
         validate_contract(f"{schema_name}.v1.json", payload)
     else:
@@ -138,6 +132,13 @@ class ModelContractLoader:
 
     @staticmethod
     def validate(schema_name: str, payload: dict[str, Any]) -> None:
+        if schema_name == "model_quality_report.v1":
+            _reject_non_finite(payload)
+            validate_contract("model_quality_report.v1.json", payload)
+            checksum_payload = {key: value for key, value in payload.items() if key != "report_checksum_sha256"}
+            if payload["report_checksum_sha256"] != sha256_json(checksum_payload):
+                raise ContractError("model quality report checksum mismatch")
+            return
         if schema_name not in _MODEL_CONTRACT_FAMILIES:
             raise ContractError(f"unknown model contract family: {schema_name}")
         _reject_non_finite(payload)
@@ -148,11 +149,11 @@ class ModelContractLoader:
                 if payload["report_checksum_sha256"] != sha256_json(checksum_payload):
                     raise ContractError("model quality report checksum mismatch")
             return
-        exclude_fields = _QUALITY_BOUND_FIELDS.get(schema_name, set()).copy()
+        exclude_fields = _QUALITY_BOUND_FIELDS.get(schema_name, {"quality_report_checksum_sha256"}).copy()
         if schema_name == "model_dataset":
             exclude_fields.add("logical_fingerprint")
-        elif schema_name == "model_artifact":
-            exclude_fields.add("quality_report_checksum_sha256")
+        elif schema_name in {"accepted_factor_index_query", "accepted_factor_index_response", "feature_schema"}:
+            exclude_fields = set()
         expected_generation, expected_digest = model_manifest_identities(
             payload, schema_name=schema_name, exclude_fields=exclude_fields
         )
@@ -160,6 +161,132 @@ class ModelContractLoader:
             raise ContractError(f"{schema_name} stable generation mismatch")
         if payload["manifest_digest_sha256"] != expected_digest:
             raise ContractError(f"{schema_name} manifest digest mismatch")
+
+
+class ModelQualityReviewRegistry:
+    """Typed view over the externally reviewed quality-check registry."""
+
+    def __init__(self, path: Path | str | None = None) -> None:
+        self.path = Path(path or Path(__file__).resolve().parents[3] / "config/model-quality-reviews.v1.json")
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContractError("model quality review registry is unavailable or malformed") from exc
+        if payload.get("registry_version") != 1 or payload.get("status") != "reviewed":
+            raise ContractError("model quality review registry is not reviewed")
+        if not isinstance(payload.get("reviewer"), str) or not payload["reviewer"]:
+            raise ContractError("model quality review registry has no reviewer")
+        bindings = payload.get("bindings")
+        if not isinstance(bindings, dict):
+            raise ContractError("model quality review registry has no bindings")
+        self.reviewer = payload["reviewer"]
+        self.bindings = bindings
+
+    def validate_report(self, report: dict[str, Any]) -> None:
+        binding_type = report.get("binding_type")
+        binding = self.bindings.get(binding_type)
+        if not isinstance(binding, dict):
+            raise ContractError(f"no reviewed quality policy for {binding_type}")
+        if report.get("policy") != binding.get("policy"):
+            raise ContractError("quality report policy does not match reviewed registry")
+        if report.get("status") not in binding.get("allowed_statuses", []):
+            raise ContractError("quality report status is not approved by reviewed registry")
+        checks = report.get("checks")
+        if not isinstance(checks, list) or not checks:
+            raise ContractError("quality report requires reviewed checks")
+        allowed = set(binding.get("allowed_checks", []))
+        for check in checks:
+            if not isinstance(check, dict) or check.get("name") not in allowed:
+                raise ContractError(f"quality check is not approved: {check.get('name')}")
+            if check.get("result") not in {"passed", "failed"}:
+                raise ContractError("quality check result is invalid")
+        if report.get("status") == "passed" and any(check.get("result") == "failed" for check in checks):
+            raise ContractError("passed quality report contains failed checks")
+
+
+_MODEL_QUALITY_REVIEW_REGISTRY = ModelQualityReviewRegistry()
+
+
+def review_signature(
+    *,
+    reviewer: str,
+    binding_type: str,
+    subject_content_sha256: str,
+    policy: str,
+    status: str,
+    checks: list[dict[str, Any]],
+    errors: list[str],
+    warnings: list[str],
+) -> str:
+    """Return the deterministic signature used by the external review registry."""
+    return sha256_json({
+        "binding_type": binding_type, "checks": checks, "errors": errors,
+        "policy": policy, "reviewer": reviewer, "status": status,
+        "subject_content_sha256": subject_content_sha256, "warnings": warnings,
+    })
+
+
+def create_reviewed_quality_decision(
+    *,
+    binding_type: str,
+    policy: str,
+    status: str,
+    checks: list[dict[str, Any]],
+    errors: list[str],
+    warnings: list[str],
+    producer_code_fingerprint: str,
+) -> dict[str, Any]:
+    """Create an immutable decision produced outside the publication path."""
+    reviewer = _MODEL_QUALITY_REVIEW_REGISTRY.reviewer
+    signature = sha256_json({
+        "binding_type": binding_type, "checks": checks, "errors": errors,
+        "policy": policy, "reviewer": reviewer, "status": status,
+        "warnings": warnings,
+    })
+    return {
+        "report_version": 2, "binding_type": binding_type, "policy": policy,
+        "status": status, "checks": checks, "errors": errors,
+        "warnings": warnings, "producer_code_fingerprint": producer_code_fingerprint,
+        "reviewer": reviewer, "review_signature_sha256": signature,
+    }
+
+
+def bind_reviewed_quality_decision(
+    decision: dict[str, Any],
+    *,
+    binding_type: str,
+    subject_generation_id: str,
+    subject_content_sha256: str | None = None,
+) -> tuple[dict[str, Any], str]:
+    """Mechanically bind an unchanged external decision to a stable subject."""
+    if not isinstance(decision, dict):
+        raise ContractError("external quality decision must be an object")
+    required = {
+        "report_version", "binding_type", "policy", "status", "checks",
+        "errors", "warnings", "producer_code_fingerprint", "reviewer",
+        "review_signature_sha256",
+    }
+    if set(decision) != required:
+        raise ContractError("external quality decision has unexpected or missing fields")
+    if decision.get("report_version") != 2 or decision.get("binding_type") != binding_type:
+        raise ContractError(f"quality decision does not match {binding_type}")
+    _MODEL_QUALITY_REVIEW_REGISTRY.validate_report({**decision, "bound_generation_id": subject_generation_id})
+    expected_signature = sha256_json({
+        "binding_type": binding_type, "checks": decision["checks"],
+        "errors": decision["errors"], "policy": decision["policy"],
+        "reviewer": decision["reviewer"], "status": decision["status"],
+        "warnings": decision["warnings"],
+    })
+    if decision.get("review_signature_sha256") != expected_signature:
+        raise ContractError("external quality decision signature mismatch")
+    subject_digest = subject_content_sha256 or subject_generation_id
+    unsigned_report = {
+        **decision, "bound_generation_id": subject_generation_id,
+        "subject_content_sha256": subject_digest,
+    }
+    report = {**unsigned_report, "report_checksum_sha256": sha256_json(unsigned_report)}
+    ModelContractLoader.validate("model_quality_report", report)
+    return report, report["report_checksum_sha256"]
 
 
 class AcceptedFactorIndexContract:
