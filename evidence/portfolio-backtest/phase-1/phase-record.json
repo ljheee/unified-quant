@@ -1,0 +1,24 @@
+{
+  "phase": 1,
+  "layer": "portfolio_backtest",
+  "status": "in_progress",
+  "entry_criteria": "Phase 0 exited",
+  "exit_criteria_tests": [
+    "test_top_n_equal_weight",
+    "test_single_position_cap",
+    "test_cash_reserve",
+    "test_nan_scores_excluded",
+    "test_insufficient_universe",
+    "test_turnover_cap_interpolation",
+    "test_turnover_requires_previous",
+    "test_e2e_publish_read",
+    "test_overwrite_rejection",
+    "test_tampered_data_rejects_read",
+    "test_missing_quality_report_rejects_read"
+  ],
+  "evidence_paths": [
+    "src/uq/portfolio/builder.py",
+    "tests/test_portfolio_layer.py"
+  ],
+  "blocked_by": ["final HEAD gate report generation after commit"]
+}
