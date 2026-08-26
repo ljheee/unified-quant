@@ -1,6 +1,6 @@
 {
   "layer": "portfolio_backtest",
-  "status": "released_pending_final_marker",
+  "status": "released",
   "implementation_commit": "62bf683cfe6501e9926235ff1cbf327b9f0f1f49",
   "local_gate": {
     "result": "passed",
@@ -18,5 +18,10 @@
     "evidence/portfolio-backtest/phase-0/phase-record.json",
     "evidence/portfolio-backtest/phase-1/phase-record.json",
     "evidence/portfolio-backtest/phase-2/phase-record.json"
-  ]
+  ],
+  "final_head_gate": {
+    "result": "passed",
+    "commit": "794f36514ab1a57b87b6d19c30e698efa5a1094b",
+    "timestamp": "2026-08-26T12:45:52.629802+00:00"
+  }
 }
