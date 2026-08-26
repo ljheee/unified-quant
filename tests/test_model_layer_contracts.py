@@ -49,7 +49,7 @@ def base_document(schema_name: str) -> dict:
             "dataset_name": "research_slice", "semantic_version": "1.0.0", "ordered_features": ["volume_ratio_20d"],
             "factor_set": "basic", "factor_version": "1.0.0", "factor_generation_ids": [digest],
             "label_set_name": "return_5d", "label_generation_id": digest, "universe_snapshot_generation_id": digest,
-            "split_policy": {"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-20"}, {"name": "validation", "start_date": "2026-02-02", "end_date": "2026-02-10"}]},
+            "split_policy": {"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-12"}, {"name": "validation", "start_date": "2026-01-23", "end_date": "2026-01-26"}]},
             "missing_policy": "fail_closed", "row_count": 10, "data_checksum_sha256": digest,
             "logical_fingerprint": digest, "code_fingerprint": digest, "serialization_profile_id": "uq-parquet-v1",
             "quality_report_checksum_sha256": digest,

@@ -1,9 +1,5 @@
 {
-  "record_version": 1,
-  "phase": "2A",
-  "status": "exited",
   "bound_commit": "801c2279d58d67071a49306c49e379fc5ee6b1a2",
-  "evidence_note": "Runtime implementation was gated before this post-release hardening pass; this machine-readable record reconciles that completed state.",
   "entry_criteria": [
     {
       "id": "Ephase-2a-entry-upstream-exit",
@@ -11,6 +7,7 @@
       "test_id": "specs/layers/model-layer-implementation-plan.md"
     }
   ],
+  "evidence_note": "Runtime implementation was gated before this post-release hardening pass; this machine-readable record reconciles that completed state.",
   "exit_criteria": [
     {
       "id": "Ephase-2a-exit-runtime-and-negative-tests",
@@ -18,6 +15,13 @@
       "test_id": "scripts/run_gate.sh"
     }
   ],
+  "phase": "2A",
+  "record_version": 1,
+  "release_blockers": [
+    "external reviewed quality reports required",
+    "fresh final-implementation local and remote gates required"
+  ],
+  "status": "implemented_release_blocked",
   "test_evidence_paths": [
     "evidence/phase-0/gate-reports/gate-report.json",
     "evidence/release/final-head-ci/32928412607/"

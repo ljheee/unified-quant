@@ -12,6 +12,11 @@
     "This record binds CI evidence to the exact commit that contains it.",
     "A final marker commit may change HEAD but must not alter implementation or lockfiles."
   ],
+  "post_release_hardening": {
+    "base_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
+    "requires_fresh_external_reviewed_quality_reports": true,
+    "requires_fresh_local_and_remote_gate": true
+  },
   "record_version": 1,
   "remote_matrix": {
     "covered_cells": [
@@ -32,11 +37,5 @@
     ],
     "result": "passed"
   },
-  "status": "released",
-  "post_release_hardening": {
-    "base_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
-    "ci_run_path": "final-head-ci/32929762689/aggregated-gates.json",
-    "local_gate_path": "../phase-0/gate-reports/gate-report.json",
-    "requires_fresh_local_and_remote_gate": false
-  }
+  "status": "blocked"
 }

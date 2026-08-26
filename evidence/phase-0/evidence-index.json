@@ -93,8 +93,8 @@
       "type": "remote_environment_matrix"
     },
     {
-      "type": "post_release_runtime_governance",
       "bound_commit": "801c2279d58d67071a49306c49e379fc5ee6b1a2",
+      "note": "Implemented-phase reconciliation superseded by external-quality-report governance correction.",
       "paths": [
         "../phase-1/phase-record.json",
         "../phase-2a/phase-record.json",
@@ -102,10 +102,10 @@
         "../phase-4/phase-record.json",
         "../phase-5/phase-record.json"
       ],
-      "note": "Machine-readable reconciliation for implemented phases; fresh final HEAD gate pending."
+      "type": "post_release_runtime_governance"
     }
   ],
   "index_version": 3,
   "phase": 0,
-  "status": "exited"
+  "status": "exited_phase_0_only"
 }

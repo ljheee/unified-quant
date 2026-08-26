@@ -9,11 +9,11 @@
   ],
   "factor_set": "basic",
   "factor_version": "1.0.0",
-  "generation_id": "e97a0729d9f98e9e6d3d5ca9b6103175ae6d82fda5e3f08b1792ec4b8c3e912f",
+  "generation_id": "8aee3603b9d84532d9d681264e756febde50b29023d380e042618d897f08307d",
   "label_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
   "label_set_name": "return_5d",
   "logical_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
-  "manifest_digest_sha256": "ad7496d2d3077b302b16b9703af318a6619a73e1d5a1721becdd119593e0c837",
+  "manifest_digest_sha256": "d0fdd8a3226b0d658b14c5b18594e48a480663bfb98760fbf80f8a0b09d4fc9a",
   "missing_policy": "fail_closed",
   "ordered_features": [
     "volume_ratio_20d"
@@ -28,9 +28,14 @@
     "purge_trading_days": 5,
     "splits": [
       {
-        "end_date": "2026-01-28",
+        "end_date": "2026-01-12",
         "name": "train",
-        "start_date": "2026-01-01"
+        "start_date": "2026-01-05"
+      },
+      {
+        "end_date": "2026-01-26",
+        "name": "validation",
+        "start_date": "2026-01-23"
       }
     ]
   },
