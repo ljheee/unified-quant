@@ -1,7 +1,7 @@
 {
-  "aggregation_result": "invalid_duplicate_evidence",
-  "bound_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
-  "ci_run_id": "32929762689",
+  "aggregation_result": "passed",
+  "bound_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+  "ci_run_id": "32934486193",
   "covered_cells": [
     "macos-latest/3.11",
     "macos-latest/3.12",
@@ -23,26 +23,26 @@
   },
   "environment_reports": [
     {
-      "cell": "macos-latest/3.11",
-      "git_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
+      "cell": "macos/latest-3.11",
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
       "path": "gate-report-macos-latest-3.11/gate-report.json",
       "platform": "macOS-26.5.2-arm64-arm-64bit",
-      "python_version": "3.13.14",
+      "python_version": "3.11.9",
       "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
       "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08"
     },
     {
-      "cell": "macos-latest/3.12",
-      "git_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
+      "cell": "macos/latest-3.12",
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
       "path": "gate-report-macos-latest-3.12/gate-report.json",
       "platform": "macOS-26.5.2-arm64-arm-64bit",
-      "python_version": "3.13.14",
+      "python_version": "3.12.10",
       "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
       "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08"
     },
     {
-      "cell": "macos-latest/3.13",
-      "git_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
+      "cell": "macos/latest-3.13",
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
       "path": "gate-report-macos-latest-3.13/gate-report.json",
       "platform": "macOS-26.5.2-arm64-arm-64bit",
       "python_version": "3.13.14",
@@ -50,42 +50,37 @@
       "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08"
     },
     {
-      "cell": "ubuntu-latest/3.11",
-      "git_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
+      "cell": "ubuntu/latest-3.11",
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
       "path": "gate-report-ubuntu-latest-3.11/gate-report.json",
-      "platform": "macOS-26.5.2-arm64-arm-64bit",
-      "python_version": "3.13.14",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.16",
       "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
       "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08"
     },
     {
-      "cell": "ubuntu-latest/3.12",
-      "git_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
+      "cell": "ubuntu/latest-3.12",
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
       "path": "gate-report-ubuntu-latest-3.12/gate-report.json",
-      "platform": "macOS-26.5.2-arm64-arm-64bit",
-      "python_version": "3.13.14",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.14",
       "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
       "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08"
     },
     {
-      "cell": "ubuntu-latest/3.13",
-      "git_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
+      "cell": "ubuntu/latest-3.13",
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
       "path": "gate-report-ubuntu-latest-3.13/gate-report.json",
-      "platform": "macOS-26.5.2-arm64-arm-64bit",
-      "python_version": "3.13.14",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.13.15",
       "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
       "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08"
     }
   ],
   "phase": "4A",
-  "post_release_hardening": {
-    "base_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
-    "requires_fresh_external_reviewed_quality_reports": true,
-    "requires_fresh_local_and_remote_gate": true
-  },
   "post_release_hardening_scope": "model governance/reproducibility changes",
   "record_version": 1,
   "scope": "locked environment matrix; uncovered OS/CPU/BLAS/GPU combinations remain not certified",
-  "status": "in_progress",
+  "status": "exited",
   "uncovered_cells": []
 }

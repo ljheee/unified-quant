@@ -1,0 +1,123 @@
+{
+  "ci_run_id": "32934486193",
+  "covered_cells": [
+    "macos/latest-3.11",
+    "macos/latest-3.12",
+    "macos/latest-3.13",
+    "ubuntu/latest-3.11",
+    "ubuntu/latest-3.12",
+    "ubuntu/latest-3.13"
+  ],
+  "environment_reports": [
+    {
+      "cell": "macos/latest-3.11",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "directory": "gate-report-macos-latest-3.11",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+      "lockfile_sha256": "16383e7d598ce38ab72bf72a1b259e1454b3836a377e525492b7b148c3f6f702",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "python_version": "3.11.9",
+      "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "runner": "uv",
+      "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "test_result": "passed",
+      "utc_timestamp": "2026-08-26T05:33:32.811481+00:00"
+    },
+    {
+      "cell": "macos/latest-3.12",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "directory": "gate-report-macos-latest-3.12",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+      "lockfile_sha256": "16383e7d598ce38ab72bf72a1b259e1454b3836a377e525492b7b148c3f6f702",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "python_version": "3.12.10",
+      "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "runner": "uv",
+      "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "test_result": "passed",
+      "utc_timestamp": "2026-08-26T05:33:29.536039+00:00"
+    },
+    {
+      "cell": "macos/latest-3.13",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "directory": "gate-report-macos-latest-3.13",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+      "lockfile_sha256": "16383e7d598ce38ab72bf72a1b259e1454b3836a377e525492b7b148c3f6f702",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "python_version": "3.13.14",
+      "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "runner": "uv",
+      "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "test_result": "passed",
+      "utc_timestamp": "2026-08-26T05:33:35.484557+00:00"
+    },
+    {
+      "cell": "ubuntu/latest-3.11",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "directory": "gate-report-ubuntu-latest-3.11",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+      "lockfile_sha256": "16383e7d598ce38ab72bf72a1b259e1454b3836a377e525492b7b148c3f6f702",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.16",
+      "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "runner": "uv",
+      "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "test_result": "passed",
+      "utc_timestamp": "2026-08-26T05:33:26.405437+00:00"
+    },
+    {
+      "cell": "ubuntu/latest-3.12",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "directory": "gate-report-ubuntu-latest-3.12",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+      "lockfile_sha256": "16383e7d598ce38ab72bf72a1b259e1454b3836a377e525492b7b148c3f6f702",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.14",
+      "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "runner": "uv",
+      "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "test_result": "passed",
+      "utc_timestamp": "2026-08-26T05:33:28.352446+00:00"
+    },
+    {
+      "cell": "ubuntu/latest-3.13",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "directory": "gate-report-ubuntu-latest-3.13",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+      "lockfile_sha256": "16383e7d598ce38ab72bf72a1b259e1454b3836a377e525492b7b148c3f6f702",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.13.15",
+      "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "runner": "uv",
+      "sidecar_requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+      "test_result": "passed",
+      "utc_timestamp": "2026-08-26T05:33:26.238490+00:00"
+    }
+  ],
+  "git_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+  "result": "passed"
+}

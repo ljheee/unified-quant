@@ -1,6 +1,6 @@
 {
-  "bound_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
-  "ci_run_id": "32929762689",
+  "bound_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+  "ci_run_id": "32934486193",
   "local_gate": {
     "path": "../phase-0/gate-reports/gate-report.json",
     "platform": "macOS-26.3-arm64-arm-64bit",
@@ -13,9 +13,10 @@
     "A final marker commit may change HEAD but must not alter implementation or lockfiles."
   ],
   "post_release_hardening": {
-    "base_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
-    "requires_fresh_external_reviewed_quality_reports": true,
-    "requires_fresh_local_and_remote_gate": true
+    "base_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
+    "requires_external_reviewed_quality_reports": true,
+    "requires_fresh_local_and_remote_gate_after_review": false,
+    "valid_matrix_evidence": "final-head-ci/32934486193/aggregated-gates.json"
   },
   "record_version": 1,
   "remote_matrix": {

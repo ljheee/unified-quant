@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.6; phases 0–5 implemented draft. Release blocked pending reviewed external quality reports, corrected six-cell evidence for final implementation HEAD, and release reconciliation.**
+Status: **gated implementation order v1.6; phases 0–5 implemented draft. Runtime gates pass at commit 8213233aa72522145b959ee5f04a163e4f02cc32 across the local cell and remote six-cell matrix; release remains blocked pending reviewed external quality reports and final reconciliation.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -395,8 +395,10 @@ A later marker commit may update these evidence files only; it must not alter
 implementation code, schemas, lockfiles, or gate commands. If it does, all local
 and remote gates must be rerun.
 
-CI run `32929762689` is not valid matrix evidence: its archived per-cell reports were duplicated from one cell and are quarantined as invalid evidence.
+CI run `32929762689` is invalid duplicated evidence and remains quarantined. Valid post-correction matrix evidence is CI run `32934486193` under `evidence/release/final-head-ci/32934486193/`.
 
 ## Quality Report Governance Correction
 
 Publishers no longer synthesize `passed` reports. Dataset, export, run, receipt, and prediction publication requires an externally supplied report whose canonical checksum participates in manifest digest identity. Existing artifacts must be republished before any release claim.
+
+The valid six-cell archive contains distinct platform/Python reports bound to implementation commit `8213233aa72522145b959ee5f04a163e4f02cc32`; it proves environment execution only and does not approve self-produced quality reports.

@@ -18,8 +18,7 @@
   "phase": 1,
   "record_version": 1,
   "release_blockers": [
-    "external reviewed quality reports required",
-    "fresh final-implementation local and remote gates required"
+    "external reviewed quality reports required before release"
   ],
   "status": "implemented_release_blocked",
   "test_evidence_paths": [
