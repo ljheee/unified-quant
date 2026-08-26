@@ -1,7 +1,7 @@
 {
   "phase": 1,
   "layer": "portfolio_backtest",
-  "status": "in_progress",
+  "status": "exited",
   "entry_criteria": "Phase 0 exited",
   "exit_criteria_tests": [
     "test_top_n_equal_weight",
@@ -20,5 +20,6 @@
     "src/uq/portfolio/builder.py",
     "tests/test_portfolio_layer.py"
   ],
-  "blocked_by": ["final HEAD gate report generation after commit"]
+  "blocked_by": [],
+  "gate_evidence": "evidence/portfolio-backtest/phase-1/gate-evidence/gate-report.json"
 }
