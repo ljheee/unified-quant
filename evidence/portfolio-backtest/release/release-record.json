@@ -1,7 +1,7 @@
 {
   "layer": "portfolio_backtest",
   "status": "released",
-  "implementation_commit": "62bf683cfe6501e9926235ff1cbf327b9f0f1f49",
+  "implementation_commit": "030853dd078a16a1e37a3c5763a0c961eb4043c6",
   "local_gate": {
     "result": "passed",
     "platform": "macOS-26.3-arm64-arm-64bit",
@@ -21,7 +21,7 @@
   ],
   "final_head_gate": {
     "result": "passed",
-    "commit": "794f36514ab1a57b87b6d19c30e698efa5a1094b",
-    "timestamp": "2026-08-26T12:45:52.629802+00:00"
+    "commit": "030853dd078a16a1e37a3c5763a0c961eb4043c6",
+    "timestamp": "2026-08-26T13:24:43.586434+00:00"
   }
 }
