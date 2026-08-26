@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from uq.contracts.model_layer import ModelContractLoader, resolve_bindings
+from uq.contracts.model_layer import ModelContractLoader, resolve_bindings, sha256_json
 from uq.errors import ContractError
 from uq.models.dataset import DatasetBuilder, SplitValidator
 from uq.models.labels import LabelBuilder, LabelValidator
@@ -27,20 +27,31 @@ def _adjusted_frame(n_instruments: int = 2, n_days: int = 10) -> pd.DataFrame:
                 "datetime": date,
                 "close": 10.0 + i,
                 "adj_factor": 1.0 + 0.01 * i,
+                "limit_up": False,
+                "limit_down": False,
+                "delisted": False,
                 "suspended": False,
                 "listing_date": pd.Timestamp("2020-01-01", tz="UTC"),
             })
     return pd.DataFrame(rows)
 
 
-def _binding() -> dict:
+def _adjusted_price_checksum(frame: pd.DataFrame) -> str:
+    ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort")
+    return sha256_json({"rows": [
+        [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
+        for row in ordered[["instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"]].itertuples(index=False)
+    ]})
+
+
+def _binding(frame: pd.DataFrame | None = None) -> dict:
     return {
         "binding": "adjusted_price",
         "dataset": "bars_adjusted",
         "schema_version": "adjusted-v1",
         "partition_date": "2026-01-15",
         "generation_id": DIGEST,
-        "data_checksum_sha256": DIGEST,
+        "data_checksum_sha256": _adjusted_price_checksum(frame if frame is not None else _adjusted_frame()),
         "visible_cutoff": "2026-01-15T15:00:00+08:00",
     }
 
@@ -49,7 +60,7 @@ class TestLabelBuilder:
     def test_build_produces_valid_manifest(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
         frame = _adjusted_frame()
-        manifest = builder.build(frame, upstream_bindings=[_binding()])
+        manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
         assert manifest["horizon_trading_days"] == 5
         assert manifest["row_count"] == 20
         assert len(manifest["generation_id"]) == 64
@@ -57,7 +68,7 @@ class TestLabelBuilder:
     def test_last_n_rows_are_null(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
         frame = _adjusted_frame(n_days=10)
-        manifest = builder.build(frame, upstream_bindings=[_binding()])
+        manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
         # Last 5 rows per instrument should have null labels.
         df = pd.DataFrame({"instrument": [f"INST{i:04d}" for i in range(2) for _ in range(10)]})
         assert manifest["row_count"] == 20  # all rows present; last 5 labels null
@@ -66,14 +77,14 @@ class TestLabelBuilder:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
         bad_binding = {**_binding(), "binding": "raw_price"}
         with pytest.raises(ContractError, match="only accepts adjusted_price"):
-            builder.build(_adjusted_frame(), upstream_bindings=[bad_binding])
+            builder.build(_adjusted_frame(), upstream_bindings=[{**_binding(), "binding": "raw_price"}])
 
     def test_rejects_duplicate_keys(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
         frame = _adjusted_frame()
         duplicated = pd.concat([frame, frame.iloc[[0]]], ignore_index=True)
         with pytest.raises(ContractError, match="duplicate"):
-            builder.build(duplicated, upstream_bindings=[_binding()])
+            builder.build(duplicated, upstream_bindings=[_binding(duplicated)])
 
     def test_run_metadata_change_stable_generation(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
@@ -86,19 +97,21 @@ class TestLabelBuilder:
 class TestLabelValidator:
     def test_validate_passes_on_valid_manifest(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
-        manifest = builder.build(_adjusted_frame(), upstream_bindings=[_binding()])
+        frame = _adjusted_frame()
+        manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
         LabelValidator.validate_manifest(manifest)
 
     def test_validate_rejects_wrong_horizon(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0", horizon=10)
         frame = _adjusted_frame(n_days=15)
-        manifest = builder.build(frame, upstream_bindings=[_binding()])
+        manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
         with pytest.raises(ContractError, match="unsupported label horizon"):
             LabelValidator.validate_manifest(manifest)
 
     def test_validate_rejects_benchmark(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
-        manifest = builder.build(_adjusted_frame(), upstream_bindings=[_binding()])
+        frame = _adjusted_frame()
+        manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
         tampered = {**manifest, "benchmark_binding": {"name": "csi300"}}
         tampered["generation_id"] = "0" * 64
         tampered["manifest_digest_sha256"] = "0" * 64

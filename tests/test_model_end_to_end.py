@@ -67,7 +67,32 @@ def _publish_factor(root: Path) -> None:
     FactorStore(root, registry).publish(**{k: v for k, v in arguments.items() if k != "frame"}, frame=arguments["frame"])
 
 
+def _load_factor_document(root: Path, generation_id: str) -> dict:
+    for manifest_path in (root / "factors").rglob("manifest.json"):
+        document = json.loads(manifest_path.read_text())
+        if document.get("generation_id") == generation_id:
+            return document
+    raise AssertionError("factor manifest not found")
+
+
+def _publish_universe(root: Path) -> dict:
+    import hashlib
+
+    members_artifact = {"path": "members.csv", "checksum_sha256": hashlib.sha256(b"INST0\nINST1\nINST2\n").hexdigest()}
+    payload = {
+        "universe_version": 1, "universe_id": "e2e-whitelist",
+        "source": "test://e2e-whitelist",
+        "snapshot_time": "2026-01-05T00:00:00Z",
+        "visibility_time": "2026-01-05T00:00:00Z",
+        "valid_from": "2026-01-05", "valid_to": None,
+        "members_artifact": members_artifact,
+        "membership_evidence": "deterministic E2E fixture; no live index membership",
+    }
+    return {**payload, "generation_id": sha256_json(payload)}
+
+
 DIGEST = "0" * 64
+
 
 
 class TestEndToEndPipeline:
@@ -92,6 +117,9 @@ class TestEndToEndPipeline:
         rng = np.random.RandomState(7)
         adjusted_frame["close"] = 10.0 + rng.randn(len(factor_data)) * 0.1
         adjusted_frame["adj_factor"] = 1.0
+        adjusted_frame["limit_up"] = False
+        adjusted_frame["limit_down"] = False
+        adjusted_frame["delisted"] = False
         adjusted_frame["suspended"] = False
         adjusted_frame["listing_date"] = pd.Timestamp("2020-01-01", tz="UTC")
         label_manifest = LabelBuilder(name="return_5d", semantic_version="1.0.0").build(
@@ -102,11 +130,24 @@ class TestEndToEndPipeline:
                 "schema_version": "adjusted-v1",
                 "partition_date": "2026-01-09",
                 "generation_id": DIGEST,
-                "data_checksum_sha256": DIGEST,
+                "data_checksum_sha256": sha256_json({"rows": [
+                    [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
+                    for row in adjusted_frame[[
+                        "instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"
+                    ]].sort_values(["instrument", "datetime"], kind="mergesort").itertuples(index=False)
+                ]}),
                 "visible_cutoff": "2026-01-09T15:00:00+08:00",
             }],
         )
-        factor_data["label"] = label_manifest["row_count"] * [None]
+        label_frame = adjusted_frame.sort_values(["instrument", "datetime"], kind="mergesort").copy()
+        label_frame["label"] = (
+            (label_frame["close"] * label_frame["adj_factor"]).groupby(label_frame["instrument"], sort=False)
+            .transform(lambda values: values.shift(-1) / values - 1)
+        )
+        factor_data["label"] = label_frame["label"].to_numpy()
+
+        universe_manifest = _publish_universe(tmp_path)
+        factor_document = _load_factor_document(tmp_path, factor_gen)
 
         # === Phase 1: Dataset build + write ===
         dataset_manifest = DatasetBuilder(dataset_name="e2e_slice", semantic_version="1.0.0").build(
@@ -114,7 +155,7 @@ class TestEndToEndPipeline:
             factor_set="basic", factor_version="1.0.0",
             factor_generation_ids=[factor_gen],
             label_set_name="return_5d", label_generation_id=label_manifest["generation_id"],
-            universe_snapshot_generation_id=DIGEST,
+            universe_snapshot_generation_id=universe_manifest["generation_id"],
             split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-09"}]},
             row_count=len(factor_data),
         )
@@ -143,6 +184,7 @@ class TestEndToEndPipeline:
             qlib_import_path="qlib", qlib_version="0.9.6",
             cache_root=str(tmp_path / ".cache"), 
             cache_files_before=cache_before, cache_files_after=cache_after,
+            verified_export=exporter.read("e2e_slice", export_manifest["generation_id"]),
         )
         assert receipt["no_ungoverned_source_assertion"] is True
 
@@ -166,8 +208,8 @@ class TestEndToEndPipeline:
             environment_lock_sha256=DIGEST,
             determinism_controls={"random_seed": 42, "threads": 1},
             label_manifest=label_manifest,
-            universe_snapshot={"generation_id": loaded_ds_manifest["universe_snapshot_generation_id"]},
-            factor_manifests={factor_gen: {"generation_id": factor_gen}},
+            universe_snapshot=universe_manifest,
+            factor_manifests={factor_gen: factor_document},
         )
         # === Phase 4: Train + publish artifact ===
         trainer = ModelTrainer(tmp_path)
@@ -178,10 +220,15 @@ class TestEndToEndPipeline:
             label_column="label",
         )
         artifact_store = ArtifactStore(tmp_path)
+        from uq.contracts.model_layer import model_manifest_identities as _mmi
+        artifact_generation = _mmi(
+            {**artifact_manifest, "generation_id": DIGEST, "manifest_digest_sha256": DIGEST},
+            schema_name="model_artifact", exclude_fields={"quality_report_checksum_sha256"},
+        )[0]
         artifact_quality_report = {
             "report_version": 1,
             "binding_type": "model_artifact_v1",
-            "bound_generation_id": artifact_manifest["model_run_content_generation_id"],
+            "bound_generation_id": artifact_generation,
             "policy": "reject_all",
             "status": "passed",
             "checks": [{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
@@ -213,9 +260,10 @@ class TestEndToEndPipeline:
         pred_builder = PredictionBuilder(tmp_path)
         pred_manifest, pred_artifact = pred_builder.build(
             prediction_set_name="daily_e2e",
-            model_artifact_generation_id=artifact_manifest["generation_id"],
+            model_artifact_generation_id=artifact_generation,
             model_artifact_checksum=artifact_manifest["artifact_checksum_sha256"],
             input_dataset_generation_id=loaded_ds_manifest["generation_id"],
+            run_generation_id=artifact_manifest["model_run_content_generation_id"], artifact_store=None,
             decision_date="2026-01-09",
             scores=scores,
             eligibility_status="passed",
@@ -232,13 +280,13 @@ class TestEndToEndPipeline:
         bindings_report = resolve_bindings({
             "model_dataset": loaded_ds_manifest,
             "label_set": label_manifest,
-            "universe_snapshot": {"generation_id": loaded_ds_manifest["universe_snapshot_generation_id"]},
-            "factor_manifests": {factor_gen: {"generation_id": factor_gen}},
+            "universe_snapshot": universe_manifest,
+            "factor_manifests": {factor_gen: factor_document},
             "model_definition": definition,
             "qlib_dataset_export": export_manifest,
             "qlib_init_receipt": receipt,
             "model_run": run_manifest,
-            "model_artifact": artifact_manifest,
+            "model_artifact": {**artifact_manifest, "generation_id": artifact_generation},
             "prediction_set": pred_manifest,
         })
         assert bindings_report["errors"] == []

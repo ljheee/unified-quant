@@ -63,11 +63,13 @@ class TestQlibDatasetExporter:
             provider_uri="file:///correct",
         )
         builder = QlibInitReceiptBuilder()
+        verified_export = exporter.read("x", manifest["generation_id"])
         with pytest.raises(ContractError, match="provider URI"):
             builder.build(
                 export_manifest=manifest, resolved_provider_uri="file:///wrong",
                 qlib_import_path="qlib", qlib_version="0.9.6",
                 cache_root=".cache", cache_files_before=set(), cache_files_after=set(),
+                verified_export=verified_export,
             )
 
     def test_receipt_passes_with_matching_uri(self, tmp_path: Path) -> None:
@@ -78,13 +80,30 @@ class TestQlibDatasetExporter:
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
             provider_uri="file:///data",
         )
+        verified_export = exporter.read("x", manifest["generation_id"])
         receipt = QlibInitReceiptBuilder().build(
             export_manifest=manifest, resolved_provider_uri="file:///data",
             qlib_import_path="qlib", qlib_version="0.9.6",
-            cache_root=".cache", cache_files_before=set(),
-            cache_files_after={".cache/qlib/calendar.pkl"},
+            cache_root=str(tmp_path / ".cache"), cache_files_before=set(),
+            cache_files_after={str(tmp_path / ".cache/qlib/calendar.pkl")},
+            verified_export=verified_export,
         )
         assert receipt["no_ungoverned_source_assertion"] is True
+
+
+    def test_calendar_tamper_rejected_on_read(self, tmp_path: Path) -> None:
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        manifest = exporter.export(
+            dataset_name="tamper_case", generation_id="d" * 64,
+            frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+            provider_uri="file:///data",
+        )
+        _, snapshot = exporter.read("tamper_case", manifest["generation_id"])
+        calendar = snapshot / "calendars" / "day.txt"
+        calendar.write_text(calendar.read_text() + "2026-01-08\n")
+        with pytest.raises(ContractError, match="file list mismatch|tampered Qlib export"):
+            exporter.read("tamper_case", manifest["generation_id"])
 
 
 class TestLegacyExporterIsolation:

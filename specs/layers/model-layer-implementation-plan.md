@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.4; phases 0–5 implemented draft; release blocked by open CR items**
+Status: **gated implementation order v1.4; phases 0–5 implemented draft; release blocked pending remote matrix and final-HEAD evidence**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -360,13 +360,13 @@ later phases must expand their rows before entering implementation.
 | Sub-ID | Owning phase | Blocked by | Test ID | Fixture path | Evidence path | Status |
 |---|---|---|---|---|---|---|
 | M1a-factor-manifest-missing | 0 | none | test_cross_manifest_binding_resolver_passes_and_fails | evidence/phase-0/fixtures/model_dataset-negative.json | evidence/phase-0/phase-record.json | passed |
-| M1b-factor-checksum-tamper | 1 | Phase 0 exit | TBD-P1 | TBD | TBD | blocked |
+| M1b-factor-checksum-tamper | 1 | Phase 0 exit | test_checksum_tamper_fails_closed | tests/test_accepted_store_runtime.py | evidence/phase-0/phase-record.json | passed |
 | M1c-wrong-generation-binding | 0 | none | test_cross_manifest_binding_resolver_passes_and_fails | evidence/phase-0/fixtures/prediction_set-negative.json | evidence/phase-0/phase-record.json | passed |
 | M5a-label-generation-change | 0 | none | test_golden_vectors_cover_all_manifest_families | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/phase-0/golden-vectors/identity-golden-vectors.json | passed |
 | M5b-dataset-generation-change | 0 | none | test_golden_vectors_cover_all_manifest_families | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/phase-0/golden-vectors/identity-golden-vectors.json | passed |
-| M8a-provider-uri-mismatch | 2A | Phase 1 exit | TBD-P2A | TBD | TBD | blocked |
-| M8b-calendar-tamper | 2A | Phase 1 exit | TBD-P2A | TBD | TBD | blocked |
-| M10a-quarantine-path-invisible | 4 | Phase 3 exit | TBD-P4 | TBD | TBD | blocked |
+| M8a-provider-uri-mismatch | 2A | Phase 1 exit | test_wrong_provider_uri_rejected_on_receipt | tests/test_model_qlib_export.py | evidence/phase-0/phase-record.json | passed |
+| M8b-calendar-tamper | 2A | Phase 1 exit | test_calendar_tamper_rejected_on_read | tests/test_model_qlib_export.py | evidence/phase-0/phase-record.json | passed |
+| M10a-quarantine-path-invisible | 4 | Phase 3 exit | test_quarantine_path_is_not_visible_as_accepted | tests/test_model_trainer.py | evidence/phase-0/phase-record.json | passed |
 | M11a-manifest-tamper-reject | 0 | none | test_typed_loader_rejects_absent_malformed_and_tampered_documents | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
 | M11b-path-mismatch-reject | 0 | none | test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
 | M11c-checksum-mismatch-reject | 0 | none | test_quality_report_checksum_and_binding_are_enforced | evidence/phase-0/fixtures/model_artifact-valid.json | evidence/phase-0/phase-record.json | passed |

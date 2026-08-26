@@ -1,53 +1,54 @@
 {
-  "phase": 0,
-  "record_version": 1,
-  "status": "exited",
   "entry_criteria": [
     {
       "id": "E0-entry-source-blockers",
-      "test_id": "tests/test_model_layer_contracts.py",
-      "status": "passed"
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py"
     },
     {
       "id": "E0-entry-schema-list",
-      "test_id": "tests/test_model_layer_contracts.py::test_all_families_have_valid_and_negative_fixtures_on_disk",
-      "status": "passed"
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_all_families_have_valid_and_negative_fixtures_on_disk"
     }
   ],
   "exit_criteria": [
     {
       "id": "E0-exit-all-schemas-validate",
-      "test_id": "tests/test_model_layer_contracts.py::test_all_families_have_valid_and_negative_fixtures_on_disk",
-      "status": "passed"
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_all_families_have_valid_and_negative_fixtures_on_disk"
     },
     {
       "id": "E0-exit-golden-vectors",
-      "test_id": "tests/test_model_layer_contracts.py::test_golden_vectors_cover_all_manifest_families",
-      "status": "passed"
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_golden_vectors_cover_all_manifest_families"
     },
     {
       "id": "E0-exit-loader-fail-closed",
-      "test_id": "tests/test_model_layer_contracts.py::test_typed_loader_rejects_absent_malformed_and_tampered_documents + test_loader_rejects_symlinked_contract + test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root",
-      "status": "passed"
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_typed_loader_rejects_absent_malformed_and_tampered_documents + test_loader_rejects_symlinked_contract + test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root"
     },
     {
       "id": "E0-exit-query-contract",
-      "test_id": "tests/test_model_layer_contracts.py::test_accepted_index_contract_is_query_only_and_fails_closed + test_accepted_query_cursor_arity_is_validated + test_accepted_index_response_schema_validates",
-      "status": "passed"
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_accepted_index_contract_is_query_only_and_fails_closed + test_accepted_query_cursor_arity_is_validated + test_accepted_index_response_schema_validates"
     },
     {
       "id": "E0-exit-cross-manifest-resolver",
-      "test_id": "tests/test_model_layer_contracts.py::test_cross_manifest_binding_resolver_passes_and_fails",
+      "note": "Contract-level binding shape only; factor upstream content resolution deferred to Phase 1 accepted-store runtime.",
       "status": "passed",
-      "note": "Contract-level binding shape only; factor upstream content resolution deferred to Phase 1 accepted-store runtime."
+      "test_id": "tests/test_model_layer_contracts.py::test_cross_manifest_binding_resolver_passes_and_fails"
     },
     {
-      "id": "E0-exit-unified-gate-green-head-bound",
-      "test_id": "scripts/run_gate.sh",
+      "bound_commit": "cc3e25a57687c772a71884d70935a86c26340f52",
       "evidence_path": "evidence/phase-0/gate-reports/gate-report.json",
+      "id": "E0-exit-unified-gate-green-head-bound",
+      "note": "Phase 0 exit evidence remains bound to its recorded commit; later model implementation changes require a fresh final-HEAD release evidence run.",
       "status": "passed",
-      "bound_commit": "cc3e25a57687c772a71884d70935a86c26340f52"
+      "test_id": "scripts/run_gate.sh"
     }
   ],
-  "exited_at_commit": "5a7559084f9505ebc450d69ed22e8689a43fe19f"
+  "exited_at_commit": "5a7559084f9505ebc450d69ed22e8689a43fe19f",
+  "phase": 0,
+  "record_version": 1,
+  "status": "exited"
 }

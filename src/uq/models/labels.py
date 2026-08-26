@@ -70,12 +70,35 @@ class LabelBuilder:
                 raise ContractError("label builder only accepts adjusted_price bindings")
             if len(binding.get("generation_id", "")) != 64:
                 raise ContractError("invalid upstream generation_id in binding")
+            if not isinstance(binding.get("data_checksum_sha256"), str) or len(binding["data_checksum_sha256"]) != 64:
+                raise ContractError("invalid upstream data checksum in binding")
+
+        input_checksum = sha256_json({"rows": [
+            [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2]),
+             None if pd.isna(row[3]) else float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
+            for row in frame[[
+                "instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"
+            ]].sort_values(["instrument", "datetime"], kind="mergesort").itertuples(index=False)
+        ]})
+        for binding in upstream_bindings:
+            if binding["data_checksum_sha256"] != input_checksum:
+                raise ContractError("upstream adjusted-price checksum does not match label input")
 
         ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort").reset_index(drop=True)
         ordered["decision_date"] = ordered["datetime"]
         decision_time = pd.to_datetime(ordered["datetime"], utc=True)
         listing_age = (decision_time - pd.to_datetime(ordered["listing_date"], utc=True)).dt.days
-        eligible = (~ordered["suspended"].astype(bool)) & (listing_age >= 60)
+        if "limit_up" not in ordered.columns or "limit_down" not in ordered.columns or "delisted" not in ordered.columns:
+            raise ContractError("label eligibility requires limit_up, limit_down, and delisted columns")
+        if ordered["limit_up"].isna().any() or ordered["limit_down"].isna().any() or ordered["delisted"].isna().any():
+            raise ContractError("null limit/delisting flag in label input")
+        eligible = (
+            (~ordered["suspended"].astype(bool))
+            & (listing_age >= 60)
+            & (~ordered["limit_up"].astype(bool))
+            & (~ordered["limit_down"].astype(bool))
+            & (~ordered["delisted"].astype(bool))
+        )
         if not eligible.all():
             ordered = ordered.loc[eligible].copy()
 
@@ -98,7 +121,12 @@ class LabelBuilder:
             "adjustment_basis": self.adjustment_basis,
             "benchmark_binding": None,
             "upstream_adjusted_price_bindings": upstream_bindings,
-            "eligibility": {"rules": {"suspension": "exclude", "listing_age_minimum_days": 60}},
+            "eligibility": {"rules": {
+                "suspension": "exclude",
+                "listing_age_minimum_days": 60,
+                "limit_events": "exclude",
+                "delisting": "exclude",
+            }},
             "terminal_return_policy": None,
             "null_policy": {"insufficient_future": "null"},
             "row_count": len(output),

@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
-from .gate_contracts import canonical_json, validate_contract
+from .gate_contracts import adjustment_snapshot_generation, canonical_json, factor_manifest_identities, validate_contract, validate_contract_path
 from ..errors import ContractError
 
 _SCHEMA_NAMES = {
@@ -134,17 +134,20 @@ class ModelContractLoader:
                 if payload["report_checksum_sha256"] != sha256_json(checksum_payload):
                     raise ContractError("model quality report checksum mismatch")
             return
-        exclude_fields = {"logical_fingerprint"} if schema_name == "model_dataset" else None
-        exclude_fields = {"logical_fingerprint"} if schema_name == "model_dataset" else None
-        expected_generation, _ = model_manifest_identities(
+        exclude_fields = None
+        if schema_name == "model_dataset":
+            exclude_fields = {"logical_fingerprint"}
+        elif schema_name == "model_artifact":
+            exclude_fields = {"quality_report_checksum_sha256"}
+        elif schema_name == "qlib_dataset_export":
+            exclude_fields = {"export_layout"}
+        expected_generation, expected_digest = model_manifest_identities(
             payload, schema_name=schema_name, exclude_fields=exclude_fields
         )
         if payload["generation_id"] != expected_generation:
             raise ContractError(f"{schema_name} stable generation mismatch")
-        if schema_name != "model_dataset":
-            _, expected_digest = model_manifest_identities(payload, schema_name=schema_name)
-            if payload["manifest_digest_sha256"] != expected_digest:
-                raise ContractError(f"{schema_name} manifest digest mismatch")
+        if payload["manifest_digest_sha256"] != expected_digest:
+            raise ContractError(f"{schema_name} manifest digest mismatch")
 
 
 class AcceptedFactorIndexContract:
@@ -186,6 +189,36 @@ def resolve_bindings(
 ) -> dict[str, list[str]]:
     """Validate cross-manifest generation bindings among model contracts."""
     errors: list[str] = []
+    def validate_factor_document(generation_id: str, document: Any) -> None:
+        if not isinstance(document, dict):
+            errors.append(f"invalid factor manifest for generation {generation_id}")
+            return
+        try:
+            validate_contract_path(Path(__file__).resolve().parents[3] / "config/schemas/manifests/factor_manifest.v1.json", document)
+            unsigned = {key: value for key, value in document.items() if key != "manifest_digest_sha256"}
+            expected_generation, expected_digest = factor_manifest_identities({
+                key: value for key, value in unsigned.items() if key != "generation_id"
+            })
+            if document.get("generation_id") != expected_generation or document.get("manifest_digest_sha256") != expected_digest:
+                raise ContractError("factor identity mismatch")
+        except ContractError:
+            errors.append(f"invalid factor manifest content for generation {generation_id}")
+
+    def validate_universe_document(document: Any, generation_id: str | None) -> None:
+        if not isinstance(document, dict):
+            errors.append("missing or invalid universe snapshot binding")
+            return
+        try:
+            validate_contract("universe_snapshot.v1.json", document)
+            unsigned = {key: value for key, value in document.items() if key != "generation_id"}
+            if document.get("generation_id") != adjustment_snapshot_generation(unsigned):
+                raise ContractError("universe identity mismatch")
+        except ContractError:
+            errors.append("invalid universe snapshot content")
+            return
+        if generation_id and document.get("generation_id") != generation_id:
+            errors.append("universe_snapshot_generation_id mismatch")
+
     dataset = documents.get("model_dataset")
     if dataset:
         label_gen = dataset.get("label_generation_id")
@@ -203,12 +236,14 @@ def resolve_bindings(
                 errors.append("invalid factor_generation_id")
             elif factor_gen not in factor_documents:
                 errors.append(f"missing factor manifest for generation {factor_gen}")
+            else:
+                validate_factor_document(factor_gen, factor_documents[factor_gen])
         universe_gen = dataset.get("universe_snapshot_generation_id")
         universe_document = documents.get("universe_snapshot")
-        if not universe_gen or len(universe_gen) != 64 or universe_document is None:
-            errors.append("missing or invalid universe snapshot binding")
-        elif universe_document.get("generation_id") != universe_gen:
-            errors.append("universe_snapshot_generation_id mismatch")
+        if not universe_gen or len(universe_gen) != 64:
+            errors.append("missing or invalid universe snapshot generation")
+        else:
+            validate_universe_document(universe_document, universe_gen)
 
     run = documents.get("model_run")
     if run:

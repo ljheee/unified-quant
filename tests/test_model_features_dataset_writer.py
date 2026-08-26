@@ -101,7 +101,8 @@ class TestDatasetWriter:
         writer = DatasetWriter(tmp_path)
         manifest = self._build_manifest()
         frame = _factor_frame()
-        partition = writer.write(manifest, frame)
+        schema = FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0")
+        partition = writer.write(manifest, frame, feature_schema=schema)
         assert partition.is_dir()
         loaded_manifest, loaded_frame = writer.read("research_slice", "1.0.0", writer.last_published_manifest["generation_id"])
         assert list(loaded_frame.columns) == list(frame.columns)
@@ -109,17 +110,19 @@ class TestDatasetWriter:
     def test_immutable_overwrite_rejected(self, tmp_path: Path) -> None:
         writer = DatasetWriter(tmp_path)
         manifest = self._build_manifest()
-        writer.write(manifest, _factor_frame())
+        frame = _factor_frame()
+        writer.write(manifest, frame, feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"))
         published_manifest = writer.last_published_manifest
         with pytest.raises(ContractError, match="immutable"):
-            writer.write(dict(published_manifest), _factor_frame())
+            writer.write(dict(published_manifest), _factor_frame(), feature_schema=FeatureSchemaBuilder().build(_factor_frame(), source_factor_set="basic", source_factor_version="1.0.0"))
         with pytest.raises(ContractError, match="immutable dataset already exists"):
-            writer.write(manifest, _factor_frame())
+            writer.write(manifest, _factor_frame(), feature_schema=FeatureSchemaBuilder().build(_factor_frame(), source_factor_set="basic", source_factor_version="1.0.0"))
 
     def test_tampered_data_rejected_on_read(self, tmp_path: Path) -> None:
         writer = DatasetWriter(tmp_path)
         manifest = self._build_manifest()
-        partition = writer.write(manifest, _factor_frame())
+        frame = _factor_frame()
+        partition = writer.write(manifest, frame, feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"))
         (partition / "data.parquet").write_bytes(b"tampered")
         with pytest.raises(ContractError, match="tampered"):
             writer.read("research_slice", "1.0.0", writer.last_published_manifest["generation_id"])

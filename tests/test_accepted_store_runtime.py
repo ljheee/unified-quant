@@ -112,6 +112,21 @@ class TestAcceptedFactorIndexRuntime:
         results = runtime.list(filtered_query)
         assert len(results) == 1 and results[0]["generation_id"] == target_gen
 
+    def test_checksum_tamper_fails_closed(self, tmp_path: Path) -> None:
+        _publish_factor(tmp_path)
+        runtime = AcceptedFactorIndexRuntime(tmp_path)
+        query = {
+            "contract_version": 1,
+            "filters": {}, "ordering": ["partition_date"],
+            "visibility": "accepted_only", "pagination": {"limit": 10},
+        }
+        generation = runtime.list(query)[0]["generation_id"]
+        manifest_path = next((tmp_path / "factors").rglob("manifest.json"))
+        data_path = manifest_path.parent / "data.parquet"
+        data_path.write_bytes(data_path.read_bytes() + b"tampered")
+        with pytest.raises(ContractError, match="tampered factor data"):
+            runtime.read(generation)
+
     def test_empty_store_returns_empty_list(self, tmp_path: Path) -> None:
         runtime = AcceptedFactorIndexRuntime(tmp_path)
         query = {

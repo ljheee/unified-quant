@@ -18,6 +18,7 @@ from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
 from ..errors import ContractError
+from .trainer import ArtifactStore
 
 
 class PredictionBuilder:
@@ -26,6 +27,7 @@ class PredictionBuilder:
     def __init__(self, root: Path | str) -> None:
         self.root = Path(root)
         self.predictions_dir = self.root / "predictions"
+        self.artifact_store = ArtifactStore(self.root)
 
     def build(
         self,
@@ -34,6 +36,8 @@ class PredictionBuilder:
         model_artifact_generation_id: str,
         model_artifact_checksum: str,
         input_dataset_generation_id: str,
+        run_generation_id: str,
+        artifact_store: ArtifactStore | None,
         decision_date: str,
         scores: pd.DataFrame,
         eligibility_status: str,
@@ -52,6 +56,16 @@ class PredictionBuilder:
         for col in score_columns:
             if scores[col].isna().any() or not np.isfinite(scores[col].dropna()).all():
                 raise ContractError(f"non-finite score detected in column {col}")
+
+        store = artifact_store or self.artifact_store
+        try:
+            artifact_manifest, _ = store.read(run_generation_id, model_artifact_generation_id)
+        except ContractError as exc:
+            raise ContractError("prediction requires an accepted model artifact") from exc
+        if (
+            artifact_manifest["artifact_checksum_sha256"] != model_artifact_checksum
+        ):
+            raise ContractError("prediction model artifact checksum mismatch")
 
         output_columns = list(scores.columns)
         artifact, data_checksum = self._serialize(scores)

@@ -101,6 +101,12 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
         """Read the verified factor partition data by generation ID."""
         if generation_id in self._tampered_generations:
             raise ContractError(f"generation {generation_id[:12]}... has tampered or invalid partition data")
-        if generation_id not in self._verified_generations:
+        if generation_id not in self._verified_generations or generation_id not in self._frames:
             raise ContractError("generation not verified as accepted; call list/index first")
+        partition = next(
+            (path.parent for path in self._factors_dir.rglob("manifest.json")),
+            None,
+        )
+        if partition is not None:
+            read_factor_partition(partition)
         return self._frames[generation_id]

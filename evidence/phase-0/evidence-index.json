@@ -1,18 +1,14 @@
 {
-  "index_version": 2,
-  "phase": 0,
-  "status": "exited",
   "entries": [
     {
-      "type": "gate_report",
-      "path": "gate-reports/gate-report.json",
-      "requirements_path": "gate-reports/requirements.lock.txt",
-      "requirements_digest_path": "gate-reports/requirements.lock.txt.sha256",
       "bound_commit": "cc3e25a57687c772a71884d70935a86c26340f52",
-      "note": "Refresh after final commit."
+      "note": "Historical Phase 0 exit evidence; rerun before any model-layer release claim.",
+      "path": "gate-reports/gate-report.json",
+      "requirements_digest_path": "gate-reports/requirements.lock.txt.sha256",
+      "requirements_path": "gate-reports/requirements.lock.txt",
+      "type": "gate_report"
     },
     {
-      "type": "phase_record",
       "path": "evidence/phase-0/phase-record.json",
       "status": "executable_pending_review",
       "test_ids_covered": [
@@ -26,12 +22,10 @@
         "test_accepted_index_response_schema_validates",
         "test_cross_manifest_binding_resolver_passes_and_fails",
         "test_quality_report_checksum_and_binding_are_enforced"
-      ]
+      ],
+      "type": "phase_record"
     },
     {
-      "type": "fixtures",
-      "path": "fixtures/",
-      "file_count": 20,
       "families_covered": [
         "label_set",
         "model_dataset",
@@ -44,11 +38,12 @@
         "model_quality_report",
         "accepted_factor_index_response"
       ],
-      "pattern": "<family>-valid.json + <family>-negative.json"
+      "file_count": 20,
+      "path": "fixtures/",
+      "pattern": "<family>-valid.json + <family>-negative.json",
+      "type": "fixtures"
     },
     {
-      "type": "golden_vectors",
-      "path": "golden-vectors/identity-golden-vectors.json",
       "families_covered": [
         "label_set",
         "model_dataset",
@@ -59,10 +54,17 @@
         "qlib_init_receipt",
         "prediction_set"
       ],
-      "test_id": "test_golden_vectors_cover_all_manifest_families"
+      "path": "golden-vectors/identity-golden-vectors.json",
+      "test_id": "test_golden_vectors_cover_all_manifest_families",
+      "type": "golden_vectors"
     },
     {
-      "type": "acceptance_matrix_expansion",
+      "implementation_sub_items_passed": [
+        "M1b-factor-checksum-tamper",
+        "M8a-provider-uri-mismatch",
+        "M8b-calendar-tamper",
+        "M10a-quarantine-path-invisible"
+      ],
       "path": "../../specs/layers/model-layer-implementation-plan.md#acceptance-matrix-expansion",
       "phase_0_sub_items_passed": [
         "M1a-factor-manifest-missing",
@@ -72,7 +74,11 @@
         "M11a-manifest-tamper-reject",
         "M11b-path-mismatch-reject",
         "M11c-checksum-mismatch-reject"
-      ]
+      ],
+      "type": "acceptance_matrix_expansion"
     }
-  ]
+  ],
+  "index_version": 2,
+  "phase": 0,
+  "status": "exited"
 }

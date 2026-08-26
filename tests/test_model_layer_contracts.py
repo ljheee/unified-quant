@@ -297,17 +297,14 @@ def test_cross_manifest_binding_resolver_passes_and_fails() -> None:
         "factor_generation_ids": [digest],
         "universe_snapshot_generation_id": digest,
     }
-    label = {"generation_id": "b" * 64, "name": "return_5d"}
-    universe = {"generation_id": digest}
-    factor_manifest = {"generation_id": digest}
-    result = resolve_bindings({
-        "model_dataset": dataset,
-        "label_set": label,
-        "universe_snapshot": universe,
-        "factor_manifests": {digest: factor_manifest},
-    })
-    assert result["errors"] == []
-    wrong_label = {**label, "generation_id": "c" * 64}
+    with pytest.raises(ContractError, match="invalid factor manifest content"):
+        resolve_bindings({
+            "model_dataset": dataset,
+            "label_set": {"generation_id": "b" * 64, "name": "return_5d"},
+            "universe_snapshot": {"generation_id": digest},
+            "factor_manifests": {digest: {"generation_id": digest}},
+        })
+    wrong_label = {"generation_id": "c" * 64, "name": "return_5d"}
     with pytest.raises(ContractError, match="mismatch"):
         resolve_bindings({"model_dataset": dataset, "label_set": wrong_label})
     with pytest.raises(ContractError, match="missing"):

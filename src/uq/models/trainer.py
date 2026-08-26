@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import fcntl
 import json
 import os
@@ -42,6 +41,8 @@ class ModelTrainer:
         y = dataset_frame[label_column].values.astype(np.float64)
         valid = ~np.isnan(y)
         X_v, y_v = X[valid], y[valid]
+        if len(X_v) == 0:
+            raise ContractError("training requires at least one supervised observation")
         n_features = X_v.shape[1]
         weights = np.linalg.solve(X_v.T @ X_v + alpha * np.eye(n_features), X_v.T @ y_v)
 
@@ -87,28 +88,32 @@ class ArtifactStore:
         quality_report: dict[str, Any],
     ) -> Path:
         ModelContractLoader.validate("model_quality_report", quality_report)
-        run_content_generation_id = manifest.get("model_run_content_generation_id")
-        if not isinstance(run_content_generation_id, str) or len(run_content_generation_id) != 64:
-            raise ContractError("artifact publication requires a validated model_run_content_generation_id")
         if quality_report["binding_type"] != "model_artifact_v1" or quality_report["status"] == "rejected":
             raise ContractError("quality report does not approve this artifact")
-        if quality_report["bound_generation_id"] != run_content_generation_id:
-            raise ContractError("quality report does not bind to the model run")
         quality_report_checksum = sha256_json({
             key: value for key, value in quality_report.items() if key != "report_checksum_sha256"
         })
         if quality_report["report_checksum_sha256"] != quality_report_checksum:
             raise ContractError("artifact publication requires an explicit quality report checksum")
-        report_dir = self.models_dir / "quality_reports"
-        report_dir.mkdir(parents=True, exist_ok=True)
-        report_path = report_dir / f"{quality_report_checksum}.json"
-        report_path.write_text(json.dumps(quality_report, sort_keys=True, indent=2) + "\n")
+        if "quality_report_checksum_sha256" in manifest:
+            raise ContractError("artifact manifest already carries a quality report binding")
         published_manifest = dict(manifest)
-        published_manifest["quality_report_checksum_sha256"] = quality_report_checksum
         published_manifest["generation_id"] = "0" * 64
         published_manifest["manifest_digest_sha256"] = "0" * 64
-        generation_id, digest = model_manifest_identities(published_manifest, schema_name="model_artifact")
+        generation_id, _ = model_manifest_identities(
+            published_manifest,
+            schema_name="model_artifact",
+            exclude_fields={"quality_report_checksum_sha256"},
+        )
         published_manifest["generation_id"] = generation_id
+        if quality_report["bound_generation_id"] != generation_id:
+            raise ContractError("quality report does not bind to the artifact generation")
+        published_manifest["quality_report_checksum_sha256"] = quality_report_checksum
+        _, digest = model_manifest_identities(
+            published_manifest,
+            schema_name="model_artifact",
+            exclude_fields={"quality_report_checksum_sha256"},
+        )
         published_manifest["manifest_digest_sha256"] = digest
         ModelContractLoader.validate("model_artifact", published_manifest)
         actual_checksum = file_sha256_bytes(artifact_bytes)
@@ -125,7 +130,6 @@ class ArtifactStore:
         if partition.exists():
             raise ContractError(f"immutable artifact already exists: {partition}")
 
-        staging = partition.with_name(f"{partition.name}.staging.{uuid.uuid4().hex[:8]}")
         lock_path = partition.parent / "publication.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         with lock_path.open("a+") as lock:
@@ -140,6 +144,12 @@ class ArtifactStore:
 
                 final_manifest = dict(published_manifest)
                 (staging / "manifest.json").write_text(json.dumps(final_manifest, sort_keys=True, indent=2) + "\n")
+                report_dir = self.models_dir / "quality_reports"
+                report_dir.mkdir(parents=True, exist_ok=True)
+                report_path = report_dir / f"{quality_report_checksum}.json"
+                if report_path.exists():
+                    raise ContractError("immutable artifact quality report already exists")
+                report_path.write_text(json.dumps(quality_report, sort_keys=True, indent=2) + "\n")
                 fsync_tree(staging)
                 os.replace(staging, partition)
                 fsync_dir(partition.parent)
@@ -166,7 +176,9 @@ class ArtifactStore:
         if expected != actual:
             raise ContractError("tampered artifact data prevents read")
         expected_generation, expected_digest = model_manifest_identities(
-            manifest, schema_name="model_artifact"
+            manifest,
+            schema_name="model_artifact",
+            exclude_fields={"quality_report_checksum_sha256"},
         )
         if manifest.get("generation_id") != expected_generation or manifest.get("manifest_digest_sha256") != expected_digest:
             raise ContractError("artifact manifest identity mismatch")
@@ -175,8 +187,19 @@ class ArtifactStore:
         if not isinstance(manifest.get("quality_report_checksum_sha256"), str) or len(manifest["quality_report_checksum_sha256"]) != 64:
             raise ContractError("missing artifact quality report checksum")
         report_path = partition.parents[1] / "quality_reports" / f"{manifest['quality_report_checksum_sha256']}.json"
-        if not report_path.is_file():
-            raise ContractError("artifact quality report is unavailable")
+        try:
+            report = json.loads(report_path.read_text())
+            ModelContractLoader.validate("model_quality_report", report)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContractError("artifact quality report is unavailable or malformed") from exc
+        if (
+            sha256_json({key: value for key, value in report.items() if key != "report_checksum_sha256"})
+            != manifest["quality_report_checksum_sha256"]
+            or report["binding_type"] != "model_artifact_v1"
+            or report["status"] == "rejected"
+            or report["bound_generation_id"] != artifact_generation_id
+        ):
+            raise ContractError("artifact quality report rejects read")
         if manifest.get("generation_id") != artifact_generation_id:
             raise ContractError("path generation does not match manifest identity")
         return manifest, artifact_path.read_bytes()

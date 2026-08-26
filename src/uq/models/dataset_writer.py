@@ -33,21 +33,11 @@ class DatasetWriter:
         manifest: dict[str, Any],
         frame: pd.DataFrame,
         *,
-        feature_schema: dict[str, Any] | None = None,
+        feature_schema: dict[str, Any],
     ) -> Path:
-        draft_manifest = dict(manifest)
-        draft_manifest["data_checksum_sha256"] = "0" * 64
-        draft_manifest["generation_id"] = "0" * 64
-        draft_manifest["manifest_digest_sha256"] = "0" * 64
-        draft_generation, _ = model_manifest_identities(
-            draft_manifest,
-            schema_name="model_dataset",
-            exclude_fields={"logical_fingerprint"},
-        )
         published_manifest = dict(manifest)
 
-        if feature_schema is not None:
-            FeatureSchemaValidator.validate_against_frame(feature_schema, frame)
+        FeatureSchemaValidator.validate_against_frame(feature_schema, frame)
 
         artifact, data_checksum = self._serialize(frame)
         restored = pd.read_parquet(io.BytesIO(artifact))
@@ -92,10 +82,9 @@ class DatasetWriter:
                 (staging / "manifest.json").write_text(
                     json.dumps(published_manifest, sort_keys=True, indent=2) + "\n"
                 )
-                if feature_schema is not None:
-                    (staging / "feature_schema.json").write_text(
-                        json.dumps(feature_schema, sort_keys=True, indent=2) + "\n"
-                    )
+                (staging / "feature_schema.json").write_text(
+                    json.dumps(feature_schema, sort_keys=True, indent=2) + "\n"
+                )
                 fsync_tree(staging)
                 os.replace(staging, partition)
                 fsync_dir(partition.parent)
@@ -142,13 +131,13 @@ class DatasetWriter:
         if manifest.get("generation_id") != generation_id:
             raise ContractError("path generation does not match dataset manifest identity")
         fs_path = partition / "feature_schema.json"
-        fs_doc = None
-        if fs_path.is_file():
-            try:
-                fs_doc = json.loads(fs_path.read_text())
-                ModelContractLoader.validate("feature_schema", fs_doc)
-            except (json.JSONDecodeError, ContractError) as exc:
-                raise ContractError("tampered or malformed feature schema in dataset partition") from exc
+        if not fs_path.is_file():
+            raise ContractError(f"incomplete dataset feature schema: {partition}")
+        try:
+            fs_doc = json.loads(fs_path.read_text())
+            ModelContractLoader.validate("feature_schema", fs_doc)
+        except (json.JSONDecodeError, ContractError) as exc:
+            raise ContractError("tampered or malformed feature schema in dataset partition") from exc
         actual_checksum = file_sha256_bytes(data_path.read_bytes())
         manifest_checksum = manifest.get("data_checksum_sha256")
         if manifest_checksum != actual_checksum:
@@ -160,11 +149,10 @@ class DatasetWriter:
             raise ContractError("sidecar checksum conflicts with manifest checksum")
 
         frame = pd.read_parquet(data_path)
-        if fs_doc is not None:
-            FeatureSchemaValidator.validate_against_frame(fs_doc, frame)
-            expected_columns = ["instrument", "datetime", *[column["name"] for column in fs_doc["columns"]]]
-            if list(frame.columns) not in (expected_columns, expected_columns + ["label"]):
-                raise ContractError("dataset frame columns do not match feature schema and label contract")
+        FeatureSchemaValidator.validate_against_frame(fs_doc, frame)
+        expected_columns = ["instrument", "datetime", *[column["name"] for column in fs_doc["columns"]]]
+        if list(frame.columns) not in (expected_columns, expected_columns + ["label"]):
+            raise ContractError("dataset frame columns do not match feature schema and label contract")
         if frame.duplicated(["instrument", "datetime"]).any():
             raise ContractError("duplicate dataset keys prevent read")
         if frame_logical_fingerprint(frame) != manifest.get("logical_fingerprint"):

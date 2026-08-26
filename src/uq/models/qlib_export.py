@@ -57,14 +57,9 @@ class QlibDatasetExporter:
         if not instruments:
             raise ContractError("instruments list cannot be empty")
 
-        snapshot = self.export_root / f"dataset={dataset_name}" / f"generation={generation_id}"
-        if snapshot.exists():
-            raise ContractError(f"immutable Qlib export already exists: {snapshot}")
-
-        staging = snapshot.with_name(f"{snapshot.name}.staging.{uuid.uuid4().hex[:8]}")
+        staging = self.export_root / f".staging.{uuid.uuid4().hex}"
         staging.mkdir(parents=True)
-        lock_path = snapshot.parent / "publication.lock"
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = self.export_root / "publication.lock"
         try:
             with lock_path.open("a+") as lock:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
@@ -129,10 +124,25 @@ class QlibDatasetExporter:
                             "byte_size": path.stat().st_size,
                         })
                 manifest["files"] = complete_files
-                generation_id, digest = model_manifest_identities(manifest, schema_name="qlib_dataset_export")
-                manifest["generation_id"] = generation_id
+                export_generation_id, _ = model_manifest_identities(
+                    manifest,
+                    schema_name="qlib_dataset_export",
+                    exclude_fields={"export_layout"},
+                )
+                manifest["export_layout"]["root"] = f"dataset={dataset_name}/generation={export_generation_id}"
+                manifest["generation_id"] = export_generation_id
+                _, digest = model_manifest_identities(
+                    manifest,
+                    schema_name="qlib_dataset_export",
+                    exclude_fields={"export_layout"},
+                )
                 manifest["manifest_digest_sha256"] = digest
                 ModelContractLoader.validate("qlib_dataset_export", manifest)
+
+                snapshot = self.export_root / f"dataset={dataset_name}" / f"generation={export_generation_id}"
+                if snapshot.exists():
+                    raise ContractError(f"immutable Qlib export already exists: {snapshot}")
+                snapshot.parent.mkdir(parents=True, exist_ok=True)
 
                 manifest_path = staging / "manifest.json"
                 manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
@@ -191,20 +201,30 @@ class QlibInitReceiptBuilder:
         cache_root: str,
         cache_files_before: set[str],
         cache_files_after: set[str],
+        verified_export: tuple[dict[str, Any], Path],
     ) -> dict[str, Any]:
+        verified_manifest, _ = verified_export
+        if (
+            verified_manifest["generation_id"] != export_manifest["generation_id"]
+            or verified_manifest["manifest_digest_sha256"] != export_manifest["manifest_digest_sha256"]
+        ):
+            raise ContractError("verified export manifest does not match receipt input")
         expected_uri = export_manifest.get("provider_uri_sha256")
         actual_uri_digest = _sha256_text(resolved_provider_uri)
         if expected_uri != actual_uri_digest:
             raise ContractError("resolved provider URI does not match export manifest binding")
 
-        allowed_cache_root = str(Path(cache_root).resolve())
+        cache_root_path = Path(cache_root)
+        if not cache_root_path.is_absolute():
+            raise ContractError("cache root must be an absolute path")
+        allowed_cache_root = str(cache_root_path.resolve())
         new_cache_files = {
             path for path in (cache_files_after - cache_files_before)
-            if Path(path).resolve().is_relative_to(allowed_cache_root)
+            if Path(path).absolute().resolve().is_relative_to(allowed_cache_root)
         }
         outside_cache = [
             path for path in (cache_files_after - cache_files_before)
-            if not Path(path).resolve().is_relative_to(allowed_cache_root)
+            if not Path(path).absolute().resolve().is_relative_to(allowed_cache_root)
         ]
         if outside_cache:
             raise ContractError(f"governed runtime wrote cache outside approved root: {outside_cache[:3]}")
