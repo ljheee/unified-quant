@@ -103,10 +103,7 @@
           "const": "raw_prev_close"
         },
         "adjustment_basis": {
-          "enum": [
-            "adjusted",
-            "raw"
-          ]
+          "const": "raw"
         }
       }
     },

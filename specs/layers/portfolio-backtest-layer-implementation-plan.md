@@ -105,13 +105,17 @@ implementation commit; release record committed.
 | ID | Phase | Test ID | Status |
 |---|---|---|---|
 | PB0a | 0 | test_portfolio_definition_valid_fixture | pending |
-| PB0b | 0 | test_portfolio_definition_negative_fixture | pending |
+| PB0b | 0 | test_portfolio_definition_negative_fixture_1 | pending |
+| PB0b2 | 0 | test_portfolio_definition_negative_fixture_2 | pending |
 | PB0c | 0 | test_target_weights_valid_fixture | pending |
-| PB0d | 0 | test_target_weights_negative_fixture | pending |
+| PB0d | 0 | test_target_weights_negative_fixture_1 | pending |
+| PB0d2 | 0 | test_target_weights_negative_fixture_2 | pending |
 | PB0e | 0 | test_backtest_config_valid_fixture | pending |
-| PB0f | 0 | test_backtest_config_negative_fixture | pending |
+| PB0f | 0 | test_backtest_config_negative_fixture_1 | pending |
+| PB0f2 | 0 | test_backtest_config_negative_fixture_2 | pending |
 | PB0g | 0 | test_backtest_result_valid_fixture | pending |
-| PB0h | 0 | test_backtest_result_negative_fixture | pending |
+| PB0h | 0 | test_backtest_result_negative_fixture_1 | pending |
+| PB0h2 | 0 | test_backtest_result_negative_fixture_2 | pending |
 | PB0i | 0 | test_golden_vectors_deterministic | pending |
 | PB1a | 1 | test_portfolio_e2e_publish_read | blocked-by: PB0* |
 | PB1b | 1 | test_single_position_cap | blocked-by: PB0* |

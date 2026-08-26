@@ -48,11 +48,11 @@ class TestPortfolioDefinitionSchema:
 
     def test_negative_fixture_1(self):
         with pytest.raises(ContractError):
-            ModelContractLoader.validate("portfolio_definition", _load_fixture("negative_portfolio_definition"))
+            ModelContractLoader.validate("portfolio_definition", _load_fixture("schema_negative_portfolio_definition"))
 
     def test_negative_fixture_2(self):
         with pytest.raises(ContractError):
-            ModelContractLoader.validate("portfolio_definition", _load_fixture("negative_portfolio_definition_2"))
+            ModelContractLoader.validate("portfolio_definition", _load_fixture("schema_negative_portfolio_definition_2"))
 
 
 class TestTargetWeightsSchema:
@@ -61,11 +61,11 @@ class TestTargetWeightsSchema:
 
     def test_negative_fixture_1(self):
         with pytest.raises(ContractError):
-            ModelContractLoader.validate("target_weights", _load_fixture("negative_target_weights"))
+            ModelContractLoader.validate("target_weights", _load_fixture("schema_negative_target_weights"))
 
     def test_negative_fixture_2(self):
         with pytest.raises(ContractError):
-            ModelContractLoader.validate("target_weights", _load_fixture("negative_target_weights_2"))
+            ModelContractLoader.validate("target_weights", _load_fixture("schema_negative_target_weights_2"))
 
 
 class TestBacktestConfigSchema:
@@ -74,11 +74,11 @@ class TestBacktestConfigSchema:
 
     def test_negative_fixture_1(self):
         with pytest.raises(ContractError):
-            ModelContractLoader.validate("backtest_config", _load_fixture("negative_backtest_config"))
+            ModelContractLoader.validate("backtest_config", _load_fixture("schema_negative_backtest_config"))
 
     def test_negative_fixture_2(self):
         with pytest.raises(ContractError):
-            ModelContractLoader.validate("backtest_config", _load_fixture("negative_backtest_config_2"))
+            ModelContractLoader.validate("backtest_config", _load_fixture("schema_negative_backtest_config_2"))
 
 
 class TestBacktestResultSchema:
@@ -87,11 +87,11 @@ class TestBacktestResultSchema:
 
     def test_negative_fixture_1(self):
         with pytest.raises(ContractError):
-            ModelContractLoader.validate("backtest_result", _load_fixture("negative_backtest_result"))
+            ModelContractLoader.validate("backtest_result", _load_fixture("schema_negative_backtest_result"))
 
     def test_negative_fixture_2(self):
         with pytest.raises(ContractError):
-            ModelContractLoader.validate("backtest_result", _load_fixture("negative_backtest_result_2"))
+            ModelContractLoader.validate("backtest_result", _load_fixture("schema_negative_backtest_result_2"))
 
 
 class TestGoldenVectors:
@@ -105,7 +105,9 @@ class TestGoldenVectors:
     ]
 
     def test_golden_vectors_deterministic_and_persisted(self):
-        GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
+        golden_path = GOLDEN_DIR / "identity-golden-vectors.json"
+        assert golden_path.is_file(), f"golden vector file missing: {golden_path}"
+        existing = json.loads(golden_path.read_text())
         vectors = {}
         for family, fixture in self.FAMILIES:
             payload = _make_valid(family, fixture)
@@ -119,14 +121,8 @@ class TestGoldenVectors:
             assert gen_a == gen_b and digest_a == digest_b
             vectors[f"{family}.v1"] = {"generation_id": gen_a, "manifest_digest_sha256": digest_a}
 
-        golden_path = GOLDEN_DIR / "identity-golden-vectors.json"
-        existing = json.loads(golden_path.read_text()) if golden_path.exists() else None
-        if existing is not None:
-            # Deterministic: same values every run
-            for key in existing:
-                assert vectors[key] == existing[key], f"golden vector drift for {key}"
-        else:
-            golden_path.write_text(json.dumps(vectors, indent=2, sort_keys=True) + "\n")
+        for key in existing:
+            assert vectors[key] == existing[key], f"golden vector drift for {key}"
 
     def test_quality_checksum_participates_in_generation(self):
         base = _make_valid("portfolio_definition", "valid_portfolio_definition")

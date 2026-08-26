@@ -32,7 +32,11 @@
         "model_artifact_v1",
         "qlib_dataset_export_v1",
         "qlib_init_receipt_v1",
-        "prediction_set_v1"
+        "prediction_set_v1",
+        "portfolio_definition_v1",
+        "target_weights_v1",
+        "backtest_config_v1",
+        "backtest_result_v1"
       ]
     },
     "bound_generation_id": {

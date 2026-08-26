@@ -243,7 +243,18 @@ def create_reviewed_quality_decision(
     warnings: list[str],
     producer_code_fingerprint: str,
 ) -> dict[str, Any]:
-    """Create an immutable decision produced outside the publication path."""
+    """Create an immutable decision. Caller must hold the external reviewer role."""
+    registry_binding = _MODEL_QUALITY_REVIEW_REGISTRY.bindings.get(binding_type)
+    if registry_binding is None:
+        raise ContractError(f"binding type {binding_type} is not registered in reviewer registry")
+    if policy != registry_binding["policy"]:
+        raise ContractError(f"policy {policy} does not match registered policy {registry_binding['policy']}")
+    if status not in registry_binding["allowed_statuses"]:
+        raise ContractError(f"status {status} not in allowed statuses {registry_binding['allowed_statuses']}")
+    allowed_check_names = set(registry_binding["allowed_checks"])
+    for check in checks:
+        if check.get("name") not in allowed_check_names:
+            raise ContractError(f"check '{check.get('name')}' not in allowed checks {sorted(allowed_check_names)}")
     reviewer = _MODEL_QUALITY_REVIEW_REGISTRY.reviewer
     signature = sha256_json({
         "binding_type": binding_type, "checks": checks, "errors": errors,

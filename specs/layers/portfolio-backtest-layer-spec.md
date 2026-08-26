@@ -1,6 +1,6 @@
 # Portfolio and Backtest Layer Specification
 
-Status: **design v1.0.0; contract drafting in progress**
+Status: **design v1.0.0; phase 0 exited at commit 9747417**
 
 Upstream source: `specs/layers/model-layer-spec.md`
 
@@ -63,7 +63,7 @@ Required artifact families:
 | `portfolio_definition.v1` | weight scheme, constraints, rebalance schedule, prediction binding |
 | `target_weights.v1` | decision date, instrument set, weight values, portfolio definition generation |
 | `backtest_config.v1` | execution model, cost parameters, calendar binding |
-| `backtest_result.v1` | equity curve checksum, turnover summary, config, weight generation bindings, and price source binding |
+| `backtest_result.v1` | equity curve checksum, turnover summary, config, ordered weight generation bindings (sorted by decision date), and price source binding |
 
 ## 5. Portfolio Layer Contract
 
@@ -106,9 +106,9 @@ First release supports `daily` only.
 - **T+1 sellable quantity**: only shares acquired on or before the prior
   trading day are sellable on day T+1. Shares bought today cannot be sold
   until the next trading day.
-- Volume guard: a fill is skipped if the required share count exceeds
-  `volume_participation_cap × open_day_volume` (default cap 0.10).
-  No partial fills.
+- **Order construction**: target share count = floor(target_weight × T_close_Nav / (T+1_open_price × (1 + slippage_bps / 10000)) / board_lot) × board_lot. Cash residual from rounding stays in cash.
+- **Volume guard**: a fill is skipped if the required share count exceeds `volume_participation_cap × prior_day_volume` (T-day total volume, PIT-available at decision time). Default cap = 0.10.
+- **Corporate actions**: this first release only supports instruments with no corporate action events during the backtest period. Instruments with dividends, splits, or rights issues within the period are excluded at universe filtering time.
 - Unfilled target delta is recorded in the fills ledger; cash remains idle.
 
 ### 6.2 Cost Model
@@ -126,7 +126,23 @@ First release supports `daily` only.
 3. Suspension: cannot trade suspended instruments.
 4. Minimum lot: A-share board lot of 100 shares.
 
-### 6.4 Output Metrics
+### 6.4 Fills Ledger
+
+Each row records one attempted order:
+
+| Column | Type | Description |
+|---|---|---|
+| date | string | execution date (YYYY-MM-DD) |
+| instrument | string | instrument identifier |
+| side | string | "buy" or "sell" |
+| target_shares | integer | desired share count |
+| filled_shares | integer | actual shares traded |
+| execution_price | float64 | price used for fill |
+| status | string | "filled", "skipped_limit_up", "skipped_limit_down", "skipped_suspended", "skipped_volume" |
+
+The fills artifact must always exist; zero rows is valid.
+
+### 6.5 Output Metrics
 
 Per-date time series:
 - portfolio value, daily return, turnover, cash ratio.
