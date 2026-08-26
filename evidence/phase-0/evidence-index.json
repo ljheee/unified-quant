@@ -1,8 +1,8 @@
 {
   "entries": [
     {
-      "bound_commit": "8638b12dd7ea1d30c4598aefd246d2757237cab9",
-      "note": "Final local implementation evidence for this commit; remote six-cell matrix remains required before release.",
+      "bound_commit": "632516692a92ba7cf2c7eb934f5fb7f7b7a78347",
+      "note": "Final local gate for current HEAD; remote six-cell matrix remains required before release.",
       "path": "gate-reports/gate-report.json",
       "requirements_digest_path": "gate-reports/requirements.lock.txt.sha256",
       "requirements_path": "gate-reports/requirements.lock.txt",

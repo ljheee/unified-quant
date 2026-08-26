@@ -39,10 +39,10 @@
       "test_id": "tests/test_model_layer_contracts.py::test_cross_manifest_binding_resolver_passes_and_fails"
     },
     {
-      "bound_commit": "8638b12dd7ea1d30c4598aefd246d2757237cab9",
+      "bound_commit": "632516692a92ba7cf2c7eb934f5fb7f7b7a78347",
       "evidence_path": "evidence/phase-0/gate-reports/gate-report.json",
       "id": "E0-exit-unified-gate-green-head-bound",
-      "note": "Final implementation gate for this commit; remote matrix still required before release.",
+      "note": "Final local gate for current HEAD; remote matrix remains a release blocker.",
       "status": "passed",
       "test_id": "scripts/run_gate.sh"
     }
