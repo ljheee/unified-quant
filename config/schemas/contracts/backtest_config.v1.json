@@ -21,7 +21,9 @@
     "created_at",
     "quality_report_checksum_sha256",
     "manifest_digest_sha256",
-    "generation_id"
+    "generation_id",
+    "corporate_action_binding",
+    "suspension_binding"
   ],
   "properties": {
     "contract_version": {
@@ -171,10 +173,7 @@
       "$ref": "#/$defs/sha256"
     },
     "corporate_action_binding": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": "object",
       "additionalProperties": false,
       "required": [
         "dataset_generation_id",
@@ -190,10 +189,7 @@
       }
     },
     "suspension_binding": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": "object",
       "additionalProperties": false,
       "required": [
         "dataset_generation_id",

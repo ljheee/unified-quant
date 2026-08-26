@@ -3,9 +3,6 @@
   "schema_version": "1.0.0",
   "backtest_config_generation_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "portfolio_definition_generation_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "target_weight_generations": [
-    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-  ],
   "price_source_binding": {
     "dataset_generation_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     "data_checksum_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -16,17 +13,56 @@
   "equity_curve_artifact": {
     "file": "equity_curve.parquet",
     "checksum_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "row_count": 21
+    "row_count": 21,
+    "columns": [
+      "date"
+    ],
+    "dtypes": {
+      "date": "string"
+    },
+    "serialization_profile_id": "parquet-v1"
   },
   "daily_metrics_artifact": {
     "file": "daily_metrics.parquet",
     "checksum_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-    "row_count": 21
+    "row_count": 21,
+    "columns": [
+      "date"
+    ],
+    "dtypes": {
+      "date": "string"
+    },
+    "serialization_profile_id": "parquet-v1"
   },
   "fills_artifact": {
     "file": "fills.parquet",
     "checksum_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-    "row_count": 42
+    "row_count": 42,
+    "columns": [
+      "date",
+      "instrument",
+      "side",
+      "target_shares",
+      "filled_shares",
+      "gross_execution_price",
+      "net_execution_price",
+      "commission_fee",
+      "stamp_duty_fee",
+      "status"
+    ],
+    "dtypes": {
+      "date": "string",
+      "instrument": "string",
+      "side": "string",
+      "target_shares": "int64",
+      "filled_shares": "int64",
+      "gross_execution_price": "float64",
+      "net_execution_price": "float64",
+      "commission_fee": "float64",
+      "stamp_duty_fee": "float64",
+      "status": "string"
+    },
+    "serialization_profile_id": "parquet-v1"
   },
   "summary_metrics": {
     "cumulative_return": 0.05,
@@ -34,10 +70,16 @@
     "annualized_volatility": 0.15,
     "sharpe_ratio": 1.2,
     "max_drawdown": 0.03,
-    "calmar_ratio": 26.67,
     "avg_daily_turnover": 0.08,
     "win_rate": 0.55
   },
   "run_id": "00000000-0000-0000-0000-000000000004",
-  "created_at": "2026-01-31T23:59:59Z"
+  "created_at": "2026-01-31T23:59:59Z",
+  "target_weight_bindings": [
+    {
+      "decision_date": "2026-01-05",
+      "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "manifest_digest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  ]
 }

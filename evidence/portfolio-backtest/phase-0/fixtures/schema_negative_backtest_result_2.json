@@ -3,18 +3,32 @@
   "schema_version": "1.0.0",
   "backtest_config_generation_id": "$GEN",
   "portfolio_definition_generation_id": "$GEN",
-  "target_weight_generations": ["$GEN"],
-  "price_source_binding": {"dataset_generation_id": "", "data_checksum_sha256": ""},
+  "price_source_binding": {
+    "dataset_generation_id": "",
+    "data_checksum_sha256": ""
+  },
   "period_start": "2026-12-31",
   "period_end": "2026-01-01",
   "trading_days": 0,
-  "equity_curve_artifact": {"file": "", "checksum_sha256": "", "row_count": 0},
-  "daily_metrics_artifact": {"file": "metrics.parquet", "checksum_sha256": "$GEN", "row_count": -1},
+  "equity_curve_artifact": {
+    "file": "",
+    "checksum_sha256": "",
+    "row_count": 0
+  },
+  "daily_metrics_artifact": {
+    "file": "metrics.parquet",
+    "checksum_sha256": "$GEN",
+    "row_count": -1
+  },
   "fills_artifact": null,
   "summary_metrics": {
-    "cumulative_return": 0.05, "annualized_return": 0.80,
-    "annualized_volatility": 0.15, "sharpe_ratio": 1.2, "max_drawdown": -0.03
+    "cumulative_return": 0.05,
+    "annualized_return": 0.8,
+    "annualized_volatility": 0.15,
+    "sharpe_ratio": 1.2,
+    "max_drawdown": -0.03
   },
   "run_id": "00000000-0000-0000-0000-000000000008",
-  "created_at": "2026-01-31T23:59:59Z"
+  "created_at": "2026-01-31T23:59:59Z",
+  "target_weight_bindings": []
 }

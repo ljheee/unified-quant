@@ -9,7 +9,6 @@
     "schema_version",
     "backtest_config_generation_id",
     "portfolio_definition_generation_id",
-    "target_weight_generations",
     "price_source_binding",
     "period_start",
     "period_end",
@@ -22,7 +21,8 @@
     "created_at",
     "quality_report_checksum_sha256",
     "manifest_digest_sha256",
-    "generation_id"
+    "generation_id",
+    "target_weight_bindings"
   ],
   "properties": {
     "contract_version": {
@@ -36,14 +36,6 @@
     },
     "portfolio_definition_generation_id": {
       "$ref": "#/$defs/sha256"
-    },
-    "target_weight_generations": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/sha256"
-      },
-      "minItems": 1,
-      "description": "ordered by decision_date ascending; must match target_weight_bindings order"
     },
     "price_source_binding": {
       "type": "object",
@@ -160,26 +152,19 @@
       }
     },
     "fills_artifact": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": "object",
       "additionalProperties": false,
       "required": [
         "file",
         "checksum_sha256",
-        "row_count"
+        "row_count",
+        "columns",
+        "dtypes",
+        "serialization_profile_id"
       ],
       "properties": {
         "file": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.parquet$",
-          "not": {
-            "enum": [
-              ".",
-              ".."
-            ]
-          }
+          "$ref": "#/$defs/path_segment"
         },
         "checksum_sha256": {
           "$ref": "#/$defs/sha256"
@@ -235,12 +220,6 @@
         "max_drawdown": {
           "type": "number",
           "minimum": 0
-        },
-        "calmar_ratio": {
-          "type": [
-            "number",
-            "null"
-          ]
         },
         "avg_daily_turnover": {
           "type": "number",
@@ -309,6 +288,16 @@
     "date_time": {
       "type": "string",
       "format": "date-time"
+    },
+    "path_segment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
     }
   }
 }

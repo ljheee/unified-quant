@@ -369,6 +369,19 @@ Canonical/PIT Store
 The exporter must write a source manifest mapping Qlib snapshot version to UQL
 canonical partitions, schemas, checksums, and source versions.
 
+## 11.5 Portfolio and Backtest Layer Boundary
+
+```text
+Model Layer (prediction_set.v1)
+  -> Portfolio Layer (portfolio_definition.v1, target_weights.v1)
+  -> Backtest Layer (backtest_config.v1, backtest_result.v1)
+```
+
+The portfolio layer converts published prediction partitions into constrained
+target weights. The backtest layer simulates execution against governed price
+data with costs, T+1 alignment, and trading guards. Both layers inherit the
+model layer's manifest, checksum, and quality-report governance.
+
 ## 12. Acceptance Criteria for the Stable Contract
 
 The architecture is considered implemented only when all pass:

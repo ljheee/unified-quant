@@ -1,6 +1,6 @@
 # Portfolio and Backtest Layer Specification
 
-Status: **design v1.0.0; phase 0 exited at commit 712eb0a; remediation round 3 in progress**
+Status: **design v1.0.0; phase 0 exited and remediated at commit 2630944**
 
 Upstream source: `specs/layers/model-layer-spec.md`
 
@@ -87,7 +87,7 @@ Constraints are applied after weight computation:
 
 1. Single-position cap: clip each weight; residual goes to cash.
 2. Industry cap: proportionally scale over-cap industries down.
-3. Turnover cap: one-sided turnover = 0.5 × Σ|w_target − w_previous_target|. The baseline is the prior trading day's published target weights (not actual executed holdings), bound via `previous_target_weights_generation_id` in target_weights.v1. Required for all dates after the first rebalance. Interpolate linearly toward previous targets when exceeded. New positions start from zero.
+3. Turnover cap (portfolio-layer target turnover): one-sided turnover = 0.5 × Σ|w_target − w_previous_target|. This constrains desired allocation changes between consecutive decision dates. The baseline is prior published target weights, bound via `previous_target_weights_generation_id`. Required after first rebalance. Note: this differs from backtest executed-turnover metrics in §6.5.
 4. Cash reserve: sum of stock weights must not exceed 1 minus reserve.
 
 All constraint parameters must be declared in `portfolio_definition.v1`.
@@ -106,9 +106,9 @@ First release supports `daily` only.
 - **T+1 sellable quantity**: only shares acquired on or before the prior
   trading day are sellable on day T+1. Shares bought today cannot be sold
   until the next trading day.
-- **Order construction**: at decision date T close, compute NAV from closing prices and current holdings. Target share count = `floor(target_weight × NAV_T_close / (T+1_open_price × (1 + slippage_bps / 10000)) / board_lot) × board_lot`. T+1 open price is used for sizing because the actual execution price is known only at T+1 open; this introduces a small sizing approximation that is accepted in the first release. Sell proceeds are credited before buy orders are sized within each rebalance step.
+- **Order construction (lookahead-adjusted simulation)**: at decision date T close, compute NAV from closing prices and current holdings. Target share count = `floor(target_weight × NAV_T_close / (T+1_open_price × (1 + slippage_bps / 10000)) / board_lot) × board_lot`. T+1 open price is used for sizing, introducing lookahead bias that is explicitly accepted for this first-release simulation mode. Sell proceeds are credited before buy orders are sized within each rebalance step.
 - **Volume guard**: a fill is skipped if the required share count exceeds `volume_participation_cap × T_day_total_volume`, where T_day_total_volume is the instrument's total traded volume on decision day T from the governed price dataset (PIT-available). This is a conservative proxy, not real-time order-book capacity. Zero-volume days are treated as suspended.
-- **Corporate actions**: this first release only supports instruments with no corporate action events during the backtest period. Instruments with dividends, splits, or rights issues within the period are excluded at universe filtering time.
+- **Corporate actions**: this first release only supports instruments with no corporate action events during the backtest period. Instruments with dividends, splits, or rights issues within the period are excluded at universe filtering time. The corporate-action source dataset is bound via `corporate_action_binding` in backtest_config.v1 (required field).
 - Unfilled target delta is recorded in the fills ledger; cash remains idle.
 
 ### 6.2 Cost Model
@@ -123,7 +123,7 @@ First release supports `daily` only.
 
 1. Limit-up detection: buy is rejected when execution open price ≥ `prev_close × (1 + limit_ratio)`. `prev_close` uses raw (unadjusted) previous close from the governed price dataset. Default `limit_ratio` = 0.10 (main board A-shares only; STAR/ChiNext excluded per §2).
 2. Limit-down detection: sell is rejected when execution open price ≤ `prev_close × (1 - limit_ratio)`.
-3. Suspension: cannot trade suspended instruments.
+3. Suspension: cannot trade suspended instruments. The suspension source dataset is bound via `suspension_binding` in backtest_config.v1 (required field). Zero-volume days are treated as suspended.
 4. Minimum lot: A-share board lot of 100 shares.
 
 ### 6.4 Fills Ledger
@@ -149,7 +149,7 @@ The fills artifact must always exist; zero rows is valid.
 ### 6.5 Output Metrics
 
 Per-date time series:
-- portfolio value, daily return, turnover, cash ratio.
+- portfolio value, daily return, executed turnover (actual fills), cash ratio.
 
 Summary statistics:
 - cumulative return = V_end / V_start − 1;
@@ -172,7 +172,8 @@ This tolerance constant is shared across portfolio and backtest layers and must 
 ## 7. Quality Gates
 
 Every publication binds an externally reviewed `model_quality_report.v2`.
-Publishers cannot self-generate passed reports. The report checksum is a
+Publishers cannot self-generate passed reports within the governed API surface;
+the deployment-level enforcement of this boundary is described in §9. The report checksum is a
 canonical JSON digest (SHA-256 over sorted-key compact JSON excluding the
 `report_checksum_sha256` field itself) and **participates in the manifest's
 stable generation computation**. Replacing the quality report with another

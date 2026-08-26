@@ -137,6 +137,7 @@ implementation commit; release record committed.
 | PB2g | 2 | test_volume_guard_skips_fill | blocked-by: PB1* |
 | PB2h | 2 | test_config_result_lineage_mismatch_rejected | blocked-by: PB1* |
 | PB2i | 2 | test_t1_sellable_quantity_enforced | blocked-by: PB1* |
+| PB2j | 2 | test_insufficient_cash_skip_recorded | blocked-by: PB1* |
 | PB3a | 3 | test_final_head_local_gate_passes | blocked-by: PB2* |
 
 ## 3. CI Matrix Note

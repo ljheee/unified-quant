@@ -1,11 +1,11 @@
 {
   "backtest_config.v1": {
-    "generation_id": "d136071ab94e071cbf89343cf0400f018a38f88150214642cb1aec7867a48e3c",
-    "manifest_digest_sha256": "c6f6c8fda2893e5317a2071290473b81ed6c832763b7f54d36c8aee1d9c366c7"
+    "generation_id": "7194cb1c4472602c77efbf9a5420bccda9c7a1291fe093cb553b1929fa7eca18",
+    "manifest_digest_sha256": "8479ee7cc6ed8d3166203e29af4c44eb7d2f7f2836778a144dd1d744998e0a51"
   },
   "backtest_result.v1": {
-    "generation_id": "b4cfc47582b7d322941301089459ea85d56b862f16148e6d0cdae855e080d020",
-    "manifest_digest_sha256": "3fe3b18c4cd7e30a1f9a0fcaff06433ee1eb7a4f45f2c80d447c96385a7a9a3c"
+    "generation_id": "f5bb2f6217370a421457977cf172bc5b8e18144e6c28f04885e820c439c2cabd",
+    "manifest_digest_sha256": "017a4b440bac20e2670738705a6570b0db816e6648d88135bcd06f8d7d055c5c"
   },
   "portfolio_definition.v1": {
     "generation_id": "842e6a874c470d72e9d8db14568d53632bdb6625c1a0027309a65d06561b7e7c",
