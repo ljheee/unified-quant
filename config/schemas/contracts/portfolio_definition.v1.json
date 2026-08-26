@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/portfolio_definition.v1.json",
+  "title": "Portfolio definition manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version", "schema_version", "portfolio_name",
+    "weight_scheme", "scheme_parameters",
+    "score_policy",
+    "constraints",
+    "rebalance_schedule",
+    "universe_snapshot_generation_id",
+    "industry_source_binding",
+    "prediction_set_generation_id",
+    "run_id", "created_at",
+    "quality_report_checksum_sha256",
+    "manifest_digest_sha256", "generation_id"
+  ],
+  "properties": {
+    "contract_version": { "const": 1 },
+    "schema_version": { "const": "1.0.0" },
+    "portfolio_name": { "$ref": "#/$defs/path_segment" },
+    "weight_scheme": { "const": "top_n_equal_weight" },
+    "scheme_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["n"],
+      "properties": {
+        "n": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "score_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["direction", "nan_policy", "tie_policy"],
+      "properties": {
+        "direction": { "enum": ["descending"] },
+        "nan_policy": { "enum": ["exclude"] },
+        "tie_policy": { "enum": ["first_by_instrument_id"] }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_single_weight"],
+      "properties": {
+        "max_single_weight": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "max_industry_weight": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "max_turnover": { "type": ["number", "null"], "minimum": 0, "maximum": 2 },
+        "cash_reserve": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "rebalance_schedule": { "enum": ["daily"] },
+    "universe_snapshot_generation_id": { "$ref": "#/$defs/sha256" },
+    "industry_source_binding": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["source_type"],
+      "properties": {
+        "source_type": { "enum": ["none", "governed_industry_manifest"] },
+        "manifest_generation_id": { "$ref": "#/$defs/sha256" },
+        "industry_column": { "type": "string" }
+      }
+    },
+    "prediction_set_generation_id": { "$ref": "#/$defs/sha256" },
+    "run_id": { "$ref": "#/$defs/uuid" },
+    "created_at": { "$ref": "#/$defs/date_time" },
+    "quality_report_checksum_sha256": { "$ref": "#/$defs/sha256" },
+    "manifest_digest_sha256": { "$ref": "#/$defs/sha256" },
+    "generation_id": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "path_segment": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", "not": { "enum": [".", ".."] } },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "uuid": { "type": "string", "format": "uuid" },
+    "date_time": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/backtest_result.v1.json",
+  "title": "Backtest result manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "schema_version",
+    "backtest_config_generation_id",
+    "portfolio_definition_generation_id",
+    "target_weight_generations",
+    "price_source_binding",
+    "period_start",
+    "period_end",
+    "trading_days",
+    "equity_curve_artifact",
+    "daily_metrics_artifact",
+    "fills_artifact",
+    "summary_metrics",
+    "run_id",
+    "created_at",
+    "quality_report_checksum_sha256",
+    "manifest_digest_sha256",
+    "generation_id"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "backtest_config_generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "portfolio_definition_generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "target_weight_generations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sha256"
+      },
+      "minItems": 1
+    },
+    "price_source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dataset_generation_id",
+        "data_checksum_sha256"
+      ],
+      "properties": {
+        "dataset_generation_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "data_checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "period_start": {
+      "$ref": "#/$defs/date"
+    },
+    "period_end": {
+      "$ref": "#/$defs/date"
+    },
+    "trading_days": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "equity_curve_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "checksum_sha256",
+        "row_count"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "row_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "daily_metrics_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "checksum_sha256",
+        "row_count"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "row_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "fills_artifact": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "checksum_sha256",
+        "row_count"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "row_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "summary_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cumulative_return",
+        "annualized_return",
+        "annualized_volatility",
+        "sharpe_ratio",
+        "max_drawdown"
+      ],
+      "properties": {
+        "cumulative_return": {
+          "type": "number"
+        },
+        "annualized_return": {
+          "type": "number"
+        },
+        "annualized_volatility": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sharpe_ratio": {
+          "type": "number"
+        },
+        "max_drawdown": {
+          "type": "number",
+          "minimum": 0
+        },
+        "calmar_ratio": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "avg_daily_turnover": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "run_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "created_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "quality_report_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "generation_id": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "backtest_name": "test_bt",
+  "start_date": "2026-01-31",
+  "end_date": "2026-01-01",
+  "execution_model": {
+    "type": "daily_t1_open", "board_lot": 100,
+    "sellable_quantity_rule": "prior_day_holding_only",
+    "volume_participation_cap": 0.10
+  },
+  "cost_model": {"commission_bps": 2.5, "stamp_duty_bps": 5.0, "slippage_bps": 1.0},
+  "limit_rules": {"limit_ratio": 0.50, "prev_close_source": "raw_prev_close", "adjustment_basis": "raw"},
+  "calendar_binding": {"generation_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "checksum_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+  "price_source_binding": {"dataset_generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "data_checksum_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+  "universe_binding": {"snapshot_generation_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"},
+  "initial_capital": 1000000.0,
+  "run_id": "00000000-0000-0000-0000-000000000003",
+  "created_at": "2026-01-01T00:00:02Z"
+}

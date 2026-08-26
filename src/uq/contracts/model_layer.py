@@ -23,6 +23,10 @@ _SCHEMA_NAMES = {
     "qlib_init_receipt",
     "prediction_set",
     "feature_schema",
+    "portfolio_definition",
+    "target_weights",
+    "backtest_config",
+    "backtest_result",
 }
 _RUN_LOCAL_FIELDS = {"run_id", "created_at"}
 _QUALITY_BOUND_FIELDS = {
@@ -31,6 +35,10 @@ _QUALITY_BOUND_FIELDS = {
     "qlib_dataset_export": {"export_layout", "quality_report_checksum_sha256"},
     "qlib_init_receipt": {"quality_report_checksum_sha256"},
     "prediction_set": {"quality_report_checksum_sha256"},
+    "portfolio_definition": {"quality_report_checksum_sha256"},
+    "target_weights": {"quality_report_checksum_sha256"},
+    "backtest_config": {"quality_report_checksum_sha256"},
+    "backtest_result": {"quality_report_checksum_sha256"},
 }
 _MODEL_CONTRACT_FAMILIES = {*_SCHEMA_NAMES, "model_quality_report"}
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -150,7 +158,7 @@ class ModelContractLoader:
                     raise ContractError("model quality report checksum mismatch")
             return
         exclude_fields = _QUALITY_BOUND_FIELDS.get(schema_name, {"quality_report_checksum_sha256"}).copy()
-        if schema_name == "model_dataset":
+        if schema_name in ("model_dataset", "target_weights"):
             exclude_fields.add("logical_fingerprint")
         elif schema_name in {"accepted_factor_index_query", "accepted_factor_index_response", "feature_schema"}:
             exclude_fields = set()
