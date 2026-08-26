@@ -1,0 +1,36 @@
+{
+  "bound_commit": "801c2279d58d67071a49306c49e379fc5ee6b1a2",
+  "ci_run_id": "32928412607",
+  "local_gate": {
+    "path": "../phase-0/gate-reports/gate-report.json",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "result": "passed",
+    "runner": "uv"
+  },
+  "notes": [
+    "This record binds CI evidence to the exact commit that contains it.",
+    "A final marker commit may change HEAD but must not alter implementation or lockfiles."
+  ],
+  "record_version": 1,
+  "remote_matrix": {
+    "covered_cells": [
+      "macos-latest/3.11",
+      "macos-latest/3.12",
+      "macos-latest/3.13",
+      "ubuntu-latest/3.11",
+      "ubuntu-latest/3.12",
+      "ubuntu-latest/3.13"
+    ],
+    "expected_cells": [
+      "macos-latest/3.11",
+      "macos-latest/3.12",
+      "macos-latest/3.13",
+      "ubuntu-latest/3.11",
+      "ubuntu-latest/3.12",
+      "ubuntu-latest/3.13"
+    ],
+    "result": "passed"
+  },
+  "status": "released_pending_final_marker"
+}

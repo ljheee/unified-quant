@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.4; phases 0–5 implemented draft; remote matrix passed and archived; release blocked only by final-HEAD evidence reconciliation**
+Status: **gated implementation order v1.4; phases 0–5 release candidate reconciled at commit 801c2279d58d67071a49306c49e379fc5ee6b1a2; local and remote six-cell gates passed**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -376,17 +376,14 @@ and they are expanded with concrete test IDs and fixture paths.
 
 ## Immediate Next Actions
 
-1. Rerun gate on final HEAD after any remaining commit.
-2. Refresh `evidence/phase-0/gate-reports/` with the new report, requirements
-   snapshot, and digest.
-3. Update phase record and evidence index to bind the new HEAD.
-4. ~~After final review confirms no residual blocker, mark Phase 0 as exited in
-   the phase record.~~ Done: Phase 0 exited at commit `5a75590`.
-5. Phase 1 label/dataset contract preparation is now open (schemas,
-   validators, split policy); production dataset builds still require the
-   typed accepted-store index/list API to be implemented behind the frozen
-   Phase 0 contract.
-6. Qlib remains excluded from production dependencies until Phase 0 exits and
-   the Phase 2A interface plus negative tests are frozen. Optional dev/model
-   dependency work may begin only after that freeze; training/runtime use starts
-   at Phase 3 or later under its own gate.
+Completed for release candidate `801c2279d58d67071a49306c49e379fc5ee6b1a2`:
+
+1. Local unified gate passed at that HEAD.
+2. Remote six-cell matrix run `32928412607` passed and its artifacts are archived
+   under `evidence/release/final-head-ci/32928412607/`.
+3. `evidence/phase-0/gate-reports/`, the phase record, evidence index, and
+   `evidence/release/release-record.json` bind to that release-candidate HEAD.
+
+A later marker commit may update these evidence files only; it must not alter
+implementation code, schemas, lockfiles, or gate commands. If it does, all local
+and remote gates must be rerun.

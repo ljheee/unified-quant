@@ -1,8 +1,8 @@
 {
   "entries": [
     {
-      "bound_commit": "632516692a92ba7cf2c7eb934f5fb7f7b7a78347",
-      "note": "Final local gate for current HEAD; remote six-cell matrix remains required before release.",
+      "bound_commit": "801c2279d58d67071a49306c49e379fc5ee6b1a2",
+      "note": "Final release-candidate local gate.",
       "path": "gate-reports/gate-report.json",
       "requirements_digest_path": "gate-reports/requirements.lock.txt.sha256",
       "requirements_path": "gate-reports/requirements.lock.txt",
@@ -78,7 +78,7 @@
       "type": "acceptance_matrix_expansion"
     },
     {
-      "ci_run_url": "https://github.com/ljheee/unified-quant/actions/runs/32928068658",
+      "ci_run_url": "https://github.com/ljheee/unified-quant/actions/runs/32928412607",
       "covered_cells": [
         "macos-latest/3.11",
         "macos-latest/3.12",
@@ -87,6 +87,7 @@
         "ubuntu-latest/3.12",
         "ubuntu-latest/3.13"
       ],
+      "note": "Final release-candidate remote matrix.",
       "path": "../phase-4a/phase-record.json",
       "status": "passed",
       "type": "remote_environment_matrix"
