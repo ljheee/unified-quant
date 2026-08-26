@@ -157,7 +157,7 @@ class ModelContractLoader:
             exclude_fields = set()
         else:
             exclude_fields = _QUALITY_BOUND_FIELDS.get(schema_name, {"quality_report_checksum_sha256"}).copy()
-        if schema_name in ("model_dataset", "target_weights"):
+        if schema_name == "model_dataset":
             exclude_fields.add("logical_fingerprint")
         elif schema_name in {"accepted_factor_index_query", "accepted_factor_index_response", "feature_schema"}:
             exclude_fields = set()

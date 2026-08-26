@@ -12,6 +12,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pyarrow as arrow
+import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.model_layer import (
@@ -80,13 +82,13 @@ class BacktestEngine:
             raise ContractError(f"no trading dates between {start_date} and {end_date}")
 
         cash = initial_capital
-        holdings: dict[str, int] = {}  # instrument -> shares (all sellable next day)
-
+        holdings: dict[str, int] = {}  # instrument -> total shares held
+        t1_locked: dict[str, int] = {}  # instrument -> shares bought today (not yet sellable)
+        prev_close_prices: dict[str, float] = {}
+        fills_rows: list[dict[str, Any]] = []
         equity_rows: list[dict[str, Any]] = []
         metrics_rows: list[dict[str, Any]] = []
-        fills_rows: list[dict[str, Any]] = []
 
-        prev_close_prices: dict[str, float] = {}
 
         for i, date in enumerate(trading_dates):
             day_data = price_panel.loc[date]
@@ -94,189 +96,197 @@ class BacktestEngine:
             # --- Mark to market at close ---
             total_holdings_value = 0.0
             for inst, shares in holdings.items():
-                close_price = day_data.loc[inst, "close"] if inst in day_data.index else 0.0
-                total_holdings_value += shares * close_price
+                if inst in day_data.index:
+                    close_price = day_data.loc[inst, "close"]
+                    if pd.isna(close_price) or close_price <= 0:
+                        raise ContractError(f"missing or invalid close price for {inst} on {date}")
+                    total_holdings_value += shares * float(close_price)
+                else:
+                    raise ContractError(f"price data missing for held instrument {inst} on {date}")
             nav = cash + total_holdings_value
 
             equity_rows.append({
                 "date": date,
-                "portfolio_value": round(nav, 2),
-                "cash": round(cash, 2),
-                "holdings_value": round(total_holdings_value, 2),
+                "portfolio_value": nav,
+                "cash": cash,
+                "holdings_value": total_holdings_value,
             })
 
-            # Daily return
-            if i > 0:
-                prev_nav = equity_rows[-2]["portfolio_value"]
-                daily_return = (nav / prev_nav - 1.0) if prev_nav > 0 else 0.0
-            else:
-                daily_return = 0.0
+            daily_return = ((nav / equity_rows[-2]["portfolio_value"]) - 1.0) if i > 0 and equity_rows[-2]["portfolio_value"] > 0 else 0.0
 
-            # Turnover from fills today
             day_fills = [f for f in fills_rows if f["date"] == date and f["status"] == "filled"]
-            day_turnover_value = sum(
-                abs(f["filled_shares"] * f["net_execution_price"]) for f in day_fills
-            )
+            day_turnover_value = sum(abs(f["filled_shares"] * f["net_execution_price"]) for f in day_fills)
             executed_turnover = (day_turnover_value / nav / 2.0) if nav > 0 else 0.0
 
             metrics_rows.append({
                 "date": date,
-                "daily_return": round(daily_return, 10),
-                "executed_turnover": round(executed_turnover, 8),
-                "cash_ratio": round(cash / nav, 6) if nav > 0 else 1.0,
+                "daily_return": daily_return,
+                "executed_turnover": round(executed_turnover, 10),
+                "cash_ratio": round(cash / nav, 8) if nav > 0 else 1.0,
             })
 
-            # --- Determine next rebalance ---
-            # Find the next date that has weight targets
-            target_date = None
-            for td in sorted_dates:
-                if td >= date:
-                    target_date = td
-                    break
-            if target_date is None or target_date != date:
-                # No rebalance today; update prev_close and continue
+            # --- Rebalance: check if this decision date has targets ---
+            if date not in weight_partitions:
                 for inst in day_data.index:
-                    prev_close_prices[inst] = day_data.loc[inst, "close"]
+                    cp = day_data.loc[inst, "close"]
+                    if not pd.isna(cp) and cp > 0:
+                        prev_close_prices[inst] = float(cp)
                 continue
 
             weights_df = weight_partitions[date]
-            target_weights = dict(zip(weights_df["instrument"], weights_df["weight"]))
-
-            # --- Execute at T+1 open ---
-            exec_date_idx = trading_dates.index(date) + 1
+            target_weights = dict(zip(weights_df["instrument"], weights_df["weight"])) if len(weights_df) > 0 else {}
+            
+            exec_date_idx = i + 1
             if exec_date_idx >= len(trading_dates):
                 break
             exec_date = trading_dates[exec_date_idx]
             exec_day_data = price_panel.loc[exec_date]
 
-            # Sell before buy; only prior-day holdings are sellable (T+1 rule)
-            sellable_holdings = dict(holdings)  # snapshot: all currently held shares are T+1 eligible
-            sells_to_process = []
-            buys_to_process = []
-            
+            # --- Compute target share counts using T-close NAV (spec formula) ---
+            target_shares_map: dict[str, int] = {}
             for inst, target_w in sorted(target_weights.items()):
-                current_shares = sellable_holdings.get(inst, 0)
-                open_price = exec_day_data.loc[inst, "open"] if inst in exec_day_data.index else 0.0
+                open_price = exec_day_data.loc[inst, "open"] if inst in exec_day_data.index else None
+                if open_price is None or pd.isna(open_price) or open_price <= 0:
+                    continue
+                raw_target = target_w * nav / (float(open_price) * (1 + slippage_rate))
+                floored = int(raw_target / board_lot) * board_lot
+                target_shares_map[inst] = max(floored, 0)
+
+            # --- Execute sells first (only prior-day sellable shares) ---
+            for inst in sorted(set(list(holdings.keys()) + list(target_shares_map.keys()))):
+                current_total = holdings.get(inst, 0)
+                current_sellable = current_total - t1_locked.get(inst, 0)
+                target_shares = target_shares_map.get(inst, 0)
+                
+                open_price = exec_day_data.loc[inst, "open"] if inst in exec_day_data.index else None
                 volume = exec_day_data.loc[inst, "volume"] if inst in exec_day_data.index else 0.0
+                pit_volume = day_data.loc[inst, "volume"] if inst in day_data.index else 0.0
                 
                 is_suspended = (
-                    open_price <= 0 or volume <= 0
+                    open_price is None or pd.isna(open_price) or open_price <= 0
+                    or volume <= 0
                     or (exec_date, inst) in (suspension_dates or set())
-                    or inst in (corporate_action_instruments or set())
                 )
                 
                 if is_suspended:
-                    if current_shares > 0 or target_w > 0:
+                    if current_sellable > 0:
                         fills_rows.append(self._fill_row(
-                            date=exec_date, instrument=inst, side="sell" if current_shares > 0 else "buy",
-                            target_shares=current_shares if current_shares > 0 else 100,
-                            filled_shares=0, gross_execution_price=open_price,
-                            net_execution_price=open_price, commission_fee=0,
-                            stamp_duty_fee=0, status="skipped_suspended",
+                            date=exec_date, instrument=inst, side="sell",
+                            target_shares=current_sellable, filled_shares=0,
+                            gross_execution_price=0.0, net_execution_price=0.0,
+                            commission_fee=0, stamp_duty_fee=0, status="skipped_suspended",
                         ))
                     continue
                 
-                current_weight = (current_shares * open_price) / max(nav, 1)
-                prev_close = prev_close_prices.get(inst, open_price)
-                limit_up_price = prev_close * (1 + limit_ratio)
+                prev_close = prev_close_prices.get(inst, float(open_price))
                 limit_down_price = prev_close * (1 - limit_ratio)
+                limit_up_price = prev_close * (1 + limit_ratio)
                 
-                if target_w < current_weight and current_shares > 0:
-                    # SELL path
-                    if open_price <= limit_down_price:
+                if target_shares < current_total:
+                    # SELL: reduce to target or liquidate
+                    shares_to_sell = min(current_sellable, current_total - target_shares)
+                    if shares_to_sell <= 0:
+                        if current_total - target_shares > 0:
+                            fills_rows.append(self._fill_row(
+                                date=exec_date, instrument=inst, side="sell",
+                                target_shares=current_total - target_shares, filled_shares=0,
+                                gross_execution_price=float(open_price), net_execution_price=float(open_price),
+                                commission_fee=0, stamp_duty_fee=0, status="skipped_t1_not_sellable",
+                            ))
+                        continue
+                    
+                    if float(open_price) <= limit_down_price:
                         fills_rows.append(self._fill_row(
                             date=exec_date, instrument=inst, side="sell",
-                            target_shares=current_shares, filled_shares=0,
-                            gross_execution_price=open_price, net_execution_price=open_price,
-                            commission_fee=0, stamp_duty_fee=0,
-                            status="skipped_limit_down",
+                            target_shares=shares_to_sell, filled_shares=0,
+                            gross_execution_price=float(open_price), net_execution_price=float(open_price),
+                            commission_fee=0, stamp_duty_fee=0, status="skipped_limit_down",
                         ))
                         continue
                     
-                    volume_cap_shares = int(volume * participation_cap / board_lot) * board_lot
-                    if current_shares > volume_cap_shares:
+                    volume_cap = int(pit_volume * participation_cap / board_lot) * board_lot
+                    if shares_to_sell > volume_cap:
                         fills_rows.append(self._fill_row(
                             date=exec_date, instrument=inst, side="sell",
-                            target_shares=current_shares, filled_shares=0,
-                            gross_execution_price=open_price, net_execution_price=open_price,
-                            commission_fee=0, stamp_duty_fee=0,
-                            status="skipped_volume",
+                            target_shares=shares_to_sell, filled_shares=0,
+                            gross_execution_price=float(open_price), net_execution_price=float(open_price),
+                            commission_fee=0, stamp_duty_fee=0, status="skipped_volume",
                         ))
                         continue
                     
-                    sells_to_process.append((inst, current_shares, open_price))
+                    net_price = float(open_price) * (1 - slippage_rate)
+                    gross_value = shares_to_sell * float(open_price)
+                    commission = gross_value * commission_rate
+                    stamp_duty = gross_value * stamp_duty_rate
+                    proceeds = gross_value - commission - stamp_duty
+                    cash += proceeds
+                    holdings[inst] = current_total - shares_to_sell
+                    if holdings[inst] <= 0:
+                        del holdings[inst]
+                    fills_rows.append(self._fill_row(
+                        date=exec_date, instrument=inst, side="sell",
+                        target_shares=shares_to_sell, filled_shares=shares_to_sell,
+                        gross_execution_price=float(open_price), net_execution_price=net_price,
+                        commission_fee=commission, stamp_duty_fee=stamp_duty, status="filled",
+                    ))
                     
-                elif target_w > current_weight and current_shares == 0:
-                    # BUY path (only new positions; adding to existing not in first release)
-                    if open_price >= limit_up_price:
+                elif target_shares > current_total:
+                    # BUY: increase position or open new
+                    shares_to_buy = target_shares - current_total
+                    
+                    if float(open_price) >= limit_up_price:
                         fills_rows.append(self._fill_row(
                             date=exec_date, instrument=inst, side="buy",
-                            target_shares=board_lot, filled_shares=0,
-                            gross_execution_price=open_price, net_execution_price=open_price,
-                            commission_fee=0, stamp_duty_fee=0,
-                            status="skipped_limit_up",
+                            target_shares=shares_to_buy, filled_shares=0,
+                            gross_execution_price=float(open_price), net_execution_price=float(open_price),
+                            commission_fee=0, stamp_duty_fee=0, status="skipped_limit_up",
                         ))
                         continue
                     
-                    target_shares = int(target_w * nav / (open_price * (1 + slippage_rate)) / board_lot) * board_lot
-                    if target_shares <= 0:
-                        continue
-                    
-                    volume_cap_shares = int(volume * participation_cap / board_lot) * board_lot
-                    actual_shares = min(target_shares, volume_cap_shares)
+                    volume_cap = int(pit_volume * participation_cap / board_lot) * board_lot
+                    actual_shares = min(shares_to_buy, max(volume_cap, 0))
                     if actual_shares <= 0:
                         fills_rows.append(self._fill_row(
                             date=exec_date, instrument=inst, side="buy",
-                            target_shares=target_shares, filled_shares=0,
-                            gross_execution_price=open_price, net_execution_price=open_price,
-                            commission_fee=0, stamp_duty_fee=0,
-                            status="skipped_volume",
+                            target_shares=shares_to_buy, filled_shares=0,
+                            gross_execution_price=float(open_price), net_execution_price=float(open_price),
+                            commission_fee=0, stamp_duty_fee=0, status="skipped_volume",
                         ))
                         continue
                     
-                    buys_to_process.append((inst, actual_shares, open_price))
-            
-            # Process sells first (credit proceeds to cash)
-            for inst, shares, price in sells_to_process:
-                net_price = price * (1 - slippage_rate)
-                gross_value = shares * price
-                commission = gross_value * commission_rate
-                stamp_duty = gross_value * stamp_duty_rate
-                proceeds = gross_value - commission - stamp_duty
-                cash += proceeds
-                del holdings[inst]
-                fills_rows.append(self._fill_row(
-                    date=exec_date, instrument=inst, side="sell",
-                    target_shares=shares, filled_shares=shares,
-                    gross_execution_price=price, net_execution_price=net_price,
-                    commission_fee=commission, stamp_duty_fee=stamp_duty,
-                    status="filled",
-                ))
-            
-            # Process buys with post-sell cash
-            for inst, shares, price in buys_to_process:
-                net_price = price * (1 + slippage_rate)
-                cost = shares * net_price
-                commission = cost * commission_rate
-                total_cost = cost + commission
-                if total_cost > cash:
+                    net_price = float(open_price) * (1 + slippage_rate)
+                    cost = actual_shares * net_price
+                    commission = cost * commission_rate
+                    total_cost = cost + commission
+                    if total_cost > cash:
+                        fills_rows.append(self._fill_row(
+                            date=exec_date, instrument=inst, side="buy",
+                            target_shares=actual_shares, filled_shares=0,
+                            gross_execution_price=float(open_price), net_execution_price=net_price,
+                            commission_fee=0, stamp_duty_fee=0, status="skipped_insufficient_cash",
+                        ))
+                        continue
+                    
+                    cash -= total_cost
+                    holdings[inst] = current_total + actual_shares
+                    t1_locked[inst] = t1_locked.get(inst, 0) + actual_shares
                     fills_rows.append(self._fill_row(
                         date=exec_date, instrument=inst, side="buy",
-                        target_shares=shares, filled_shares=0,
-                        gross_execution_price=price, net_execution_price=net_price,
-                        commission_fee=0, stamp_duty_fee=0,
-                        status="skipped_insufficient_cash",
+                        target_shares=actual_shares, filled_shares=actual_shares,
+                        gross_execution_price=float(open_price), net_execution_price=net_price,
+                        commission_fee=commission, stamp_duty_fee=0, status="filled",
                     ))
-                    continue
-                cash -= total_cost
-                # T+1 settlement: bought shares become available next day
-                holdings[inst] = holdings.get(inst, 0) + shares
+            
+            # T+1 unlock: all previously locked shares become sellable tomorrow
+            t1_locked.clear()
 
-            # Update prev_close for next iteration
+            # Update prev_close from execution day
             for inst in exec_day_data.index:
-                prev_close_prices[inst] = exec_day_data.loc[inst, "close"]
+                cp = exec_day_data.loc[inst, "close"]
+                if not pd.isna(cp) and cp > 0:
+                    prev_close_prices[inst] = float(cp)
 
-        # Compute summary metrics
+# Compute summary metrics
         equity_df = pd.DataFrame(equity_rows)
         metrics_df = pd.DataFrame(metrics_rows)
         fills_df = pd.DataFrame(fills_rows) if fills_rows else pd.DataFrame(columns=[
@@ -506,14 +516,23 @@ class BacktestResultStore:
                 raise ContractError(f"artifact row count mismatch: {meta['file']}")
             if list(frame.columns) != meta["columns"]:
                 raise ContractError(f"artifact column mismatch: {meta['file']}")
+            if meta.get("serialization_profile_id") != "parquet-v1":
+                raise ContractError(f"unsupported serialization profile: {meta.get('serialization_profile_id')}")
+            for col_name, expected_dtype in meta.get("dtypes", {}).items():
+                if col_name in frame.columns:
+                    actual_dtype = str(frame[col_name].dtype)
+                    if "float" in expected_dtype and "float" not in actual_dtype:
+                        raise ContractError(f"dtype mismatch for {col_name} in {meta['file']}: expected {expected_dtype}, got {actual_dtype}")
+                    elif "int" in expected_dtype and "int" not in actual_dtype:
+                        raise ContractError(f"dtype mismatch for {col_name} in {meta['file']}: expected {expected_dtype}, got {actual_dtype}")
+                    elif expected_dtype == "string" and "object" not in actual_dtype and "str" not in actual_dtype:
+                        raise ContractError(f"dtype mismatch for {col_name} in {meta['file']}: expected string, got {actual_dtype}")
             artifacts[key] = frame
 
         return manifest, artifacts
 
     @staticmethod
     def _serialize(frame: pd.DataFrame) -> tuple[bytes, str]:
-        import pyarrow as arrow
-        import pyarrow.parquet as parquet
         table = arrow.Table.from_pandas(frame.reset_index(drop=True), preserve_index=False)
         sink = arrow.BufferOutputStream()
         parquet.write_table(table, sink, compression="snappy")

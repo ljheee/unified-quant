@@ -179,27 +179,12 @@ class TargetWeightStore:
         previous_target_weights_generation_id: str | None = None,
     ) -> Path:
         """Publish a target-weights partition atomically."""
-        if manifest.get("weights_checksum_sha256") == "0" * 64:
-            artifact, checksum = self._serialize(frame)
-        else:
-            partition_check = (
-                self.weights_dir / f"date={manifest['decision_date']}" / "data.parquet"
-            )
-            if partition_check.is_file():
-                checksum = file_sha256_bytes(partition_check.read_bytes())
-            else:
-                artifact, checksum = self._serialize(frame)
+        artifact, checksum = self._serialize(frame)
 
         manifest["weights_checksum_sha256"] = checksum
         manifest["previous_target_weights_generation_id"] = previous_target_weights_generation_id
 
-        logical_fp = sha256_json({
-            "instruments": sorted(frame["instrument"].tolist()),
-            "weights": [round(w, 12) for w in frame.sort_values("instrument")["weight"].tolist()],
-        })
-        manifest["logical_fingerprint"] = logical_fp
-
-        # Step 1: compute all non-quality semantic fields and logical fingerprint
+        # Step 1: compute logical fingerprint (now participates in generation)
         manifest["logical_fingerprint"] = sha256_json({
             "instruments": sorted(frame["instrument"].tolist()),
             "weights": [round(w, 12) for w in frame.sort_values("instrument")["weight"].tolist()],
@@ -209,7 +194,7 @@ class TargetWeightStore:
         provisional_gen, _ = model_manifest_identities(
             {**manifest, "quality_report_checksum_sha256": "0" * 64,
              "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
-            schema_name="target_weights", exclude_fields={"logical_fingerprint"},
+            schema_name="target_weights",
         )
 
         # Step 3: bind quality decision to provisional generation + content checksum
@@ -224,7 +209,7 @@ class TargetWeightStore:
         # Step 4: compute final identity WITH quality checksum participating
         final_gen, digest = model_manifest_identities(
             {**manifest, "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
-            schema_name="target_weights", exclude_fields={"logical_fingerprint"},
+            schema_name="target_weights",
         )
         manifest["generation_id"] = final_gen
         manifest["manifest_digest_sha256"] = digest
@@ -298,11 +283,10 @@ class TargetWeightStore:
             raise ContractError("quality report binding type mismatch")
         # Quality report binds to the provisional generation (computed with quality=zero).
         # Recompute it from the published manifest for verification.
-        from ..contracts.model_layer import model_manifest_identities as _mmi
-        prov_gen, _ = _mmi(
+        prov_gen, _ = model_manifest_identities(
             {**manifest, "quality_report_checksum_sha256": "0" * 64,
              "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
-            schema_name="target_weights", exclude_fields={"logical_fingerprint"},
+            schema_name="target_weights",
         )
         if report.get("bound_generation_id") != prov_gen:
             raise ContractError("quality report does not bind this generation")

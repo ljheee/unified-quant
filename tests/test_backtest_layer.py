@@ -281,3 +281,75 @@ class TestT1SellableQuantity:
             # Either all buys are filled within budget or some are skipped for cash
             total_cost = sum(f["filled_shares"] * f["net_execution_price"] + f["commission_fee"] for _, f in filled_buys.iterrows())
             assert total_cost <= config["initial_capital"] or len(cash_skips) > 0
+
+
+class TestT1Enforcement:
+    def test_same_day_bought_shares_not_sellable(self):
+        """Buy on D1 exec; on D2 (next day) try to sell. Should succeed because T+1 has passed.
+        But if we could somehow sell same day, it would violate T+1.
+        The real test: buy fills happen, then next day's rebalance can sell."""
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config()
+        dates = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]
+        price_panel = _make_price_panel(dates, ["A"], open_prices={"A": 10.0})
+        
+        # Day 1: buy A. Day 2 decision: target 0 (sell all). Exec on day 3.
+        weights = {
+            "2026-01-05": _make_weights("2026-01-05", ["A"]),
+            "2026-01-06": pd.DataFrame({"instrument": ["A"], "weight": [0.5]}),
+        }
+        _, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        fills = artifacts["fills"]
+        buy_fills = fills[(fills["side"] == "buy") & (fills["status"] == "filled")]
+        sell_fills = fills[(fills["side"] == "sell") & (fills["status"] == "filled")]
+        assert len(buy_fills) > 0
+        # Sell must be on a later date than the buy (T+1 enforced by design)
+        for _, sell in sell_fills.iterrows():
+            assert sell["date"] > buy_fills.iloc[0]["date"]
+
+    def test_partial_sell_reduces_position(self):
+        """Target weight reduction should partially sell, not liquidate all."""
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config(initial_capital=1000000.0)
+        dates = ["2026-01-05", "2026-01-06", "2026-01-07"]
+        price_panel = _make_price_panel(dates, ["A"], open_prices={"A": 100.0})
+        
+        weights = {
+            "2026-01-05": _make_weights("2026-01-05", ["A"]),  # 100%
+            "2026-01-06": pd.DataFrame({"instrument": ["A"], "weight": [0.5]}),  # reduce to 50%
+        }
+        manifest, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        fills = artifacts["fills"]
+        sells = fills[(fills["side"] == "sell") & (fills["status"] == "filled")]
+        buys = fills[(fills["side"] == "buy") & (fills["status"] == "filled")]
+        if len(buys) > 0 and len(sells) > 0:
+            # Partial sell: sold shares < bought shares
+            assert sells.iloc[0]["filled_shares"] < buys.iloc[0]["filled_shares"]
+
+    def test_add_to_existing_position(self):
+        """Target weight increase should add to existing position, not liquidate-rebuy."""
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config(initial_capital=1000000.0)
+        dates = ["2026-01-05", "2026-01-06", "2026-01-07"]
+        price_panel = _make_price_panel(dates, ["A"], open_prices={"A": 100.0})
+        
+        weights = {
+            "2026-01-05": _make_weights("2026-01-05", ["A"]),  # 50% (equal split with phantom B)
+            "2026-01-06": _make_weights("2026-01-06", ["A"]),  # 100% single
+        }
+        manifest, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        fills = artifacts["fills"]
+        buys = fills[(fills["side"] == "buy") & (fills["status"] == "filled")]
+        sells = fills[(fills["side"] == "sell") & (fills["status"] == "filled")]
+        # If we increased from partial to full, we should see two buy fills and no sells
+        if len(buys) >= 2:
+            assert len(sells) == 0

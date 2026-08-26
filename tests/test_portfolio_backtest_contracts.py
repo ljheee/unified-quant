@@ -17,7 +17,7 @@ GOLDEN_DIR = ROOT / "evidence/portfolio-backtest/phase-0/golden-vectors"
 # Quality checksum PARTICIPATES in stable generation for these four families.
 FAMILY_EXCLUDES = {
     "portfolio_definition": set(),
-    "target_weights": {"logical_fingerprint"},
+    "target_weights": set(),
     "backtest_config": set(),
     "backtest_result": set(),
 }
