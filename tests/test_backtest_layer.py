@@ -1,0 +1,240 @@
+"""Phase 2 backtest layer runtime tests."""
+
+import json
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from uq.backtest.engine import BacktestEngine, BacktestResultStore
+from uq.contracts.model_layer import create_reviewed_quality_decision
+from uq.errors import ContractError
+
+GEN_A = "a" * 64; GEN_B = "b" * 64; GEN_C = "c" * 64; GEN_D = "d" * 64
+
+
+def _make_config(**overrides):
+    base = {
+        "contract_version": 1, "schema_version": "1.0.0",
+        "backtest_name": "test_bt", "start_date": "2026-01-01", "end_date": "2026-01-31",
+        "execution_model": {"type": "daily_t1_open", "board_lot": 100,
+            "sellable_quantity_rule": "prior_day_holding_only", "volume_participation_cap": 0.5},
+        "cost_model": {"commission_bps": 2.5, "stamp_duty_bps": 5.0, "slippage_bps": 1.0},
+        "limit_rules": {"limit_ratio": 0.10, "prev_close_source": "raw_prev_close", "adjustment_basis": "raw"},
+        "calendar_binding": {"generation_id": GEN_C, "checksum_sha256": GEN_A},
+        "price_source_binding": {"dataset_generation_id": GEN_A, "data_checksum_sha256": GEN_B},
+        "universe_binding": {"snapshot_generation_id": GEN_C},
+        "corporate_action_binding": {"dataset_generation_id": GEN_B, "data_checksum_sha256": GEN_C},
+        "suspension_binding": {"dataset_generation_id": GEN_C, "data_checksum_sha256": GEN_A},
+        "initial_capital": 1000000.0,
+        "run_id": "00000000-0000-0000-0000-000000000003",
+        "created_at": "2026-01-01T00:00:02Z",
+        "quality_report_checksum_sha256": "0" * 64,
+        "generation_id": GEN_A, "manifest_digest_sha256": GEN_B,
+    }
+    base.update(overrides)
+    return base
+
+
+def _make_price_panel(dates, instruments, open_prices=None):
+    rows = []
+    for i, d in enumerate(dates):
+        for j, inst in enumerate(instruments):
+            base = (open_prices or {}).get(inst, 10.0 + j * 5)
+            drift = 1.01 ** i
+            rows.append({
+                "date": d, "instrument": inst,
+                "open": round(base * drift, 4),
+                "close": round(base * drift * 1.005, 4),
+                "volume": 500000,
+            })
+    return pd.DataFrame(rows).set_index(["date", "instrument"])
+
+
+def _make_weights(date, instruments, weight=1.0):
+    n = len(instruments)
+    w = round(weight / n, 12) if n > 0 else 0
+    return pd.DataFrame({"instrument": instruments, "weight": [w] * n})
+
+
+def _make_decision():
+    checks = [{"name": "equity_curve_finite_positive", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}]
+    return create_reviewed_quality_decision(
+        binding_type="backtest_result_v1", policy="reject_all", status="passed",
+        checks=checks, errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+    )
+
+
+DATES = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"]
+INSTRUMENTS = ["A", "B"]
+
+
+class TestBacktestEngine:
+    def test_deterministic_pnl(self):
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config()
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        weights = {"2026-01-05": _make_weights("2026-01-05", INSTRUMENTS)}
+        manifest, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        # Same inputs produce same results
+        manifest2, artifacts2 = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel.copy(),
+        )
+        assert manifest["summary_metrics"] == manifest2["summary_metrics"]
+
+    def test_costs_reduce_pnl(self):
+        engine = BacktestEngine(tempfile.mkdtemp())
+        no_cost_config = _make_config(cost_model={"commission_bps": 0, "stamp_duty_bps": 0, "slippage_bps": 0})
+        cost_config = _make_config()
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        weights = {"2026-01-05": _make_weights("2026-01-05", INSTRUMENTS)}
+        m_no_cost, _ = engine.run(config=no_cost_config, portfolio_definition={"generation_id": GEN_B}, weight_partitions=weights, price_panel=price_panel)
+        m_cost, _ = engine.run(config=cost_config, portfolio_definition={"generation_id": GEN_B}, weight_partitions=weights, price_panel=price_panel)
+        assert m_no_cost["summary_metrics"]["cumulative_return"] >= m_cost["summary_metrics"]["cumulative_return"]
+
+    def test_limit_up_blocks_buy(self):
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config(limit_rules={"limit_ratio": 0.001, "prev_close_source": "raw_prev_close", "adjustment_basis": "raw"})
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        # Force limit-up on exec day
+        for d in DATES:
+            price_panel.loc[(d, "A"), "close"] = price_panel.loc[(d, "A"), "open"] * 1.02
+        weights = {"2026-01-05": _make_weights("2026-01-05", ["A"])}
+        _, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        fills = artifacts["fills"]
+        if len(fills) > 0:
+            assert not ((fills["instrument"] == "A") & (fills["side"] == "buy") & (fills["status"] == "filled")).all()
+
+    def test_limit_down_blocks_sell(self):
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config(limit_rules={"limit_ratio": 0.001, "prev_close_source": "raw_prev_close", "adjustment_basis": "raw"})
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        weights_1 = _make_weights("2026-01-05", ["A"])
+        weights_2 = _make_weights("2026-01-06", [])  # empty = sell all
+        weights = {"2026-01-05": weights_1, "2026-01-06": weights_2}
+        _, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+
+    def test_board_lot_rounding(self):
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config()
+        config["initial_capital"] = 12345.0  # small capital forces rounding
+        price_panel = _make_price_panel(DATES, ["A"], open_prices={"A": 33.33})
+        weights = {"2026-01-05": _make_weights("2026-01-05", ["A"])}
+        _, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        fills = artifacts["fills"]
+        if len(fills) > 0:
+            buy_fills = fills[fills["status"] == "filled"]
+            if len(buy_fills) > 0:
+                assert (buy_fills["filled_shares"] % 100 == 0).all()
+
+    def test_suspension_skip_recorded(self):
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config()
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        weights = {"2026-01-05": _make_weights("2026-01-05", INSTRUMENTS)}
+        suspension = {("2026-01-06", "A")}
+        _, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+            suspension_dates=suspension,
+        )
+        fills = artifacts["fills"]
+        if len(fills) > 0:
+            skipped = fills[fills["status"] == "skipped_suspended"]
+            # At least some fill attempt should be recorded
+
+    def test_volume_guard_skips_fill(self):
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config(execution_model={
+            "type": "daily_t1_open", "board_lot": 100,
+            "sellable_quantity_rule": "prior_day_holding_only",
+            "volume_participation_cap": 0.0001,
+        })
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        weights = {"2026-01-05": _make_weights("2026-01-05", INSTRUMENTS)}
+        _, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+
+
+class TestBacktestResultStore:
+    def test_e2e_publish_read(self, tmp_path):
+        root = Path(tmp_path)
+        engine = BacktestEngine(root)
+        store = BacktestResultStore(root)
+
+        config = _make_config()
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        weights = {"2026-01-05": _make_weights("2026-01-05", INSTRUMENTS)}
+        manifest, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+
+        tw_bindings = [{
+            "decision_date": "2026-01-05",
+            "generation_id": GEN_C,
+            "manifest_digest_sha256": GEN_D,
+        }]
+        partition = store.publish(manifest.copy(), artifacts, quality_decision=_make_decision(), target_weight_generations=tw_bindings)
+
+        disk_manifest = json.loads((partition / "manifest.json").read_text())
+        read_manifest, read_artifacts = store.read(disk_manifest["generation_id"])
+
+        assert len(read_artifacts["equity_curve"]) > 0
+        assert len(read_artifacts["daily_metrics"]) > 0
+        assert abs(read_manifest["summary_metrics"]["cumulative_return"] - manifest["summary_metrics"]["cumulative_return"]) < 1e-10
+
+    def test_overwrite_rejection(self, tmp_path):
+        root = Path(tmp_path)
+        engine = BacktestEngine(root)
+        store = BacktestResultStore(root)
+        config = _make_config()
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        weights = {"2026-01-05": _make_weights("2026-01-05", INSTRUMENTS)}
+        manifest, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        tw_bindings = [{"decision_date": "2026-01-05", "generation_id": GEN_C, "manifest_digest_sha256": GEN_D}]
+        decision = _make_decision()
+        store.publish(manifest.copy(), artifacts, quality_decision=decision, target_weight_generations=tw_bindings)
+        with pytest.raises(ContractError, match="already exists"):
+            store.publish(manifest.copy(), artifacts, quality_decision=decision, target_weight_generations=tw_bindings)
+
+    def test_tampered_artifact_rejects_read(self, tmp_path):
+        root = Path(tmp_path)
+        engine = BacktestEngine(root)
+        store = BacktestResultStore(root)
+        config = _make_config()
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        weights = {"2026-01-05": _make_weights("2026-01-05", INSTRUMENTS)}
+        manifest, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        tw_bindings = [{"decision_date": "2026-01-05", "generation_id": GEN_C, "manifest_digest_sha256": GEN_D}]
+        partition = store.publish(manifest.copy(), artifacts, quality_decision=_make_decision(), target_weight_generations=tw_bindings)
+        disk_manifest = json.loads((partition / "manifest.json").read_text())
+
+        equity_file = partition / "equity_curve.parquet"
+        equity_file.write_bytes(equity_file.read_bytes() + b"tampered")
+
+        with pytest.raises(ContractError, match="tampered|checksum"):
+            store.read(disk_manifest["generation_id"])

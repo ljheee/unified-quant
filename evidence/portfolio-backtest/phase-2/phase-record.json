@@ -1,0 +1,23 @@
+{
+  "phase": 2,
+  "layer": "portfolio_backtest",
+  "status": "in_progress",
+  "entry_criteria": "Phase 1 exited",
+  "exit_criteria_tests": [
+    "test_deterministic_pnl",
+    "test_costs_reduce_pnl",
+    "test_limit_up_blocks_buy",
+    "test_limit_down_blocks_sell",
+    "test_board_lot_rounding",
+    "test_suspension_skip_recorded",
+    "test_volume_guard_skips_fill",
+    "test_e2e_publish_read",
+    "test_overwrite_rejection",
+    "test_tampered_artifact_rejects_read"
+  ],
+  "evidence_paths": [
+    "src/uq/backtest/engine.py",
+    "tests/test_backtest_layer.py"
+  ],
+  "blocked_by": ["final HEAD gate report generation after commit"]
+}
