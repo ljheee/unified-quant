@@ -274,7 +274,7 @@ class ModelRunBuilder:
         for family, document in required_documents.items():
             if family not in {"universe_snapshot", "factor_manifests"}:
                 ModelContractLoader.validate(family, document)
-        resolve_bindings(required_documents)  # type: ignore[arg-type]
+        resolve_bindings(required_documents, universe_root=Path(store_root) / "universes")
         code_fingerprint = sha256_json({"component": "ModelRunBuilder", "version": 1})
         content_payload = {
             "definition": definition["generation_id"],

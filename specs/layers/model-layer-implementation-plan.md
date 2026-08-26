@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.4; phases 0–5 release candidate reconciled at commit 801c2279d58d67071a49306c49e379fc5ee6b1a2; local and remote six-cell gates passed**
+Status: **gated implementation order v1.5; phases 0–5 implemented and reconciled at commit 801c2279d58d67071a49306c49e379fc5ee6b1a2; local and remote six-cell gates passed. Post-release hardening adds split reconciliation, universe artifact verification, Qlib boundary negatives, reproducibility tests, and reviewed-definition governance.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -365,14 +365,21 @@ later phases must expand their rows before entering implementation.
 | M5a-label-generation-change | 0 | none | test_golden_vectors_cover_all_manifest_families | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/phase-0/golden-vectors/identity-golden-vectors.json | passed |
 | M5b-dataset-generation-change | 0 | none | test_golden_vectors_cover_all_manifest_families | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/phase-0/golden-vectors/identity-golden-vectors.json | passed |
 | M8a-provider-uri-mismatch | 2A | Phase 1 exit | test_wrong_provider_uri_rejected_on_receipt | tests/test_model_qlib_export.py | evidence/phase-0/phase-record.json | passed |
+| M3a-split-purge-embargo-write-reject | 1 | Phase 0 exit | TestDatasetWriter::test_split_purge_embargo_violation_fails_closed_on_write | generated governed dataset fixture | local unified gate report | passed |
+| M4a-dataset-byte-rebuild-locked-cell | 1 | Phase 0 exit | TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable | generated governed dataset fixture | local unified gate report | passed |
+| M4b-dataset-generation-stability | 1 | Phase 0 exit | TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable | generated governed dataset fixture | local unified gate report | passed |
 | M8b-calendar-tamper | 2A | Phase 1 exit | test_calendar_tamper_rejected_on_read | tests/test_model_qlib_export.py | evidence/phase-0/phase-record.json | passed |
-| M10a-quarantine-path-invisible | 4 | Phase 3 exit | test_quarantine_path_is_not_visible_as_accepted | tests/test_model_trainer.py | evidence/phase-0/phase-record.json | passed |
+| M8c-partial-export-read-reject | 2A | Phase 1 exit | test_partial_export_rejected_on_read | generated Qlib export snapshot | local unified gate report | passed |
+| M8d-feature-order-mutation-reject | 2A | Phase 1 exit | test_feature_order_mutation_rejected_on_read | generated Qlib export snapshot | local unified gate report | passed |
+| M8e-cache-substitution-outside-root | 2A | Phase 1 exit | test_cache_substitution_outside_approved_root_rejected + test_external_cache_writes_are_recorded_in_receipt | synthetic cache diff fixtures | local unified gate report | passed |
+| M10a-quarantine-path-invisible | 4 | Phase 3 exit | test_quarantine_path_is_not_visible_as_accepted + test_quarantine_manifest_records_input_generations_and_is_not_accepted | tests/test_model_trainer.py | evidence/phase-0/phase-record.json | passed |
+| M12a-reviewed-definition-required | 3 | Phase 2A exit | ModelDefinitionBuilder external `reviewed=True` rejection tests | tests/test_model_definition.py | local unified gate report | passed |
 | M11a-manifest-tamper-reject | 0 | none | test_typed_loader_rejects_absent_malformed_and_tampered_documents | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
 | M11b-path-mismatch-reject | 0 | none | test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
 | M11c-checksum-mismatch-reject | 0 | none | test_quality_report_checksum_and_binding_are_enforced | evidence/phase-0/fixtures/model_artifact-valid.json | evidence/phase-0/phase-record.json | passed |
 
-Phase 1+ sub-items remain `blocked` until their owning phase entry criteria pass
-and they are expanded with concrete test IDs and fixture paths.
+The remaining source-spec rows are covered by the runtime tests named above or by
+their existing phase-specific negative suites; no security/lineage row is deferred.
 
 ## Immediate Next Actions
 

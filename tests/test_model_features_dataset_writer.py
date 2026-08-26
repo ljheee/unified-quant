@@ -30,7 +30,7 @@ def _quality_report() -> dict:
 
 
 def _factor_frame() -> pd.DataFrame:
-    dates = pd.bdate_range("2026-01-05", periods=3)
+    dates = pd.bdate_range("2026-01-05", periods=20)
     rows = []
     for i in range(2):
         for d in dates:
@@ -107,8 +107,8 @@ class TestDatasetWriter:
             factor_generation_ids=[digest],
             label_set_name="return_5d", label_generation_id=digest,
             universe_snapshot_generation_id=digest,
-            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-01", "end_date": "2026-01-28"}]},
-            row_count=6,
+            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-12"}, {"name": "validation", "start_date": "2026-01-23", "end_date": "2026-01-26"}]},
+            row_count=40,
         )
 
     def test_write_and_readback(self, tmp_path: Path) -> None:
@@ -141,6 +141,34 @@ class TestDatasetWriter:
         with pytest.raises(ContractError, match="tampered"):
             writer.read("research_slice", "1.0.0", writer.last_published_manifest["generation_id"])
 
+    def _write_dataset(self, tmp_path: Path, frame: pd.DataFrame | None = None):
+        writer = DatasetWriter(tmp_path)
+        manifest = self._build_manifest()
+        frame = frame if frame is not None else _factor_frame()
+        schema = FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0")
+        partition = writer.write(manifest, frame, feature_schema=schema, quality_report=_quality_report())
+        return manifest, frame, partition
+
+    def test_rebuild_is_logically_reproducible_and_generation_stable(self, tmp_path: Path) -> None:
+        first_manifest, first_frame, first_partition = self._write_dataset(tmp_path / "one")
+        second_manifest, _, second_partition = self._write_dataset(tmp_path / "two")
+        assert (first_partition / "data.parquet").read_bytes() == (second_partition / "data.parquet").read_bytes()
+        assert first_manifest["generation_id"] == second_manifest["generation_id"]
+        assert first_manifest["logical_fingerprint"] == second_manifest["logical_fingerprint"]
+
+    def test_split_purge_embargo_violation_fails_closed_on_write(self, tmp_path: Path) -> None:
+        manifest = self._build_manifest()
+        manifest["split_policy"]["splits"][1]["start_date"] = "2026-01-14"
+        manifest["split_policy"]["splits"][1]["end_date"] = "2026-01-15"
+        frame = _factor_frame()
+        with pytest.raises(ContractError, match="purge/embargo"):
+            DatasetWriter(tmp_path).write(
+                manifest,
+                frame,
+                feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"),
+                quality_report=_quality_report(),
+            )
+
     def test_end_to_end_with_accepted_store(self, tmp_path: Path) -> None:
         """Full chain: publish factor → accepted index → feature schema → dataset write."""
         _publish_factor(tmp_path)
@@ -161,7 +189,7 @@ class TestDatasetWriter:
             factor_generation_ids=[gen_id],
             label_set_name="return_5d", label_generation_id=digest,
             universe_snapshot_generation_id=digest,
-            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-01", "end_date": "2026-01-28"}]},
+            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-12"}, {"name": "validation", "start_date": "2026-01-23", "end_date": "2026-01-26"}]},
             row_count=len(factor_data),
         )
         writer = DatasetWriter(tmp_path)

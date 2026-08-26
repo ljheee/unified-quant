@@ -33,7 +33,7 @@ def _publish_factor(root: Path) -> None:
     from uq.contracts.artifacts import QualityReportStore
     from uq.contracts.canonical_v2 import file_sha256_bytes
 
-    dates = pd.bdate_range("2026-01-05", periods=5)
+    dates = pd.bdate_range("2026-01-05", periods=20)
     rows = []
     rng = np.random.RandomState(42)
     for i in range(3):
@@ -78,7 +78,8 @@ def _load_factor_document(root: Path, generation_id: str) -> dict:
 def _publish_universe(root: Path) -> dict:
     import hashlib
 
-    members_artifact = {"path": "members.csv", "checksum_sha256": hashlib.sha256(b"INST0\nINST1\nINST2\n").hexdigest()}
+    members_artifact_bytes = b"INST0\nINST1\nINST2\n"
+    members_artifact = {"path": "members.csv", "checksum_sha256": hashlib.sha256(members_artifact_bytes).hexdigest()}
     payload = {
         "universe_version": 1, "universe_id": "e2e-whitelist",
         "source": "test://e2e-whitelist",
@@ -88,7 +89,11 @@ def _publish_universe(root: Path) -> dict:
         "members_artifact": members_artifact,
         "membership_evidence": "deterministic E2E fixture; no live index membership",
     }
-    return {**payload, "generation_id": sha256_json(payload)}
+    generation_id = sha256_json(payload)
+    members_path = root / "universes" / "e2e-whitelist" / generation_id / "members.csv"
+    members_path.parent.mkdir(parents=True, exist_ok=True)
+    members_path.write_bytes(members_artifact_bytes)
+    return {**payload, "generation_id": generation_id}
 
 
 DIGEST = "0" * 64
@@ -156,7 +161,7 @@ class TestEndToEndPipeline:
             factor_generation_ids=[factor_gen],
             label_set_name="return_5d", label_generation_id=label_manifest["generation_id"],
             universe_snapshot_generation_id=universe_manifest["generation_id"],
-            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-09"}]},
+            split_policy={"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-12"}, {"name": "validation", "start_date": "2026-01-23", "end_date": "2026-01-26"}]},
             row_count=len(factor_data),
         )
         writer = DatasetWriter(tmp_path)
@@ -167,7 +172,7 @@ class TestEndToEndPipeline:
         # === Phase 2A: Qlib export + init receipt ===
         exporter = QlibDatasetExporter(tmp_path / "qlib_exports")
         feature_mapping = {"volume_ratio_20d": "VOLUME_RATIO"}
-        calendar_dates = [d.strftime("%Y-%m-%d") for d in pd.bdate_range("2026-01-05", periods=5)]
+        calendar_dates = sorted(factor_data["datetime"].dt.strftime("%Y-%m-%d").unique().tolist())
         instruments = sorted(factor_data["instrument"].unique().tolist())
         export_manifest = exporter.export(
             dataset_name="e2e_slice", generation_id=dataset_manifest["generation_id"],
@@ -289,7 +294,7 @@ class TestEndToEndPipeline:
             "model_run": run_manifest,
             "model_artifact": {**artifact_manifest, "generation_id": artifact_generation},
             "prediction_set": pred_manifest,
-        })
+        }, universe_root=tmp_path / "universes")
         assert bindings_report["errors"] == []
 
         print(f"\nE2E pipeline complete: {len(entries)} factors, "

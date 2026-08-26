@@ -17,6 +17,7 @@ from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
 from ..errors import ContractError
+from .dataset import SplitValidator
 from .features import FeatureSchemaValidator
 from ..factors.raw_price import logical_fingerprint as frame_logical_fingerprint
 
@@ -53,6 +54,12 @@ class DatasetWriter:
             quality_report["report_checksum_sha256"] = sha256_json(quality_report)
 
         FeatureSchemaValidator.validate_against_frame(feature_schema, frame)
+        policy = published_manifest["split_policy"]
+        trading_dates = sorted({timestamp.strftime("%Y-%m-%d") for timestamp in frame["datetime"]})
+        SplitValidator.validate_splits(
+            policy["splits"], horizon=policy["purge_trading_days"],
+            embargo_days=policy["embargo_trading_days"], trading_dates=trading_dates,
+        )
 
         artifact, data_checksum = self._serialize(frame)
         restored = pd.read_parquet(io.BytesIO(artifact))
@@ -198,6 +205,13 @@ class DatasetWriter:
             raise ContractError("duplicate dataset keys prevent read")
         if frame_logical_fingerprint(frame) != manifest.get("logical_fingerprint"):
             raise ContractError("dataset logical fingerprint mismatch")
+        policy = manifest["split_policy"]
+        trading_dates = sorted({timestamp.strftime("%Y-%m-%d") for timestamp in frame["datetime"]})
+        SplitValidator.validate_splits(
+            policy["splits"], horizon=policy["purge_trading_days"],
+            embargo_days=policy["embargo_trading_days"], trading_dates=trading_dates,
+            covered_dates={str(value.date()) for value in pd.to_datetime(frame["datetime"])},
+        )
         if len(frame) != manifest.get("row_count"):
             raise ContractError("dataset row count does not match manifest")
         return manifest, frame

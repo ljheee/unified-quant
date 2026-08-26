@@ -91,9 +91,21 @@
       "path": "../phase-4a/phase-record.json",
       "status": "passed",
       "type": "remote_environment_matrix"
+    },
+    {
+      "type": "post_release_runtime_governance",
+      "bound_commit": "801c2279d58d67071a49306c49e379fc5ee6b1a2",
+      "paths": [
+        "../phase-1/phase-record.json",
+        "../phase-2a/phase-record.json",
+        "../phase-3/phase-record.json",
+        "../phase-4/phase-record.json",
+        "../phase-5/phase-record.json"
+      ],
+      "note": "Machine-readable reconciliation for implemented phases; fresh final HEAD gate pending."
     }
   ],
-  "index_version": 2,
+  "index_version": 3,
   "phase": 0,
   "status": "exited"
 }

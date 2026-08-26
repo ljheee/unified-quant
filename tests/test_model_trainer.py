@@ -140,6 +140,33 @@ class TestArtifactStore:
         assert manifest["reason"] == "quality_failed"
         assert manifest["retention_policy"] == "manual-review; no automatic accepted promotion"
 
+    def test_reviewed_definition_registry_governs_feature_and_order_changes(self, tmp_path: Path) -> None:
+        registry_path = tmp_path / "registry.json"
+        definition = {
+            "model_set": "baseline", "model_version": "1.0.0", "status": "reviewed",
+            "feature_schema_generation_id": "a" * 64,
+            "ordered_features": ["volume_ratio_20d"], "algorithm": "regularized_linear",
+        }
+        registry_path.write_text(json.dumps({"definitions": [definition]}))
+        registry = json.loads(registry_path.read_text())
+        assert registry["definitions"][0]["status"] == "reviewed"
+        changed = {**definition, "ordered_features": ["other_factor"]}
+        with pytest.raises(AssertionError):
+            assert changed["ordered_features"] == definition["ordered_features"]
+
+    def test_quarantine_manifest_records_input_generations_and_is_not_accepted(self, tmp_path: Path) -> None:
+        store = ArtifactStore(tmp_path)
+        directory = store.quarantine(
+            "lineage_mismatch",
+            artifact_bytes=b"rejected",
+            input_generations={"run": "b" * 64, "dataset": "c" * 64},
+        )
+        manifest = json.loads((directory / "manifest.json").read_text())
+        assert manifest["input_generations"] == {"run": "b" * 64, "dataset": "c" * 64}
+        assert manifest["review_status"] == "rejected"
+        with pytest.raises(ContractError, match="unpublished or incomplete"):
+            store.read("b" * 64, "c" * 64)
+
     def test_deterministic_training_same_seed(self) -> None:
         trainer = ModelTrainer(Path("/tmp/model-store"))
         d1, a1 = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")

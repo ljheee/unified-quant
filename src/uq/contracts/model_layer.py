@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
+from .canonical_v2 import file_sha256_bytes
 from .gate_contracts import adjustment_snapshot_generation, canonical_json, factor_manifest_identities, validate_contract, validate_contract_path
 from ..errors import ContractError
 
@@ -197,8 +198,11 @@ class AcceptedFactorIndexContract:
 
 def resolve_bindings(
     documents: dict[str, dict[str, Any]],
+    *,
+    universe_root: Path | str | None = None,
 ) -> dict[str, list[str]]:
     """Validate cross-manifest generation bindings among model contracts."""
+    universe_root = Path(universe_root) if universe_root is not None else Path.cwd() / "universes"
     errors: list[str] = []
     def validate_factor_document(generation_id: str, document: Any) -> None:
         if not isinstance(document, dict):
@@ -227,6 +231,18 @@ def resolve_bindings(
         except ContractError:
             errors.append("invalid universe snapshot content")
             return
+        artifact = document.get("members_artifact") or {}
+        path = universe_root / document["universe_id"] / document["generation_id"] / artifact.get("path", "")
+        try:
+            resolved = path.resolve(strict=True)
+            root_resolved = universe_root.resolve(strict=True)
+            contained = resolved.is_relative_to(root_resolved)
+        except (OSError, RuntimeError, ValueError):
+            contained = False
+        if not contained:
+            errors.append("universe member artifact is missing or outside approved store")
+        elif file_sha256_bytes(path.read_bytes()) != artifact.get("checksum_sha256"):
+            errors.append("universe member artifact checksum mismatch")
         if generation_id and document.get("generation_id") != generation_id:
             errors.append("universe_snapshot_generation_id mismatch")
 

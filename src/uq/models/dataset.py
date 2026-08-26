@@ -21,9 +21,15 @@ class SplitValidator:
         horizon: int,
         embargo_days: int,
         trading_dates: list[str],
+        covered_dates: set[str] | None = None,
     ) -> None:
         if len(splits) < 2:
             raise ContractError("at least train and validation splits required")
+        if covered_dates is not None:
+            declared = {item for split in splits for item in (split["start_date"], split["end_date"])}
+            missing = sorted(declared - set(trading_dates) - covered_dates)
+            if missing:
+                raise ContractError(f"split boundaries are not reconciled with dataset calendar: {missing}")
         names = [split["name"] for split in splits]
         if len(names) != len(set(names)):
             raise ContractError("duplicate split names")

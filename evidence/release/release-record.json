@@ -32,5 +32,9 @@
     ],
     "result": "passed"
   },
-  "status": "released_pending_final_marker"
+  "status": "released",
+  "post_release_hardening": {
+    "base_commit": "801c2279d58d67071a49306c49e379fc5ee6b1a2",
+    "requires_fresh_local_and_remote_gate": true
+  }
 }
