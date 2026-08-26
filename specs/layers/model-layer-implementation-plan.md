@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.4; phases 0–5 implemented draft; release blocked pending remote matrix and final-HEAD evidence**
+Status: **gated implementation order v1.4; phases 0–5 implemented draft; remote matrix passed and archived; release blocked only by final-HEAD evidence reconciliation**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
