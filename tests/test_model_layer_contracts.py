@@ -52,6 +52,7 @@ def base_document(schema_name: str) -> dict:
             "split_policy": {"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-01", "end_date": "2026-01-28"}]},
             "missing_policy": "fail_closed", "row_count": 10, "data_checksum_sha256": digest,
             "logical_fingerprint": digest, "code_fingerprint": digest, "serialization_profile_id": "uq-parquet-v1",
+            "quality_report_checksum_sha256": digest,
         })
     elif schema_name == "model_definition":
         common.update({
@@ -190,6 +191,7 @@ def _extended_document(schema_name: str) -> dict:
             "model_artifact_generation_id": digest,
             "model_artifact_checksum_sha256": digest,
             "input_dataset_generation_id": digest,
+            "model_run_generation_id": digest,
             "decision_date": "2026-02-02",
             "visible_cutoff": "2026-02-02T15:00:00+08:00",
             "score_semantics": {"column": "score", "unit": "rank", "direction": "higher_better", "ranking_scope": "universe", "tie_policy": "instrument", "normalization": "none"},
@@ -201,6 +203,7 @@ def _extended_document(schema_name: str) -> dict:
             "data_checksum_sha256": digest,
             "column_set_exact_match": True,
         })
+    common["quality_report_checksum_sha256"] = "0" * 64
     return common
 
 

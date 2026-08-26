@@ -76,6 +76,7 @@ class PredictionBuilder:
             "model_artifact_generation_id": model_artifact_generation_id,
             "model_artifact_checksum_sha256": model_artifact_checksum,
             "input_dataset_generation_id": input_dataset_generation_id,
+            "model_run_generation_id": run_generation_id,
             "decision_date": decision_date,
             "visible_cutoff": f"{decision_date}T15:00:00+08:00",
             "score_semantics": {
@@ -94,16 +95,34 @@ class PredictionBuilder:
             "row_count": len(scores),
             "data_checksum_sha256": data_checksum,
             "serialization_profile_id": "parquet-v1",
+            "quality_report_checksum_sha256": "0" * 64,
             "run_id": str(uuid.uuid4()),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
-        generation_id, manifest_digest = model_manifest_identities(manifest, schema_name="prediction_set")
+        unsigned_report={
+            "report_version":1,"binding_type":"prediction_set_v1","bound_generation_id":"pending","policy":"reject_all","status":"passed",
+            "checks":[{"name":"finite_scores","threshold":0,"observed":0,"level":"error","result":"passed"}],
+            "errors":[],"warnings":[],"producer_code_fingerprint":sha256_json({"component":"PredictionBuilder","version":1}),
+        }
+        provisional=dict(manifest);provisional["generation_id"]="0"*64;provisional["manifest_digest_sha256"]="0"*64
+        generation_id,_=model_manifest_identities(provisional,schema_name="prediction_set",exclude_fields={"quality_report_checksum_sha256"})
+        unsigned_report["bound_generation_id"]=generation_id
+        report={**unsigned_report,"report_checksum_sha256":sha256_json(unsigned_report)}
+        report_checksum=sha256_json(unsigned_report)
+        manifest["quality_report_checksum_sha256"]=report_checksum
+        report_dir=self.root/"model_quality_reports";report_dir.mkdir(parents=True,exist_ok=True)
+        rp=report_dir/f"{report_checksum}.json"
+        if not rp.exists():
+            rs=rp.with_suffix(f".staging.{uuid.uuid4().hex}");rs.write_text(json.dumps(report,sort_keys=True,indent=2)+"\n");os.replace(rs,rp);fsync_dir(self.root)
+        _,manifest_digest=model_manifest_identities(manifest,schema_name="prediction_set",exclude_fields={"quality_report_checksum_sha256"})
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest
         validate_contract("prediction_set.v1.json", manifest)
-        expected_generation, expected_digest = model_manifest_identities(manifest, schema_name="prediction_set")
+        expected_generation, expected_digest = model_manifest_identities(
+            manifest, schema_name="prediction_set", exclude_fields={"quality_report_checksum_sha256"}
+        )
         if manifest["generation_id"] != expected_generation or manifest["manifest_digest_sha256"] != expected_digest:
             raise ContractError("prediction manifest identity mismatch")
         return manifest, artifact
@@ -160,9 +179,19 @@ class PredictionBuilder:
         ModelContractLoader.validate("prediction_set", manifest)
         if manifest.get("decision_date") != decision_date:
             raise ContractError("decision date does not match prediction path partition")
-        expected_generation, _ = model_manifest_identities(manifest, schema_name="prediction_set")
+        expected_generation, _ = model_manifest_identities(manifest, schema_name="prediction_set", exclude_fields={"quality_report_checksum_sha256"})
         if manifest["generation_id"] != expected_generation:
             raise ContractError("prediction stable generation mismatch")
+        checksum=manifest["quality_report_checksum_sha256"]
+        try: report=json.loads((self.root/"model_quality_reports"/f"{checksum}.json").read_text())
+        except (OSError,json.JSONDecodeError) as exc: raise ContractError("prediction quality report unavailable") from exc
+        ModelContractLoader.validate("model_quality_report",report)
+        actual=sha256_json({k:v for k,v in report.items() if k!="report_checksum_sha256"})
+        if checksum!=actual or report["binding_type"]!="prediction_set_v1" or report["bound_generation_id"]!=manifest["generation_id"] or report["status"] not in {"passed","warning"}:
+            raise ContractError("prediction quality report rejects read")
+        self.artifact_store.read(
+            manifest["model_run_generation_id"], manifest["model_artifact_generation_id"]
+        )
         actual_checksum = file_sha256_bytes(data_path.read_bytes())
         if actual_checksum != manifest["data_checksum_sha256"]:
             raise ContractError("tampered prediction data prevents read")

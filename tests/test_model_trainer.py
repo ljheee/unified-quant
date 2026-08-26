@@ -132,11 +132,11 @@ class TestArtifactStore:
 
     def test_quarantine_rejects_accepted_read(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)
-        q_dir = store.quarantine("quality_failed", artifact_bytes=b"data")
+        q_dir = store.quarantine("quality_failed", artifact_bytes=b"data", input_generations={"dataset": "c" * 64})
         assert q_dir.is_dir()
         manifest = json.loads((q_dir / "manifest.json").read_text())
         assert manifest["review_status"] == "rejected"
-        assert manifest["input_generations"] == {}
+        assert manifest["input_generations"] == {"dataset": "c" * 64}
         assert manifest["reason"] == "quality_failed"
         assert manifest["retention_policy"] == "manual-review; no automatic accepted promotion"
 

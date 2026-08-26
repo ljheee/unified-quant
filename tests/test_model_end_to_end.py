@@ -210,6 +210,7 @@ class TestEndToEndPipeline:
             label_manifest=label_manifest,
             universe_snapshot=universe_manifest,
             factor_manifests={factor_gen: factor_document},
+            store_root=tmp_path,
         )
         # === Phase 4: Train + publish artifact ===
         trainer = ModelTrainer(tmp_path)

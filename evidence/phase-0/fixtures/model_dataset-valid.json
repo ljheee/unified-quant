@@ -1,37 +1,38 @@
 {
+  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
   "contract_version": 1,
-  "run_id": "00000000-0000-4000-8000-000000000001",
   "created_at": "2026-01-30T07:00:00+00:00",
-  "manifest_digest_sha256": "cf2bdc33bafa82532028b50316d5b783e2983ba2a237e6f9d4c3aa488cc6da2a",
-  "generation_id": "e97a0729d9f98e9e6d3d5ca9b6103175ae6d82fda5e3f08b1792ec4b8c3e912f",
+  "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "dataset_name": "research_slice",
-  "semantic_version": "1.0.0",
-  "ordered_features": [
-    "volume_ratio_20d"
-  ],
-  "factor_set": "basic",
-  "factor_version": "1.0.0",
   "factor_generation_ids": [
     "0000000000000000000000000000000000000000000000000000000000000000"
   ],
-  "label_set_name": "return_5d",
+  "factor_set": "basic",
+  "factor_version": "1.0.0",
+  "generation_id": "e97a0729d9f98e9e6d3d5ca9b6103175ae6d82fda5e3f08b1792ec4b8c3e912f",
   "label_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
-  "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "label_set_name": "return_5d",
+  "logical_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_digest_sha256": "ad7496d2d3077b302b16b9703af318a6619a73e1d5a1721becdd119593e0c837",
+  "missing_policy": "fail_closed",
+  "ordered_features": [
+    "volume_ratio_20d"
+  ],
+  "quality_report_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "row_count": 10,
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "semantic_version": "1.0.0",
+  "serialization_profile_id": "uq-parquet-v1",
   "split_policy": {
-    "purge_trading_days": 5,
     "embargo_trading_days": 2,
+    "purge_trading_days": 5,
     "splits": [
       {
+        "end_date": "2026-01-28",
         "name": "train",
-        "start_date": "2026-01-01",
-        "end_date": "2026-01-28"
+        "start_date": "2026-01-01"
       }
     ]
   },
-  "missing_policy": "fail_closed",
-  "row_count": 10,
-  "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-  "logical_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
-  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
-  "serialization_profile_id": "uq-parquet-v1"
+  "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000"
 }

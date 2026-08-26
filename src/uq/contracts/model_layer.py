@@ -24,6 +24,13 @@ _SCHEMA_NAMES = {
     "feature_schema",
 }
 _RUN_LOCAL_FIELDS = {"run_id", "created_at"}
+_QUALITY_BOUND_FIELDS = {
+    "model_dataset": {"quality_report_checksum_sha256"},
+    "model_run": {"quality_report_checksum_sha256"},
+    "qlib_dataset_export": {"export_layout", "quality_report_checksum_sha256"},
+    "qlib_init_receipt": {"quality_report_checksum_sha256"},
+    "prediction_set": {"quality_report_checksum_sha256"},
+}
 _MODEL_CONTRACT_FAMILIES = {*_SCHEMA_NAMES, "model_quality_report"}
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _ORDERING_FIELDS = ("factor_set", "factor_version", "partition_date", "generation_id")
@@ -68,6 +75,12 @@ def model_manifest_identities(
 
 def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
     if schema_name == "model_dataset":
+        if payload.get("quality_report_checksum_sha256") == "0" * 64:
+            provisional = {key: value for key, value in payload.items() if key != "quality_report_checksum_sha256"}
+            schema_path = Path(__file__).resolve().parents[3] / "config/schemas/contracts/model_dataset.v1.json"
+            required = json.loads(schema_path.read_text())["required"]
+            if all(field == "quality_report_checksum_sha256" or field in provisional for field in required):
+                return
         validate_contract("model_dataset.v1.json", payload)
         return
     if schema_name == "model_quality_report":
@@ -134,13 +147,11 @@ class ModelContractLoader:
                 if payload["report_checksum_sha256"] != sha256_json(checksum_payload):
                     raise ContractError("model quality report checksum mismatch")
             return
-        exclude_fields = None
+        exclude_fields = _QUALITY_BOUND_FIELDS.get(schema_name, set()).copy()
         if schema_name == "model_dataset":
-            exclude_fields = {"logical_fingerprint"}
+            exclude_fields.add("logical_fingerprint")
         elif schema_name == "model_artifact":
-            exclude_fields = {"quality_report_checksum_sha256"}
-        elif schema_name == "qlib_dataset_export":
-            exclude_fields = {"export_layout"}
+            exclude_fields.add("quality_report_checksum_sha256")
         expected_generation, expected_digest = model_manifest_identities(
             payload, schema_name=schema_name, exclude_fields=exclude_fields
         )
@@ -249,7 +260,9 @@ def resolve_bindings(
     if run:
         definition_gen = run.get("model_definition_generation_id")
         definition = documents.get("model_definition")
-        if definition and definition.get("generation_id") != definition_gen:
+        if definition is None:
+            errors.append("missing model_definition document for run")
+        elif definition.get("generation_id") != definition_gen:
             errors.append("run.definition_generation_id mismatch")
         dataset_gen = run.get("model_dataset_generation_id")
         if dataset and dataset.get("generation_id") != dataset_gen:

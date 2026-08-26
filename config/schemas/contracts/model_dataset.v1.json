@@ -24,6 +24,7 @@
     "serialization_profile_id",
     "run_id",
     "created_at",
+    "quality_report_checksum_sha256",
     "manifest_digest_sha256",
     "generation_id"
   ],
@@ -152,13 +153,21 @@
     },
     "generation_id": {
       "$ref": "#/$defs/sha256"
+    },
+    "quality_report_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
     }
   },
   "$defs": {
     "path_segment": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
-      "not": {"enum": [".", ".."]}
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
     },
     "sha256": {
       "type": "string",

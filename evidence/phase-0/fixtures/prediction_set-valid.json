@@ -1,35 +1,37 @@
 {
-  "contract_version": 1,
-  "run_id": "00000000-0000-4000-8000-000000000001",
-  "created_at": "2026-01-30T07:00:00+00:00",
-  "manifest_digest_sha256": "e9fdf362ee9752053738545d7a5aff111d00e7cca65e900b496f801f31cb3be7",
-  "generation_id": "ed75afc6270afb97164640f83c030b6f62694e43aeeeb128908a99fbf173813d",
-  "prediction_set_name": "daily",
-  "model_artifact_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
-  "model_artifact_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-  "input_dataset_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
-  "decision_date": "2026-02-02",
-  "visible_cutoff": "2026-02-02T15:00:00+08:00",
-  "score_semantics": {
-    "column": "score",
-    "unit": "rank",
-    "direction": "higher_better",
-    "ranking_scope": "universe",
-    "tie_policy": "instrument",
-    "normalization": "none"
-  },
-  "declared_output_columns": [
-    "instrument",
-    "score"
-  ],
   "actual_output_columns": [
     "instrument",
     "score"
   ],
   "column_set_exact_match": true,
-  "eligibility_policy": "reviewed-v1",
-  "row_count": 2,
+  "contract_version": 1,
+  "created_at": "2026-01-30T07:00:00+00:00",
   "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "decision_date": "2026-02-02",
+  "declared_output_columns": [
+    "instrument",
+    "score"
+  ],
+  "eligibility_policy": "reviewed-v1",
+  "eligibility_status": "passed",
+  "generation_id": "4630b50fc640d9c2bbdc6befa728be6c4f4486ffcd1d5dfa39c2ad4d497b6727",
+  "input_dataset_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_digest_sha256": "721eaee6f5af0392c5ae5018527e95c9d283ab647ce284057bd5dc58bcd94cb7",
+  "model_artifact_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "model_artifact_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "model_run_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "prediction_set_name": "daily",
+  "quality_report_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "row_count": 2,
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "score_semantics": {
+    "column": "score",
+    "direction": "higher_better",
+    "normalization": "none",
+    "ranking_scope": "universe",
+    "tie_policy": "instrument",
+    "unit": "rank"
+  },
   "serialization_profile_id": "uq-v1",
-  "eligibility_status": "passed"
+  "visible_cutoff": "2026-02-02T15:00:00+08:00"
 }

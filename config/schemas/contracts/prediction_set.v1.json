@@ -10,6 +10,7 @@
     "model_artifact_generation_id",
     "model_artifact_checksum_sha256",
     "input_dataset_generation_id",
+    "model_run_generation_id",
     "decision_date",
     "visible_cutoff",
     "score_semantics",
@@ -23,6 +24,7 @@
     "serialization_profile_id",
     "run_id",
     "created_at",
+    "quality_report_checksum_sha256",
     "manifest_digest_sha256",
     "generation_id"
   ],
@@ -112,7 +114,10 @@
       "const": "reviewed-v1"
     },
     "eligibility_status": {
-      "enum": ["passed", "rejected"]
+      "enum": [
+        "passed",
+        "rejected"
+      ]
     },
     "row_count": {
       "type": "integer",
@@ -136,13 +141,24 @@
     },
     "generation_id": {
       "$ref": "#/$defs/sha256"
+    },
+    "quality_report_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "model_run_generation_id": {
+      "$ref": "#/$defs/sha256"
     }
   },
   "$defs": {
     "path_segment": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
-      "not": {"enum": [".", ".."]}
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
     },
     "sha256": {
       "type": "string",

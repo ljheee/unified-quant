@@ -149,7 +149,10 @@ class ArtifactStore:
                 report_path = report_dir / f"{quality_report_checksum}.json"
                 if report_path.exists():
                     raise ContractError("immutable artifact quality report already exists")
-                report_path.write_text(json.dumps(quality_report, sort_keys=True, indent=2) + "\n")
+                report_staging = report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
+                report_staging.write_text(json.dumps(quality_report, sort_keys=True, indent=2) + "\n")
+                os.replace(report_staging, report_path)
+                fsync_dir(report_dir)
                 fsync_tree(staging)
                 os.replace(staging, partition)
                 fsync_dir(partition.parent)
@@ -204,7 +207,12 @@ class ArtifactStore:
             raise ContractError("path generation does not match manifest identity")
         return manifest, artifact_path.read_bytes()
 
-    def quarantine(self, reason: str, *, artifact_bytes: bytes = b"", operator: str = "model-store") -> Path:
+    def quarantine(self, reason: str, *, artifact_bytes: bytes = b"", input_generations: dict[str, str] | None = None, operator: str = "model-store") -> Path:
+        if not isinstance(input_generations or {}, dict) or not all(
+            isinstance(key, str) and isinstance(value, str) and len(value) == 64
+            for key, value in (input_generations or {}).items()
+        ):
+            raise ContractError("quarantine input_generations must map names to 64-character generation IDs")
         if reason not in {"quality_failed", "checksum_mismatch", "lineage_mismatch", "operator_rejected"}:
             raise ContractError("quarantine reason is not in the approved taxonomy")
         directory = self.quarantine_dir / uuid.uuid4().hex
@@ -218,7 +226,7 @@ class ArtifactStore:
                 "reason": reason,
                 "operator": operator,
                 "review_status": "rejected",
-                "input_generations": {},
+                "input_generations": dict(input_generations or {}),
                 "data_checksum_sha256": file_sha256_bytes(artifact_path.read_bytes()),
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "retention_policy": "manual-review; no automatic accepted promotion",
@@ -251,6 +259,7 @@ class ModelRunBuilder:
         universe_snapshot: dict[str, Any],
         factor_manifests: dict[str, dict[str, Any]],
         reproducibility_mode: str = "logical_fingerprint",
+        store_root: Path | str = ".",
     ) -> dict[str, Any]:
         from ..contracts.model_layer import resolve_bindings
         required_documents = {
@@ -295,13 +304,29 @@ class ModelRunBuilder:
             "environment_lock_sha256": environment_lock_sha256,
             "determinism_controls": determinism_controls,
             "reproducibility_mode": reproducibility_mode,
+            "quality_report_checksum_sha256": "0" * 64,
             **({"logical_tolerance": 1e-12} if reproducibility_mode == "logical_fingerprint" else {}),
             "run_id": str(uuid.uuid4()),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
-        generation_id, manifest_digest = model_manifest_identities(manifest, schema_name="model_run")
+        unsigned_report={
+            "report_version":1,"binding_type":"model_run_v1","bound_generation_id":"pending","policy":"reject_all","status":"passed",
+            "checks":[{"name":"upstream_lineage_resolved","threshold":0,"observed":0,"level":"error","result":"passed"}],
+            "errors":[],"warnings":[],"producer_code_fingerprint":code_fingerprint,
+        }
+        provisional=dict(manifest);provisional["generation_id"]="0"*64;provisional["manifest_digest_sha256"]="0"*64
+        generation_id,_=model_manifest_identities(provisional,schema_name="model_run",exclude_fields={"quality_report_checksum_sha256"})
+        unsigned_report["bound_generation_id"]=generation_id
+        report={**unsigned_report,"report_checksum_sha256":sha256_json(unsigned_report)}
+        manifest["quality_report_checksum_sha256"]=sha256_json(unsigned_report)
+        report_dir=Path(store_root)/"model_quality_reports";report_dir.mkdir(parents=True,exist_ok=True)
+        rp=report_dir/f"{manifest['quality_report_checksum_sha256']}.json"
+        if not rp.exists():
+            rs=rp.with_suffix(f".staging.{uuid.uuid4().hex}");rs.write_text(json.dumps(report,sort_keys=True,indent=2)+"\n");os.replace(rs,rp);fsync_dir(report_dir)
+        
+        _,manifest_digest=model_manifest_identities(manifest,schema_name="model_run",exclude_fields={"quality_report_checksum_sha256"})
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest
         ModelContractLoader.validate("model_run", manifest)

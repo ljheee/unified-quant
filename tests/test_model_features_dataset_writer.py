@@ -12,7 +12,21 @@ from uq.errors import ContractError
 from uq.models.accepted_store import AcceptedFactorIndexRuntime
 from uq.models.dataset import DatasetBuilder
 from uq.models.dataset_writer import DatasetWriter
+from uq.contracts.model_layer import sha256_json
 from uq.models.features import FeatureSchemaBuilder, FeatureSchemaValidator
+
+DIGEST = "0" * 64
+
+
+def _quality_report() -> dict:
+    report = {
+        "report_version": 1, "binding_type": "model_dataset_v1", "bound_generation_id": DIGEST,
+        "policy": "reject_all", "status": "passed",
+        "checks": [{"name": "row_count", "threshold": 0, "observed": 6, "level": "error", "result": "passed"}],
+        "errors": [], "warnings": [], "producer_code_fingerprint": DIGEST,
+    }
+    report["report_checksum_sha256"] = sha256_json(report)
+    return report
 
 
 def _factor_frame() -> pd.DataFrame:
@@ -102,7 +116,7 @@ class TestDatasetWriter:
         manifest = self._build_manifest()
         frame = _factor_frame()
         schema = FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0")
-        partition = writer.write(manifest, frame, feature_schema=schema)
+        partition = writer.write(manifest, frame, feature_schema=schema, quality_report=_quality_report())
         assert partition.is_dir()
         loaded_manifest, loaded_frame = writer.read("research_slice", "1.0.0", writer.last_published_manifest["generation_id"])
         assert list(loaded_frame.columns) == list(frame.columns)
@@ -111,7 +125,7 @@ class TestDatasetWriter:
         writer = DatasetWriter(tmp_path)
         manifest = self._build_manifest()
         frame = _factor_frame()
-        writer.write(manifest, frame, feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"))
+        writer.write(manifest, frame, feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"), quality_report=_quality_report())
         published_manifest = writer.last_published_manifest
         with pytest.raises(ContractError, match="immutable"):
             writer.write(dict(published_manifest), _factor_frame(), feature_schema=FeatureSchemaBuilder().build(_factor_frame(), source_factor_set="basic", source_factor_version="1.0.0"))
@@ -122,7 +136,7 @@ class TestDatasetWriter:
         writer = DatasetWriter(tmp_path)
         manifest = self._build_manifest()
         frame = _factor_frame()
-        partition = writer.write(manifest, frame, feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"))
+        partition = writer.write(manifest, frame, feature_schema=FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0"), quality_report=_quality_report())
         (partition / "data.parquet").write_bytes(b"tampered")
         with pytest.raises(ContractError, match="tampered"):
             writer.read("research_slice", "1.0.0", writer.last_published_manifest["generation_id"])
@@ -151,7 +165,7 @@ class TestDatasetWriter:
             row_count=len(factor_data),
         )
         writer = DatasetWriter(tmp_path)
-        partition = writer.write(manifest, factor_data, feature_schema=schema)
+        partition = writer.write(manifest, factor_data, feature_schema=schema, quality_report=_quality_report())
         assert partition.is_dir()
         _, loaded = writer.read("e2e_slice", "1.0.0", writer.last_published_manifest["generation_id"])
         assert len(loaded) == len(factor_data)

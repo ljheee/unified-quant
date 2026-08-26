@@ -2,11 +2,99 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unified-quant.local/schemas/contracts/qlib_init_receipt.v1.json",
   "title": "Qlib runtime initialization receipt v1",
-  "type": "object", "additionalProperties": false,
-  "required": ["contract_version","resolved_provider_uri_sha256","export_generation_id","export_manifest_digest_sha256","file_list_checksum_sha256","calendar_checksum_sha256","instruments_checksum_sha256","feature_mapping_checksum_sha256","qlib_import_path","qlib_version","cache_root","cache_diff_checksum_sha256","no_ungoverned_source_assertion","run_id","created_at","manifest_digest_sha256","generation_id"],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "resolved_provider_uri_sha256",
+    "export_generation_id",
+    "export_manifest_digest_sha256",
+    "file_list_checksum_sha256",
+    "calendar_checksum_sha256",
+    "instruments_checksum_sha256",
+    "feature_mapping_checksum_sha256",
+    "qlib_import_path",
+    "qlib_version",
+    "cache_root",
+    "cache_diff_checksum_sha256",
+    "no_ungoverned_source_assertion",
+    "run_id",
+    "created_at",
+    "quality_report_checksum_sha256",
+    "manifest_digest_sha256",
+    "generation_id"
+  ],
   "properties": {
-    "contract_version": {"const": 1}, "resolved_provider_uri_sha256": {"$ref":"#/$defs/sha256"}, "export_generation_id": {"$ref":"#/$defs/sha256"}, "export_manifest_digest_sha256": {"$ref":"#/$defs/sha256"}, "file_list_checksum_sha256": {"$ref":"#/$defs/sha256"}, "calendar_checksum_sha256": {"$ref":"#/$defs/sha256"}, "instruments_checksum_sha256": {"$ref":"#/$defs/sha256"}, "feature_mapping_checksum_sha256": {"$ref":"#/$defs/sha256"}, "qlib_import_path": {"type":"string","minLength":1}, "qlib_version": {"type":"string","minLength":1}, "cache_root": {"type":"string","minLength":1}, "cache_diff_checksum_sha256": {"$ref":"#/$defs/sha256"}, "no_ungoverned_source_assertion": {"const": true},
-    "run_id": {"$ref":"#/$defs/uuid"}, "created_at": {"$ref":"#/$defs/date_time"}, "manifest_digest_sha256": {"$ref":"#/$defs/sha256"}, "generation_id": {"$ref":"#/$defs/sha256"}
+    "contract_version": {
+      "const": 1
+    },
+    "resolved_provider_uri_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "export_generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "export_manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "file_list_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "calendar_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "instruments_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "feature_mapping_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "qlib_import_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "qlib_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cache_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cache_diff_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "no_ungoverned_source_assertion": {
+      "const": true
+    },
+    "run_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "created_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "quality_report_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
   },
-  "$defs":{"sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"uuid":{"type":"string","format":"uuid"},"date_time":{"type":"string","format":"date-time"}}
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
 }
