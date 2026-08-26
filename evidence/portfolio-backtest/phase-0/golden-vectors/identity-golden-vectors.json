@@ -1,0 +1,18 @@
+{
+  "backtest_config.v1": {
+    "generation_id": "5a4fb24124c86cf1cdcc305fcfeeb42fc8f8d0f76dd3817dfc3eb1f89d0735bf",
+    "manifest_digest_sha256": "653d7e347ca1528c06395c9c224df66b58fcc747179a36ced148af9955a63a47"
+  },
+  "backtest_result.v1": {
+    "generation_id": "b4cfc47582b7d322941301089459ea85d56b862f16148e6d0cdae855e080d020",
+    "manifest_digest_sha256": "3fe3b18c4cd7e30a1f9a0fcaff06433ee1eb7a4f45f2c80d447c96385a7a9a3c"
+  },
+  "portfolio_definition.v1": {
+    "generation_id": "842e6a874c470d72e9d8db14568d53632bdb6625c1a0027309a65d06561b7e7c",
+    "manifest_digest_sha256": "46ed311267a7f702b8f58fbf227e149a72f1638449868a4bcf2771ee69feefe9"
+  },
+  "target_weights.v1": {
+    "generation_id": "3e59c2e6e4ac97b0e33d3ba6ae48f9d1c75f7d32d31491d73a4081f82f2a3d90",
+    "manifest_digest_sha256": "844f2536f5ea61f65991fd418fde82185c5a9fc0075c1ceb76ad5a273a34ae8b"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "decision_date": "2026-01-05",
+  "portfolio_definition_generation_id": "$GEN",
+  "prediction_set_generation_id": "$GEN",
+  "universe_snapshot_generation_id": "$GEN",
+  "instrument_count": 3,
+  "total_stock_weight": 1.5,
+  "cash_reserve": 0.1,
+  "weights_file": "../escape.parquet",
+  "weights_checksum_sha256": "$GEN",
+  "columns": ["instrument", "weight"],
+  "dtypes": {"instrument": "string", "weight": "float64"},
+  "row_count": 3,
+  "key_uniqueness": "composite_key_not_allowed",
+  "logical_fingerprint": "$GEN",
+  "serialization_profile_id": "parquet-v1",
+  "run_id": "00000000-0000-0000-0000-000000000006",
+  "created_at": "2026-01-01T00:00:01Z"
+}

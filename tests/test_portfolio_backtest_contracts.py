@@ -1,6 +1,7 @@
 """Phase 0 contract tests for portfolio and backtest layers."""
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 
@@ -9,13 +10,16 @@ import pytest
 from uq.contracts.model_layer import ModelContractLoader, model_manifest_identities
 from uq.errors import ContractError
 
-FIXTURES = Path(__file__).resolve().parents[1] / "evidence/portfolio-backtest/phase-0/fixtures"
+ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "evidence/portfolio-backtest/phase-0/fixtures"
+GOLDEN_DIR = ROOT / "evidence/portfolio-backtest/phase-0/golden-vectors"
 
+# Quality checksum PARTICIPATES in stable generation for these four families.
 FAMILY_EXCLUDES = {
-    "portfolio_definition": {"quality_report_checksum_sha256"},
-    "target_weights": {"quality_report_checksum_sha256", "logical_fingerprint"},
-    "backtest_config": {"quality_report_checksum_sha256"},
-    "backtest_result": {"quality_report_checksum_sha256"},
+    "portfolio_definition": set(),
+    "target_weights": {"logical_fingerprint"},
+    "backtest_config": set(),
+    "backtest_result": set(),
 }
 
 
@@ -42,64 +46,102 @@ class TestPortfolioDefinitionSchema:
     def test_valid_fixture(self):
         ModelContractLoader.validate("portfolio_definition", _make_valid("portfolio_definition", "valid_portfolio_definition"))
 
-    def test_negative_fixture(self):
+    def test_negative_fixture_1(self):
         with pytest.raises(ContractError):
             ModelContractLoader.validate("portfolio_definition", _load_fixture("negative_portfolio_definition"))
+
+    def test_negative_fixture_2(self):
+        with pytest.raises(ContractError):
+            ModelContractLoader.validate("portfolio_definition", _load_fixture("negative_portfolio_definition_2"))
 
 
 class TestTargetWeightsSchema:
     def test_valid_fixture(self):
         ModelContractLoader.validate("target_weights", _make_valid("target_weights", "valid_target_weights"))
 
-    def test_negative_fixture(self):
+    def test_negative_fixture_1(self):
         with pytest.raises(ContractError):
             ModelContractLoader.validate("target_weights", _load_fixture("negative_target_weights"))
+
+    def test_negative_fixture_2(self):
+        with pytest.raises(ContractError):
+            ModelContractLoader.validate("target_weights", _load_fixture("negative_target_weights_2"))
 
 
 class TestBacktestConfigSchema:
     def test_valid_fixture(self):
         ModelContractLoader.validate("backtest_config", _make_valid("backtest_config", "valid_backtest_config"))
 
-    def test_negative_fixture(self):
+    def test_negative_fixture_1(self):
         with pytest.raises(ContractError):
             ModelContractLoader.validate("backtest_config", _load_fixture("negative_backtest_config"))
+
+    def test_negative_fixture_2(self):
+        with pytest.raises(ContractError):
+            ModelContractLoader.validate("backtest_config", _load_fixture("negative_backtest_config_2"))
 
 
 class TestBacktestResultSchema:
     def test_valid_fixture(self):
         ModelContractLoader.validate("backtest_result", _make_valid("backtest_result", "valid_backtest_result"))
 
-    def test_negative_fixture(self):
+    def test_negative_fixture_1(self):
         with pytest.raises(ContractError):
             ModelContractLoader.validate("backtest_result", _load_fixture("negative_backtest_result"))
 
+    def test_negative_fixture_2(self):
+        with pytest.raises(ContractError):
+            ModelContractLoader.validate("backtest_result", _load_fixture("negative_backtest_result_2"))
+
 
 class TestGoldenVectors:
-    def test_golden_vectors_deterministic(self):
-        base = _make_valid("portfolio_definition", "valid_portfolio_definition")
-        gen_a, digest_a = model_manifest_identities(
-            copy.deepcopy(base), schema_name="portfolio_definition",
-            exclude_fields=FAMILY_EXCLUDES["portfolio_definition"],
-        )
-        gen_b, digest_b = model_manifest_identities(
-            copy.deepcopy(base), schema_name="portfolio_definition",
-            exclude_fields=FAMILY_EXCLUDES["portfolio_definition"],
-        )
-        assert gen_a == gen_b and digest_a == digest_b
+    """Persist deterministic identity golden vectors to disk."""
 
-    def test_quality_checksum_excluded_from_generation_but_in_digest(self):
-        base = _make_valid("portfolio_definition", "valid_portfolio_definition")
+    FAMILIES = [
+        ("portfolio_definition", "valid_portfolio_definition"),
+        ("target_weights", "valid_target_weights"),
+        ("backtest_config", "valid_backtest_config"),
+        ("backtest_result", "valid_backtest_result"),
+    ]
 
+    def test_golden_vectors_deterministic_and_persisted(self):
+        GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
+        vectors = {}
+        for family, fixture in self.FAMILIES:
+            payload = _make_valid(family, fixture)
+            exclude = FAMILY_EXCLUDES[family]
+            gen_a, digest_a = model_manifest_identities(
+                copy.deepcopy(payload), schema_name=family, exclude_fields=exclude
+            )
+            gen_b, digest_b = model_manifest_identities(
+                copy.deepcopy(payload), schema_name=family, exclude_fields=exclude
+            )
+            assert gen_a == gen_b and digest_a == digest_b
+            vectors[f"{family}.v1"] = {"generation_id": gen_a, "manifest_digest_sha256": digest_a}
+
+        golden_path = GOLDEN_DIR / "identity-golden-vectors.json"
+        existing = json.loads(golden_path.read_text()) if golden_path.exists() else None
+        if existing is not None:
+            # Deterministic: same values every run
+            for key in existing:
+                assert vectors[key] == existing[key], f"golden vector drift for {key}"
+        else:
+            golden_path.write_text(json.dumps(vectors, indent=2, sort_keys=True) + "\n")
+
+    def test_quality_checksum_participates_in_generation(self):
+        base = _make_valid("portfolio_definition", "valid_portfolio_definition")
         modified = copy.deepcopy(base)
         modified["quality_report_checksum_sha256"] = "b" * 64
-        gen_base, digest_base = model_manifest_identities(
-            base, schema_name="portfolio_definition", exclude_fields=FAMILY_EXCLUDES["portfolio_definition"]
+
+        gen_base, _ = model_manifest_identities(
+            copy.deepcopy(base), schema_name="portfolio_definition",
+            exclude_fields=FAMILY_EXCLUDES["portfolio_definition"],
         )
-        gen_mod, digest_mod = model_manifest_identities(
-            modified, schema_name="portfolio_definition", exclude_fields=FAMILY_EXCLUDES["portfolio_definition"]
+        gen_mod, _ = model_manifest_identities(
+            modified, schema_name="portfolio_definition",
+            exclude_fields=FAMILY_EXCLUDES["portfolio_definition"],
         )
-        assert gen_base == gen_mod
-        assert digest_base != digest_mod
+        assert gen_base != gen_mod  # quality changes stable generation
 
 
 class TestRunMetadataExcludedFromGeneration:
@@ -110,9 +152,11 @@ class TestRunMetadataExcludedFromGeneration:
         modified["created_at"] = "2027-12-31T23:59:59Z"
 
         gen_a, _ = model_manifest_identities(
-            copy.deepcopy(base), schema_name="portfolio_definition", exclude_fields=FAMILY_EXCLUDES["portfolio_definition"]
+            copy.deepcopy(base), schema_name="portfolio_definition",
+            exclude_fields=FAMILY_EXCLUDES["portfolio_definition"],
         )
         gen_b, _ = model_manifest_identities(
-            modified, schema_name="portfolio_definition", exclude_fields=FAMILY_EXCLUDES["portfolio_definition"]
+            modified, schema_name="portfolio_definition",
+            exclude_fields=FAMILY_EXCLUDES["portfolio_definition"],
         )
         assert gen_a == gen_b

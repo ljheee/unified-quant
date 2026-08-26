@@ -122,6 +122,7 @@ First release supports `daily` only.
 ### 6.3 Trading Constraints
 
 1. Limit-up detection: buy is rejected when execution open price ≥ `prev_close × (1 + limit_ratio)`. `prev_close` uses raw (unadjusted) previous close from the governed price dataset. Default `limit_ratio` = 0.10 (main board A-shares only; STAR/ChiNext excluded per §2).
+2. Limit-down detection: sell is rejected when execution open price ≤ `prev_close × (1 - limit_ratio)`.
 3. Suspension: cannot trade suspended instruments.
 4. Minimum lot: A-share board lot of 100 shares.
 

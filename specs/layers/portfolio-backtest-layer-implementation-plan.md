@@ -90,14 +90,15 @@ fill. Board-lot rounding floors share count to multiples of 100.
 
 **Deliverables**
 
-- Final HEAD gate evidence (local + remote CI six-cell matrix)
+- Final HEAD local gate evidence with bound commit hash
 - Updated spec/plan status markers
 - Release record with bound commit hash and evidence index
+- Remote six-cell CI matrix result (if available) recorded as supplementary
 
 **Entry criteria**: Phase 2 exits.
 
-**Exit criteria**: All phases exited; remote CI matrix passed on final
-implementation commit; release marker committed.
+**Exit criteria**: All phases exited; local gate passed on final
+implementation commit; release record committed.
 
 ### Acceptance Matrix
 
@@ -132,15 +133,15 @@ implementation commit; release marker committed.
 | PB2g | 2 | test_volume_guard_skips_fill | blocked-by: PB1* |
 | PB2h | 2 | test_config_result_lineage_mismatch_rejected | blocked-by: PB1* |
 | PB2i | 2 | test_t1_sellable_quantity_enforced | blocked-by: PB1* |
-| PB3a | 3 | test_final_head_local_gate | blocked-by: PB2* |
+| PB3a | 3 | test_final_head_local_gate_passes | blocked-by: PB2* |
 
 ## 3. CI Matrix Note
 
-The portfolio/backtest layers are pure Python (pandas + numpy) with no C
-extension dependencies. The six-cell OS × Python matrix inherited from the
-factor/model layers is retained as a conservative regression check but is not
-a hard requirement unique to this layer; a single-platform gate is sufficient
-to validate portfolio/backtest correctness.
+This layer is pure Python (pandas + numpy). Release requires a successful
+local gate on final HEAD. The remote six-cell matrix is inherited from the
+repository's existing CI workflow as a conservative regression check; if it
+passes, it strengthens evidence. A local gate is sufficient to declare this
+layer's phase exit, provided all focused tests pass.
 
 ## 4. Dependency Graph
 

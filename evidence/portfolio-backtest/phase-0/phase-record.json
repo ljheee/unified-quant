@@ -5,15 +5,19 @@
   "entry_criteria": "none (first phase)",
   "exit_criteria_tests": [
     "test_portfolio_definition_valid_fixture",
-    "test_portfolio_definition_negative_fixture",
+    "test_portfolio_definition_negative_fixture_1",
+    "test_portfolio_definition_negative_fixture_2",
     "test_target_weights_valid_fixture",
-    "test_target_weights_negative_fixture",
+    "test_target_weights_negative_fixture_1",
+    "test_target_weights_negative_fixture_2",
     "test_backtest_config_valid_fixture",
-    "test_backtest_config_negative_fixture",
+    "test_backtest_config_negative_fixture_1",
+    "test_backtest_config_negative_fixture_2",
     "test_backtest_result_valid_fixture",
-    "test_backtest_result_negative_fixture",
-    "test_golden_vectors_deterministic",
-    "test_quality_checksum_excluded_from_generation_but_in_digest",
+    "test_backtest_result_negative_fixture_1",
+    "test_backtest_result_negative_fixture_2",
+    "test_golden_vectors_deterministic_and_persisted",
+    "test_quality_checksum_participates_in_generation",
     "test_run_id_and_created_at_do_not_change_generation"
   ],
   "evidence_paths": [
@@ -22,6 +26,7 @@
     "config/schemas/contracts/backtest_config.v1.json",
     "config/schemas/contracts/backtest_result.v1.json",
     "evidence/portfolio-backtest/phase-0/fixtures/",
+    "evidence/portfolio-backtest/phase-0/golden-vectors/",
     "tests/test_portfolio_backtest_contracts.py"
   ],
   "blocked_by": ["final HEAD gate report generation after commit"]

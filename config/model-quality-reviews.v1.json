@@ -5,33 +5,116 @@
   "bindings": {
     "model_dataset_v1": {
       "policy": "reject_all",
-      "allowed_statuses": ["passed", "warning"],
-      "allowed_checks": ["row_count", "schema_reconciliation", "readback_reconciliation", "null_rate"]
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "row_count",
+        "schema_reconciliation",
+        "readback_reconciliation",
+        "null_rate"
+      ]
     },
     "qlib_dataset_export_v1": {
       "policy": "reject_all",
-      "allowed_statuses": ["passed", "warning"],
-      "allowed_checks": ["export_files_verified"]
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "export_files_verified"
+      ]
     },
     "model_artifact_v1": {
       "policy": "reject_all",
-      "allowed_statuses": ["passed", "warning"],
-      "allowed_checks": ["artifact_checksum", "artifact_readback"]
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "artifact_checksum",
+        "artifact_readback"
+      ]
     },
     "qlib_init_receipt_v1": {
       "policy": "reject_all",
-      "allowed_statuses": ["passed", "warning"],
-      "allowed_checks": ["runtime_cache_boundary"]
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "runtime_cache_boundary"
+      ]
     },
     "model_run_v1": {
       "policy": "reject_all",
-      "allowed_statuses": ["passed", "warning"],
-      "allowed_checks": ["upstream_lineage_resolved"]
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "upstream_lineage_resolved"
+      ]
     },
     "prediction_set_v1": {
       "policy": "reject_all",
-      "allowed_statuses": ["passed", "warning"],
-      "allowed_checks": ["finite_scores", "eligibility_coverage"]
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "finite_scores",
+        "eligibility_coverage"
+      ]
+    },
+    "portfolio_definition_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "weight_scheme_valid",
+        "constraints_within_bounds",
+        "universe_binding_resolved"
+      ]
+    },
+    "target_weights_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "weight_sum_within_reserve",
+        "no_nan_inf_weights",
+        "instruments_in_universe"
+      ]
+    },
+    "backtest_config_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "calendar_period_valid",
+        "cost_parameters_non_negative",
+        "price_source_bound"
+      ]
+    },
+    "backtest_result_v1": {
+      "policy": "reject_all",
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "equity_curve_finite_positive",
+        "turnover_non_negative",
+        "lineage_generations_resolved"
+      ]
     }
   }
 }

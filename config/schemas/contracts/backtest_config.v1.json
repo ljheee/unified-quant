@@ -5,92 +5,201 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "contract_version", "schema_version",
-    "backtest_name", "start_date", "end_date",
+    "contract_version",
+    "schema_version",
+    "backtest_name",
+    "start_date",
+    "end_date",
     "execution_model",
     "cost_model",
     "limit_rules",
-    "calendar_binding", "price_source_binding", "universe_binding",
+    "calendar_binding",
+    "price_source_binding",
+    "universe_binding",
     "initial_capital",
-    "run_id", "created_at",
+    "run_id",
+    "created_at",
     "quality_report_checksum_sha256",
-    "manifest_digest_sha256", "generation_id"
+    "manifest_digest_sha256",
+    "generation_id"
   ],
   "properties": {
-    "contract_version": { "const": 1 },
-    "schema_version": { "const": "1.0.0" },
-    "backtest_name": { "$ref": "#/$defs/path_segment" },
-    "start_date": { "$ref": "#/$defs/date" },
-    "end_date": { "$ref": "#/$defs/date" },
+    "contract_version": {
+      "const": 1
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "backtest_name": {
+      "$ref": "#/$defs/path_segment"
+    },
+    "start_date": {
+      "$ref": "#/$defs/date"
+    },
+    "end_date": {
+      "$ref": "#/$defs/date"
+    },
     "execution_model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "board_lot"],
+      "required": [
+        "type",
+        "board_lot"
+      ],
       "properties": {
-        "type": { "const": "daily_t1_open" },
-        "board_lot": { "type": "integer", "const": 100 },
-        "sellable_quantity_rule": { "const": "prior_day_holding_only" },
-        "volume_participation_cap": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+        "type": {
+          "const": "daily_t1_open"
+        },
+        "board_lot": {
+          "type": "integer",
+          "const": 100
+        },
+        "sellable_quantity_rule": {
+          "const": "prior_day_holding_only"
+        },
+        "volume_participation_cap": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
       }
     },
     "cost_model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["commission_bps", "stamp_duty_bps", "slippage_bps"],
+      "required": [
+        "commission_bps",
+        "stamp_duty_bps",
+        "slippage_bps"
+      ],
       "properties": {
-        "commission_bps": { "type": "number", "minimum": 0 },
-        "stamp_duty_bps": { "type": "number", "minimum": 0 },
-        "slippage_bps": { "type": "number", "minimum": 0 }
+        "commission_bps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stamp_duty_bps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "slippage_bps": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     },
     "limit_rules": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["limit_ratio"],
+      "required": [
+        "limit_ratio"
+      ],
       "properties": {
-        "limit_ratio": { "type": "number", "minimum": 0.01, "maximum": 0.30 },
-        "prev_close_source": { "enum": ["governed_adjusted_close", "raw_prev_close"] },
-        "adjustment_basis": { "enum": ["adjusted", "raw"] }
+        "limit_ratio": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 0.3
+        },
+        "prev_close_source": {
+          "const": "raw_prev_close"
+        },
+        "adjustment_basis": {
+          "enum": [
+            "adjusted",
+            "raw"
+          ]
+        }
       }
     },
     "calendar_binding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["generation_id", "checksum_sha256"],
+      "required": [
+        "generation_id",
+        "checksum_sha256"
+      ],
       "properties": {
-        "generation_id": { "$ref": "#/$defs/sha256" },
-        "checksum_sha256": { "$ref": "#/$defs/sha256" }
+        "generation_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
     "price_source_binding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["dataset_generation_id", "data_checksum_sha256"],
+      "required": [
+        "dataset_generation_id",
+        "data_checksum_sha256"
+      ],
       "properties": {
-        "dataset_generation_id": { "$ref": "#/$defs/sha256" },
-        "data_checksum_sha256": { "$ref": "#/$defs/sha256" }
+        "dataset_generation_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "data_checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
     "universe_binding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["snapshot_generation_id"],
+      "required": [
+        "snapshot_generation_id"
+      ],
       "properties": {
-        "snapshot_generation_id": { "$ref": "#/$defs/sha256" }
+        "snapshot_generation_id": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
-    "initial_capital": { "type": "number", "exclusiveMinimum": 0 },
-    "run_id": { "$ref": "#/$defs/uuid" },
-    "created_at": { "$ref": "#/$defs/date_time" },
-    "quality_report_checksum_sha256": { "$ref": "#/$defs/sha256" },
-    "manifest_digest_sha256": { "$ref": "#/$defs/sha256" },
-    "generation_id": { "$ref": "#/$defs/sha256" }
+    "initial_capital": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "run_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "created_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "quality_report_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "generation_id": {
+      "$ref": "#/$defs/sha256"
+    }
   },
   "$defs": {
-    "path_segment": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", "not": { "enum": [".", ".."] } },
-    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-    "uuid": { "type": "string", "format": "uuid" },
-    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-    "date_time": { "type": "string", "format": "date-time" }
+    "path_segment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    }
   }
 }

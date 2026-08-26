@@ -144,7 +144,9 @@
         "annualized_return",
         "annualized_volatility",
         "sharpe_ratio",
-        "max_drawdown"
+        "max_drawdown",
+        "avg_daily_turnover",
+        "win_rate"
       ],
       "properties": {
         "cumulative_return": {
@@ -171,17 +173,11 @@
           ]
         },
         "avg_daily_turnover": {
-          "type": [
-            "number",
-            "null"
-          ],
+          "type": "number",
           "minimum": 0
         },
         "win_rate": {
-          "type": [
-            "number",
-            "null"
-          ],
+          "type": "number",
           "minimum": 0,
           "maximum": 1
         }
