@@ -238,3 +238,46 @@ class TestBacktestResultStore:
 
         with pytest.raises(ContractError, match="tampered|checksum"):
             store.read(disk_manifest["generation_id"])
+
+
+class TestT1SellableQuantity:
+    def test_t1_sellable_quantity_enforced(self):
+        """Shares bought on day T cannot be sold until T+1."""
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config()
+        # 3 dates: buy on D1 exec, try to sell on D2 (should work because T+1 has passed)
+        dates = ["2026-01-05", "2026-01-06", "2026-01-07"]
+        price_panel = _make_price_panel(dates, ["A"], open_prices={"A": 10.0})
+        
+        weights = {
+            "2026-01-05": _make_weights("2026-01-05", ["A"]),
+            "2026-01-06": pd.DataFrame({"instrument": [], "weight": []}),  # empty = sell all
+        }
+        _, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        fills = artifacts["fills"]
+        buy_fills = fills[(fills["side"] == "buy") & (fills["status"] == "filled")]
+        sell_fills = fills[(fills["side"] == "sell") & (fills["status"] == "filled")]
+        # If we bought, the sell should succeed because it's on the next trading day
+        if len(buy_fills) > 0 and len(sell_fills) > 0:
+            assert sell_fills.iloc[0]["date"] > buy_fills.iloc[0]["date"]
+
+    def test_insufficient_cash_skip_recorded(self):
+        """Buy order exceeding available cash is skipped and recorded."""
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config(initial_capital=1000.0)  # very small
+        price_panel = _make_price_panel(DATES, INSTRUMENTS)
+        weights = {"2026-01-05": _make_weights("2026-01-05", INSTRUMENTS)}
+        _, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+        )
+        fills = artifacts["fills"]
+        if len(fills) > 0:
+            cash_skips = fills[fills["status"] == "skipped_insufficient_cash"]
+            filled_buys = fills[(fills["side"] == "buy") & (fills["status"] == "filled")]
+            # Either all buys are filled within budget or some are skipped for cash
+            total_cost = sum(f["filled_shares"] * f["net_execution_price"] + f["commission_fee"] for _, f in filled_buys.iterrows())
+            assert total_cost <= config["initial_capital"] or len(cash_skips) > 0

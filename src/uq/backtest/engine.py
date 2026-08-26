@@ -17,9 +17,7 @@ from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.model_layer import (
     ModelContractLoader,
     bind_reviewed_quality_decision,
-    create_reviewed_quality_decision,
     model_manifest_identities,
-    sha256_json,
 )
 from ..errors import ContractError
 
@@ -83,7 +81,6 @@ class BacktestEngine:
 
         cash = initial_capital
         holdings: dict[str, int] = {}  # instrument -> shares (all sellable next day)
-        pending_buys: dict[str, int] = {}  # T+1 buy queue (not yet settled)
 
         equity_rows: list[dict[str, Any]] = []
         metrics_rows: list[dict[str, Any]] = []
@@ -152,65 +149,94 @@ class BacktestEngine:
             exec_date = trading_dates[exec_date_idx]
             exec_day_data = price_panel.loc[exec_date]
 
-            # Sell before buy
-            # 1. Process sells
+            # Sell before buy; only prior-day holdings are sellable (T+1 rule)
+            sellable_holdings = dict(holdings)  # snapshot: all currently held shares are T+1 eligible
             sells_to_process = []
             buys_to_process = []
-            for inst, target_w in target_weights.items():
-                current_shares = holdings.get(inst, 0)
+            
+            for inst, target_w in sorted(target_weights.items()):
+                current_shares = sellable_holdings.get(inst, 0)
                 open_price = exec_day_data.loc[inst, "open"] if inst in exec_day_data.index else 0.0
                 volume = exec_day_data.loc[inst, "volume"] if inst in exec_day_data.index else 0.0
-
-                if open_price <= 0 or volume <= 0:
-                    status = "skipped_suspended"
-                elif (exec_date, inst) in (suspension_dates or set()):
-                    status = "skipped_suspended"
-                elif inst in (corporate_action_instruments or set()):
-                    status = "skipped_suspended"
-                else:
-                    prev_close = prev_close_prices.get(inst, open_price)
-                    limit_up_price = prev_close * (1 + limit_ratio)
-                    limit_down_price = prev_close * (1 - limit_ratio)
-
-                    if target_w < (holdings.get(inst, 0) * open_price) / max(nav, 1):
-                        # Need to sell
-                        if current_shares <= 0:
-                            continue  # nothing to sell
-                        if open_price <= limit_down_price:
-                            status = "skipped_limit_down"
-                        elif volume * participation_cap * open_price < current_shares * open_price:
-                            status = "skipped_volume"
-                        else:
-                            status = "filled_sell"
-                            sells_to_process.append((inst, current_shares, open_price))
-                    elif target_w > (holdings.get(inst, 0) * open_price) / max(nav, 1):
-                        # Need to buy
-                        if open_price >= limit_up_price:
-                            status = "skipped_limit_up"
-                            fills_rows.append(self._fill_row(
-                                exec_date, inst, "buy", 0, 0,
-                                open_price, open_price, 0, 0, "skipped_limit_up"
-                            ))
-                            continue
-                        target_shares = int(
-                            target_w * nav / (open_price * (1 + slippage_rate)) / board_lot
-                        ) * board_lot
-                        max_shares_by_volume = int(volume * participation_cap / board_lot) * board_lot
-                        actual_shares = min(target_shares, max_shares_by_volume)
-                        net_price = open_price * (1 + slippage_rate)
-                        cost = actual_shares * net_price
-                        commission = cost * commission_rate
-                        total_cost = cost + commission
-                        if total_cost > cash:
-                            fills_rows.append(self._fill_row(
-                                exec_date, inst, "buy", target_shares, 0,
-                                open_price, net_price, 0, 0,
-                                "skipped_insufficient_cash"
-                            ))
-                            continue
-                        buys_to_process.append((inst, actual_shares, open_price))
-
-            # Process sells
+                
+                is_suspended = (
+                    open_price <= 0 or volume <= 0
+                    or (exec_date, inst) in (suspension_dates or set())
+                    or inst in (corporate_action_instruments or set())
+                )
+                
+                if is_suspended:
+                    if current_shares > 0 or target_w > 0:
+                        fills_rows.append(self._fill_row(
+                            date=exec_date, instrument=inst, side="sell" if current_shares > 0 else "buy",
+                            target_shares=current_shares if current_shares > 0 else 100,
+                            filled_shares=0, gross_execution_price=open_price,
+                            net_execution_price=open_price, commission_fee=0,
+                            stamp_duty_fee=0, status="skipped_suspended",
+                        ))
+                    continue
+                
+                current_weight = (current_shares * open_price) / max(nav, 1)
+                prev_close = prev_close_prices.get(inst, open_price)
+                limit_up_price = prev_close * (1 + limit_ratio)
+                limit_down_price = prev_close * (1 - limit_ratio)
+                
+                if target_w < current_weight and current_shares > 0:
+                    # SELL path
+                    if open_price <= limit_down_price:
+                        fills_rows.append(self._fill_row(
+                            date=exec_date, instrument=inst, side="sell",
+                            target_shares=current_shares, filled_shares=0,
+                            gross_execution_price=open_price, net_execution_price=open_price,
+                            commission_fee=0, stamp_duty_fee=0,
+                            status="skipped_limit_down",
+                        ))
+                        continue
+                    
+                    volume_cap_shares = int(volume * participation_cap / board_lot) * board_lot
+                    if current_shares > volume_cap_shares:
+                        fills_rows.append(self._fill_row(
+                            date=exec_date, instrument=inst, side="sell",
+                            target_shares=current_shares, filled_shares=0,
+                            gross_execution_price=open_price, net_execution_price=open_price,
+                            commission_fee=0, stamp_duty_fee=0,
+                            status="skipped_volume",
+                        ))
+                        continue
+                    
+                    sells_to_process.append((inst, current_shares, open_price))
+                    
+                elif target_w > current_weight and current_shares == 0:
+                    # BUY path (only new positions; adding to existing not in first release)
+                    if open_price >= limit_up_price:
+                        fills_rows.append(self._fill_row(
+                            date=exec_date, instrument=inst, side="buy",
+                            target_shares=board_lot, filled_shares=0,
+                            gross_execution_price=open_price, net_execution_price=open_price,
+                            commission_fee=0, stamp_duty_fee=0,
+                            status="skipped_limit_up",
+                        ))
+                        continue
+                    
+                    target_shares = int(target_w * nav / (open_price * (1 + slippage_rate)) / board_lot) * board_lot
+                    if target_shares <= 0:
+                        continue
+                    
+                    volume_cap_shares = int(volume * participation_cap / board_lot) * board_lot
+                    actual_shares = min(target_shares, volume_cap_shares)
+                    if actual_shares <= 0:
+                        fills_rows.append(self._fill_row(
+                            date=exec_date, instrument=inst, side="buy",
+                            target_shares=target_shares, filled_shares=0,
+                            gross_execution_price=open_price, net_execution_price=open_price,
+                            commission_fee=0, stamp_duty_fee=0,
+                            status="skipped_volume",
+                        ))
+                        continue
+                    
+                    buys_to_process.append((inst, actual_shares, open_price))
+            
+            # Process sells first (credit proceeds to cash)
             for inst, shares, price in sells_to_process:
                 net_price = price * (1 - slippage_rate)
                 gross_value = shares * price
@@ -220,26 +246,31 @@ class BacktestEngine:
                 cash += proceeds
                 del holdings[inst]
                 fills_rows.append(self._fill_row(
-                    exec_date, inst, "sell", shares, shares,
-                    price, net_price, commission, stamp_duty, "filled"
+                    date=exec_date, instrument=inst, side="sell",
+                    target_shares=shares, filled_shares=shares,
+                    gross_execution_price=price, net_execution_price=net_price,
+                    commission_fee=commission, stamp_duty_fee=stamp_duty,
+                    status="filled",
                 ))
-
-            # Process buys
+            
+            # Process buys with post-sell cash
             for inst, shares, price in buys_to_process:
                 net_price = price * (1 + slippage_rate)
                 cost = shares * net_price
                 commission = cost * commission_rate
-                cash -= (cost + commission)
-                pending_buys[inst] = pending_buys.get(inst, 0) + shares
-                fills_rows.append(self._fill_row(
-                    exec_date, inst, "buy", shares, shares,
-                    price, net_price, commission, 0, "filled"
-                ))
-
-            # Move pending buys to holdings (T+1 settlement)
-            for inst, shares in pending_buys.items():
+                total_cost = cost + commission
+                if total_cost > cash:
+                    fills_rows.append(self._fill_row(
+                        date=exec_date, instrument=inst, side="buy",
+                        target_shares=shares, filled_shares=0,
+                        gross_execution_price=price, net_execution_price=net_price,
+                        commission_fee=0, stamp_duty_fee=0,
+                        status="skipped_insufficient_cash",
+                    ))
+                    continue
+                cash -= total_cost
+                # T+1 settlement: bought shares become available next day
                 holdings[inst] = holdings.get(inst, 0) + shares
-            pending_buys.clear()
 
             # Update prev_close for next iteration
             for inst in exec_day_data.index:
@@ -327,11 +358,19 @@ class BacktestEngine:
         return manifest, artifacts
 
     @staticmethod
-    def _fill_row(*args: Any) -> dict[str, Any]:
-        keys = ["date", "instrument", "side", "target_shares", "filled_shares",
-                "gross_execution_price", "net_execution_price",
-                "commission_fee", "stamp_duty_fee", "status"]
-        return dict(zip(keys, args))
+    def _fill_row(*, date: str, instrument: str, side: str,
+                  target_shares: int, filled_shares: int,
+                  gross_execution_price: float, net_execution_price: float,
+                  commission_fee: float, stamp_duty_fee: float,
+                  status: str) -> dict[str, Any]:
+        return {
+            "date": date, "instrument": instrument, "side": side,
+            "target_shares": target_shares, "filled_shares": filled_shares,
+            "gross_execution_price": gross_execution_price,
+            "net_execution_price": net_execution_price,
+            "commission_fee": commission_fee, "stamp_duty_fee": stamp_duty_fee,
+            "status": status,
+        }
 
 
 class BacktestResultStore:

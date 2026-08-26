@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import shutil
@@ -20,7 +19,6 @@ from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.model_layer import (
     ModelContractLoader,
     bind_reviewed_quality_decision,
-    create_reviewed_quality_decision,
     model_manifest_identities,
     sha256_json,
 )
