@@ -1,7 +1,7 @@
 {
   "phase": 0,
   "layer": "portfolio_backtest",
-  "status": "in_progress",
+  "status": "exited",
   "entry_criteria": "none (first phase)",
   "exit_criteria_tests": [
     "test_portfolio_definition_valid_fixture",
@@ -29,5 +29,6 @@
     "evidence/portfolio-backtest/phase-0/golden-vectors/",
     "tests/test_portfolio_backtest_contracts.py"
   ],
-  "blocked_by": ["final HEAD gate report generation after commit"]
+  "blocked_by": [],
+  "gate_evidence": "evidence/portfolio-backtest/phase-0/gate-evidence/gate-report.json"
 }
