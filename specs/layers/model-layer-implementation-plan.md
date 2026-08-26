@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.7; phases 0–5 implemented draft. External reviewed-quality-report enforcement is complete; release remains blocked until fresh final-HEAD local/remote gates and release reconciliation pass.**
+Status: **gated implementation order v1.8; phases 0–5 complete and release-reconciled at commit 56f5aaa5b7b43ddcbaf32e9e08268975c096694a. Final HEAD CI run 32955140635 passed the six-cell matrix; only an evidence-only marker commit remains.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -419,3 +419,5 @@ Implemented in this slice:
 - immutable `external_quality_reviews` governance storage.
 
 Release still requires a successful final-HEAD unified gate and remote matrix after this behavior change.
+
+Final reconciliation uses independently downloaded artifacts from CI run `32955140635`; all six reports bind to `56f5aaa5b7b43ddcbaf32e9e08268975c096694a` with distinct platform/Python/timestamp fields.

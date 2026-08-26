@@ -1,6 +1,11 @@
 {
-  "bound_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
-  "ci_run_id": "32934486193",
+  "bound_commit": "56f5aaa5b7b43ddcbaf32e9e08268975c096694a",
+  "ci_run_id": "32955140635",
+  "external_quality_reviews": {
+    "contract": "config/model-quality-reviews.v1.json",
+    "publisher_self_approval_forbidden": true,
+    "schema": "config/schemas/contracts/model_quality_report.v2.json"
+  },
   "local_gate": {
     "path": "../phase-0/gate-reports/gate-report.json",
     "platform": "macOS-26.3-arm64-arm-64bit",
@@ -13,10 +18,8 @@
     "A final marker commit may change HEAD but must not alter implementation or lockfiles."
   ],
   "post_release_hardening": {
-    "base_commit": "8213233aa72522145b959ee5f04a163e4f02cc32",
-    "requires_external_reviewed_quality_reports": true,
-    "requires_fresh_local_and_remote_gate_after_review": false,
-    "valid_matrix_evidence": "final-head-ci/32934486193/aggregated-gates.json"
+    "base_commit": "56f5aaa5b7b43ddcbaf32e9e08268975c096694a",
+    "requires_fresh_local_and_remote_gate_after_marker": false
   },
   "record_version": 1,
   "remote_matrix": {
@@ -38,5 +41,6 @@
     ],
     "result": "passed"
   },
-  "status": "blocked"
+  "status": "released_pending_final_marker",
+  "valid_matrix_evidence": "final-head-ci/32955140635/aggregated-gates.json"
 }
