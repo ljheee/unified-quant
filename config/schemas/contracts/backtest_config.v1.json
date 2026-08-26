@@ -169,6 +169,44 @@
     },
     "generation_id": {
       "$ref": "#/$defs/sha256"
+    },
+    "corporate_action_binding": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "dataset_generation_id",
+        "data_checksum_sha256"
+      ],
+      "properties": {
+        "dataset_generation_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "data_checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "suspension_binding": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "dataset_generation_id",
+        "data_checksum_sha256"
+      ],
+      "properties": {
+        "dataset_generation_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "data_checksum_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
     }
   },
   "$defs": {

@@ -10,12 +10,19 @@
   "cash_reserve": 0.1,
   "weights_file": "data.parquet",
   "weights_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "columns": ["instrument", "weight"],
-  "dtypes": {"instrument": "string", "weight": "float64"},
+  "columns": [
+    "instrument",
+    "weight"
+  ],
+  "dtypes": {
+    "instrument": "string",
+    "weight": "float64"
+  },
   "row_count": 3,
   "key_uniqueness": "instrument",
   "logical_fingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "serialization_profile_id": "parquet-v1",
   "run_id": "00000000-0000-0000-0000-000000000002",
-  "created_at": "2026-01-01T00:00:01Z"
+  "created_at": "2026-01-01T00:00:01Z",
+  "previous_target_weights_generation_id": null
 }

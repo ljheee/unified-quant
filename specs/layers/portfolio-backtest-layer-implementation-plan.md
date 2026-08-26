@@ -116,7 +116,7 @@ implementation commit; release record committed.
 | PB0g | 0 | test_backtest_result_valid_fixture | pending |
 | PB0h | 0 | test_backtest_result_negative_fixture_1 | pending |
 | PB0h2 | 0 | test_backtest_result_negative_fixture_2 | pending |
-| PB0i | 0 | test_golden_vectors_deterministic | pending |
+| PB0i | 0 | test_golden_vectors_deterministic_and_persisted | pending |
 | PB1a | 1 | test_portfolio_e2e_publish_read | blocked-by: PB0* |
 | PB1b | 1 | test_single_position_cap | blocked-by: PB0* |
 | PB1c | 1 | test_industry_cap_scaling | blocked-by: PB0* |
@@ -154,3 +154,17 @@ Phase 0 ──> Phase 1 ──> Phase 2 ──> Phase 3
 ```
 
 No parallel tracks in the first release.
+
+## 5. Architecture Registration
+
+This portfolio/backtest layer is registered as a downstream consumer of the
+model layer in the UQ architecture. Its boundary is:
+
+```
+Model Layer (prediction_set.v1)
+  -> Portfolio Layer (portfolio_definition.v1, target_weights.v1)
+  -> Backtest Layer (backtest_config.v1, backtest_result.v1)
+```
+
+It does not replace Qlib's internal backtest for research exploration; it
+provides a governed, manifest-verified simulation path.

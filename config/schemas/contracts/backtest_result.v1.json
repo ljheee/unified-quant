@@ -42,7 +42,8 @@
       "items": {
         "$ref": "#/$defs/sha256"
       },
-      "minItems": 1
+      "minItems": 1,
+      "description": "ordered by decision_date ascending; must match target_weight_bindings order"
     },
     "price_source_binding": {
       "type": "object",
@@ -80,7 +81,14 @@
       ],
       "properties": {
         "file": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.parquet$",
+          "not": {
+            "enum": [
+              ".",
+              ".."
+            ]
+          }
         },
         "checksum_sha256": {
           "$ref": "#/$defs/sha256"
@@ -88,6 +96,22 @@
         "row_count": {
           "type": "integer",
           "minimum": 1
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "dtypes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "serialization_profile_id": {
+          "const": "parquet-v1"
         }
       }
     },
@@ -101,7 +125,14 @@
       ],
       "properties": {
         "file": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.parquet$",
+          "not": {
+            "enum": [
+              ".",
+              ".."
+            ]
+          }
         },
         "checksum_sha256": {
           "$ref": "#/$defs/sha256"
@@ -109,6 +140,22 @@
         "row_count": {
           "type": "integer",
           "minimum": 1
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "dtypes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "serialization_profile_id": {
+          "const": "parquet-v1"
         }
       }
     },
@@ -125,7 +172,14 @@
       ],
       "properties": {
         "file": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.parquet$",
+          "not": {
+            "enum": [
+              ".",
+              ".."
+            ]
+          }
         },
         "checksum_sha256": {
           "$ref": "#/$defs/sha256"
@@ -133,6 +187,22 @@
         "row_count": {
           "type": "integer",
           "minimum": 0
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "dtypes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "serialization_profile_id": {
+          "const": "parquet-v1"
         }
       }
     },
@@ -197,6 +267,30 @@
     },
     "generation_id": {
       "$ref": "#/$defs/sha256"
+    },
+    "target_weight_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision_date",
+          "generation_id",
+          "manifest_digest_sha256"
+        ],
+        "properties": {
+          "decision_date": {
+            "$ref": "#/$defs/date"
+          },
+          "generation_id": {
+            "$ref": "#/$defs/sha256"
+          },
+          "manifest_digest_sha256": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      }
     }
   },
   "$defs": {

@@ -1,6 +1,6 @@
 # Portfolio and Backtest Layer Specification
 
-Status: **design v1.0.0; phase 0 exited at commit 9747417**
+Status: **design v1.0.0; phase 0 exited at commit 712eb0a; remediation round 3 in progress**
 
 Upstream source: `specs/layers/model-layer-spec.md`
 
@@ -87,7 +87,7 @@ Constraints are applied after weight computation:
 
 1. Single-position cap: clip each weight; residual goes to cash.
 2. Industry cap: proportionally scale over-cap industries down.
-3. Turnover cap: one-sided turnover = 0.5 × Σ|w_target − w_executed_prev|. Interpolate linearly toward previous executed weights when the cap is exceeded. New positions start from zero.
+3. Turnover cap: one-sided turnover = 0.5 × Σ|w_target − w_previous_target|. The baseline is the prior trading day's published target weights (not actual executed holdings), bound via `previous_target_weights_generation_id` in target_weights.v1. Required for all dates after the first rebalance. Interpolate linearly toward previous targets when exceeded. New positions start from zero.
 4. Cash reserve: sum of stock weights must not exceed 1 minus reserve.
 
 All constraint parameters must be declared in `portfolio_definition.v1`.
@@ -106,8 +106,8 @@ First release supports `daily` only.
 - **T+1 sellable quantity**: only shares acquired on or before the prior
   trading day are sellable on day T+1. Shares bought today cannot be sold
   until the next trading day.
-- **Order construction**: target share count = floor(target_weight × T_close_Nav / (T+1_open_price × (1 + slippage_bps / 10000)) / board_lot) × board_lot. Cash residual from rounding stays in cash.
-- **Volume guard**: a fill is skipped if the required share count exceeds `volume_participation_cap × prior_day_volume` (T-day total volume, PIT-available at decision time). Default cap = 0.10.
+- **Order construction**: at decision date T close, compute NAV from closing prices and current holdings. Target share count = `floor(target_weight × NAV_T_close / (T+1_open_price × (1 + slippage_bps / 10000)) / board_lot) × board_lot`. T+1 open price is used for sizing because the actual execution price is known only at T+1 open; this introduces a small sizing approximation that is accepted in the first release. Sell proceeds are credited before buy orders are sized within each rebalance step.
+- **Volume guard**: a fill is skipped if the required share count exceeds `volume_participation_cap × T_day_total_volume`, where T_day_total_volume is the instrument's total traded volume on decision day T from the governed price dataset (PIT-available). This is a conservative proxy, not real-time order-book capacity. Zero-volume days are treated as suspended.
 - **Corporate actions**: this first release only supports instruments with no corporate action events during the backtest period. Instruments with dividends, splits, or rights issues within the period are excluded at universe filtering time.
 - Unfilled target delta is recorded in the fills ledger; cash remains idle.
 
@@ -138,7 +138,11 @@ Each row records one attempted order:
 | target_shares | integer | desired share count |
 | filled_shares | integer | actual shares traded |
 | execution_price | float64 | price used for fill |
-| status | string | "filled", "skipped_limit_up", "skipped_limit_down", "skipped_suspended", "skipped_volume" |
+| status | string | "filled", "skipped_limit_up", "skipped_limit_down", "skipped_suspended", "skipped_volume", "skipped_insufficient_cash", "skipped_t1_not_sellable" |
+| gross_execution_price | float64 | raw price used |
+| net_execution_price | float64 | price after slippage adjustment |
+| commission_fee | float64 | commission charged |
+| stamp_duty_fee | float64 | stamp duty charged (sell only) |
 
 The fills artifact must always exist; zero rows is valid.
 
@@ -151,10 +155,19 @@ Summary statistics:
 - cumulative return = V_end / V_start − 1;
 - annualized return = (V_end / V_start)^(252 / trading_days) − 1;
 - annualized volatility = std(daily simple returns) × √252;
-- Sharpe ratio = mean(daily returns − rf_daily) / std(daily returns) × √252, where rf_daily = 0 (first release);
+- Sharpe ratio = mean(daily returns − rf_daily) / std(daily returns) × √252, where rf_daily = 0 (first release); if std is zero or fewer than 2 observations, Sharpe is null;
 - maximum drawdown = max peak-to-trough decline of portfolio value at daily close valuation;
 - average daily turnover = mean(one-sided turnover);
 - win rate = fraction of days with positive daily return.
+
+
+### 6.6 Numerical Tolerances
+
+All float comparisons use absolute tolerance of `1e-8` unless otherwise declared:
+- weight sum ≤ 1 - cash_reserve + 1e-8;
+- equity curve positivity: value > 0 exactly (no tolerance);
+- identity checksums use exact byte equality.
+This tolerance constant is shared across portfolio and backtest layers and must not be overridden per call site.
 
 ## 7. Quality Gates
 
@@ -213,3 +226,10 @@ The first release reuses:
 - unified gate runner for mechanical testing.
 
 Phase records follow the same machine-readable format as the model layer.
+
+The external quality review currently operates as a process-level trust
+boundary: `create_reviewed_quality_decision()` validates against a frozen
+reviewer registry but does not use cryptographic attestation. A deployment
+must ensure the publisher process cannot invoke this function directly.
+Future versions should introduce an offline signing key or hardware-backed
+trust anchor to close this gap mechanically.
