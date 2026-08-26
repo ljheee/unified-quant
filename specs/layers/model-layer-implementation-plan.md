@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.5; phases 0–5 implemented and reconciled at commit 801c2279d58d67071a49306c49e379fc5ee6b1a2; local and remote six-cell gates passed. Post-release hardening adds split reconciliation, universe artifact verification, Qlib boundary negatives, reproducibility tests, and reviewed-definition governance.**
+Status: **gated implementation order v1.5; phases 0–5 complete and reconciled at commit 08a4095899ea1ebf236989e4e3606b2196095991; local and remote six-cell gates passed after post-release hardening.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -394,3 +394,5 @@ Completed for release candidate `801c2279d58d67071a49306c49e379fc5ee6b1a2`:
 A later marker commit may update these evidence files only; it must not alter
 implementation code, schemas, lockfiles, or gate commands. If it does, all local
 and remote gates must be rerun.
+
+Post-release hardening evidence binds to CI run `32929762689` under `evidence/release/final-head-ci/32929762689/`.

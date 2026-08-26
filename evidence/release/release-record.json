@@ -1,6 +1,6 @@
 {
-  "bound_commit": "801c2279d58d67071a49306c49e379fc5ee6b1a2",
-  "ci_run_id": "32928412607",
+  "bound_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
+  "ci_run_id": "32929762689",
   "local_gate": {
     "path": "../phase-0/gate-reports/gate-report.json",
     "platform": "macOS-26.3-arm64-arm-64bit",
@@ -34,7 +34,9 @@
   },
   "status": "released",
   "post_release_hardening": {
-    "base_commit": "801c2279d58d67071a49306c49e379fc5ee6b1a2",
-    "requires_fresh_local_and_remote_gate": true
+    "base_commit": "08a4095899ea1ebf236989e4e3606b2196095991",
+    "ci_run_path": "final-head-ci/32929762689/aggregated-gates.json",
+    "local_gate_path": "../phase-0/gate-reports/gate-report.json",
+    "requires_fresh_local_and_remote_gate": false
   }
 }
