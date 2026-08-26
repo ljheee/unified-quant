@@ -1,6 +1,6 @@
 # Portfolio and Backtest Layer Specification
 
-Status: **design v1.0.0; phase 0 exited and remediated at commit 2630944**
+Status: **v1.0.0; phases 0–2 complete and released_pending_final_marker at commit 62bf683**
 
 Upstream source: `specs/layers/model-layer-spec.md`
 

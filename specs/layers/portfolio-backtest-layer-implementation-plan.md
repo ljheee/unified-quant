@@ -1,6 +1,6 @@
 # Portfolio and Backtest Layer Implementation Plan
 
-Status: **gated implementation order v1.0; all phases paused pending phase 0 exit.**
+Status: **gated implementation order v1.0; phases 0–2 exited and release-reconciled at commit 62bf683. Local gate passed on final implementation HEAD (278 tests).**
 
 Source spec: `specs/layers/portfolio-backtest-layer-spec.md`
 
@@ -104,41 +104,41 @@ implementation commit; release record committed.
 
 | ID | Phase | Test ID | Status |
 |---|---|---|---|
-| PB0a | 0 | test_portfolio_definition_valid_fixture | pending |
-| PB0b | 0 | test_portfolio_definition_negative_fixture_1 | pending |
-| PB0b2 | 0 | test_portfolio_definition_negative_fixture_2 | pending |
-| PB0c | 0 | test_target_weights_valid_fixture | pending |
-| PB0d | 0 | test_target_weights_negative_fixture_1 | pending |
-| PB0d2 | 0 | test_target_weights_negative_fixture_2 | pending |
-| PB0e | 0 | test_backtest_config_valid_fixture | pending |
-| PB0f | 0 | test_backtest_config_negative_fixture_1 | pending |
-| PB0f2 | 0 | test_backtest_config_negative_fixture_2 | pending |
-| PB0g | 0 | test_backtest_result_valid_fixture | pending |
-| PB0h | 0 | test_backtest_result_negative_fixture_1 | pending |
-| PB0h2 | 0 | test_backtest_result_negative_fixture_2 | pending |
-| PB0i | 0 | test_golden_vectors_deterministic_and_persisted | pending |
-| PB1a | 1 | test_portfolio_e2e_publish_read | blocked-by: PB0* |
-| PB1b | 1 | test_single_position_cap | blocked-by: PB0* |
-| PB1c | 1 | test_industry_cap_scaling | blocked-by: PB0* |
-| PB1d | 1 | test_turnover_cap_interpolation | blocked-by: PB0* |
-| PB1e | 1 | test_tampered_manifest_rejects_read | blocked-by: PB0* |
-| PB1f | 1 | test_missing_quality_report_rejects_publish | blocked-by: PB0* |
-| PB1g | 1 | test_wrong_reviewer_signature_rejects_read | blocked-by: PB0* |
-| PB1h | 1 | test_prediction_lineage_mismatch_rejects_build | blocked-by: PB0* |
-| PB1i | 1 | test_instrument_outside_universe_rejected | blocked-by: PB0* |
-| PB1j | 1 | test_cash_reserve_violation_rejected | blocked-by: PB0* |
-| PB1k | 1 | test_overwrite_rejection | blocked-by: PB0* |
-| PB2a | 2 | test_backtest_deterministic_pnl | blocked-by: PB1* |
-| PB2b | 2 | test_commission_stamp_slippage_costs | blocked-by: PB1* |
-| PB2c | 2 | test_limit_up_blocks_buy | blocked-by: PB1* |
-| PB2d | 2 | test_limit_down_blocks_sell | blocked-by: PB1* |
-| PB2e | 2 | test_board_lot_rounding | blocked-by: PB1* |
-| PB2f | 2 | test_suspension_skip_recorded | blocked-by: PB1* |
-| PB2g | 2 | test_volume_guard_skips_fill | blocked-by: PB1* |
-| PB2h | 2 | test_config_result_lineage_mismatch_rejected | blocked-by: PB1* |
-| PB2i | 2 | test_t1_sellable_quantity_enforced | blocked-by: PB1* |
-| PB2j | 2 | test_insufficient_cash_skip_recorded | blocked-by: PB1* |
-| PB3a | 3 | test_final_head_local_gate_passes | blocked-by: PB2* |
+| PB0a | 0 | test_portfolio_definition_valid_fixture | passed |
+| PB0b | 0 | test_portfolio_definition_negative_fixture_1 | passed |
+| PB0b2 | 0 | test_portfolio_definition_negative_fixture_2 | passed |
+| PB0c | 0 | test_target_weights_valid_fixture | passed |
+| PB0d | 0 | test_target_weights_negative_fixture_1 | passed |
+| PB0d2 | 0 | test_target_weights_negative_fixture_2 | passed |
+| PB0e | 0 | test_backtest_config_valid_fixture | passed |
+| PB0f | 0 | test_backtest_config_negative_fixture_1 | passed |
+| PB0f2 | 0 | test_backtest_config_negative_fixture_2 | passed |
+| PB0g | 0 | test_backtest_result_valid_fixture | passed |
+| PB0h | 0 | test_backtest_result_negative_fixture_1 | passed |
+| PB0h2 | 0 | test_backtest_result_negative_fixture_2 | passed |
+| PB0i | 0 | test_golden_vectors_deterministic_and_persisted | passed |
+| PB1a | 1 | test_portfolio_e2e_publish_read | passed |
+| PB1b | 1 | test_single_position_cap | passed |
+| PB1c | 1 | test_industry_cap_scaling | passed |
+| PB1d | 1 | test_turnover_cap_interpolation | passed |
+| PB1e | 1 | test_tampered_manifest_rejects_read | passed |
+| PB1f | 1 | test_missing_quality_report_rejects_publish | passed |
+| PB1g | 1 | test_wrong_reviewer_signature_rejects_read | passed |
+| PB1h | 1 | test_prediction_lineage_mismatch_rejects_build | passed |
+| PB1i | 1 | test_instrument_outside_universe_rejected | passed |
+| PB1j | 1 | test_cash_reserve_violation_rejected | passed |
+| PB1k | 1 | test_overwrite_rejection | passed |
+| PB2a | 2 | test_backtest_deterministic_pnl | passed |
+| PB2b | 2 | test_commission_stamp_slippage_costs | passed |
+| PB2c | 2 | test_limit_up_blocks_buy | passed |
+| PB2d | 2 | test_limit_down_blocks_sell | passed |
+| PB2e | 2 | test_board_lot_rounding | passed |
+| PB2f | 2 | test_suspension_skip_recorded | passed |
+| PB2g | 2 | test_volume_guard_skips_fill | passed |
+| PB2h | 2 | test_config_result_lineage_mismatch_rejected | passed |
+| PB2i | 2 | test_t1_sellable_quantity_enforced | passed |
+| PB2j | 2 | test_insufficient_cash_skip_recorded | passed |
+| PB3a | 3 | test_final_head_local_gate_passes | passed |
 
 ## 3. CI Matrix Note
 

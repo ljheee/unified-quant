@@ -1,0 +1,22 @@
+{
+  "layer": "portfolio_backtest",
+  "status": "released_pending_final_marker",
+  "implementation_commit": "62bf683cfe6501e9926235ff1cbf327b9f0f1f49",
+  "local_gate": {
+    "result": "passed",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "commit_bound": "62bf683cfe6501e9926235ff1cbf327b9f0f1f49",
+    "timestamp": "2026-08-26T12:44:49.919341+00:00"
+  },
+  "phases_exited": [
+    0,
+    1,
+    2
+  ],
+  "phase_records": [
+    "evidence/portfolio-backtest/phase-0/phase-record.json",
+    "evidence/portfolio-backtest/phase-1/phase-record.json",
+    "evidence/portfolio-backtest/phase-2/phase-record.json"
+  ]
+}
