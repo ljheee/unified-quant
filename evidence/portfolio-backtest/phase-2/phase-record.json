@@ -1,7 +1,7 @@
 {
   "phase": 2,
   "layer": "portfolio_backtest",
-  "status": "in_progress",
+  "status": "exited",
   "entry_criteria": "Phase 1 exited",
   "exit_criteria_tests": [
     "test_deterministic_pnl",
@@ -19,5 +19,6 @@
     "src/uq/backtest/engine.py",
     "tests/test_backtest_layer.py"
   ],
-  "blocked_by": ["final HEAD gate report generation after commit"]
+  "blocked_by": [],
+  "gate_evidence": "evidence/portfolio-backtest/phase-2/gate-evidence/gate-report.json"
 }
