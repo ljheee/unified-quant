@@ -1,7 +1,7 @@
 {
   "layer": "portfolio_backtest",
   "status": "released",
-  "implementation_commit": "9b99440b18801cd9e976b5c50eadef1d65be6e73",
+  "implementation_commit": "d694110f95ff99ecc07137677e7a2011a9686f1e",
   "phases_exited": [
     0,
     1,
@@ -16,8 +16,8 @@
     "result": "passed",
     "platform": "macOS-26.3-arm64-arm-64bit",
     "python_version": "3.12.13",
-    "commit_bound": "9b99440b18801cd9e976b5c50eadef1d65be6e73",
-    "timestamp": "2026-08-31T13:38:44.714529+00:00"
+    "commit_bound": "d694110f95ff99ecc07137677e7a2011a9686f1e",
+    "timestamp": "2026-08-31T14:01:20.930219+00:00"
   },
   "phase_history": {
     "initial_implementation_gate": {
