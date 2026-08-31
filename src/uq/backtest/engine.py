@@ -185,7 +185,7 @@ class BacktestEngine:
                         fills_rows.append(self._fill_row(
                             date=exec_date, instrument=inst, side="sell",
                             target_shares=current_sellable, filled_shares=0,
-                            gross_execution_price=0.0, net_execution_price=0.0,
+                            gross_execution_price=float("nan"), net_execution_price=float("nan"),
                             commission_fee=0, stamp_duty_fee=0, status="skipped_suspended",
                         ))
                     continue
@@ -289,7 +289,10 @@ class BacktestEngine:
                         commission_fee=commission, stamp_duty_fee=0, status="filled",
                     ))
             
-            # T+1 unlock: all previously locked shares become sellable tomorrow
+            # T+1 unlock: all previously locked shares become sellable tomorrow.
+            # This runs on every rebalance execution day. In the daily decision model,
+            # each exec date clears the previous day's lock, which is correct because
+            # shares bought on exec day are locked and become sellable the next day.
             t1_locked.clear()
 
             # Update prev_close from execution day
@@ -491,6 +494,18 @@ class BacktestResultStore:
         if manifest["generation_id"] != result_generation_id:
             raise ContractError("backtest result generation mismatch on read")
 
+        # Mechanical lineage validation: ordering, dedup, non-empty
+        bindings = manifest.get("target_weight_bindings", [])
+        if not bindings:
+            raise ContractError("backtest result must have at least one target weight binding")
+        dates_in_bindings = [b["decision_date"] for b in bindings]
+        if dates_in_bindings != sorted(dates_in_bindings):
+            raise ContractError("target_weight_bindings must be sorted by decision_date ascending")
+        if len(dates_in_bindings) != len(set(dates_in_bindings)):
+            raise ContractError("target_weight_bindings contain duplicate decision dates")
+        if manifest["period_start"] > dates_in_bindings[0] or dates_in_bindings[-1] > manifest["period_end"]:
+            raise ContractError("target weight bindings fall outside backtest period")
+
         checksum = manifest["quality_report_checksum_sha256"]
         review_path = self.reviews_dir / f"{checksum}.json"
         if not review_path.is_file():
@@ -545,6 +560,9 @@ class BacktestResultStore:
 
     @staticmethod
     def _serialize(frame: pd.DataFrame) -> tuple[bytes, str]:
+        sort_cols = [c for c in ["date", "instrument"] if c in frame.columns]
+        if sort_cols:
+            frame = frame.sort_values(sort_cols, kind="mergesort")
         table = arrow.Table.from_pandas(frame.reset_index(drop=True), preserve_index=False)
         sink = arrow.BufferOutputStream()
         parquet.write_table(table, sink, compression="snappy")
