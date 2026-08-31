@@ -105,6 +105,35 @@ class PortfolioBuilder:
 
         weights_map = {inst: capped_weight for inst in selected}
 
+        # Industry cap: requires industry_source_binding and per-instrument industry mapping
+        if max_industry is not None and max_industry < 1.0:
+            industry_binding = definition.get("industry_source_binding")
+            if not industry_binding or industry_binding.get("source_type") != "governed_industry_manifest":
+                raise ContractError(
+                    "max_industry_weight requires a governed_industry_manifest binding"
+                )
+            if not isinstance(definition.get("_industry_mapping"), dict):
+                raise ContractError(
+                    "industry mapping must be provided as _industry_mapping {instrument: industry_id}"
+                )
+            industry_mapping: dict[str, str] = definition["_industry_mapping"]
+            # Compute industry totals
+            industry_totals: dict[str, float] = {}
+            for inst, w in weights_map.items():
+                ind = industry_mapping.get(inst)
+                if ind is None:
+                    continue
+                industry_totals[ind] = industry_totals.get(ind, 0.0) + w
+            # Scale down over-cap industries proportionally (residual to cash)
+            for ind, total in sorted(industry_totals.items()):
+                if total > max_industry + _WEIGHT_TOLERANCE:
+                    scale = max_industry / total
+                    for inst in list(weights_map.keys()):
+                        if industry_mapping.get(inst) == ind:
+                            weights_map[inst] *= scale
+                    residual_reduction = total - total * scale
+                    total_stock -= residual_reduction
+
         # Turnover cap
         if max_turnover is not None:
             if max_turnover > 0 and previous_target_weights is None:
@@ -297,11 +326,20 @@ class TargetWeightStore:
         if actual_checksum != manifest["weights_checksum_sha256"]:
             raise ContractError("tampered target-weight data prevents read")
 
+        if manifest.get("serialization_profile_id") != "parquet-v1":
+            raise ContractError("unsupported target-weights serialization profile")
         frame = pd.read_parquet(data_path)
         if list(frame.columns) != manifest.get("columns"):
             raise ContractError("target-weight column mismatch on read")
         if len(frame) != manifest.get("row_count"):
             raise ContractError("target-weight row count mismatch on read")
+        for col_name, expected_dtype in manifest.get("dtypes", {}).items():
+            if col_name in frame.columns:
+                actual_dtype = str(frame[col_name].dtype)
+                if "float" in expected_dtype and "float" not in actual_dtype:
+                    raise ContractError(f"dtype mismatch for {col_name}: expected {expected_dtype}, got {actual_dtype}")
+                elif expected_dtype == "string" and "object" not in actual_dtype and "str" not in actual_dtype:
+                    raise ContractError(f"dtype mismatch for {col_name}: expected string, got {actual_dtype}")
         if frame.duplicated(subset=["instrument"]).any():
             raise ContractError("duplicate instruments in target-weight data")
         if frame["weight"].isna().any() or not np.isfinite(frame["weight"]).all():

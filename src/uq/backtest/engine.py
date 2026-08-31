@@ -71,6 +71,18 @@ class BacktestEngine:
         start_date = config["start_date"]
         end_date = config["end_date"]
 
+        # Fail-closed: reject any weight partition containing a corporate-action instrument
+        ca_instruments = corporate_action_instruments or set()
+        if ca_instruments:
+            for date_key, weights_df in weight_partitions.items():
+                instruments_in_weights = set(weights_df["instrument"].tolist())
+                overlap = instruments_in_weights & ca_instruments
+                if overlap:
+                    raise ContractError(
+                        f"corporate-action instruments {sorted(overlap)} found in weight partitions on {date_key}; "
+                        "they must be excluded at universe filtering time"
+                    )
+
         # Sort decision dates
         sorted_dates = sorted(weight_partitions.keys())
         if not sorted_dates:

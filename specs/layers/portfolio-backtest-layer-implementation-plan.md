@@ -1,6 +1,6 @@
 # Portfolio and Backtest Layer Implementation Plan
 
-Status: **gated implementation order v1.0; phases 0–2 exited and release-reconciled at commit 62bf683. Local gate passed on final implementation HEAD (278 tests).**
+Status: **gated implementation order v1.0; phases 0–2 exited and release-reconciled; CR remediation rounds applied. Latest gate evidence in release/final-gate-report.json.**
 
 Source spec: `specs/layers/portfolio-backtest-layer-spec.md`
 

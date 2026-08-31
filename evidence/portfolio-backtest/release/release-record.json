@@ -2,13 +2,6 @@
   "layer": "portfolio_backtest",
   "status": "released",
   "implementation_commit": "030853dd078a16a1e37a3c5763a0c961eb4043c6",
-  "local_gate": {
-    "result": "passed",
-    "platform": "macOS-26.3-arm64-arm-64bit",
-    "python_version": "3.12.13",
-    "commit_bound": "62bf683cfe6501e9926235ff1cbf327b9f0f1f49",
-    "timestamp": "2026-08-26T12:44:49.919341+00:00"
-  },
   "phases_exited": [
     0,
     1,
@@ -21,7 +14,19 @@
   ],
   "final_head_gate": {
     "result": "passed",
-    "commit": "030853dd078a16a1e37a3c5763a0c961eb4043c6",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "commit_bound": "030853dd078a16a1e37a3c5763a0c961eb4043c6",
     "timestamp": "2026-08-26T13:24:43.586434+00:00"
+  },
+  "phase_history": {
+    "initial_implementation_gate": {
+      "commit": "62bf683cfe65",
+      "note": "Phase 2 initial implementation gate before CR remediation"
+    },
+    "cr_round1_gate": {
+      "commit": "1267223f36af",
+      "note": "First CR remediation round"
+    }
   }
 }
