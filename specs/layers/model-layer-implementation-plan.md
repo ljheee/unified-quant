@@ -408,31 +408,31 @@ later phases must expand their rows before entering implementation.
 | M11a-manifest-tamper-reject | 0 | none | test_typed_loader_rejects_absent_malformed_and_tampered_documents | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
 | M11b-path-mismatch-reject | 0 | none | test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
 | M11c-checksum-mismatch-reject | 0 | none | test_quality_report_checksum_and_binding_are_enforced | evidence/phase-0/fixtures/model_artifact-valid.json | evidence/phase-0/phase-record.json | passed |
-| FP1a-cross-section-transform | FP | none | test_cross_sectional_standardization_and_rank_are_date_bounded | generated frame | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1b-output-mismatch-reject | FP | none | test_manifest_rejects_transform_output_mismatch_and_sparse_group | generated frame | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1c-identity-stability | FP | none | test_manifest_identity_is_stable_across_run_metadata | generated frame | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | generated frame | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper + test_dataset_read_rejects_stored_input_feature_schema_tamper | generated frame | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1f-schema-binding-fail-closed | FP | none | test_dataset_write_rejects_wrong_input_feature_schema_binding | generated frame | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1g-infinity-reject | FP | none | test_build_rejects_infinity_in_input_or_output | generated frame | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1h-input-frame-mismatch | FP | none | test_dataset_write_rejects_preprocessing_input_frame_mismatch | generated frame | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1i-invalid-manifest | FP | none | test_dataset_write_rejects_invalid_preprocessing_manifest | generated frame | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1a-cross-section-transform | FP | none | test_cross_sectional_standardization_and_rank_are_date_bounded | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1b-output-mismatch-reject | FP | none | test_manifest_rejects_transform_output_mismatch_and_sparse_group | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1c-identity-stability | FP | none | test_manifest_identity_is_stable_across_run_metadata | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper + test_dataset_read_rejects_stored_input_feature_schema_tamper | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1f-schema-binding-fail-closed | FP | none | test_dataset_write_rejects_wrong_input_feature_schema_binding | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1g-infinity-reject | FP | none | test_build_rejects_infinity_in_input_or_output | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1h-input-frame-mismatch | FP | none | test_dataset_write_rejects_preprocessing_input_frame_mismatch | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1i-invalid-manifest | FP | none | test_dataset_write_rejects_invalid_preprocessing_manifest | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 
 The remaining source-spec rows are covered by the runtime tests named above or by
 their existing phase-specific negative suites; no security/lineage row is deferred.
 
 ## Immediate Next Actions
 
-The real Qlib runtime slice is complete. Release evidence is recorded in
-`evidence/release/final-head-ci/33523302538/aggregated-gates.json` for local and
-remote gates bound to `03d1f0c73a51976445c561718d744317684bf644`.
+FP remediation is not gate-exit ready. The active blocker is the external
+reviewer trust boundary: `create_reviewed_quality_decision()` remains a
+publisher-process helper and does not provide a mechanical separation from the
+publisher. FP must therefore remain `in_progress` even though contract, runtime,
+fixture, and local-gate checks are green.
 
-Remote coverage comprises the standard six-cell matrix (`macos-latest` and
-`ubuntu-latest` with Python 3.11–3.13) plus four Qlib-extras cells
-(`macos-latest` and `ubuntu-latest` with Python 3.11–3.12). The local gate used
-the `dev`, `real`, and `qlib` extras. Uncovered OS/CPU/BLAS/GPU combinations
-remain outside the certified matrix.
+After introducing and testing the external reviewer trust anchor:
 
-The evidence marker commit may update documentation and preserved evidence only;
-it must not alter implementation code, schemas, lockfiles, or gate commands. If
-it does, local and remote gates must be rerun.
+1. rerun the unified gate on the final implementation HEAD;
+2. preserve the local report, locked requirements, and digest;
+3. run and aggregate the declared remote CI matrix at the same HEAD;
+4. update the FP phase record and evidence index; and
+5. only then change FP status from `in_progress` to `exited`.

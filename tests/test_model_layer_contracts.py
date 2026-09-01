@@ -13,6 +13,8 @@ from uq.contracts.model_layer import (
     model_manifest_identities,
     sha256_json,
 )
+from uq.contracts.model_layer import _QUALITY_BOUND_FIELDS
+
 from uq.errors import ContractError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -282,6 +284,8 @@ def test_all_families_have_valid_and_negative_fixtures_on_disk() -> None:
         assert negative_path.is_file(), f"missing negative fixture: {negative_path}"
         valid_doc = json.loads(valid_path.read_text())
         ModelContractLoader.validate(family, valid_doc)
+        with pytest.raises(ContractError):
+            ModelContractLoader.validate(family, json.loads(negative_path.read_text()))
 
 
 def test_golden_vectors_cover_all_manifest_families() -> None:
@@ -292,6 +296,19 @@ def test_golden_vectors_cover_all_manifest_families() -> None:
     for family, entry in vectors.items():
         assert entry["run_metadata_change_stable"] is True
         assert entry["changed_run_generation_matches"] is True
+        fixture_path = ROOT / entry["valid_fixture"]
+        fixture = json.loads(fixture_path.read_text())
+        ModelContractLoader.validate(family, fixture)
+        exclude_fields = _QUALITY_BOUND_FIELDS.get(family, {"quality_report_checksum_sha256"}).copy()
+        if family == "model_dataset":
+            exclude_fields.add("logical_fingerprint")
+        elif family in {"feature_schema", "accepted_factor_index_query", "accepted_factor_index_response"}:
+            exclude_fields = set()
+        expected_generation, expected_digest = model_manifest_identities(
+            fixture, schema_name=family, exclude_fields=exclude_fields
+        )
+        assert fixture["generation_id"] == entry["generation_id"] == expected_generation
+        assert fixture["manifest_digest_sha256"] == entry["manifest_digest_sha256"] == expected_digest
 
 
 def test_cross_manifest_binding_resolver_passes_and_fails() -> None:
@@ -344,3 +361,18 @@ def test_quality_report_and_response_fixtures_exist_and_validate() -> None:
         from uq.contracts.gate_contracts import validate_contract as validate_schema
         schema_name = "model_quality_report.v1.json" if name == "model_quality_report" else f"{name}.v1.json"
         validate_schema(schema_name, json.loads(valid_path.read_text()))
+
+
+def test_feature_preprocessing_manifest_digest_anchors_quality_report_checksum() -> None:
+    fixture = json.loads((EVIDENCE_DIR / "fixtures" / "feature_preprocessing-valid.json").read_text())
+    changed = copy.deepcopy(fixture)
+    changed["quality_report_checksum_sha256"] = "2" * 64
+    generation, digest = model_manifest_identities(
+        changed, schema_name="feature_preprocessing",
+        exclude_fields={"quality_report_checksum_sha256"},
+    )
+    changed["generation_id"] = generation
+    changed["manifest_digest_sha256"] = digest
+    assert generation == fixture["generation_id"]
+    assert digest != fixture["manifest_digest_sha256"]
+    ModelContractLoader.validate("feature_preprocessing", changed)

@@ -209,8 +209,14 @@ class ModelQualityReviewRegistry:
                 raise ContractError(f"quality check is not approved: {check.get('name')}")
             if check.get("result") not in {"passed", "failed"}:
                 raise ContractError("quality check result is invalid")
-        if report.get("status") == "passed" and any(check.get("result") == "failed" for check in checks):
+        failed_error_checks = [
+            check for check in checks
+            if check.get("result") == "failed" and check.get("level", "error") == "error"
+        ]
+        if report.get("status") == "passed" and failed_error_checks:
             raise ContractError("passed quality report contains failed checks")
+        if report.get("status") == "warning" and failed_error_checks:
+            raise ContractError("warning quality report contains failed error checks")
 
 
 _MODEL_QUALITY_REVIEW_REGISTRY = ModelQualityReviewRegistry()

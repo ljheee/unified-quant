@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.1.1; phases 0–5 released; FP0/FP1 remediated pending fresh head-bound gate evidence**
+Status: **design v1.1.2; phases 0–5 released; FP remediated but blocked by external reviewer trust boundary and fresh gates**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
@@ -358,9 +358,13 @@ decision but cannot create, mutate, or re-sign review conclusions. The bound
 report checksum is recorded by the manifest and stored in an immutable
 governance root; cache directories are never quality-report storage.
 
-Because report binding participates in durable manifest identity, changing a
-review decision requires republishing a new artifact generation under the v1
-republish rule; existing partitions are immutable and cannot be edited.
+The first release does not yet provide an out-of-process reviewer service. The
+in-process helper is therefore a test fixture, not a production trust boundary.
+FP publications must remain blocked until a separately held external reviewer
+artifact/trust anchor is introduced and its signature is verified against a
+mechanically separated trust root. Changing a review decision requires
+republishing a new artifact generation; existing partitions are immutable and
+cannot be edited.
 
 ## 10. Quality Gate
 

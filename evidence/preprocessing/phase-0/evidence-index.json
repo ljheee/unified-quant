@@ -17,8 +17,8 @@
       "type": "contract_fixtures"
     },
     {
-      "generation_id": "694e0d3f3885b6ffd95c2a76c6bd130f7887c5aed08704570a07b569abef89e5",
-      "manifest_digest_sha256": "d90edeebeba9d9794d099d18d01bea00c10b819b4073765c41655eaf7c20f2f7",
+      "generation_id": "e3c4f9ec45ad18956c911b089b80984cce6dddf6644bc51f559ab02f61b19781",
+      "manifest_digest_sha256": "a5a6e9cb88a6517c12f286c248df556c0e9a0ce2c0f6e9dfc04053678fdf3be1",
       "path": "../phase-0/golden-vectors/identity-golden-vectors.json",
       "status": "passed",
       "test_id": "tests/test_model_layer_contracts.py::test_golden_vectors_cover_all_manifest_families",

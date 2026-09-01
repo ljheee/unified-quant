@@ -1,5 +1,7 @@
 {
   "blocked_by": [
+    "external reviewer trust anchor outside publisher process",
+    "fresh final-head unified local gate",
     "fresh final-head remote CI matrix",
     "evidence-only reconciliation commit"
   ],
@@ -29,14 +31,14 @@
     {
       "id": "FP0-exit-runtime",
       "status": "passed",
-      "test_id": "tests/test_feature_preprocessing.py"
+      "test_id": "tests/test_feature_preprocessing.py::test_cross_sectional_standardization_and_rank_are_date_bounded; tests/test_feature_preprocessing.py::test_manifest_rejects_transform_output_mismatch_and_sparse_group; tests/test_feature_preprocessing.py::test_manifest_identity_is_stable_across_run_metadata; tests/test_feature_preprocessing.py::test_dataset_write_and_readback_bind_preprocessing; tests/test_feature_preprocessing.py::test_dataset_read_rejects_preprocessing_manifest_tamper; tests/test_feature_preprocessing.py::test_build_rejects_infinity_in_input_or_output; tests/test_feature_preprocessing.py::test_dataset_write_rejects_wrong_input_feature_schema_binding; tests/test_feature_preprocessing.py::test_dataset_read_rejects_stored_input_feature_schema_tamper"
     },
     {
       "evidence_path": "gate-reports/gate-report.json",
       "id": "FP0-exit-final-head-gate",
-      "status": "passed",
+      "status": "blocked",
       "test_id": "UQ_GATE_EXTRAS=qlib scripts/run_gate.sh",
-      "note": "Local unified gate passed at implementation HEAD 7eb9c19."
+      "note": "Superseded local gate is bound to 7eb9c19; a fresh final-head gate is required."
     },
     {
       "evidence_path": null,

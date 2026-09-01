@@ -15,7 +15,7 @@ import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
-from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
 from ..errors import ContractError
 from .dataset import SplitValidator
 from .feature_preprocessing import FeaturePreprocessorBuilder
@@ -94,12 +94,6 @@ class DatasetWriter:
                 exclude_fields={"quality_report_checksum_sha256"},
             )
             ModelContractLoader.validate("feature_preprocessing", preprocessing_manifest)
-        quality_report_path = self.root / "external_quality_reviews" / f"{report_checksum}.json"
-        quality_report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_staging = quality_report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
-        report_staging.write_text(json.dumps(bound_report, sort_keys=True, indent=2) + "\n")
-        os.replace(report_staging, quality_report_path)
-        fsync_dir(quality_report_path.parent)
         published_manifest["generation_id"] = generation_id
         published_manifest["quality_report_checksum_sha256"] = report_checksum
         _, manifest_digest = model_manifest_identities(
@@ -135,11 +129,12 @@ class DatasetWriter:
                 (staging / "manifest.json").write_text(
                     json.dumps(published_manifest, sort_keys=True, indent=2) + "\n"
                 )
-                input_schema_dir = staging / "feature_schemas"
-                input_schema_dir.mkdir()
-                stored_input_schema = preprocessing_input_feature_schema or feature_schema
-                input_schema_bytes = json.dumps(stored_input_schema, sort_keys=True, indent=2).encode() + b"\n"
-                (input_schema_dir / "input.json").write_bytes(input_schema_bytes)
+                if published_manifest.get("input_feature_schema_path") is not None:
+                    input_schema_dir = staging / "feature_schemas"
+                    input_schema_dir.mkdir()
+                    stored_input_schema = preprocessing_input_feature_schema or feature_schema
+                    input_schema_bytes = json.dumps(stored_input_schema, sort_keys=True, indent=2).encode() + b"\n"
+                    (input_schema_dir / "input.json").write_bytes(input_schema_bytes)
                 (staging / "feature_schema.json").write_text(
                     json.dumps(feature_schema, sort_keys=True, indent=2) + "\n"
                 )
@@ -147,29 +142,34 @@ class DatasetWriter:
                     (staging / "feature_preprocessing.json").write_text(
                         json.dumps(preprocessing_manifest, sort_keys=True, indent=2) + "\n"
                     )
-                    preprocessing_path = self.root / "external_quality_reviews" / f"{preprocessing_report_checksum}.json"
-                    preprocessing_path.parent.mkdir(parents=True, exist_ok=True)
-                    if not preprocessing_path.exists():
-                        preprocessing_staging = preprocessing_path.with_suffix(f".staging.{uuid.uuid4().hex}")
-                        preprocessing_staging.write_text(json.dumps(bound_preprocessing_report, sort_keys=True, indent=2) + "\n")
-                        os.replace(preprocessing_staging, preprocessing_path)
-                        fsync_dir(preprocessing_path.parent)
-                report_dir = self.root / "model_quality_reports"
-                report_dir.mkdir(parents=True, exist_ok=True)
-                report_path = report_dir / f"{report_checksum}.json"
-                if not report_path.exists():
-                    report_staging = report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
-                    report_staging.write_text(json.dumps(quality_report, sort_keys=True, indent=2) + "\n")
-                    os.replace(report_staging, report_path)
-                    fsync_dir(report_dir)
                 fsync_tree(staging)
                 os.replace(staging, partition)
                 fsync_dir(partition.parent)
+                self._publish_quality_report(report_checksum, bound_report)
+                if preprocessing_manifest is not None:
+                    self._publish_quality_report(preprocessing_report_checksum, bound_preprocessing_report)
                 self._last_published_manifest = dict(published_manifest)
             except Exception:
                 shutil.rmtree(staging, ignore_errors=True)
                 raise
         return partition
+
+    def _publish_quality_report(self, checksum: str, report: dict[str, Any]) -> None:
+        path = self.root / "external_quality_reviews" / f"{checksum}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            existing = json.loads(path.read_text())
+            if existing != report:
+                raise ContractError("immutable quality report checksum collision")
+            return
+        staging = path.with_suffix(f".staging.{uuid.uuid4().hex}")
+        try:
+            staging.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
+            os.replace(staging, path)
+            fsync_dir(path.parent)
+        except Exception:
+            staging.unlink(missing_ok=True)
+            raise
 
     @property
     def last_published_manifest(self) -> dict[str, Any]:
@@ -178,12 +178,23 @@ class DatasetWriter:
         return self._last_published_manifest
 
     def read(self, dataset_name: str, semantic_version: str, generation_id: str) -> tuple[dict[str, Any], pd.DataFrame]:
-        partition = (
-            self._datasets_dir
-            / f"dataset={dataset_name}"
-            / f"version={semantic_version}"
-            / f"generation={generation_id}"
-        )
+        if dataset_name in {".", ".."} or "/" in dataset_name or "\\" in dataset_name:
+            raise ContractError("unsafe dataset name prevents read")
+        if semantic_version in {".", ".."} or "/" in semantic_version or "\\" in semantic_version:
+            raise ContractError("unsafe dataset version prevents read")
+        if generation_id in {".", ".."} or "/" in generation_id or "\\" in generation_id:
+            raise ContractError("unsafe dataset generation prevents read")
+        partition = self._datasets_dir / f"dataset={dataset_name}" / f"version={semantic_version}" / f"generation={generation_id}"
+        try:
+            resolved = partition.resolve(strict=True)
+            root_resolved = self.root.resolve(strict=True)
+            contained = resolved.is_relative_to(root_resolved)
+        except (OSError, RuntimeError, ValueError):
+            contained = False
+        if not contained:
+            raise ContractError("dataset partition lies outside approved store")
+        if any(item.is_symlink() for item in (self.root, *partition.parents)):
+            raise ContractError("symbolic links are forbidden in dataset stores")
         manifest_path = partition / "manifest.json"
         data_path = partition / "data.parquet"
         if not manifest_path.is_file() or not data_path.is_file():
@@ -275,6 +286,7 @@ class DatasetWriter:
         except (OSError, json.JSONDecodeError) as exc:
             raise ContractError("dataset quality report is unavailable or malformed") from exc
         ModelContractLoader.validate("model_quality_report", report)
+        ModelQualityReviewRegistry().validate_report(report)
         actual_checksum = sha256_json({key: value for key, value in report.items() if key != "report_checksum_sha256"})
         if (
             checksum != actual_checksum
@@ -335,6 +347,10 @@ class DatasetWriter:
         ordered_features = preprocessing_manifest["ordered_features"]
         if list(preprocessing_frame.columns) != ["instrument", "datetime", *ordered_features]:
             raise ContractError("preprocessing output columns do not match manifest")
+        if len(preprocessing_frame) != preprocessing_manifest["output_frame_row_count"]:
+            raise ContractError("preprocessing output row count mismatch")
+        if len(preprocessing_frame) != len(frame):
+            raise ContractError("dataset and preprocessing frame row counts disagree")
         canonical_output = preprocessing_frame.sort_values(
             ["instrument", "datetime"], kind="mergesort"
         ).reset_index(drop=True)
@@ -393,6 +409,7 @@ class DatasetWriter:
         except (OSError, json.JSONDecodeError) as exc:
             raise ContractError("preprocessing quality report is unavailable or malformed") from exc
         ModelContractLoader.validate("model_quality_report", report)
+        ModelQualityReviewRegistry().validate_report(report)
         actual_checksum = sha256_json({key: value for key, value in report.items() if key != "report_checksum_sha256"})
         if (
             checksum != actual_checksum

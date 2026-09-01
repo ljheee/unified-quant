@@ -9,6 +9,7 @@ import pandas as pd
 
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
 from ..errors import ContractError
+from .features import FeatureSchemaValidator
 
 
 def _frame_fingerprint(frame: pd.DataFrame) -> str:
@@ -73,6 +74,7 @@ class FeaturePreprocessorBuilder:
         ModelContractLoader.validate("feature_schema", input_feature_schema)
         ModelContractLoader.validate("feature_schema", output_feature_schema)
         self._validate_feature_schema(input_feature_schema, ordered_features, "input")
+        FeatureSchemaValidator.validate_against_frame(input_feature_schema, input_frame)
         self._validate_feature_schema(
             output_feature_schema,
             ordered_features,
