@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.12; phases 0–5 released; FP0/FP1 remediated and pending fresh head-bound local plus remote gate evidence.**
+Status: **gated implementation order v1.13; phases 0–5 released; FP contracts/runtime and fresh local plus ten-cell remote gates passed, but FP gate exit remains blocked by external reviewer trust boundary.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores

@@ -7,10 +7,10 @@
   ],
   "git_commit": "0a44b3c8590f46024f1b992e91997699ff19e6d5",
   "lockfile_sha256": "da51355b8f5100eacc19292622db1bf97b104926eed3d61ce4aac6133250fccc",
-  "platform": "macOS-26.3-arm64-arm-64bit",
-  "python_version": "3.12.13",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "python_version": "3.12.10",
   "requirements_lock_sha256": "cbfec94e5d552d069c9621cd49ce0c8d9068f5490d8011f522b09c0fe373fc2b",
   "runner": "uv",
   "test_result": "passed",
-  "utc_timestamp": "2026-09-01T18:06:21.628621+00:00"
+  "utc_timestamp": "2026-09-01T18:03:02.942206+00:00"
 }

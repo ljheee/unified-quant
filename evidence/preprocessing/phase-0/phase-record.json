@@ -1,9 +1,6 @@
 {
   "blocked_by": [
-    "external reviewer trust anchor outside publisher process",
-    "fresh final-head unified local gate",
-    "fresh final-head remote CI matrix",
-    "evidence-only reconciliation commit"
+    "external reviewer trust anchor outside publisher process"
   ],
   "entry_criteria": [
     {
@@ -36,15 +33,15 @@
     {
       "evidence_path": "gate-reports/gate-report.json",
       "id": "FP0-exit-final-head-gate",
-      "status": "blocked",
+      "status": "passed",
       "test_id": "UQ_GATE_EXTRAS=qlib scripts/run_gate.sh",
-      "note": "Superseded local gate is bound to 7eb9c19; a fresh final-head gate is required."
+      "note": "Local unified gate passed at implementation HEAD 0a44b3c."
     },
     {
-      "evidence_path": null,
+      "evidence_path": "remote-matrix/cells.json",
       "id": "FP0-exit-remote-matrix",
-      "status": "blocked",
-      "test_id": "CI unified gate matrix"
+      "status": "passed",
+      "test_id": "CI run 33541194434; ten distinct OS/Python/Qlib cells"
     }
   ],
   "phase": "FP0/FP1",
