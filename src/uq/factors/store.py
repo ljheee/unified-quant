@@ -84,6 +84,9 @@ class FactorStore:
                 raise ContractError("adjusted factor input binding does not match reviewed factor set")
             if adjustment_snapshot_id is None or effective_date_table_checksum is None:
                 raise ContractError("adjusted factors require governed adjustment lineage")
+        elif definition.factor_set.startswith("alpha"):
+            if input_dataset != "bars_daily" and input_dataset != "bars_adjusted":
+                raise ContractError(f"qlib adapter factors require bars input, got {input_dataset}")
         else:
             raise ContractError(f"unsupported governed factor set: {factor_set}")
 
@@ -284,8 +287,14 @@ def _manifest_without_identities(
     decision_time = datetime.combine(
         partition_date, time(15, 0), tzinfo=ZoneInfo("Asia/Shanghai")
     )
-    return {
-        "manifest_version": 1,
+    is_qlib = definition.factor_set.startswith("alpha")
+    code_fingerprint = file_sha256_bytes(Path(__file__).read_bytes())
+    if is_qlib:
+        from .qlib_adapter import QlibFactorAdapter
+
+        code_fingerprint = QlibFactorAdapter._fingerprint()
+    manifest = {
+        "manifest_version": 2 if is_qlib else 1,
         "input_dataset": input_dataset,
         "input_schema_version": input_schema_version,
         "factor_set": definition.factor_set,
@@ -312,7 +321,7 @@ def _manifest_without_identities(
         "data_checksum_sha256": data_checksum,
         "logical_fingerprint": logical_fingerprint(frame),
         "engine_version": "v0",
-        "code_fingerprint": file_sha256_bytes(Path(__file__).read_bytes()),
+        "code_fingerprint": code_fingerprint,
         "serialization_profile_id": SERIALIZATION_PROFILE["profile_id"],
         "engine_package_provenance": {
             "project_version": "0.1.0",
@@ -327,6 +336,15 @@ def _manifest_without_identities(
             "report_checksum_sha256": quality_report_checksum,
         },
     }
+    if is_qlib:
+        from .qlib_adapter import QlibFactorAdapter
+
+        manifest["engine_contract"] = {
+            "engine_name": "qlib",
+            "engine_version": QlibFactorAdapter.qlib_version(),
+            "qlib_expression_set": definition.document["qlib_expression_set"],
+        }
+    return manifest
 
 
 def _reconcile_output(expected: pd.DataFrame, actual: pd.DataFrame, fingerprint: str) -> None:
@@ -354,6 +372,10 @@ def read_factor_partition(partition: Path) -> pd.DataFrame:
     except json.JSONDecodeError as exc:
         raise ContractError("malformed factor manifest") from exc
 
+    schema_path = (
+        Path(__file__).resolve().parents[3]
+        / f"config/schemas/manifests/factor_manifest.v{manifest.get('manifest_version', 1)}.json"
+    )
     expected_components = {
         "dataset": "input_dataset",
         "schema_version": "input_schema_version",
@@ -369,7 +391,7 @@ def read_factor_partition(partition: Path) -> pd.DataFrame:
     if len(components) != 5 or components != observed:
         raise ContractError("physical path does not match manifest identity")
 
-    validate_contract_path(Path(__file__).resolve().parents[3] / "config/schemas/manifests/factor_manifest.v1.json", manifest)
+    validate_contract_path(schema_path, manifest)
     unsigned = {
         key: value for key, value in manifest.items() if key != "manifest_digest_sha256"
     }

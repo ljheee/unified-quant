@@ -1,6 +1,6 @@
 # Qlib Factor Adapter Specification
 
-Status: **design v1.0.0; contract drafting in progress**
+Status: **implemented v1.0.0; Alpha158 only; Alpha360 contract-only**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 External dependency: `pyqlib` (Alpha158/Alpha360 expression engine)
@@ -38,27 +38,31 @@ Qlib answers "what to compute". UQ answers "how to govern it".
 
 ## 3A. Dependency Gating
 
-`pyqlib` is NOT added to `pyproject.toml` at this stage. The adapter module
-uses a lazy import guarded by an explicit capability check. CI and gate
-runner do not require pyqlib. If pyqlib is installed in the environment,
-the adapter activates; otherwise, a typed `QlibNotInstalledError` is raised
-at compute time. This follows the same pattern as the model layer's Qlib
-dependency gating.
+`pyqlib` is an optional extra (`[project.optional-dependencies] qlib = ["pyqlib>=0.9.7"]`).
+The adapter module uses a lazy import. If pyqlib is not installed, a typed
+`QlibNotInstalledError` is raised at compute time. The broad unified gate does
+not install the optional extra; Qlib compute tests are skipped unless pyqlib
+is present. Governance-only tests still run. A qlib-enabled environment is
+required for Phase 1 compute evidence. The installed `qlib.__version__` is
+recorded in every manifest.
 
 ## 3B. Compute Strategy
 
-Qlib Alpha158 computes factors over an entire date range in one pass,
-producing a wide DataFrame (date × instrument × N columns). UQ
-FactorStore publishes per-date partitions. The adapter:
+Qlib's expression engine requires `qlib.init(provider_uri)` to resolve
+`$column` references. The adapter uses a temporary Qlib data directory:
 
-1. Converts UQ canonical data to Qlib's expected format (date-indexed
-   panel with OHLCV columns).
-2. Runs Alpha158 expressions over the full range.
-3. Slices the result into per-date frames.
-4. Publishes each date partition via FactorStore.
+1. Convert UQ canonical data to Qlib `.bin` format in a temp directory
+   (calendar.txt, instruments/all.txt, features/<inst>/<col>.day.bin).
+2. Call `qlib.init(provider_uri=tempdir)`.
+3. Run Alpha158 expressions via `D.features()` over the full range.
+4. Convert result back to UQ canonical format (instrument, datetime keys).
+5. Clean up temp directory and re-init Qlib to previous state if needed.
 
-This means Phase 1 E2E tests must use a synthetic multi-date panel, not
-a single-day snapshot.
+Qlib `init()` is a global singleton. The adapter tracks whether it was
+previously initialized and restores state after computation.
+
+UQ FactorStore publishes per-date partitions. After computation, the
+adapter slices the result into per-date frames for publication.
 
 ## 3C. VWAP Handling
 
@@ -70,46 +74,45 @@ factor-set definition JSON.
 ## 3D. Lookahead Audit
 
 Qlib Alpha158 expressions that use `Ref($column, -N)` (future data) are
-**excluded**. The adapter validates each factor's expression AST before
-computation and raises a typed error if a forward-looking reference is
-detected. This audit is performed at factor-set definition time, not at
-runtime.
+**excluded**. The adapter performs a deterministic expression-shift audit at
+definition load time and raises a typed error if a forward-looking reference
+is detected.
 
 ## 4. Data Flow
 
-1. UQ `FactorContext` reads governed canonical data.
-2. Adapter converts to Qlib's expected DataFrame format (pandas MultiIndex).
-3. Qlib expression evaluation runs Alpha158/360 over the full range.
-4. Adapter validates no forward-looking references in expression AST.
+1. The caller supplies a UQ canonical multi-date OHLCV DataFrame.
+2. Adapter converts it to a temporary Qlib file provider.
+3. Qlib expression evaluation runs the reviewed Alpha158 set over the full range.
+4. Adapter rejects any negative `Ref` shift before computation.
 5. Adapter converts result back to UQ canonical format (instrument, datetime keys).
 6. Result is sliced into per-date partitions.
 7. UQ governance wrapper generates manifest, binds quality report.
 8. `FactorStore.publish()` writes immutable partition per date.
 
-Qlib initialization: the adapter does NOT use `qlib.init(provider_uri=...)`.
-Instead, it uses Qlib's expression evaluation directly on a pandas DataFrame
-via `qlib.data.dataset.processor` internals or `Alpha158` handler's
-`__call__` method, bypassing Qlib's file-based data layer entirely. This
-keeps UQ's governance as the single data source.
+The adapter writes UQ governed data to a temporary Qlib-format directory
+(calendars, instruments, features as `.bin` files), calls `qlib.init()`,
+evaluates expressions, then cleans up. UQ's governance remains the single
+data source; Qlib's file layer is used only as a computation backend.
 
 ## 5. Factor Set Definitions
 
 ### 5.1 `alpha158-v1`
 
-Subset of Qlib's Alpha158 expression set, restricted to factors that
-depend only on: open, close, high, low, volume, amount, vwap.
-
-Excluded: factors requiring Qlib's internal `Ref` with negative lookahead
-or non-governed data sources.
+Reviewed 157-factor subset of Qlib's Alpha158 expression set. It uses only
+the governed columns `$open`, `$high`, `$low`, `$close`, and `$volume`.
+`VWAP0` is excluded because `$vwap` is not governed. Expressions may use
+positive `Ref(..., N)` history; negative lookahead references are rejected.
 
 ### 5.2 `alpha360-v1`
 
-Analogous subset from Alpha360.
+Draft contract only. It has no reviewed factors and cannot be computed or
+published until a future reviewed version supplies its expression set.
 
 ### 5.3 Selection Criteria
 
 A factor is included if:
-1. Its expression uses only governed columns (OHLCV + amount, no vwap).
+1. Its expression uses only governed columns (`$open`, `$high`, `$low`,
+   `$close`, and `$volume`; no `$vwap`).
 2. All operations are backward-looking (no future data leakage).
 3. It produces finite values for at least 80% of the universe.
 4. It does not duplicate an existing UQ factor (e.g. return_1d).
@@ -138,10 +141,10 @@ Every published partition must have:
 | generation_id | SHA-256 of canonical identity payload |
 | manifest_digest_sha256 | SHA-256 of full manifest |
 | data_checksum_sha256 | SHA-256 of Parquet artifact |
-| quality_report_checksum_sha256 | External reviewer's report digest |
-| implementation_fingerprint | SHA-256 of adapter code version |
-| qlib_expression_set | `Alpha158` or `Alpha360` |
-| qlib_version | installed pyqlib version string |
+| quality_report_checksum_sha256 | Factor quality report file digest |
+| implementation_fingerprint | SHA-256 of adapter module bytes |
+| engine_contract.qlib_expression_set | `Alpha158` for this release |
+| engine_contract.engine_version | installed pyqlib version string |
 
 ## 7. Quality Gates
 
@@ -162,21 +165,20 @@ Follows factor-layer-spec §6A:
 ## 9. Acceptance Criteria Summary
 
 ### Phase 0
-- Factor set definition JSON for alpha158-v1 with included/excluded factor names.
-- Lookahead audit report: list of excluded factors with reason.
-- Name mapping table (Qlib name → UQ name).
-- Adapter module placement and fingerprint registration.
+- Factor-set definition schema v2, alpha158-v1, and contract-only alpha360-v1.
+- Lookahead audit and deterministic Qlib-to-UQ name mapping.
+- Persistent phase record and unified gate evidence on final HEAD.
 
 ### Phase 1
-- Adapter computes factors from a small synthetic price panel.
-- Output passes UQ manifest generation and identity checks.
-- Quality report binding works with existing reviewer registry.
-- Published partition passes FactorStore.read() fail-closed verification.
+- Single-process Qlib computation on a synthetic multi-date panel.
+- Factor manifest v2 records reviewed expressions, adapter fingerprint,
+  Qlib version, and Alpha158 expression set.
+- Factor quality report binding passes immutable publication/read gates.
+- Same governed input produces the same generation ID.
 
 ### Phase 2
-- E2E: governed data → Qlib compute → governance → accepted store.
-- Full lineage from accepted partition back to source price data.
-- Deterministic across runs (same inputs → same generation_id).
+- Final HEAD gate evidence and release reconciliation.
+- Full lineage remains governed by the existing factor-layer rules.
 
 ## 10. Module Placement
 

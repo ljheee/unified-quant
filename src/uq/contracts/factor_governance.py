@@ -121,7 +121,11 @@ class FactorRegistry:
 
 
 def _validate_factor_set(document: dict[str, Any]) -> None:
-    schema_path = Path(__file__).resolve().parents[3] / "config/schemas/factor-sets/factor_set.v1.json"
+    schema_version = document.get("set_definition_version", 1)
+    schema_path = (
+        Path(__file__).resolve().parents[3]
+        / f"config/schemas/factor-sets/factor_set.v{schema_version}.json"
+    )
     from .gate_contracts import validate_contract_path
 
     validate_contract_path(schema_path, document)

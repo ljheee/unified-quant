@@ -1,0 +1,1286 @@
+{
+  "set_definition_version": 2,
+  "factor_set": "alpha158",
+  "factor_version": "1.0.0",
+  "status": "reviewed",
+  "required_columns": [
+    "instrument",
+    "datetime",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume"
+  ],
+  "quality_policy": "reject_all",
+  "quality_thresholds": {
+    "null_rate_maximum": 0.2,
+    "coverage_minimum": 0.8
+  },
+  "dependencies": [],
+  "qlib_expression_set": "Alpha158",
+  "excluded_factors": [
+    {
+      "name": "VWAP0",
+      "reason": "requires ungoverned $vwap column"
+    }
+  ],
+  "factors": [
+    {
+      "name": "qlib_kmid",
+      "qlib_name": "KMID",
+      "expression": "($close-$open)/$open",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "0cd5c30e5cd641147dee6d475d68383bdf9ab8059895ebe1719a0ae5d1b1232c"
+    },
+    {
+      "name": "qlib_klen",
+      "qlib_name": "KLEN",
+      "expression": "($high-$low)/$open",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "5742d3e5c50c082788fcd62424bce38fbca024c861e7c3e4ad0d1c97ac7b045b"
+    },
+    {
+      "name": "qlib_kmid2",
+      "qlib_name": "KMID2",
+      "expression": "($close-$open)/($high-$low+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "c688e4d88853a6761311f3821a82814e1291925f58b63168047f799ff65692fa"
+    },
+    {
+      "name": "qlib_kup",
+      "qlib_name": "KUP",
+      "expression": "($high-Greater($open, $close))/$open",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "fb913ebd56bfa173091b4889c84ac7353c350655127a0910177d5e542559ada5"
+    },
+    {
+      "name": "qlib_kup2",
+      "qlib_name": "KUP2",
+      "expression": "($high-Greater($open, $close))/($high-$low+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "3049dface146472391e8d274d6189963c5a402c3307eca3b2fd8c4397ddeee18"
+    },
+    {
+      "name": "qlib_klow",
+      "qlib_name": "KLOW",
+      "expression": "(Less($open, $close)-$low)/$open",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7f691980ad8f77c62ede4bfc5707bac7a06c932bc5c4c8d09e1448906361ae6b"
+    },
+    {
+      "name": "qlib_klow2",
+      "qlib_name": "KLOW2",
+      "expression": "(Less($open, $close)-$low)/($high-$low+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "70bc43f48803e27f8735d73e64a68223ead1a0c99f1f8778bd34adf2df57be5c"
+    },
+    {
+      "name": "qlib_ksft",
+      "qlib_name": "KSFT",
+      "expression": "(2*$close-$high-$low)/$open",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "721cdcdae5ca75aea322b5467b55c316f1f99415fc5965b1cd8f3e6df7713136"
+    },
+    {
+      "name": "qlib_ksft2",
+      "qlib_name": "KSFT2",
+      "expression": "(2*$close-$high-$low)/($high-$low+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "c6554be5e48caa39cfddff1dccc442cb5dd3e9513ceba4f00e1efae2498b627b"
+    },
+    {
+      "name": "qlib_open0",
+      "qlib_name": "OPEN0",
+      "expression": "$open/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "cf18877e154bcfaf2bb99e76095817bd8a6e8459e173152c0a60ec845fc29727"
+    },
+    {
+      "name": "qlib_high0",
+      "qlib_name": "HIGH0",
+      "expression": "$high/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "8910c3885cad373db24d43b7a758b8965198bc6ffe311e899116a3510c69c2a0"
+    },
+    {
+      "name": "qlib_low0",
+      "qlib_name": "LOW0",
+      "expression": "$low/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "58104c22f3271c85cc0dd2bb8c82b6968461e91b116261754457f6ef27b8b62b"
+    },
+    {
+      "name": "qlib_roc5",
+      "qlib_name": "ROC5",
+      "expression": "Ref($close, 5)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "3982b85bc8590b00eb96c143d673d3b407639a14e9298b22dcc77162375ff41a"
+    },
+    {
+      "name": "qlib_roc10",
+      "qlib_name": "ROC10",
+      "expression": "Ref($close, 10)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "36a7484a5d12249174866de1347d9ccc7aedb18f1c9661671aed0e69e61823dc"
+    },
+    {
+      "name": "qlib_roc20",
+      "qlib_name": "ROC20",
+      "expression": "Ref($close, 20)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "578757550bbd5cd0b729dfe04850c1df418ce267949cda6a43387854c89f4738"
+    },
+    {
+      "name": "qlib_roc30",
+      "qlib_name": "ROC30",
+      "expression": "Ref($close, 30)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "c68dcda6f85b0f518b89eb0146133807bf3ea15a01c82f58c2d8c1c7c9504488"
+    },
+    {
+      "name": "qlib_roc60",
+      "qlib_name": "ROC60",
+      "expression": "Ref($close, 60)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "99a3d35fe48b83d23695d524127bcf250c00b61ca6e2a1ff9e70470154907c82"
+    },
+    {
+      "name": "qlib_ma5",
+      "qlib_name": "MA5",
+      "expression": "Mean($close, 5)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "3a36c978343296eedf7da378a673bf1bf95b11e97df2b333df7404f157e4133a"
+    },
+    {
+      "name": "qlib_ma10",
+      "qlib_name": "MA10",
+      "expression": "Mean($close, 10)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7f6205cc6e3c6774565051e8e9eb17d509f7bd0e9a332e56a0bfec387e4c4043"
+    },
+    {
+      "name": "qlib_ma20",
+      "qlib_name": "MA20",
+      "expression": "Mean($close, 20)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "ef578a5c0531a42bdb42a924d891ab9293d99f9b8f63ca2d9aa18f58b75145d0"
+    },
+    {
+      "name": "qlib_ma30",
+      "qlib_name": "MA30",
+      "expression": "Mean($close, 30)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "d810a20775fc78bc2888844b55de043282364ff54d80961a8f78739c6a63df6e"
+    },
+    {
+      "name": "qlib_ma60",
+      "qlib_name": "MA60",
+      "expression": "Mean($close, 60)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "012bfcb83a6b59866b07e1c108aa374e30f9d7ad10609086f505ad085414c63c"
+    },
+    {
+      "name": "qlib_std5",
+      "qlib_name": "STD5",
+      "expression": "Std($close, 5)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "0416e62ac6094827379ca0cc2bee2968c4569af9663a437058c9f384d4e3afb1"
+    },
+    {
+      "name": "qlib_std10",
+      "qlib_name": "STD10",
+      "expression": "Std($close, 10)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "e7b75c89ef62c61fb0d26d2689e15e0a42b984d98ed75b0312c782aeeefb378a"
+    },
+    {
+      "name": "qlib_std20",
+      "qlib_name": "STD20",
+      "expression": "Std($close, 20)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "65b272da890b4976d424fa8d68de45d1274edc57d32f7042012a15850da4a383"
+    },
+    {
+      "name": "qlib_std30",
+      "qlib_name": "STD30",
+      "expression": "Std($close, 30)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "890a7383cbff9396d401be4628e343412914bc311ca1086801991ddfe87a9e28"
+    },
+    {
+      "name": "qlib_std60",
+      "qlib_name": "STD60",
+      "expression": "Std($close, 60)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "225a9e0c67b719ee2aea76c703d77996576a19dd474848d43cb02a466d3c5f17"
+    },
+    {
+      "name": "qlib_beta5",
+      "qlib_name": "BETA5",
+      "expression": "Slope($close, 5)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "96f5722b5771c977a028dca3e039c99351759bd0dbefbfee4f5807d3ce6eb29a"
+    },
+    {
+      "name": "qlib_beta10",
+      "qlib_name": "BETA10",
+      "expression": "Slope($close, 10)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "aca8c22971702ac66431822a266cd26142e2f79e97cb5e74b29d68d039680034"
+    },
+    {
+      "name": "qlib_beta20",
+      "qlib_name": "BETA20",
+      "expression": "Slope($close, 20)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "2c189d7c66ab3e75eeaaef886f4eba4a550e9cb27ec95bf985eecfdc5bbc61a8"
+    },
+    {
+      "name": "qlib_beta30",
+      "qlib_name": "BETA30",
+      "expression": "Slope($close, 30)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "186888da71a57858dc43dfe6ce7be3a02cfdff7a622ffe536daee47f2a8190c2"
+    },
+    {
+      "name": "qlib_beta60",
+      "qlib_name": "BETA60",
+      "expression": "Slope($close, 60)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "5c281f03c35e33f9f701e759a69cd2d62ac11f2a00a0f5bc1ceaf3606a9af077"
+    },
+    {
+      "name": "qlib_rsqr5",
+      "qlib_name": "RSQR5",
+      "expression": "Rsquare($close, 5)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "11c4afdbb10e0577e23aba7135ac99ccf8023b7260ce01cbcffe517b867b5673"
+    },
+    {
+      "name": "qlib_rsqr10",
+      "qlib_name": "RSQR10",
+      "expression": "Rsquare($close, 10)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "4ac425e9a5a1dc5479494dc1a6deb658609d92f348a7d4353ed91cf026b257c3"
+    },
+    {
+      "name": "qlib_rsqr20",
+      "qlib_name": "RSQR20",
+      "expression": "Rsquare($close, 20)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "3ade0a701e3e70a50215585c6f60f084bcf5df4d0ff5d076e4bd22b329ee0560"
+    },
+    {
+      "name": "qlib_rsqr30",
+      "qlib_name": "RSQR30",
+      "expression": "Rsquare($close, 30)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "b742846980e2d4acd559106bd32b81266edb8e085401ff68bec4f43a169b41bd"
+    },
+    {
+      "name": "qlib_rsqr60",
+      "qlib_name": "RSQR60",
+      "expression": "Rsquare($close, 60)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "4e055c83b3b6cd006b767053a047359d0e87614a5207ff31520398fe37ae73fb"
+    },
+    {
+      "name": "qlib_resi5",
+      "qlib_name": "RESI5",
+      "expression": "Resi($close, 5)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "4e70e64e34b4e3d2f8cb8061910ef9248aec71636760c556ebbea1bb6b0cc761"
+    },
+    {
+      "name": "qlib_resi10",
+      "qlib_name": "RESI10",
+      "expression": "Resi($close, 10)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "4f095e96d7c3493c98b50113213e616f96f3c9f23fee78c864db397ffe15a99f"
+    },
+    {
+      "name": "qlib_resi20",
+      "qlib_name": "RESI20",
+      "expression": "Resi($close, 20)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "d5f69c584f9924bf1475e41934d362ce4f11c11d3c0310fc79174e5338e43c24"
+    },
+    {
+      "name": "qlib_resi30",
+      "qlib_name": "RESI30",
+      "expression": "Resi($close, 30)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "030ea4a0ba2f4fcf796f04c6217a3154da5afe5606ddce423d0ed361e6f85441"
+    },
+    {
+      "name": "qlib_resi60",
+      "qlib_name": "RESI60",
+      "expression": "Resi($close, 60)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "869507dd441b6c6689b6baae28c450908aad662719db847568c482ff0e6bfdea"
+    },
+    {
+      "name": "qlib_max5",
+      "qlib_name": "MAX5",
+      "expression": "Max($high, 5)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "78f0c234a14d3c8b85eaa077393b075c88b4e427a883f8dfe5b87a774270e80f"
+    },
+    {
+      "name": "qlib_max10",
+      "qlib_name": "MAX10",
+      "expression": "Max($high, 10)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "be4a436c34f46fd165d847e1575a41c0a056a1ba88754a0ca66246f23261c2e2"
+    },
+    {
+      "name": "qlib_max20",
+      "qlib_name": "MAX20",
+      "expression": "Max($high, 20)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "619cd8cde9758f3d5df3222441ffd9f76348dcf409c028409d9eb576367cd3da"
+    },
+    {
+      "name": "qlib_max30",
+      "qlib_name": "MAX30",
+      "expression": "Max($high, 30)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "9387567cce78c4917ea41019ed1f5fc75615ab398943d522626ab8925e71cbb5"
+    },
+    {
+      "name": "qlib_max60",
+      "qlib_name": "MAX60",
+      "expression": "Max($high, 60)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "380b5ae5c0a35e69df4d1db602c9055ceab8f3440f95cba06b7dc5858cc5d08d"
+    },
+    {
+      "name": "qlib_min5",
+      "qlib_name": "MIN5",
+      "expression": "Min($low, 5)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "879d0906b049d73b0a595c9dd20cc8fb3282f664fe4424bbf61ae9e9458972ac"
+    },
+    {
+      "name": "qlib_min10",
+      "qlib_name": "MIN10",
+      "expression": "Min($low, 10)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "c1d9f539a981f5d3ec60439b7431a68ed7a328fb6f6ffe776e4c3cef66d9ad17"
+    },
+    {
+      "name": "qlib_min20",
+      "qlib_name": "MIN20",
+      "expression": "Min($low, 20)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "246d06763000869e22599a8b249b77c1b65913ca9cd22fad4cf366386e30e0b7"
+    },
+    {
+      "name": "qlib_min30",
+      "qlib_name": "MIN30",
+      "expression": "Min($low, 30)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "eb04a6e6e5d49ac333076d92537bfb10acee7accdebd97a9fd9424dbdc5b56d7"
+    },
+    {
+      "name": "qlib_min60",
+      "qlib_name": "MIN60",
+      "expression": "Min($low, 60)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "bfb1c3d8b982cc76f228addd0a0aabdce8404404a1ba4015934bd9337414546e"
+    },
+    {
+      "name": "qlib_qtlu5",
+      "qlib_name": "QTLU5",
+      "expression": "Quantile($close, 5, 0.8)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "c6143e5464db46c10e2ee34f5852863c941072c3f473ead872bf7db2966eb876"
+    },
+    {
+      "name": "qlib_qtlu10",
+      "qlib_name": "QTLU10",
+      "expression": "Quantile($close, 10, 0.8)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "d00095b7b556d4922f44ac4cda27a6f103adbc4fe1cb96e590c3601cc4dda585"
+    },
+    {
+      "name": "qlib_qtlu20",
+      "qlib_name": "QTLU20",
+      "expression": "Quantile($close, 20, 0.8)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "1f10dda5fc86d81ea6b64151ed043dd2a460342cc73025a549e4889b32241326"
+    },
+    {
+      "name": "qlib_qtlu30",
+      "qlib_name": "QTLU30",
+      "expression": "Quantile($close, 30, 0.8)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "b060b5ed41ecd73338b68e400555b88a7904cf698bc740b90d005172e213b217"
+    },
+    {
+      "name": "qlib_qtlu60",
+      "qlib_name": "QTLU60",
+      "expression": "Quantile($close, 60, 0.8)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "6943abd60d87a2d695c5ba97c4a89dec21a26061c7d35d6c4daadb430c922528"
+    },
+    {
+      "name": "qlib_qtld5",
+      "qlib_name": "QTLD5",
+      "expression": "Quantile($close, 5, 0.2)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "2ceb283405eb9222cf27ccd95289b37750fc45d296265b48368e5e602134d0f6"
+    },
+    {
+      "name": "qlib_qtld10",
+      "qlib_name": "QTLD10",
+      "expression": "Quantile($close, 10, 0.2)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7f9245a81e8c87689976fb0e1d488b4d3a5ecc1022d7ce45c4619b5518685c39"
+    },
+    {
+      "name": "qlib_qtld20",
+      "qlib_name": "QTLD20",
+      "expression": "Quantile($close, 20, 0.2)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "f958fddb698772f8d2a191259f32f1c962ad389899d1ec05a4fd1d50c1771a8b"
+    },
+    {
+      "name": "qlib_qtld30",
+      "qlib_name": "QTLD30",
+      "expression": "Quantile($close, 30, 0.2)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "d151d5a63a2ace16b69e65dabd6ec69a5c0da85fef7d9badd6c8bd60ef448c49"
+    },
+    {
+      "name": "qlib_qtld60",
+      "qlib_name": "QTLD60",
+      "expression": "Quantile($close, 60, 0.2)/$close",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7354638a3d59dd368c0e999c4c1866dcec20890f717b77d585086772fb4aca5c"
+    },
+    {
+      "name": "qlib_rank5",
+      "qlib_name": "RANK5",
+      "expression": "Rank($close, 5)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "0e7de40b3ee24e57a755dff4e1172eac826234beb441f205f010c41b5db9faa7"
+    },
+    {
+      "name": "qlib_rank10",
+      "qlib_name": "RANK10",
+      "expression": "Rank($close, 10)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "fbeddaf951030415158fb36dcc1bc5c1fd8fa4f6f61613c83e8620cc809f8754"
+    },
+    {
+      "name": "qlib_rank20",
+      "qlib_name": "RANK20",
+      "expression": "Rank($close, 20)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "b9e7f25265e8d975eee30da3e5ae6a61c979bfb513b64532a8cbcaee021470e2"
+    },
+    {
+      "name": "qlib_rank30",
+      "qlib_name": "RANK30",
+      "expression": "Rank($close, 30)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "f9040dd666d5ab14743bdc8490e0716d624823c424c5847d44b83939170eaf97"
+    },
+    {
+      "name": "qlib_rank60",
+      "qlib_name": "RANK60",
+      "expression": "Rank($close, 60)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "e5b8b33cf19bccb38d260e7ca9c651229b695b8db79f2f3cd0a04accb9759cb3"
+    },
+    {
+      "name": "qlib_rsv5",
+      "qlib_name": "RSV5",
+      "expression": "($close-Min($low, 5))/(Max($high, 5)-Min($low, 5)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "341387183be69d2697051289abca8a75590863adf031516f168befcc3d6cc284"
+    },
+    {
+      "name": "qlib_rsv10",
+      "qlib_name": "RSV10",
+      "expression": "($close-Min($low, 10))/(Max($high, 10)-Min($low, 10)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "65d23410caf18f1e2ff30ae44a6bf4ec792a70a5db161c533c7561e74962d874"
+    },
+    {
+      "name": "qlib_rsv20",
+      "qlib_name": "RSV20",
+      "expression": "($close-Min($low, 20))/(Max($high, 20)-Min($low, 20)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "73ad94ac7ca36b1cbb207b965e341eeed49594ca562e32995d553e5d3aab4f79"
+    },
+    {
+      "name": "qlib_rsv30",
+      "qlib_name": "RSV30",
+      "expression": "($close-Min($low, 30))/(Max($high, 30)-Min($low, 30)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "9af445ca3444d4f05d0b5fd442f50816c642008b500b7d5dd7982589360d28fd"
+    },
+    {
+      "name": "qlib_rsv60",
+      "qlib_name": "RSV60",
+      "expression": "($close-Min($low, 60))/(Max($high, 60)-Min($low, 60)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "ba3f32f927729c70b6b6588f64e4d690fde8325214f09dbb74ed276909f4a9a0"
+    },
+    {
+      "name": "qlib_imax5",
+      "qlib_name": "IMAX5",
+      "expression": "IdxMax($high, 5)/5",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "ec8608096bc395a72687ea8f0feb769488abd711eca75b026bb513410d1feb1c"
+    },
+    {
+      "name": "qlib_imax10",
+      "qlib_name": "IMAX10",
+      "expression": "IdxMax($high, 10)/10",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "ad6abd008c4aa7328ba5a70b0b5b8db926360a540fe289aa1c9bf68fe915342e"
+    },
+    {
+      "name": "qlib_imax20",
+      "qlib_name": "IMAX20",
+      "expression": "IdxMax($high, 20)/20",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "8789c07e9d7b9fc4ef23d1a0214b72872820e03871851ed90dd15b8affea905a"
+    },
+    {
+      "name": "qlib_imax30",
+      "qlib_name": "IMAX30",
+      "expression": "IdxMax($high, 30)/30",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "48e780c44c6b0a25c8be2d91fd14c95d8aa1d97161f92c90c05294c30d798502"
+    },
+    {
+      "name": "qlib_imax60",
+      "qlib_name": "IMAX60",
+      "expression": "IdxMax($high, 60)/60",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "5a271c0729b67212a6e8e93f3cf97b06479e8ae0daeec9af68b5f5dbdb2bd124"
+    },
+    {
+      "name": "qlib_imin5",
+      "qlib_name": "IMIN5",
+      "expression": "IdxMin($low, 5)/5",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "d06c66a99afc3fb4108291f9768884edf80daec5a9f55b9f71dcee3e5e73a4ac"
+    },
+    {
+      "name": "qlib_imin10",
+      "qlib_name": "IMIN10",
+      "expression": "IdxMin($low, 10)/10",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "fe25e0db8ad00c7b98b4af291273ec60264eb58e65cc561df7edd6c212e1888f"
+    },
+    {
+      "name": "qlib_imin20",
+      "qlib_name": "IMIN20",
+      "expression": "IdxMin($low, 20)/20",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "21deef3c3041ac522ca25e52bb4a516373f4c9e4298728ab98a9336010cf320d"
+    },
+    {
+      "name": "qlib_imin30",
+      "qlib_name": "IMIN30",
+      "expression": "IdxMin($low, 30)/30",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "41749c759e01cdb32c69cd9421ccfc22a497fa0db5e3cb71a3462876e4c018d3"
+    },
+    {
+      "name": "qlib_imin60",
+      "qlib_name": "IMIN60",
+      "expression": "IdxMin($low, 60)/60",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7809b38fbe31e67f4b5a4a33e2db7487ddcaaae2765b7617c77a15ad79e56280"
+    },
+    {
+      "name": "qlib_imxd5",
+      "qlib_name": "IMXD5",
+      "expression": "(IdxMax($high, 5)-IdxMin($low, 5))/5",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "eb27efc39bf25cb2ccd826890196fcc03634054938b58907d08058e5b5224d04"
+    },
+    {
+      "name": "qlib_imxd10",
+      "qlib_name": "IMXD10",
+      "expression": "(IdxMax($high, 10)-IdxMin($low, 10))/10",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "118e85f652901c603289e9068be93c26681093bbc2cbd165062a8ee14ef2f145"
+    },
+    {
+      "name": "qlib_imxd20",
+      "qlib_name": "IMXD20",
+      "expression": "(IdxMax($high, 20)-IdxMin($low, 20))/20",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "45e957805c0a411ca1365fc023ac8b48c23cb49759aa64637dcb35047ff2384b"
+    },
+    {
+      "name": "qlib_imxd30",
+      "qlib_name": "IMXD30",
+      "expression": "(IdxMax($high, 30)-IdxMin($low, 30))/30",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "616044dd51a99dbdcbe7b90868f338ea7e4a9c52becd08e5df85594ea339cec6"
+    },
+    {
+      "name": "qlib_imxd60",
+      "qlib_name": "IMXD60",
+      "expression": "(IdxMax($high, 60)-IdxMin($low, 60))/60",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "f2f37f9bdffaf3d68f821909d695b21067b86e18857da0319c3addef9e7d6257"
+    },
+    {
+      "name": "qlib_corr5",
+      "qlib_name": "CORR5",
+      "expression": "Corr($close, Log($volume+1), 5)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "3fede632b1aa309c7cb566b893a07d95f57a93055134788e49487729db431e4f"
+    },
+    {
+      "name": "qlib_corr10",
+      "qlib_name": "CORR10",
+      "expression": "Corr($close, Log($volume+1), 10)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "104f91d846c5a7e249e9641c845bc5a13c3081e1b7be5066b6a6df6b24f1a4bd"
+    },
+    {
+      "name": "qlib_corr20",
+      "qlib_name": "CORR20",
+      "expression": "Corr($close, Log($volume+1), 20)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "4c0abf97f3a52d1546782a730b4c59cce52032732bbd12066978333b033ea1c5"
+    },
+    {
+      "name": "qlib_corr30",
+      "qlib_name": "CORR30",
+      "expression": "Corr($close, Log($volume+1), 30)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "081fdd357c5439299a3988c9f519f05e1275b5df7c6011b8e1d0338f94ed9f51"
+    },
+    {
+      "name": "qlib_corr60",
+      "qlib_name": "CORR60",
+      "expression": "Corr($close, Log($volume+1), 60)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7a00c792452f338adcc5a188f2f5ec232d1e6076e0fb12d1dddf2e6d81af3691"
+    },
+    {
+      "name": "qlib_cord5",
+      "qlib_name": "CORD5",
+      "expression": "Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 5)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "39a62f4d728de6cd2c2c0737809e86542cedc6fef7258a41ab6e0ae628c39c76"
+    },
+    {
+      "name": "qlib_cord10",
+      "qlib_name": "CORD10",
+      "expression": "Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 10)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "70bc12d3d469ef9e0567a54781fd75404d94aad6531bc021d15e3792abc13cb2"
+    },
+    {
+      "name": "qlib_cord20",
+      "qlib_name": "CORD20",
+      "expression": "Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 20)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "6510d71d3a72ca7414e75da0a5a982cd196a4942652dcbcf05f44a1f8f61d943"
+    },
+    {
+      "name": "qlib_cord30",
+      "qlib_name": "CORD30",
+      "expression": "Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 30)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "bf748acd0a0d8697331480c84edaeff00f12c249f3727d28134ed9b6d86894a4"
+    },
+    {
+      "name": "qlib_cord60",
+      "qlib_name": "CORD60",
+      "expression": "Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), 60)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "12b2c99bd55adcae1e6129b8345b9fa62bb4cd209eb4adb2f489bb7cd5b671ab"
+    },
+    {
+      "name": "qlib_cntp5",
+      "qlib_name": "CNTP5",
+      "expression": "Mean($close>Ref($close, 1), 5)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "e341af366499360bc2105c2f01b58da03d60907b1c5b03566e6ce96c9221ddb0"
+    },
+    {
+      "name": "qlib_cntp10",
+      "qlib_name": "CNTP10",
+      "expression": "Mean($close>Ref($close, 1), 10)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "99e59afb80f7947f5dd8b4fc00beb46b61b95a0221a16cf93b0b0ad56bfd43ee"
+    },
+    {
+      "name": "qlib_cntp20",
+      "qlib_name": "CNTP20",
+      "expression": "Mean($close>Ref($close, 1), 20)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "688878302c8bc5c5d932bc089c3923c36e073530e108631ba2f35c068c8dea8a"
+    },
+    {
+      "name": "qlib_cntp30",
+      "qlib_name": "CNTP30",
+      "expression": "Mean($close>Ref($close, 1), 30)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "4fba5bc1e940e77fb367160883c19450cf9a3a5cda216714ef0233b57a1cb481"
+    },
+    {
+      "name": "qlib_cntp60",
+      "qlib_name": "CNTP60",
+      "expression": "Mean($close>Ref($close, 1), 60)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "55713b7709f28c4b174d3c85a30d7dd20f8bfb75ff915f21030ce899e1bbdcd5"
+    },
+    {
+      "name": "qlib_cntn5",
+      "qlib_name": "CNTN5",
+      "expression": "Mean($close<Ref($close, 1), 5)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "5421872f8106d677011f5c316acbf6d831a7b014f299231ec641b98a69a725f6"
+    },
+    {
+      "name": "qlib_cntn10",
+      "qlib_name": "CNTN10",
+      "expression": "Mean($close<Ref($close, 1), 10)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "2039b756e8cf1200fbd26aff5a67fede6353b2462e8313202cbea2c0586857f3"
+    },
+    {
+      "name": "qlib_cntn20",
+      "qlib_name": "CNTN20",
+      "expression": "Mean($close<Ref($close, 1), 20)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "f5b057c2094126ba79693b79d23105914b13866b6f136a047210aefbbba96db8"
+    },
+    {
+      "name": "qlib_cntn30",
+      "qlib_name": "CNTN30",
+      "expression": "Mean($close<Ref($close, 1), 30)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "3daaac85cb7aad57b4d36ee379d3a18aa6aad7e7a430d9dfc2c11ceb44bf260d"
+    },
+    {
+      "name": "qlib_cntn60",
+      "qlib_name": "CNTN60",
+      "expression": "Mean($close<Ref($close, 1), 60)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "8eb2150cd04719f00941a254e6ebf9b2f666d410d80814f328e914d41312a698"
+    },
+    {
+      "name": "qlib_cntd5",
+      "qlib_name": "CNTD5",
+      "expression": "Mean($close>Ref($close, 1), 5)-Mean($close<Ref($close, 1), 5)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "e7b4c5eda7f656fb8f19044ed8fe51fafb3b7e94469742aa7b02845eaabe1d61"
+    },
+    {
+      "name": "qlib_cntd10",
+      "qlib_name": "CNTD10",
+      "expression": "Mean($close>Ref($close, 1), 10)-Mean($close<Ref($close, 1), 10)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "c4b1dbe2ecd05104843c7fa215c157b859472ea4d6d6539fd11fcf0dbd67f1eb"
+    },
+    {
+      "name": "qlib_cntd20",
+      "qlib_name": "CNTD20",
+      "expression": "Mean($close>Ref($close, 1), 20)-Mean($close<Ref($close, 1), 20)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "8c52864af40a0e10d838f2c7f9526ea19ed7898d8089b2cb1d539425877d111b"
+    },
+    {
+      "name": "qlib_cntd30",
+      "qlib_name": "CNTD30",
+      "expression": "Mean($close>Ref($close, 1), 30)-Mean($close<Ref($close, 1), 30)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "ede267013e238828d2b4182235ef290b5a3e7cde2c438761e5bc8e821c37242e"
+    },
+    {
+      "name": "qlib_cntd60",
+      "qlib_name": "CNTD60",
+      "expression": "Mean($close>Ref($close, 1), 60)-Mean($close<Ref($close, 1), 60)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "bfd415c2bb0a5496d8201e0422737d496575b25f33b234eb215545fa3db7a918"
+    },
+    {
+      "name": "qlib_sump5",
+      "qlib_name": "SUMP5",
+      "expression": "Sum(Greater($close-Ref($close, 1), 0), 5)/(Sum(Abs($close-Ref($close, 1)), 5)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "488c4772a53a841fe494141e71bd7a6ab16e130c38e1966d5926844a301a0b03"
+    },
+    {
+      "name": "qlib_sump10",
+      "qlib_name": "SUMP10",
+      "expression": "Sum(Greater($close-Ref($close, 1), 0), 10)/(Sum(Abs($close-Ref($close, 1)), 10)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "d7a8001f444db8859567447f835c28eb7b52b238e617dcbdf945cb63d13c6c69"
+    },
+    {
+      "name": "qlib_sump20",
+      "qlib_name": "SUMP20",
+      "expression": "Sum(Greater($close-Ref($close, 1), 0), 20)/(Sum(Abs($close-Ref($close, 1)), 20)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "df652ab85b75a49262a5299644c350bffbb52a4f6d3ac848a8c637a459c11c4a"
+    },
+    {
+      "name": "qlib_sump30",
+      "qlib_name": "SUMP30",
+      "expression": "Sum(Greater($close-Ref($close, 1), 0), 30)/(Sum(Abs($close-Ref($close, 1)), 30)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7e0708ae4613df845820011dac5b0a10abecd527e0a1c67e09a32f6de53dde03"
+    },
+    {
+      "name": "qlib_sump60",
+      "qlib_name": "SUMP60",
+      "expression": "Sum(Greater($close-Ref($close, 1), 0), 60)/(Sum(Abs($close-Ref($close, 1)), 60)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "59086cb189bd8558650ce9e58fd945ee1b6cf24c8fd24a04e984c86fd74c2d67"
+    },
+    {
+      "name": "qlib_sumn5",
+      "qlib_name": "SUMN5",
+      "expression": "Sum(Greater(Ref($close, 1)-$close, 0), 5)/(Sum(Abs($close-Ref($close, 1)), 5)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "1f059fbda3939c0957d0e1e1d6f14e55c58c077df1f65aaf95428912e0497724"
+    },
+    {
+      "name": "qlib_sumn10",
+      "qlib_name": "SUMN10",
+      "expression": "Sum(Greater(Ref($close, 1)-$close, 0), 10)/(Sum(Abs($close-Ref($close, 1)), 10)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "98818868c46ad8d34208d6fb844f96900e33015c7c5560d78e479c528cdc43be"
+    },
+    {
+      "name": "qlib_sumn20",
+      "qlib_name": "SUMN20",
+      "expression": "Sum(Greater(Ref($close, 1)-$close, 0), 20)/(Sum(Abs($close-Ref($close, 1)), 20)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "818e73e5948a4fedf0368df8e95c8ba8d3e9a4e62341684b438b115cb96d18fe"
+    },
+    {
+      "name": "qlib_sumn30",
+      "qlib_name": "SUMN30",
+      "expression": "Sum(Greater(Ref($close, 1)-$close, 0), 30)/(Sum(Abs($close-Ref($close, 1)), 30)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "675f8ed10ed594640af81e341f7f3f33bbaa8356d0d4f196cf0847e5a6b840bf"
+    },
+    {
+      "name": "qlib_sumn60",
+      "qlib_name": "SUMN60",
+      "expression": "Sum(Greater(Ref($close, 1)-$close, 0), 60)/(Sum(Abs($close-Ref($close, 1)), 60)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "1ce3307ac6500bbafd84ea671bd7adf835dd881c4305d6e9f1b6bbdcb84e8bde"
+    },
+    {
+      "name": "qlib_sumd5",
+      "qlib_name": "SUMD5",
+      "expression": "(Sum(Greater($close-Ref($close, 1), 0), 5)-Sum(Greater(Ref($close, 1)-$close, 0), 5))/(Sum(Abs($close-Ref($close, 1)), 5)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "abfdb57a918a92e437741fbcff6f4d7c9a4518756eab76f6243632b87f49fd83"
+    },
+    {
+      "name": "qlib_sumd10",
+      "qlib_name": "SUMD10",
+      "expression": "(Sum(Greater($close-Ref($close, 1), 0), 10)-Sum(Greater(Ref($close, 1)-$close, 0), 10))/(Sum(Abs($close-Ref($close, 1)), 10)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "718a42b51827e096d374a1405a134b469edba0531d02bcc6a1ddf040b8e52750"
+    },
+    {
+      "name": "qlib_sumd20",
+      "qlib_name": "SUMD20",
+      "expression": "(Sum(Greater($close-Ref($close, 1), 0), 20)-Sum(Greater(Ref($close, 1)-$close, 0), 20))/(Sum(Abs($close-Ref($close, 1)), 20)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "592784710a9072499d65ff81f8d81f6f3e07583ed793986b936d7929f261e386"
+    },
+    {
+      "name": "qlib_sumd30",
+      "qlib_name": "SUMD30",
+      "expression": "(Sum(Greater($close-Ref($close, 1), 0), 30)-Sum(Greater(Ref($close, 1)-$close, 0), 30))/(Sum(Abs($close-Ref($close, 1)), 30)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "67021beb26c694e0ae91b028ceed3c5359ef1bb5d0efb180fa4850e995800b21"
+    },
+    {
+      "name": "qlib_sumd60",
+      "qlib_name": "SUMD60",
+      "expression": "(Sum(Greater($close-Ref($close, 1), 0), 60)-Sum(Greater(Ref($close, 1)-$close, 0), 60))/(Sum(Abs($close-Ref($close, 1)), 60)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "0f4bc8b589b9a42acff04c959c2def1104c8be80b3651aceb40ebe6a79907df4"
+    },
+    {
+      "name": "qlib_vma5",
+      "qlib_name": "VMA5",
+      "expression": "Mean($volume, 5)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "b904cbd6a768cb400f7078e11af787767e9a2a6439d7bdad3d22359ca0eb2106"
+    },
+    {
+      "name": "qlib_vma10",
+      "qlib_name": "VMA10",
+      "expression": "Mean($volume, 10)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "742721aabd72b6203ada8cc861c702375eeaf6d24d8185392147d351d522bd1f"
+    },
+    {
+      "name": "qlib_vma20",
+      "qlib_name": "VMA20",
+      "expression": "Mean($volume, 20)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7aafdbc7033873f336d136b36910758d416fb2d201a8fcc78236dc3306a45731"
+    },
+    {
+      "name": "qlib_vma30",
+      "qlib_name": "VMA30",
+      "expression": "Mean($volume, 30)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "447bc0e67d77c22049993f71e9d334b1e42e6aea7fe1da463fcf094d050b8cba"
+    },
+    {
+      "name": "qlib_vma60",
+      "qlib_name": "VMA60",
+      "expression": "Mean($volume, 60)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "958d3b8201fa157eff50582e0663c384ec44bc31de2f2b767f0c6f72b5a90b8d"
+    },
+    {
+      "name": "qlib_vstd5",
+      "qlib_name": "VSTD5",
+      "expression": "Std($volume, 5)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "e95d49018138f21a2584e562782267e3375c348f12c6359b019734bfee61ebea"
+    },
+    {
+      "name": "qlib_vstd10",
+      "qlib_name": "VSTD10",
+      "expression": "Std($volume, 10)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "01f8dbf34876cdce20e5f3eebd185a11479a08df7955ad8e9b09f83ac39a6561"
+    },
+    {
+      "name": "qlib_vstd20",
+      "qlib_name": "VSTD20",
+      "expression": "Std($volume, 20)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "b00fe63fa54386d75b08cb11553aeffcf303e92b9b842d9542dca2d5355d806d"
+    },
+    {
+      "name": "qlib_vstd30",
+      "qlib_name": "VSTD30",
+      "expression": "Std($volume, 30)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "6581cecea6893fb0cc9ff3134e4522a8f70d28074fa76599fb958805fbb48564"
+    },
+    {
+      "name": "qlib_vstd60",
+      "qlib_name": "VSTD60",
+      "expression": "Std($volume, 60)/($volume+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "33992079198852dcee324f2ea63ff32140aa626578ac32709949fb0e471a44b7"
+    },
+    {
+      "name": "qlib_wvma5",
+      "qlib_name": "WVMA5",
+      "expression": "Std(Abs($close/Ref($close, 1)-1)*$volume, 5)/(Mean(Abs($close/Ref($close, 1)-1)*$volume, 5)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "0e22257d027965005fbf17ba79f1233064a9571e5d47fb555a7fc53158cea328"
+    },
+    {
+      "name": "qlib_wvma10",
+      "qlib_name": "WVMA10",
+      "expression": "Std(Abs($close/Ref($close, 1)-1)*$volume, 10)/(Mean(Abs($close/Ref($close, 1)-1)*$volume, 10)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "ff2a7b061d8afe39668a78c95d180558f4560ab3a39dad2b70afc518d12863e7"
+    },
+    {
+      "name": "qlib_wvma20",
+      "qlib_name": "WVMA20",
+      "expression": "Std(Abs($close/Ref($close, 1)-1)*$volume, 20)/(Mean(Abs($close/Ref($close, 1)-1)*$volume, 20)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "3a3acfb22e962533de1e1ff5610fef978f9cf1c13ff5e191e8413cd2a5802d4e"
+    },
+    {
+      "name": "qlib_wvma30",
+      "qlib_name": "WVMA30",
+      "expression": "Std(Abs($close/Ref($close, 1)-1)*$volume, 30)/(Mean(Abs($close/Ref($close, 1)-1)*$volume, 30)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "1b14c4aa7510ec5ffcd5f57345a1a39e03758f40d91a2762751f2db5bce3ec2b"
+    },
+    {
+      "name": "qlib_wvma60",
+      "qlib_name": "WVMA60",
+      "expression": "Std(Abs($close/Ref($close, 1)-1)*$volume, 60)/(Mean(Abs($close/Ref($close, 1)-1)*$volume, 60)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "4f0ddf0204fad148b53ff28ea7ef57912b75e78af3d942aa3949ee6074de2570"
+    },
+    {
+      "name": "qlib_vsump5",
+      "qlib_name": "VSUMP5",
+      "expression": "Sum(Greater($volume-Ref($volume, 1), 0), 5)/(Sum(Abs($volume-Ref($volume, 1)), 5)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "70ec270e6845899cd26a0e6c93ad8270c3a42323568f4a02dc0aaec2d48bc2e1"
+    },
+    {
+      "name": "qlib_vsump10",
+      "qlib_name": "VSUMP10",
+      "expression": "Sum(Greater($volume-Ref($volume, 1), 0), 10)/(Sum(Abs($volume-Ref($volume, 1)), 10)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "ff5a8884fd5ab04e0fe3403313e46a677172e39db916d55e07a2d6bc59eac9b8"
+    },
+    {
+      "name": "qlib_vsump20",
+      "qlib_name": "VSUMP20",
+      "expression": "Sum(Greater($volume-Ref($volume, 1), 0), 20)/(Sum(Abs($volume-Ref($volume, 1)), 20)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "639cb561dd8831b97d825398112de086287c17192991176ee510e9ab97fef5d3"
+    },
+    {
+      "name": "qlib_vsump30",
+      "qlib_name": "VSUMP30",
+      "expression": "Sum(Greater($volume-Ref($volume, 1), 0), 30)/(Sum(Abs($volume-Ref($volume, 1)), 30)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "1159c83fa9b3bfcc5a79da732ef86d91d962adf4eebb8ab49ecf92124fdc20ce"
+    },
+    {
+      "name": "qlib_vsump60",
+      "qlib_name": "VSUMP60",
+      "expression": "Sum(Greater($volume-Ref($volume, 1), 0), 60)/(Sum(Abs($volume-Ref($volume, 1)), 60)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "176d97d6214067120d5b22439e8c71e851a84b107ed623b5e3f42e2394e85f75"
+    },
+    {
+      "name": "qlib_vsumn5",
+      "qlib_name": "VSUMN5",
+      "expression": "Sum(Greater(Ref($volume, 1)-$volume, 0), 5)/(Sum(Abs($volume-Ref($volume, 1)), 5)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7364ca15ea7a3b0d78bb6f6412d80d17fdb39fe3d623deb2cbc73e9736d0be11"
+    },
+    {
+      "name": "qlib_vsumn10",
+      "qlib_name": "VSUMN10",
+      "expression": "Sum(Greater(Ref($volume, 1)-$volume, 0), 10)/(Sum(Abs($volume-Ref($volume, 1)), 10)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "31241c263c0ee8118713642ca1d2fb860d34bc71ac8d1c997d849097f9c97326"
+    },
+    {
+      "name": "qlib_vsumn20",
+      "qlib_name": "VSUMN20",
+      "expression": "Sum(Greater(Ref($volume, 1)-$volume, 0), 20)/(Sum(Abs($volume-Ref($volume, 1)), 20)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "d2606f0f099fdc428d4ac0c499ce40e9fa8eeb5b4307101111d166d092865623"
+    },
+    {
+      "name": "qlib_vsumn30",
+      "qlib_name": "VSUMN30",
+      "expression": "Sum(Greater(Ref($volume, 1)-$volume, 0), 30)/(Sum(Abs($volume-Ref($volume, 1)), 30)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "92f5970257c0c6fa78fd87bfb681d36c9e6a79a880e0a307f6b0fd7487fe3156"
+    },
+    {
+      "name": "qlib_vsumn60",
+      "qlib_name": "VSUMN60",
+      "expression": "Sum(Greater(Ref($volume, 1)-$volume, 0), 60)/(Sum(Abs($volume-Ref($volume, 1)), 60)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "7d87de4f371e578f143e6d1ac64456048a061cdd066d62a90323d0547dff1bfb"
+    },
+    {
+      "name": "qlib_vsumd5",
+      "qlib_name": "VSUMD5",
+      "expression": "(Sum(Greater($volume-Ref($volume, 1), 0), 5)-Sum(Greater(Ref($volume, 1)-$volume, 0), 5))/(Sum(Abs($volume-Ref($volume, 1)), 5)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "aa11bcb83dd2f821f14e7ab6e9600d9c18daf9def90e1a04e5d09d20ad6434a9"
+    },
+    {
+      "name": "qlib_vsumd10",
+      "qlib_name": "VSUMD10",
+      "expression": "(Sum(Greater($volume-Ref($volume, 1), 0), 10)-Sum(Greater(Ref($volume, 1)-$volume, 0), 10))/(Sum(Abs($volume-Ref($volume, 1)), 10)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "c0546fa8d71d2930726d064934ccf691d208e9845a6f25cffddb36242b85fcc6"
+    },
+    {
+      "name": "qlib_vsumd20",
+      "qlib_name": "VSUMD20",
+      "expression": "(Sum(Greater($volume-Ref($volume, 1), 0), 20)-Sum(Greater(Ref($volume, 1)-$volume, 0), 20))/(Sum(Abs($volume-Ref($volume, 1)), 20)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "fa4dea8d277219bcfc54cbc39e84a04c4ab2b2705be451f056b22db86586e9c9"
+    },
+    {
+      "name": "qlib_vsumd30",
+      "qlib_name": "VSUMD30",
+      "expression": "(Sum(Greater($volume-Ref($volume, 1), 0), 30)-Sum(Greater(Ref($volume, 1)-$volume, 0), 30))/(Sum(Abs($volume-Ref($volume, 1)), 30)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "14098fab0911811dbceb2d5f61abeea6367edc7a218210532a5b731c3c71be82"
+    },
+    {
+      "name": "qlib_vsumd60",
+      "qlib_name": "VSUMD60",
+      "expression": "(Sum(Greater($volume-Ref($volume, 1), 0), 60)-Sum(Greater(Ref($volume, 1)-$volume, 0), 60))/(Sum(Abs($volume-Ref($volume, 1)), 60)+1e-12)",
+      "minimum_history": 60,
+      "version": "1.0.0",
+      "implementation_fingerprint": "9a92419659b817787e538cc6e8bb5c55932e365d0e34b3cca4c878071a5d8517"
+    }
+  ]
+}

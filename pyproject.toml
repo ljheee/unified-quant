@@ -28,6 +28,9 @@ dev = [
   "scikit-learn>=1.3",
   "joblib>=1.3",
 ]
+qlib = [
+  "pyqlib>=0.9.7",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
