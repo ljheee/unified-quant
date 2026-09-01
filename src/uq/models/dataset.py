@@ -93,6 +93,7 @@ class DatasetBuilder:
         universe_snapshot_generation_id: str,
         split_policy: dict[str, Any],
         missing_policy: str = "fail_closed",
+        feature_preprocessing_generation_id: str | None = None,
         row_count: int,
     ) -> dict[str, Any]:
         if missing_policy not in ("fail_closed", "declared_fill"):
@@ -115,6 +116,7 @@ class DatasetBuilder:
             "universe_snapshot_generation_id": universe_snapshot_generation_id,
             "split_policy": split_policy,
             "missing_policy": missing_policy,
+            "feature_preprocessing_generation_id": feature_preprocessing_generation_id,
             "row_count": row_count,
             "data_checksum_sha256": sha256_json({"features": ordered_features, "row_count": row_count}),
             "logical_fingerprint": sha256_json({"features": ordered_features}),

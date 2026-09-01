@@ -23,6 +23,7 @@ _SCHEMA_NAMES = {
     "qlib_init_receipt",
     "prediction_set",
     "feature_schema",
+    "feature_preprocessing",
     "portfolio_definition",
     "target_weights",
     "backtest_config",
@@ -31,6 +32,7 @@ _SCHEMA_NAMES = {
 _RUN_LOCAL_FIELDS = {"run_id", "created_at"}
 _QUALITY_BOUND_FIELDS = {
     "model_dataset": {"quality_report_checksum_sha256", "logical_fingerprint"},
+    "feature_preprocessing": {"quality_report_checksum_sha256"},
     "model_run": {"quality_report_checksum_sha256"},
     "qlib_dataset_export": {"export_layout", "quality_report_checksum_sha256"},
     "qlib_init_receipt": {"quality_report_checksum_sha256"},

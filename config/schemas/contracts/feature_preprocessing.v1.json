@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/feature_preprocessing.v1.json",
+  "title": "Governed stateless cross-sectional feature preprocessing manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "preprocess_name",
+    "semantic_version",
+    "input_factor_set",
+    "input_factor_version",
+    "input_factor_generation_ids",
+    "input_frame_sha256",
+    "ordered_features",
+    "key_columns",
+    "policy",
+    "group_columns",
+    "output_frame_row_count",
+    "output_frame_sha256",
+    "code_fingerprint",
+    "serialization_profile_id",
+    "run_id",
+    "created_at",
+    "quality_report_checksum_sha256",
+    "manifest_digest_sha256",
+    "generation_id",
+    "transform"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "preprocess_name": {
+      "$ref": "#/$defs/path_segment"
+    },
+    "semantic_version": {
+      "$ref": "#/$defs/semver"
+    },
+    "input_factor_set": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input_factor_version": {
+      "$ref": "#/$defs/semver"
+    },
+    "input_factor_generation_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/sha256"
+      }
+    },
+    "input_frame_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "ordered_features": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "key_columns": {
+      "const": [
+        "instrument",
+        "datetime"
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "null_result",
+        "min_group_observations"
+      ],
+      "properties": {
+        "type": {
+          "const": "cross_sectional_stateless_v1"
+        },
+        "null_result": {
+          "const": "preserve_null"
+        },
+        "min_group_observations": {
+          "type": "integer",
+          "minimum": 2
+        }
+      }
+    },
+    "group_columns": {
+      "const": [
+        "datetime"
+      ]
+    },
+    "output_frame_row_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "output_frame_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "code_fingerprint": {
+      "$ref": "#/$defs/sha256"
+    },
+    "serialization_profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "created_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "quality_report_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "transform": {
+      "enum": [
+        "standardize_cross_section",
+        "rank_cross_section"
+      ]
+    }
+  },
+  "$defs": {
+    "path_segment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

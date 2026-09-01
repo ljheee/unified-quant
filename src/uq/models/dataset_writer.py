@@ -18,6 +18,7 @@ from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
 from ..errors import ContractError
 from .dataset import SplitValidator
+from .feature_preprocessing import FeaturePreprocessorBuilder
 from .features import FeatureSchemaValidator
 from ..factors.raw_price import logical_fingerprint as frame_logical_fingerprint
 
@@ -36,6 +37,10 @@ class DatasetWriter:
         *,
         feature_schema: dict[str, Any],
         quality_report: dict[str, Any] | None = None,
+        preprocessing_manifest: dict[str, Any] | None = None,
+        preprocessing_frame: pd.DataFrame | None = None,
+        preprocessing_input_frame: pd.DataFrame | None = None,
+        preprocessing_quality_report: dict[str, Any] | None = None,
     ) -> Path:
         published_manifest = dict(manifest)
 
@@ -43,6 +48,10 @@ class DatasetWriter:
             raise ContractError("dataset publication requires an externally reviewed quality decision")
 
         FeatureSchemaValidator.validate_against_frame(feature_schema, frame)
+        self._validate_preprocessing(
+            published_manifest, frame, feature_schema, preprocessing_manifest,
+            preprocessing_input_frame, preprocessing_frame,
+        )
         policy = published_manifest["split_policy"]
         trading_dates = sorted({timestamp.strftime("%Y-%m-%d") for timestamp in frame["datetime"]})
         SplitValidator.validate_splits(
@@ -69,6 +78,21 @@ class DatasetWriter:
             subject_generation_id=generation_id,
             subject_content_sha256=generation_id,
         )
+        if preprocessing_manifest is not None:
+            if preprocessing_quality_report is None:
+                raise ContractError("preprocessing publication requires an externally reviewed quality decision")
+            bound_preprocessing_report, preprocessing_report_checksum = bind_reviewed_quality_decision(
+                preprocessing_quality_report, binding_type="feature_preprocessing_v1",
+                subject_generation_id=preprocessing_manifest["generation_id"],
+                subject_content_sha256=preprocessing_manifest["generation_id"],
+            )
+            preprocessing_manifest = {**preprocessing_manifest, "quality_report_checksum_sha256": preprocessing_report_checksum}
+            _, preprocessing_manifest["manifest_digest_sha256"] = model_manifest_identities(
+                preprocessing_manifest,
+                schema_name="feature_preprocessing",
+                exclude_fields={"quality_report_checksum_sha256"},
+            )
+            ModelContractLoader.validate("feature_preprocessing", preprocessing_manifest)
         quality_report_path = self.root / "external_quality_reviews" / f"{report_checksum}.json"
         quality_report_path.parent.mkdir(parents=True, exist_ok=True)
         report_staging = quality_report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
@@ -113,6 +137,17 @@ class DatasetWriter:
                 (staging / "feature_schema.json").write_text(
                     json.dumps(feature_schema, sort_keys=True, indent=2) + "\n"
                 )
+                if preprocessing_manifest is not None:
+                    (staging / "feature_preprocessing.json").write_text(
+                        json.dumps(preprocessing_manifest, sort_keys=True, indent=2) + "\n"
+                    )
+                    preprocessing_path = self.root / "external_quality_reviews" / f"{preprocessing_report_checksum}.json"
+                    preprocessing_path.parent.mkdir(parents=True, exist_ok=True)
+                    if not preprocessing_path.exists():
+                        preprocessing_staging = preprocessing_path.with_suffix(f".staging.{uuid.uuid4().hex}")
+                        preprocessing_staging.write_text(json.dumps(bound_preprocessing_report, sort_keys=True, indent=2) + "\n")
+                        os.replace(preprocessing_staging, preprocessing_path)
+                        fsync_dir(preprocessing_path.parent)
                 report_dir = self.root / "model_quality_reports"
                 report_dir.mkdir(parents=True, exist_ok=True)
                 report_path = report_dir / f"{report_checksum}.json"
@@ -177,6 +212,18 @@ class DatasetWriter:
             ModelContractLoader.validate("feature_schema", fs_doc)
         except (json.JSONDecodeError, ContractError) as exc:
             raise ContractError("tampered or malformed feature schema in dataset partition") from exc
+        preprocessing_doc: dict[str, Any] | None = None
+        if manifest.get("feature_preprocessing_generation_id") is not None:
+            preprocessing_path = partition / "feature_preprocessing.json"
+            if not preprocessing_path.is_file():
+                raise ContractError(f"incomplete dataset feature preprocessing: {partition}")
+            try:
+                preprocessing_doc = json.loads(preprocessing_path.read_text())
+                ModelContractLoader.validate("feature_preprocessing", preprocessing_doc)
+                self._validate_preprocessing_references(manifest, preprocessing_doc, fs_doc)
+                self._validate_preprocessing_quality_report(preprocessing_doc)
+            except (json.JSONDecodeError, ContractError) as exc:
+                raise ContractError("tampered or malformed feature preprocessing in dataset partition") from exc
         actual_checksum = file_sha256_bytes(data_path.read_bytes())
         manifest_checksum = manifest.get("data_checksum_sha256")
         if manifest_checksum != actual_checksum:
@@ -196,6 +243,9 @@ class DatasetWriter:
             raise ContractError("duplicate dataset keys prevent read")
         if frame_logical_fingerprint(frame) != manifest.get("logical_fingerprint"):
             raise ContractError("dataset logical fingerprint mismatch")
+        if preprocessing_doc is not None:
+            if frame_logical_fingerprint(frame) != preprocessing_doc["output_frame_sha256"]:
+                raise ContractError("preprocessing output fingerprint mismatch")
         policy = manifest["split_policy"]
         trading_dates = sorted({timestamp.strftime("%Y-%m-%d") for timestamp in frame["datetime"]})
         SplitValidator.validate_splits(
@@ -235,3 +285,86 @@ class DatasetWriter:
         parquet.write_table(table, sink, compression="snappy")
         artifact = sink.getvalue().to_pybytes()
         return artifact, file_sha256_bytes(artifact)
+
+    def _validate_preprocessing(
+        self,
+        manifest: dict[str, Any],
+        frame: pd.DataFrame,
+        feature_schema: dict[str, Any],
+        preprocessing_manifest: dict[str, Any] | None,
+        preprocessing_input_frame: pd.DataFrame | None,
+        preprocessing_frame: pd.DataFrame | None,
+    ) -> None:
+        if (manifest.get("feature_preprocessing_generation_id") is None) != (preprocessing_manifest is None):
+            raise ContractError("dataset manifest and supplied preprocessing manifest disagree")
+        if preprocessing_manifest is None:
+            return
+        if preprocessing_frame is None:
+            raise ContractError("preprocessing manifest requires preprocessing output frame")
+        if preprocessing_input_frame is None:
+            raise ContractError("preprocessing manifest requires preprocessing input frame")
+        self._validate_preprocessing_references(manifest, preprocessing_manifest, feature_schema)
+        builder = FeaturePreprocessorBuilder(
+            preprocess_name=preprocessing_manifest["preprocess_name"],
+            semantic_version=preprocessing_manifest["semantic_version"],
+            transform=preprocessing_manifest["transform"],
+            min_group_observations=preprocessing_manifest["policy"]["min_group_observations"],
+            code_fingerprint=preprocessing_manifest["code_fingerprint"],
+        )
+        builder.validate_frame_keys(frame)
+        builder.validate_frame_keys(preprocessing_frame)
+        ordered_features = preprocessing_manifest["ordered_features"]
+        if list(preprocessing_frame.columns) != ["instrument", "datetime", *ordered_features]:
+            raise ContractError("preprocessing output columns do not match manifest")
+        canonical_output = preprocessing_frame.sort_values(
+            ["instrument", "datetime"], kind="mergesort"
+        ).reset_index(drop=True)
+        expected = builder.transform(preprocessing_input_frame.copy(), ordered_features)
+        pd.testing.assert_frame_equal(
+            canonical_output, expected, check_exact=False, rtol=1e-12, atol=1e-12
+        )
+        if frame_logical_fingerprint(canonical_output) != preprocessing_manifest["output_frame_sha256"]:
+            raise ContractError("preprocessing output fingerprint mismatch")
+
+    def _validate_preprocessing_references(
+        self,
+        manifest: dict[str, Any],
+        preprocessing_manifest: dict[str, Any],
+        feature_schema: dict[str, Any],
+    ) -> None:
+        if manifest.get("feature_preprocessing_generation_id") != preprocessing_manifest.get("generation_id"):
+            raise ContractError("dataset preprocessing generation mismatch")
+        if preprocessing_manifest.get("input_factor_set") != manifest.get("factor_set"):
+            raise ContractError("preprocessing input factor set mismatch")
+        if preprocessing_manifest.get("input_factor_version") != manifest.get("factor_version"):
+            raise ContractError("preprocessing input factor version mismatch")
+        if preprocessing_manifest.get("input_factor_generation_ids") != manifest.get("factor_generation_ids"):
+            raise ContractError("preprocessing input factor generation mismatch")
+        ordered_features = preprocessing_manifest.get("ordered_features")
+        schema_features = [column["name"] for column in feature_schema["columns"]]
+        if ordered_features != schema_features:
+            raise ContractError("preprocessing ordered features do not match feature schema")
+        statuses = {column["name"]: column["transform_status"] for column in feature_schema["columns"]}
+        policy_type = preprocessing_manifest.get("transform")
+        expected_status = "standardized" if policy_type == "standardize_cross_section" else "ranked"
+        for name in ordered_features:
+            if statuses.get(name) != expected_status:
+                raise ContractError(f"feature schema transform status mismatch for {name}")
+
+    def _validate_preprocessing_quality_report(self, preprocessing_manifest: dict[str, Any]) -> None:
+        checksum = preprocessing_manifest.get("quality_report_checksum_sha256")
+        path = self.root / "external_quality_reviews" / f"{checksum}.json"
+        try:
+            report = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContractError("preprocessing quality report is unavailable or malformed") from exc
+        ModelContractLoader.validate("model_quality_report", report)
+        actual_checksum = sha256_json({key: value for key, value in report.items() if key != "report_checksum_sha256"})
+        if (
+            checksum != actual_checksum
+            or report["binding_type"] != "feature_preprocessing_v1"
+            or report["bound_generation_id"] != preprocessing_manifest["generation_id"]
+            or report["subject_content_sha256"] != preprocessing_manifest["generation_id"]
+            or report["status"] not in {"passed", "warning"}
+        ):
+            raise ContractError("preprocessing quality report rejects read")

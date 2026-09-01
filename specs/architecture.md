@@ -369,6 +369,19 @@ Canonical/PIT Store
 The exporter must write a source manifest mapping Qlib snapshot version to UQL
 canonical partitions, schemas, checksums, and source versions.
 
+## 11.4 Model Feature Preprocessing Boundary
+
+```text
+FactorStore (accepted factors)
+  -> Model Dataset Feature Schema
+  -> feature_preprocessing.v1 (stateless, cross-sectional transform)
+  -> Model Dataset / Qlib runtime
+```
+
+Preprocessing is model governance, not factor computation. The first slice may
+only use same-date cross-sectional stateless transforms. Qlib runtime processors
+are disabled unless they consume a governed preprocessing manifest.
+
 ## 11.5 Portfolio and Backtest Layer Boundary
 
 ```text

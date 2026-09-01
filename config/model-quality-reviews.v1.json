@@ -26,6 +26,19 @@
         "export_files_verified"
       ]
     },
+    "feature_preprocessing_v1": {
+      "policy": "cross_sectional_stateless_v1",
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "allowed_checks": [
+        "key_reconciliation",
+        "row_count_reconciliation",
+        "output_readback",
+        "null_rate"
+      ]
+    },
     "model_artifact_v1": {
       "policy": "reject_all",
       "allowed_statuses": [

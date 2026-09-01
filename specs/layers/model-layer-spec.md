@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.0.7; phases 0–5 implemented; real Qlib runtime slice released at commit `03d1f0c73a51976445c561718d744317684bf644`**
+Status: **design v1.1.0; phases 0–5 released; stateless feature preprocessing addendum FP0/FP1 implemented**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
@@ -189,6 +189,34 @@ A training observation is ineligible whenever its label outcome interval
 purge, apply the declared global or per-universe embargo in trading sessions.
 Split manifests must record inclusive decision-date bounds, horizon `h`, purge
 rule, embargo rule, and affected row counts.
+
+## 6A. Stateless Feature Preprocessing Addendum
+
+The model layer owns feature preprocessing. The factor layer remains semantic
+factor computation and does not perform ML normalization.
+
+The first governed slice is stateless and cross-sectional:
+
+- group only by `datetime` at the decision date;
+- support per-date standardization and per-date rank normalization;
+- preserve native nulls and reject infinities through serialization/readback;
+- require at least the declared minimum observations per date;
+- use canonical `(instrument, datetime)` row order for fingerprints;
+- do not fit or persist mean/std/quantile state across dates or splits.
+
+`feature_preprocessing.v1` binds the preprocessing name/version, transform,
+input factor set/version/generations, exact input frame fingerprint, output
+frame fingerprint, ordered features, code fingerprint, serialization profile,
+quality-report checksum, stable generation, and manifest digest. `DatasetWriter`
+must reconcile this manifest with the feature schema and recompute the declared
+transform before publication. Readback verifies the dataset manifest, sidecar,
+feature schema, preprocessing manifest, preprocessing quality report, row keys,
+row count, physical checksum, and logical fingerprints.
+
+A learned or rolling preprocessing policy (for example train-fit z-score,
+winsorization bounds, neutralization, or online scaling) requires a new contract
+version with explicit fit-window bindings, state storage, refresh policy, and
+leakage tests.
 
 ## 7. Qlib Runtime Boundary
 
