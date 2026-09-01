@@ -37,7 +37,11 @@
     {
       "path": "evidence/qlib-adapter/phase-2/ci-33497514575",
       "type": "remote-six-cell-gate-evidence"
+    },
+    {
+      "path": "evidence/qlib-adapter/phase-2/ci-33497710763",
+      "type": "remote-six-cell-gate-evidence"
     }
   ],
-  "status": "CR hardening implementation gates passed; pending final HEAD evidence gate"
+  "status": "released; local and remote gates passed on evidence HEAD acf053e"
 }

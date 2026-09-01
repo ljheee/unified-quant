@@ -1,6 +1,6 @@
 # Qlib Factor Adapter Implementation Plan
 
-Status: **implementation gates passed after CR hardening; final evidence-only HEAD gate pending.**
+Status: **released v1.0.0; release HEAD 46d1ef0 with local and remote gates passed at evidence HEAD acf053e.**
 
 Source spec: `specs/layers/qlib-factor-adapter-spec.md`
 
@@ -109,4 +109,5 @@ Phase 0 ──> Phase 1 ──> Phase 2
 | QA1s | 1 | tests/test_release_acceptance.py::test_local_and_bound_quality_checks_must_agree | passed |
 | QA2a | 2 | scripts/run_gate.sh | passed |
 | QA2b | 2 | github-actions:33497514575:f4-certification | passed |
-| QA2c | 2 | scripts/run_gate.sh on final evidence HEAD | pending-final-head-gate |
+| QA2c | 2 | scripts/run_gate.sh on evidence HEAD acf053e | passed |
+| QA2d | 2 | github-actions:33497710763:f4-certification | passed |

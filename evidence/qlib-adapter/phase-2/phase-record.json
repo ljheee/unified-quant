@@ -28,6 +28,14 @@
       "note": "Post-CR hardening remote gate; the evidence-only commit remains a required final HEAD marker.",
       "status": "passed",
       "test_id": "github-actions:33497514575:f4-certification"
+    },
+    {
+      "bound_commit": "acf053e50a25aa186bb98546c8022e3db45cec2d",
+      "evidence_path": "evidence/qlib-adapter/phase-2/gate-reports/gate-report.json",
+      "id": "Q2c-final-head-gate",
+      "release_head_definition": "46d1ef0a3ee97e4bb4ef5f452610f21295c1370d (last source/contract commit; evidence-only commits do not alter release content)",
+      "status": "passed",
+      "test_id": "scripts/run_gate.sh"
     }
   ],
   "exited_at_commit": "46d1ef0a3ee97e4bb4ef5f452610f21295c1370d",

@@ -3,6 +3,11 @@
   "binds_spec": "specs/layers/qlib-factor-adapter-spec.md",
   "bound_commit": "46d1ef0a3ee97e4bb4ef5f452610f21295c1370d",
   "gate_evidence": "evidence/qlib-adapter/phase-2/gate-reports/gate-report.json",
+  "local_gate": {
+    "commit_bound": "acf053e50a25aa186bb98546c8022e3db45cec2d",
+    "evidence_path": "evidence/qlib-adapter/phase-2/gate-reports/gate-report.json",
+    "passed": true
+  },
   "notes": [
     "CR hardening gate passed on implementation HEAD.",
     "A fresh gate and remote run are required on the evidence-only release commit before final release claim."
@@ -13,13 +18,15 @@
     "phase_2": "evidence/qlib-adapter/phase-2/phase-record.json"
   },
   "record_version": 1,
+  "release_head": "46d1ef0a3ee97e4bb4ef5f452610f21295c1370d",
+  "release_head_definition": "Last source/contract commit; evidence-only commits do not alter release content.",
   "released_at": "2026-09-01T09:59:40.940352+00:00",
   "remote_gate": {
-    "bound_commit": "46d1ef0a3ee97e4bb4ef5f452610f21295c1370d",
-    "evidence_path": "evidence/qlib-adapter/phase-2/ci-33497514575",
+    "commit_bound": "acf053e50a25aa186bb98546c8022e3db45cec2d",
+    "evidence_path": "evidence/qlib-adapter/phase-2/ci-33497710763",
     "f4_certification_job": "f4-certification",
     "passed": true,
-    "run_id": "33497514575"
+    "run_id": "33497710763"
   },
-  "status": "implementation_gates_passed; pending_final_head_evidence_gate"
+  "status": "released"
 }
