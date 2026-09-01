@@ -1,0 +1,73 @@
+{
+  "entry_criteria": [
+    {
+      "id": "phase-1-entry",
+      "status": "passed",
+      "test_id": "specs/layers/qlib-factor-adapter-implementation-plan.md"
+    }
+  ],
+  "exit_criteria": [
+    {
+      "id": "Q11",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_adapter_computes_alpha158_factors"
+    },
+    {
+      "id": "Q12",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_governance_manifest_generation"
+    },
+    {
+      "id": "Q13",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_quality_report_binding"
+    },
+    {
+      "id": "Q14",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_e2e_publish_read"
+    },
+    {
+      "id": "Q15",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_deterministic_generation_id"
+    },
+    {
+      "id": "Q16",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_qlib_import_guard_raises_without_qlib"
+    },
+    {
+      "id": "Q17",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_forward_looking_expression_rejected"
+    },
+    {
+      "id": "Q18",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_per_date_partition_slicing"
+    },
+    {
+      "id": "Q19",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_vwap_factors_excluded"
+    },
+    {
+      "id": "Q110",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_tampered_partition_rejects_read"
+    },
+    {
+      "bound_commit": "8e06651cbea43a62b50a3e61b22d545a6fdf8f98",
+      "evidence_path": "evidence/qlib-adapter/phase-1/gate-reports/gate-report.json",
+      "id": "Q-gate-implementation-head",
+      "note": "Unified gate was green at the implementation commit. The evidence-only marker commit changes HEAD afterward; remote marker gate remains required.",
+      "status": "passed",
+      "test_id": "scripts/run_gate.sh"
+    }
+  ],
+  "exited_at_commit": "8e06651cbea43a62b50a3e61b22d545a6fdf8f98",
+  "phase": 1,
+  "record_version": 1,
+  "status": "exited"
+}

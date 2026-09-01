@@ -1,0 +1,10 @@
+{
+  "command": ".venv/bin/python -m pytest tests/test_qlib_adapter.py -q",
+  "dependency": "pyqlib==0.9.7",
+  "focused_result": "15 passed; 0 skipped; 0 warnings",
+  "full_suite_command": ".venv/bin/python -m pytest -q",
+  "full_suite_result": "309 passed; 0 skipped; 11 warnings",
+  "record_version": 1,
+  "recorded_at_utc": "2026-09-01T04:12:59.187192+00:00",
+  "result": "passed"
+}

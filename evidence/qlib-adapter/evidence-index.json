@@ -1,0 +1,31 @@
+{
+  "implementation_commit": "8e06651cbea43a62b50a3e61b22d545a6fdf8f98",
+  "index_version": 1,
+  "items": [
+    {
+      "path": "evidence/qlib-adapter/phase-0/phase-record.json",
+      "type": "phase-record"
+    },
+    {
+      "path": "evidence/qlib-adapter/phase-0/gate-reports/gate-report.json",
+      "type": "gate-report"
+    },
+    {
+      "path": "evidence/qlib-adapter/phase-1/phase-record.json",
+      "type": "phase-record"
+    },
+    {
+      "path": "evidence/qlib-adapter/phase-1/gate-reports/gate-report.json",
+      "type": "gate-report"
+    },
+    {
+      "path": "evidence/qlib-adapter/qlib-enabled-tests.json",
+      "type": "optional-runtime-test-summary"
+    },
+    {
+      "path": "evidence/qlib-adapter/release/release-record.json",
+      "type": "release-record"
+    }
+  ],
+  "status": "implementation-gate-passed; pending final marker remote gate"
+}

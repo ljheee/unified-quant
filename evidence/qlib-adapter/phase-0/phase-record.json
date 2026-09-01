@@ -1,0 +1,43 @@
+{
+  "entry_criteria": [
+    {
+      "id": "phase-0-entry",
+      "status": "passed",
+      "test_id": "specs/layers/qlib-factor-adapter-implementation-plan.md"
+    }
+  ],
+  "exit_criteria": [
+    {
+      "id": "Q01",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_factor_set_definition_valid"
+    },
+    {
+      "id": "Q02",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_alpha158_factor_names_deterministic"
+    },
+    {
+      "id": "Q03",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_lookahead_audit_excludes_forward_looking"
+    },
+    {
+      "id": "Q04",
+      "status": "passed",
+      "test_id": "tests/test_qlib_adapter.py::test_name_mapping_deterministic"
+    },
+    {
+      "bound_commit": "8e06651cbea43a62b50a3e61b22d545a6fdf8f98",
+      "evidence_path": "evidence/qlib-adapter/phase-0/gate-reports/gate-report.json",
+      "id": "Q-gate-implementation-head",
+      "note": "Unified gate was green at the implementation commit. The evidence-only marker commit changes HEAD afterward; remote marker gate remains required.",
+      "status": "passed",
+      "test_id": "scripts/run_gate.sh"
+    }
+  ],
+  "exited_at_commit": "8e06651cbea43a62b50a3e61b22d545a6fdf8f98",
+  "phase": 0,
+  "record_version": 1,
+  "status": "exited"
+}

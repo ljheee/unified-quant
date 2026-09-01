@@ -1,0 +1,15 @@
+{
+  "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+  "extras": [
+    "dev",
+    "real"
+  ],
+  "git_commit": "8e06651cbea43a62b50a3e61b22d545a6fdf8f98",
+  "lockfile_sha256": "6aff8b29d2818127cbcac8551ef9f2246aa42de6da2d293d3375cc6fd53a223f",
+  "platform": "macOS-26.3-arm64-arm-64bit",
+  "python_version": "3.12.13",
+  "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+  "runner": "uv",
+  "test_result": "passed",
+  "utc_timestamp": "2026-09-01T04:12:13.447447+00:00"
+}
