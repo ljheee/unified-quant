@@ -46,6 +46,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v3
+      - name: Install Qlib macOS native dependency
+        if: runner.os == 'macOS'
+        run: brew install libomp
       - run: scripts/run_gate.sh
       - name: Record Qlib runtime cell
         run: |
