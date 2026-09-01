@@ -1,6 +1,15 @@
 {
   "entries": [
     {
+      "bound_commit": "7eb9c19aac44bd57a4cc5313058fa1a711386e6c",
+      "note": "Local unified gate with dev, real, and qlib extras.",
+      "path": "gate-reports/gate-report.json",
+      "requirements_digest_path": "gate-reports/requirements.lock.txt.sha256",
+      "requirements_path": "gate-reports/requirements.lock.txt",
+      "status": "passed",
+      "type": "local_gate_report"
+    },
+    {
       "negative_fixture": "../phase-0/fixtures/feature_preprocessing-negative.json",
       "path": "../phase-0/fixtures/feature_preprocessing-valid.json",
       "status": "passed",

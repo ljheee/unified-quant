@@ -1,6 +1,5 @@
 {
   "blocked_by": [
-    "fresh final-head unified local gate",
     "fresh final-head remote CI matrix",
     "evidence-only reconciliation commit"
   ],
@@ -33,10 +32,11 @@
       "test_id": "tests/test_feature_preprocessing.py"
     },
     {
-      "evidence_path": null,
+      "evidence_path": "gate-reports/gate-report.json",
       "id": "FP0-exit-final-head-gate",
-      "status": "blocked",
-      "test_id": "UQ_GATE_EXTRAS=qlib scripts/run_gate.sh"
+      "status": "passed",
+      "test_id": "UQ_GATE_EXTRAS=qlib scripts/run_gate.sh",
+      "note": "Local unified gate passed at implementation HEAD 7eb9c19."
     },
     {
       "evidence_path": null,
