@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
@@ -44,6 +45,8 @@ class QlibDatasetExporter:
         generation_id: str,
         frame: pd.DataFrame,
         feature_mapping: dict[str, str],
+        label_column: str,
+        label_mapping: str,
         calendar_dates: list[str],
         instruments: list[str],
         provider_uri: str,
@@ -53,6 +56,10 @@ class QlibDatasetExporter:
             raise ContractError("cannot export empty dataset")
         if not feature_mapping:
             raise ContractError("feature mapping cannot be empty")
+        if not isinstance(label_column, str) or not label_column:
+            raise ContractError("label column cannot be empty")
+        if not isinstance(label_mapping, str) or not label_mapping:
+            raise ContractError("label mapping cannot be empty")
         if not calendar_dates:
             raise ContractError("calendar dates cannot be empty")
         if not instruments:
@@ -80,17 +87,50 @@ class QlibDatasetExporter:
                 (inst_dir / "all.txt").write_text(instruments_content)
                 instruments_checksum = file_sha256_bytes((inst_dir / "all.txt").read_bytes())
 
-                # 3. Feature mapping file
-                mapping_content = json.dumps(feature_mapping, sort_keys=True, indent=2) + "\n"
+                # 3. Feature and label mapping file
+                complete_mapping = {**feature_mapping, label_column: label_mapping}
+                mapping_content = json.dumps(complete_mapping, sort_keys=True, indent=2) + "\n"
                 mapping_path = staging / "feature_mapping.json"
                 mapping_path.write_text(mapping_content)
                 mapping_checksum = file_sha256_bytes(mapping_path.read_bytes())
 
                 # 4. Data parquet with Qlib-compatible columns
-                qlib_frame = frame[["instrument", "datetime", *feature_mapping.keys()]].copy()
-                qlib_frame = qlib_frame.rename(columns=feature_mapping)
-                data_path = staging / "data.parquet"
-                qlib_frame.to_parquet(data_path, index=False, compression="snappy")
+                qlib_frame = frame[["instrument", "datetime", *complete_mapping.keys()]].copy()
+                qlib_frame = qlib_frame.rename(columns=complete_mapping)
+                calendar_series = pd.Series(pd.to_datetime(calendar_dates))
+                calendar_index = {date.strftime("%Y-%m-%d"): index for index, date in enumerate(calendar_series)}
+                feature_dir = staging / "features"
+                qlib_frame = qlib_frame.copy()
+                qlib_frame["datetime"] = pd.to_datetime(qlib_frame["datetime"])
+                qlib_frame["instrument"] = qlib_frame["instrument"].astype(str).str.lower()
+                for _, row in qlib_frame.iterrows():
+                    instrument = row["instrument"]
+                    date_key = row["datetime"].strftime("%Y-%m-%d")
+                    if date_key not in calendar_index:
+                        raise ContractError(f"export row date is missing from calendar: {date_key}")
+                    instrument_dir = feature_dir / instrument
+                    instrument_dir.mkdir(parents=True, exist_ok=True)
+                    for mapped_name, value in row.drop(["instrument", "datetime"]).items():
+                        if not pd.notna(value):
+                            raise ContractError("Qlib provider export cannot contain missing values")
+                        if not isinstance(value, (int, float, np.integer, np.floating)) or not np.isfinite(float(value)):
+                            raise ContractError(f"Qlib provider export requires finite numeric values: {mapped_name}")
+                        value_array = np.array([float(value)], dtype=np.float32)
+                        file_path = instrument_dir / f"{mapped_name.lower()}.day.bin"
+                        index = np.array([calendar_index[date_key]], dtype=np.float32)
+                        if file_path.exists():
+                            values = np.fromfile(file_path, dtype="<f")
+                            start_index = int(values[0])
+                            if index[0] < start_index:
+                                raise ContractError("Qlib provider export cannot prepend dates")
+                            if index[0] <= start_index + len(values) - 2:
+                                raise ContractError("Qlib provider export has duplicate date keys")
+                            target = np.full(int(max(len(values), index[0] - start_index + 2)), np.nan, dtype=np.float32)
+                            target[:len(values)] = values
+                            target[int(index[0] - start_index + 1)] = value_array[0]
+                        else:
+                            target = np.hstack([index, value_array])
+                        target.astype("<f").tofile(file_path)
 
                 # Build file list
                 # Verify all written files before building file list
@@ -122,7 +162,7 @@ class QlibDatasetExporter:
                         rel = path.relative_to(staging).as_posix()
                         complete_files.append({
                             "path": rel,
-                            "checksum_sha256": file_sha256_bytes(path.read_bytes()),
+                    "checksum_sha256": file_sha256_bytes(path.read_bytes()),
                             "byte_size": path.stat().st_size,
                         })
                 manifest["files"] = complete_files

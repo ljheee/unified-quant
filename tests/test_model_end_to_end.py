@@ -25,6 +25,11 @@ from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
 from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision, sha256_json, resolve_bindings
 from uq.models.trainer import ArtifactStore, ModelRunBuilder, ModelTrainer
 
+try:
+    import qlib
+except ImportError:
+    qlib = None
+
 
 def _publish_factor(root: Path) -> None:
     """Publish a basic factor partition for testing."""
@@ -164,6 +169,7 @@ class TestEndToEndPipeline:
         adjusted_frame["delisted"] = False
         adjusted_frame["suspended"] = False
         adjusted_frame["listing_date"] = pd.Timestamp("2020-01-01", tz="UTC")
+        adjusted_frame["label"] = 0.01
         label_manifest = LabelBuilder(name="return_5d", semantic_version="1.0.0").build(
             adjusted_frame,
             upstream_bindings=[{
@@ -213,8 +219,9 @@ class TestEndToEndPipeline:
         instruments = sorted(factor_data["instrument"].unique().tolist())
         export_manifest = exporter.export(
             dataset_name="e2e_slice", generation_id=dataset_manifest["generation_id"],
-            frame=factor_data[["instrument", "datetime", "volume_ratio_20d"]],
+            frame=factor_data[["instrument", "datetime", "volume_ratio_20d", "label"]].fillna({"volume_ratio_20d": 0.0, "label": 0.0}),
             feature_mapping=feature_mapping,
+            label_column="label", label_mapping="LABEL_5D",
             calendar_dates=calendar_dates, instruments=instruments,
             provider_uri="file:///test/exports", quality_decision=export_decision(),
         )
@@ -223,7 +230,7 @@ class TestEndToEndPipeline:
         cache_after = cache_before | {str(tmp_path / ".cache" / "qlib" / "calendar.pkl")}
         receipt = receipt_builder.build(
             export_manifest=export_manifest, resolved_provider_uri="file:///test/exports",
-            qlib_import_path="qlib", qlib_version="0.9.6",
+            qlib_import_path="qlib", qlib_version=(qlib.__version__ if qlib is not None else "0.9.6"),
             cache_root=str(tmp_path / ".cache"), 
             cache_files_before=cache_before, cache_files_after=cache_after,
             verified_export=exporter.read("e2e_slice", export_manifest["generation_id"]),
@@ -255,6 +262,73 @@ class TestEndToEndPipeline:
             factor_manifests={factor_gen: factor_document},
             quality_decision=run_decision(), store_root=tmp_path,
         )
+
+        # === Phase 4A: Real Qlib runtime training ===
+        if qlib is not None:
+            from uq.models.qlib_runtime import QlibRuntimeTrainer
+
+            qlib_definition_input = ModelDefinitionBuilder(
+                run_content_generation_id="1" * 64, reviewed=True
+            ).build(
+                algorithm="qlib_linear", hyperparameters={"alpha": 0.5},
+                seed_policy={"base_seed": 42, "derivation": "fixed"},
+                model_set="qlib-baseline", model_version="1.0.0",
+                feature_schema_generation_id=feature_schema["generation_id"],
+                compatible_dataset_versions=["1.0.0"],
+                metrics=[{"name": "ic", "direction": "maximize"}],
+                selection_rule="max validation ic", serializer_version="joblib-v1",
+            )
+            qlib_run_manifest, qlib_definition = ModelRunBuilder.build(
+                definition=qlib_definition_input,
+                dataset_manifest=loaded_ds_manifest,
+                export_manifest=export_manifest,
+                receipt_manifest=receipt,
+                environment_lock_sha256=DIGEST,
+                determinism_controls={"random_seed": 42, "threads": 1},
+                label_manifest=label_manifest,
+                universe_snapshot=universe_manifest,
+                factor_manifests={factor_gen: factor_document},
+                quality_decision=run_decision(), store_root=tmp_path,
+            )
+            qlib_manifest, qlib_bytes = QlibRuntimeTrainer().train(
+                definition=qlib_definition,
+                dataset_manifest=loaded_ds_manifest,
+                export_manifest=export_manifest,
+                receipt_manifest=receipt,
+                verified_export=exporter.read("e2e_slice", export_manifest["generation_id"]),
+                feature_columns=["volume_ratio_20d"], label_column="label",
+            )
+            assert qlib_manifest["runtime_name"] == "qlib_linear"
+            assert qlib_manifest["runtime_version"] == qlib.__version__
+            assert "features/inst0/volume_ratio.day.bin" in {entry["path"] for entry in export_manifest["files"]}
+            assert "features/inst0/label_5d.day.bin" in {entry["path"] for entry in export_manifest["files"]}
+
+            from uq.contracts.model_layer import model_manifest_identities as _runtime_mmi
+            runtime_generation = _runtime_mmi(
+                {**qlib_manifest, "generation_id": DIGEST, "manifest_digest_sha256": DIGEST},
+                schema_name="model_artifact",
+                exclude_fields={"quality_report_checksum_sha256"},
+            )[0]
+            runtime_report, _ = bind_reviewed_quality_decision(
+                create_reviewed_quality_decision(
+                    binding_type="model_artifact_v1", policy="reject_all", status="passed",
+                    checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+                    errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+                ),
+                binding_type="model_artifact_v1", subject_generation_id=runtime_generation,
+                subject_content_sha256=runtime_generation,
+            )
+            runtime_store = ArtifactStore(tmp_path)
+            runtime_partition = runtime_store.publish(
+                qlib_manifest, qlib_bytes, quality_report=runtime_report,
+            )
+            assert (runtime_partition / "model.joblib").is_file()
+            loaded_runtime_manifest, loaded_runtime_bytes = runtime_store.read(
+                qlib_manifest["model_run_content_generation_id"], runtime_generation,
+            )
+            assert loaded_runtime_manifest["artifact_filename"] == "model.joblib"
+            assert loaded_runtime_bytes == qlib_bytes
+
         # === Phase 4: Train + publish artifact ===
         trainer = ModelTrainer(tmp_path)
         artifact_manifest, artifact_bytes = trainer.train(
@@ -358,3 +432,96 @@ class TestEndToEndPipeline:
         runtime._tampered_generations.add(gen)
         with pytest.raises(ContractError, match="tampered or invalid"):
             runtime.read(gen)
+
+
+class TestQlibRuntimeTrainer:
+    @pytest.mark.skipif(qlib is None, reason="Qlib extra is not installed")
+    def test_tampered_provider_bin_rejects_training(self, tmp_path: Path) -> None:
+        from uq.models.qlib_runtime import QlibRuntimeTrainer
+
+        _publish_factor(tmp_path)
+        runtime = AcceptedFactorIndexRuntime(tmp_path)
+        factor_gen = runtime.list({
+            "contract_version": 1, "filters": {}, "ordering": ["partition_date"],
+            "visibility": "accepted_only", "pagination": {"limit": 10},
+        })[0]["generation_id"]
+        factor_data = runtime.read(factor_gen).fillna({"volume_ratio_20d": 0.0})
+        adjusted_frame = factor_data.copy()
+        adjusted_frame["close"] = 10.0
+        adjusted_frame["adj_factor"] = 1.0
+        adjusted_frame["limit_up"] = False
+        adjusted_frame["limit_down"] = False
+        adjusted_frame["delisted"] = False
+        adjusted_frame["suspended"] = False
+        adjusted_frame["listing_date"] = pd.Timestamp("2020-01-01", tz="UTC")
+        adjusted_frame["label"] = 0.01
+        label_manifest = LabelBuilder(name="return_5d", semantic_version="1.0.0").build(
+            adjusted_frame,
+            upstream_bindings=[{
+                "binding": "adjusted_price", "dataset": "tamper_bars", "schema_version": "adjusted-v1",
+                "partition_date": "2026-01-09", "generation_id": DIGEST,
+                "data_checksum_sha256": sha256_json({"rows": [
+                    [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
+                    for row in adjusted_frame[["instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"]].sort_values(["instrument", "datetime"], kind="mergesort").itertuples(index=False)
+                ]}),
+                "visible_cutoff": "2026-01-09T15:00:00+08:00",
+            }],
+        )
+        feature_schema = FeatureSchemaBuilder().build(
+            factor_data.drop(columns=["label"], errors="ignore"), source_factor_set="basic", source_factor_version="1.0.0",
+        )
+        universe_manifest = _publish_universe(tmp_path)
+        factor_document = _load_factor_document(tmp_path, factor_gen)
+        dataset_manifest = DatasetBuilder(dataset_name="tamper_slice", semantic_version="1.0.0").build(
+            ordered_features=["volume_ratio_20d"], factor_set="basic", factor_version="1.0.0",
+            factor_generation_ids=[factor_gen], label_set_name="return_5d",
+            label_generation_id=label_manifest["generation_id"],
+            universe_snapshot_generation_id=universe_manifest["generation_id"],
+            split_policy={"purge_trading_days": 0, "embargo_trading_days": 0, "splits": [
+                {"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-12"},
+                {"name": "validation", "start_date": "2026-01-19", "end_date": "2026-01-23"},
+            ]},
+            row_count=len(factor_data),
+        )
+        DatasetWriter(tmp_path).write(
+            dataset_manifest, factor_data, feature_schema=feature_schema, quality_report=dataset_decision(),
+        )
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        export_manifest = exporter.export(
+            dataset_name="tamper_slice", generation_id=dataset_manifest["generation_id"], frame=adjusted_frame,
+            feature_mapping={"volume_ratio_20d": "VOLUME_RATIO"}, label_column="label", label_mapping="LABEL_5D",
+            calendar_dates=sorted(factor_data["datetime"].dt.strftime("%Y-%m-%d").unique()),
+            instruments=sorted(factor_data["instrument"].unique()),
+            provider_uri="file:///correct", quality_decision=export_decision(),
+        )
+        receipt = QlibInitReceiptBuilder().build(
+            export_manifest=export_manifest, resolved_provider_uri="file:///correct",
+            qlib_import_path="qlib", qlib_version=qlib.__version__, cache_root=str(tmp_path / ".cache"),
+            cache_files_before=set(), cache_files_after=set(),
+            verified_export=exporter.read("tamper_slice", export_manifest["generation_id"]),
+            governance_root=tmp_path, quality_decision=receipt_decision(),
+        )
+        definition = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True).build(
+            algorithm="qlib_linear", hyperparameters={"alpha": 0.1},
+            seed_policy={"base_seed": 42, "derivation": "fixed"},
+            model_set="qlib", model_version="1.0.0", feature_schema_generation_id=feature_schema["generation_id"],
+            compatible_dataset_versions=["1.0.0"], metrics=[{"name": "ic", "direction": "maximize"}],
+            selection_rule="max ic", serializer_version="joblib-v1",
+        )
+        _, definition = ModelRunBuilder.build(
+            definition=definition, dataset_manifest=dataset_manifest, export_manifest=export_manifest,
+            receipt_manifest=receipt, environment_lock_sha256=DIGEST,
+            determinism_controls={"random_seed": 42, "threads": 1}, label_manifest=label_manifest,
+            universe_snapshot=universe_manifest, factor_manifests={factor_gen: factor_document},
+            quality_decision=run_decision(), store_root=tmp_path,
+        )
+        verified_manifest, snapshot = exporter.read("tamper_slice", export_manifest["generation_id"])
+        target = snapshot / "features" / "inst0" / "volume_ratio.day.bin"
+        target.write_bytes(target.read_bytes()[:-1])
+        with pytest.raises(ContractError, match="tampered Qlib export file"):
+            QlibRuntimeTrainer().train(
+                definition=definition, dataset_manifest=dataset_manifest,
+                export_manifest=export_manifest, receipt_manifest=receipt,
+                verified_export=(verified_manifest, snapshot),
+                feature_columns=["volume_ratio_20d"], label_column="label",
+            )

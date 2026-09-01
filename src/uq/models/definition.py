@@ -42,7 +42,7 @@ class ModelDefinitionBuilder:
         quality_policy: str = "reject_all",
         serializer_version: str = "json-numpy-v1",
     ) -> dict[str, Any]:
-        if algorithm != "regularized_linear":
+        if algorithm not in {"regularized_linear", "qlib_linear"}:
             raise ContractError(f"unsupported algorithm: {algorithm}")
         if not metrics:
             raise ContractError("model definition requires at least one metric")

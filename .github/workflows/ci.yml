@@ -32,6 +32,36 @@ jobs:
             .gate/certification/environment-cell.txt
           if-no-files-found: error
 
+  qlib-runtime:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ["macos-latest", "ubuntu-latest"]
+        python-version: ["3.11", "3.12"]
+    env:
+      UQ_GATE_EXTRAS: qlib
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v3
+      - run: scripts/run_gate.sh
+      - name: Record Qlib runtime cell
+        run: |
+          mkdir -p .gate/certification
+          printf '%s\n' "${{ matrix.os }}/${{ matrix.python-version }}/qlib" > .gate/certification/environment-cell.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qlib-gate-report-${{ matrix.os }}-${{ matrix.python-version }}
+          path: |
+            .gate/gate-report.json
+            .gate/requirements.lock.txt
+            .gate/requirements.lock.txt.sha256
+            .gate/certification/environment-cell.txt
+          if-no-files-found: error
+
   f4-certification:
     needs: test
     runs-on: ubuntu-latest

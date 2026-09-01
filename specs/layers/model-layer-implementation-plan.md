@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.8; phases 0–5 complete and release-reconciled at commit 56f5aaa5b7b43ddcbaf32e9e08268975c096694a. Final HEAD CI run 32955140635 passed the six-cell matrix; only an evidence-only marker commit remains.**
+Status: **gated implementation order v1.9; phases 0–5 implemented and prior evidence is superseded by the real Qlib runtime slice. Final HEAD local and remote gates are pending.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -13,7 +13,7 @@ This plan implements only the first local-research supervised slice:
 - one reviewed adjusted-return label family;
 - one reviewed factor-set binding;
 - deterministic time-based splits;
-- one deterministic NumPy ridge baseline with Qlib-compatible export/receipt provenance;
+- one deterministic NumPy ridge compatibility baseline plus one real Qlib `LinearModel` runtime trainer;
 - immutable dataset/model/prediction artifacts;
 - fail-closed lineage, quality, reproducibility, and isolation gates.
 
@@ -254,8 +254,12 @@ model run/artifact.
 
 Deliverables:
 
-1. Typed trainer consuming resolved definition, dataset export, and Qlib runtime
-   initialization result.
+1. `QlibRuntimeTrainer` consuming resolved definition, dataset manifest,
+   verified export, and Qlib runtime initialization receipt.
+1a. The Qlib path fits through `DatasetH`/`LinearModel`, serializes as
+   `joblib-v1`, and records Qlib runtime provenance in the artifact manifest.
+1b. The NumPy ridge path remains the separate `regularized_linear`
+   compatibility implementation and does not claim Qlib runtime identity.
 2. `model_run.v1` creation with code fingerprint and environment lock digest.
 3. Atomic staging/publication with scoped lock and immutable overwrite rejection.
 4. Model artifact checksum/readback reconciliation.
@@ -372,6 +376,8 @@ later phases must expand their rows before entering implementation.
 | M8c-partial-export-read-reject | 2A | Phase 1 exit | test_partial_export_rejected_on_read | generated Qlib export snapshot | local unified gate report | passed |
 | M8d-feature-order-mutation-reject | 2A | Phase 1 exit | test_feature_order_mutation_rejected_on_read | generated Qlib export snapshot | local unified gate report | passed |
 | M8e-cache-substitution-outside-root | 2A | Phase 1 exit | test_cache_substitution_outside_approved_root_rejected + test_external_cache_writes_are_recorded_in_receipt | synthetic cache diff fixtures | local unified gate report | passed |
+| M8f-real-qlib-provider-training | 3 | Phase 2A exit | TestEndToEndPipeline::test_full_chain_from_factor_to_prediction (Qlib runtime branch) | generated native Qlib provider snapshot | pending final HEAD unified gate | pending_final_gate |
+| M8g-provider-bin-tamper-reject | 3 | Phase 2A exit | TestQlibRuntimeTrainer::test_tampered_provider_bin_rejects_training | generated native Qlib provider snapshot | pending final HEAD unified gate | pending_final_gate |
 | M10a-quarantine-path-invisible | 4 | Phase 3 exit | test_quarantine_path_is_not_visible_as_accepted + test_quarantine_manifest_records_input_generations_and_is_not_accepted | tests/test_model_trainer.py | evidence/phase-0/phase-record.json | passed |
 | M12a-reviewed-definition-required | 3 | Phase 2A exit | ModelDefinitionBuilder external `reviewed=True` rejection tests | tests/test_model_definition.py | local unified gate report | passed |
 | M11a-manifest-tamper-reject | 0 | none | test_typed_loader_rejects_absent_malformed_and_tampered_documents | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
@@ -383,7 +389,13 @@ their existing phase-specific negative suites; no security/lineage row is deferr
 
 ## Immediate Next Actions
 
-Completed for release candidate `801c2279d58d67071a49306c49e379fc5ee6b1a2`:
+The release evidence through `56f5aaa5b7b43ddcbaf32e9e08268975c096694a` is
+historical context and no longer binds the real Qlib runtime slice. The next
+required actions are a final-HEAD local gate, a fresh remote run that includes
+the Qlib-compatible gate path where the locked wheel supports it, and refreshed
+evidence records. Do not reuse the prior release marker.
+
+Historical completion for `801c2279d58d67071a49306c49e379fc5ee6b1a2`:
 
 1. Local unified gate passed at that HEAD.
 2. Remote six-cell matrix run `32928412607` passed and its artifacts are archived

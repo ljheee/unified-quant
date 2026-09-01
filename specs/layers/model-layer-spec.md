@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.0.5; phases 0–5 complete; released_pending_final_marker**
+Status: **design v1.0.6; phases 0–5 implemented; real Qlib runtime slice pending final gate**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
@@ -204,7 +204,7 @@ Allowed:
 Forbidden:
 
 - using Qlib expression factors as unregistered model features;
-- allowing Qlib to fetch provider data during training/inference;
+- allowing Qlib to fetch provider data from outside the verified exported snapshot;
 - using Qlib calendars/universes as authoritative PIT evidence unless they are
   byte-for-byte exports of governed bindings;
 - storing `.bin` files in Git;
@@ -217,16 +217,28 @@ The adapter must produce:
    universe provenance, feature mapping, and exporter code fingerprint.
 2. A typed initialization result proving that Qlib initialized against the
    exported snapshot and not another provider URI.
+3. A real runtime training slice that re-verifies every export file, checks
+   receipt-to-export bindings and the installed Qlib version, initializes Qlib
+   against the snapshot, and fits a reviewed model through Qlib APIs.
 
-The export manifest must contain the physical layout, complete file list,
-per-file SHA-256, provider URI digest, calendar/instrument digests, feature
-mapping digest, exporter fingerprint, serialization profile, and empty-cache
-precondition. A typed `QlibInitReceipt.v1` must record resolved provider URI
-digest, export manifest digest, file-list/calendar/instrument/feature-mapping
+The export manifest must contain the physical Qlib provider layout, complete
+file list, per-file SHA-256, provider URI digest, calendar/instrument digests,
+feature-and-label mapping digest, exporter fingerprint, serialization profile,
+and empty-cache precondition. The supervised slice must export governed labels
+as well as features. A typed `QlibInitReceipt.v1` must record resolved provider
+URI digest, export manifest digest, file-list/calendar/instrument/feature-mapping
 digests, Qlib import path/version, initialized cache root, post-run cache diff,
 and an assertion that no ungoverned provider source was configured. The runtime
-must fail if a required governed file changes or an ungoverned source/cache is
-detected.
+must fail if a required governed file changes, a receipt binding mismatches the
+verified export, the installed Qlib version differs, or an ungoverned
+source/cache is detected.
+
+`QlibRuntimeTrainer` is the real runtime entry point for `qlib_linear`. It
+loads features and labels only through Qlib APIs from the verified snapshot,
+trains `qlib.contrib.model.linear.LinearModel`, and emits a governed
+`model.joblib` artifact. The NumPy ridge baseline remains a separate
+`regularized_linear` compatibility path and must not be described as Qlib
+runtime training.
 
 For supervised model slices, this section supersedes architecture §11's
 canonical direct-export prototype. Existing `QlibExporter` output is not a valid

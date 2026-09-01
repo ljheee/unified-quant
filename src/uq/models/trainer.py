@@ -144,8 +144,9 @@ class ArtifactStore:
             try:
                 staging = partition.with_name(f"{partition.name}.staging.{uuid.uuid4().hex[:8]}")
                 staging.mkdir(parents=True)
-                (staging / "artifact.bin").write_bytes(artifact_bytes)
-                readback = (staging / "artifact.bin").read_bytes()
+                artifact_path = staging / published_manifest["artifact_filename"]
+                artifact_path.write_bytes(artifact_bytes)
+                readback = artifact_path.read_bytes()
                 if file_sha256_bytes(readback) != published_manifest["artifact_checksum_sha256"]:
                     raise ContractError("artifact readback checksum mismatch")
 
@@ -173,13 +174,17 @@ class ArtifactStore:
             self.models_dir / f"run_generation={run_generation_id}" / f"artifact_generation={artifact_generation_id}"
         )
         manifest_path = partition / "manifest.json"
-        artifact_path = partition / "artifact.bin"
-        if not manifest_path.is_file() or not artifact_path.is_file():
+        if not manifest_path.is_file():
             raise ContractError(f"unpublished or incomplete artifact: {partition}")
         try:
             manifest = json.loads(manifest_path.read_text())
         except json.JSONDecodeError as exc:
             raise ContractError("malformed artifact manifest") from exc
+        if manifest.get("artifact_filename") not in {"artifact.bin", "model.joblib"}:
+            raise ContractError("unsupported artifact filename")
+        artifact_path = partition / manifest["artifact_filename"]
+        if not artifact_path.is_file():
+            raise ContractError(f"unpublished or incomplete artifact: {partition}")
 
         expected = manifest.get("artifact_checksum_sha256")
         actual = file_sha256_bytes(artifact_path.read_bytes())

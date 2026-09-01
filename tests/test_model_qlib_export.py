@@ -35,11 +35,13 @@ def _dataset_frame() -> pd.DataFrame:
     rows = []
     for i in range(2):
         for d in dates:
-            rows.append({"instrument": f"INST{i}", "datetime": d, "volume_ratio_20d": 1.0 + i * 0.1})
+            rows.append({"instrument": f"INST{i}", "datetime": d, "volume_ratio_20d": 1.0 + i * 0.1, "label": 0.01 * (i + 1)})
     return pd.DataFrame(rows)
 
 
 FEATURE_MAPPING = {"volume_ratio_20d": "VOLUME_RATIO_20D"}
+LABEL_COLUMN = "label"
+LABEL_MAPPING = "LABEL_5D"
 CALENDAR = ["2026-01-05", "2026-01-06", "2026-01-07"]
 INSTRUMENTS = ["INST0", "INST1"]
 
@@ -51,12 +53,13 @@ class TestQlibDatasetExporter:
         manifest = exporter.export(
             dataset_name="research_slice", generation_id="a" * 64,
             frame=frame, feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
             provider_uri="file:///tmp/exports", quality_decision=export_decision(),
         )
         assert len(manifest["generation_id"]) == 64
         assert manifest["empty_cache_precondition"] is True
-        assert len(manifest["files"]) >= 4  # calendar, instruments, mapping, data
+        assert len(manifest["files"]) >= 6  # calendar, instruments, mapping, feature and label bins
         ModelContractLoader_validate(manifest)
 
     def test_immutable_overwrite_rejected(self, tmp_path: Path) -> None:
@@ -64,6 +67,7 @@ class TestQlibDatasetExporter:
         common = dict(
             dataset_name="research_slice", generation_id="a" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
             provider_uri="file:///tmp", quality_decision=export_decision(),
         )
@@ -76,6 +80,7 @@ class TestQlibDatasetExporter:
         manifest = exporter.export(
             dataset_name="x", generation_id="b" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
             provider_uri="file:///correct", quality_decision=export_decision(),
         )
@@ -95,6 +100,7 @@ class TestQlibDatasetExporter:
         manifest = exporter.export(
             dataset_name="x", generation_id="c" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
             provider_uri="file:///data", quality_decision=export_decision(),
         )
@@ -115,6 +121,7 @@ class TestQlibDatasetExporter:
         manifest = exporter.export(
             dataset_name="tamper_case", generation_id="d" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
             provider_uri="file:///data", quality_decision=export_decision(),
         )
@@ -130,11 +137,12 @@ class TestQlibDatasetExporter:
         manifest = exporter.export(
             dataset_name="partial", generation_id="e" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
             provider_uri="file:///data", quality_decision=export_decision(),
         )
         _, snapshot = exporter.read("partial", manifest["generation_id"])
-        (snapshot / "data.parquet").unlink()
+        (snapshot / "features" / "inst0" / "volume_ratio_20d.day.bin").unlink()
         with pytest.raises(ContractError, match="file list mismatch"):
             exporter.read("partial", manifest["generation_id"])
 
@@ -144,14 +152,16 @@ class TestQlibDatasetExporter:
         manifest = exporter.export(
             dataset_name="feature-order", generation_id="f" * 64,
             frame=frame, feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
             provider_uri="file:///data", quality_decision=export_decision(),
         )
         _, snapshot = exporter.read("feature-order", manifest["generation_id"])
-        mutated = pd.read_parquet(snapshot / "data.parquet")
-        mutated["VOLUME_RATIO_20D"] = 999.0
-        mutated.to_parquet(snapshot / "data.parquet", index=False)
-        with pytest.raises(ContractError, match="tampered Qlib export file: data.parquet"):
+        mutated_path = snapshot / "features" / "inst0" / "volume_ratio_20d.day.bin"
+        mutated_bytes = bytearray(mutated_path.read_bytes())
+        mutated_bytes[-1] = 1
+        mutated_path.write_bytes(bytes(mutated_bytes))
+        with pytest.raises(ContractError, match="tampered Qlib export file:"):
             exporter.read("feature-order", manifest["generation_id"])
 
     def test_cache_substitution_outside_approved_root_rejected(self, tmp_path: Path) -> None:
@@ -184,6 +194,7 @@ class TestQlibDatasetExporter:
         manifest = QlibDatasetExporter(tmp_path / "exports").export(
             dataset_name="cache", generation_id="1" * 64,
             frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
             calendar_dates=CALENDAR, instruments=INSTRUMENTS,
             provider_uri="file:///data", quality_decision=export_decision(),
         )

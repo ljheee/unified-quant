@@ -6,21 +6,29 @@ GATE_DIR="${UQ_GATE_DIR:-$ROOT/.gate}"
 mkdir -p "$GATE_DIR"
 PYTHON_BIN="${PYTHON_BIN:-$(/usr/bin/env bash "$ROOT/scripts/python-for-gate.sh")}"
 
+if [[ "${UQ_GATE_EXTRAS:-}" == "qlib" ]]; then
+  gate_extras=(--extra dev --extra real --extra qlib)
+  extras_label=(dev real qlib)
+else
+  gate_extras=(--extra dev --extra real)
+  extras_label=(dev real)
+fi
+
 if command -v uv >/dev/null 2>&1; then
   runner="uv"
   lockfile_digest="$("$PYTHON_BIN" -c 'import hashlib,pathlib; print(hashlib.sha256(pathlib.Path("uv.lock").read_bytes()).hexdigest())')"
-  uv export --format requirements-txt --hashes > "$GATE_DIR/requirements.lock.txt"
+  uv export --format requirements-txt --no-hashes "${gate_extras[@]}" > "$GATE_DIR/requirements.lock.txt"
 else
   runner="lockfile-fallback"
   lockfile_digest="$("$PYTHON_BIN" -c 'import hashlib,pathlib; print(hashlib.sha256(pathlib.Path("uv.lock").read_bytes()).hexdigest())')"
-  "$PYTHON_BIN" scripts/export_locked_requirements.py > "$GATE_DIR/requirements.lock.txt"
+  "$PYTHON_BIN" scripts/export_locked_requirements.py --extras "${extras_label[@]}" > "$GATE_DIR/requirements.lock.txt"
 fi
 
 requirements_digest="$(sha256sum "$GATE_DIR/requirements.lock.txt" | awk '{print $1}')"
 printf '%s\n' "$requirements_digest" > "$GATE_DIR/requirements.lock.txt.sha256"
 
 if [[ "$runner" == "uv" ]]; then
-  install_command=(uv sync --locked --extra dev --extra real)
+  install_command=(uv sync --locked "${gate_extras[@]}")
   test_command=(uv run --no-sync python -m pytest)
   "${install_command[@]}"
   "${test_command[@]}"
@@ -51,16 +59,17 @@ printf '%s\n' "${install_command[*]} && ${test_command[*]}" > "$GATE_DIR/command
   "$lockfile_digest" \
   "$requirements_digest" \
   "$git_commit" \
-  "$GATE_DIR/gate-report.json" <<'PY'
+  "$GATE_DIR/gate-report.json" "${extras_label[@]}" <<'PY'
 import json
 import platform
 import sys
 from datetime import datetime, timezone
 
-command, runner, python_version, lockfile_digest, requirements_digest, git_commit, output = sys.argv[1:]
+command, runner, python_version, lockfile_digest, requirements_digest, git_commit, output, *extra_args = sys.argv[1:]
+extras = extra_args if extra_args else ["dev", "real"]
 report = {
     "command": open(command, encoding="utf-8").read().strip(),
-    "extras": ["dev", "real"],
+    "extras": extras,
     "git_commit": git_commit,
     "lockfile_sha256": lockfile_digest,
     "platform": platform.platform(),
