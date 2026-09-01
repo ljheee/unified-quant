@@ -8,21 +8,29 @@
   ],
   "exit_criteria": [
     {
-      "bound_commit": "5f89b535bd7fd94cbea252f77b8ef24a74bc62be",
+      "bound_commit": "46d1ef0a3ee97e4bb4ef5f452610f21295c1370d",
       "evidence_path": "evidence/qlib-adapter/phase-2/gate-reports/gate-report.json",
       "id": "Q2a",
       "status": "passed",
       "test_id": "scripts/run_gate.sh"
     },
     {
-      "bound_commit": "5f89b535bd7fd94cbea252f77b8ef24a74bc62be",
+      "bound_commit": "46d1ef0a3ee97e4bb4ef5f452610f21295c1370d",
       "evidence_path": "evidence/qlib-adapter/phase-2/final-head-ci",
       "id": "Q2b",
       "status": "passed",
-      "test_id": "github-actions:33494854629:f4-certification"
+      "test_id": "github-actions:33497514575:f4-certification"
+    },
+    {
+      "bound_commit": "46d1ef0a3ee97e4bb4ef5f452610f21295c1370d",
+      "evidence_path": "evidence/qlib-adapter/phase-2/ci-33497514575",
+      "id": "Q2c-cr-hardening-remote-gate",
+      "note": "Post-CR hardening remote gate; the evidence-only commit remains a required final HEAD marker.",
+      "status": "passed",
+      "test_id": "github-actions:33497514575:f4-certification"
     }
   ],
-  "exited_at_commit": "5f89b535bd7fd94cbea252f77b8ef24a74bc62be",
+  "exited_at_commit": "46d1ef0a3ee97e4bb4ef5f452610f21295c1370d",
   "phase": 2,
   "record_version": 1,
   "status": "exited"
