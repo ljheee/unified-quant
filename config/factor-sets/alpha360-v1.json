@@ -20,5 +20,18 @@
   "dependencies": [],
   "qlib_expression_set": "Alpha360",
   "excluded_factors": [],
-  "factors": []
+  "factors": [],
+  "reviewed_engine_versions": [
+    "0.9.7"
+  ],
+  "input_bindings": {
+    "allowed_datasets": [
+      "bars_daily"
+    ],
+    "required_schema_versions": {
+      "bars_daily": [
+        "research-v1"
+      ]
+    }
+  }
 }

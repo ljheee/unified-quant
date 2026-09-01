@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import io
 import uuid
@@ -65,7 +66,9 @@ class QualityReportStore:
         if report["binding_type"] not in {"factor_v1", "canonical_v2"}:
             raise ContractError("unsupported quality report binding type")
         allowed_checks = {"duplicate_keys", "null_rate", "missing_dependency", "coverage", "semantic_version"}
-        if any(item["name"] not in allowed_checks for item in report["checks"]):
+        def _check_name_allowed(name: str) -> bool:
+            return name in allowed_checks or bool(re.fullmatch(r"(?:null_rate|finite_values)__[^_].*", name))
+        if any(not _check_name_allowed(item["name"]) for item in report["checks"]):
             raise ContractError("unknown quality check taxonomy")
         content = json.dumps(report, sort_keys=True, separators=(",", ":")).encode("utf-8")
         directory = root / "reports" / report["binding_type"] / report["bound_generation_id"]
@@ -107,7 +110,9 @@ class QualityReportStore:
         if report["binding_type"] != binding_type:
             raise ContractError("quality report is not bound to requested type")
         allowed_checks = {"duplicate_keys", "null_rate", "missing_dependency", "coverage", "semantic_version"}
-        if any(item["name"] not in allowed_checks for item in report["checks"]):
+        def _check_name_allowed(name: str) -> bool:
+            return name in allowed_checks or bool(re.fullmatch(r"(?:null_rate|finite_values)__[^_].*", name))
+        if any(not _check_name_allowed(item["name"]) for item in report["checks"]):
             raise ContractError("unknown quality check taxonomy")
         if report["bound_generation_id"] != bound_generation_id:
             raise ContractError("quality report bound to another run")

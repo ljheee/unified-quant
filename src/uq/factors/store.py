@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import numpy as np
 import pandas as pd
 import pyarrow as arrow
 import pyarrow.parquet as parquet
@@ -85,8 +86,16 @@ class FactorStore:
             if adjustment_snapshot_id is None or effective_date_table_checksum is None:
                 raise ContractError("adjusted factors require governed adjustment lineage")
         elif definition.factor_set.startswith("alpha"):
-            if input_dataset != "bars_daily" and input_dataset != "bars_adjusted":
-                raise ContractError(f"qlib adapter factors require bars input, got {input_dataset}")
+            bindings = definition.document.get("input_bindings")
+            if not bindings or input_dataset not in bindings["allowed_datasets"]:
+                raise ContractError(f"qlib factor input dataset is not reviewed: {input_dataset}")
+            reviewed_schemas = bindings["required_schema_versions"].get(input_dataset, [])
+            if input_schema_version not in reviewed_schemas:
+                raise ContractError(f"qlib factor input schema is not reviewed: {input_schema_version}")
+            if input_dataset == "bars_adjusted" and (
+                adjustment_snapshot_id is None or effective_date_table_checksum is None
+            ):
+                raise ContractError("adjusted qlib factors require governed adjustment lineage")
         else:
             raise ContractError(f"unsupported governed factor set: {factor_set}")
 
@@ -119,9 +128,6 @@ class FactorStore:
             factor_version=factor_version,
             partition_date=partition_date,
         )
-        if partition.exists():
-            raise ContractError(f"immutable factor partition already published: {partition}")
-
         staging = partition.with_name(f"{partition.name}.staging.{uuid.uuid4().hex}")
         staging.mkdir(parents=True)
         lock_path = partition.parent / "publication.lock"
@@ -129,6 +135,10 @@ class FactorStore:
         with lock_path.open("a+") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
             try:
+                if partition.exists():
+                    raise ContractError(
+                        f"immutable factor partition already published: {partition}"
+                    )
                 data_path = staging / "data.parquet"
                 data_path.write_bytes(artifact)
                 restored = pd.read_parquet(data_path)
@@ -220,15 +230,24 @@ def _iso_datetime(value: str | datetime) -> str:
 
 
 def _reports_agree(left: dict[str, Any], right: dict[str, Any]) -> bool:
-    def normalized(report: dict[str, Any]) -> dict[tuple[str, float], str]:
-        return {
-            (item["name"], float(item["threshold"])): item["result"]
-            for item in report.get("checks", [])
+    def normalized(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        checks = report.get("checks", [])
+        normalized_checks = {
+            item["name"]: {
+                "threshold": item["threshold"],
+                "observed": item["observed"],
+                "level": item["level"],
+                "result": item["result"],
+            }
+            for item in checks
         }
+        if len(normalized_checks) != len(checks):
+            raise ContractError("duplicate quality checks reject publication")
+        return normalized_checks
 
     left_checks = normalized(left)
     right_checks = normalized(right)
-    return bool(left_checks) and all(right_checks.get(key) == result for key, result in left_checks.items())
+    return bool(left_checks) and left_checks == right_checks
 
 
 def _validate_factor_frame(
@@ -241,20 +260,46 @@ def _validate_factor_frame(
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ContractError(f"missing factor output columns: {missing}")
+    if definition is not None:
+        reviewed_factors = {factor["name"] for factor in definition.factors}
+        if definition.factor_set.startswith("alpha"):
+            if set(frame.columns) != required | reviewed_factors:
+                raise ContractError("factor output columns do not match reviewed factor set")
+        elif not reviewed_factors.issuperset(set(frame.columns) - required):
+            raise ContractError("factor output columns are outside the reviewed factor set")
     if frame.duplicated(["instrument", "datetime"]).any():
         raise ContractError("duplicate factor keys reject publication")
     thresholds = (definition.document.get("quality_thresholds", {}) if definition else {})
     maximum_null_rate = float(thresholds.get("null_rate_maximum", 0.0))
     minimum_coverage = float(thresholds.get("coverage_minimum", 1.0))
     value_columns = [column for column in frame.columns if column not in required]
-    observed_null_rate = float(frame[value_columns].isna().to_numpy().mean())
+    try:
+        numeric_values = frame[value_columns].to_numpy(dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ContractError("factor values must be numeric") from exc
+    observed_null_rate = float(np.isnan(numeric_values).mean())
     observed_coverage = 1.0 - observed_null_rate
+    finite_failures = int(np.isinf(numeric_values).sum())
     warnings: list[str] = []
     errors: list[str] = []
     checks = [
         {"name": "null_rate", "threshold": maximum_null_rate, "observed": observed_null_rate, "level": "error", "result": "passed" if observed_null_rate <= maximum_null_rate else "failed"},
         {"name": "coverage", "threshold": minimum_coverage, "observed": observed_coverage, "level": "error", "result": "passed" if observed_coverage >= minimum_coverage else "failed"},
     ]
+    for column in value_columns:
+        values = frame[column].to_numpy(dtype=float)
+        null_rate = float(np.isnan(values).mean())
+        infinite_count = int(np.isinf(values).sum())
+        checks.append({
+            "name": f"null_rate__{column}", "threshold": maximum_null_rate,
+            "observed": null_rate, "level": "error",
+            "result": "passed" if null_rate <= maximum_null_rate else "failed",
+        })
+        checks.append({
+            "name": f"finite_values__{column}", "threshold": 0,
+            "observed": infinite_count, "level": "error",
+            "result": "passed" if infinite_count == 0 else "failed",
+        })
     for check in checks:
         if check["result"] == "failed":
             errors.append(f'{check["name"]} threshold failed')
@@ -284,10 +329,10 @@ def _manifest_without_identities(
     data_checksum: str,
 ) -> dict[str, Any]:
     environment = environment_profile()
+    is_qlib = definition.factor_set.startswith("alpha")
     decision_time = datetime.combine(
         partition_date, time(15, 0), tzinfo=ZoneInfo("Asia/Shanghai")
     )
-    is_qlib = definition.factor_set.startswith("alpha")
     code_fingerprint = file_sha256_bytes(Path(__file__).read_bytes())
     if is_qlib:
         from .qlib_adapter import QlibFactorAdapter
@@ -339,9 +384,15 @@ def _manifest_without_identities(
     if is_qlib:
         from .qlib_adapter import QlibFactorAdapter
 
+        installed_qlib_version = QlibFactorAdapter.qlib_version()
+        if installed_qlib_version not in definition.document.get("reviewed_engine_versions", []):
+            raise ContractError(
+                f"qlib version {installed_qlib_version} is not reviewed for "
+                f"{definition.factor_set}/{definition.factor_version}"
+            )
         manifest["engine_contract"] = {
             "engine_name": "qlib",
-            "engine_version": QlibFactorAdapter.qlib_version(),
+            "engine_version": installed_qlib_version,
             "qlib_expression_set": definition.document["qlib_expression_set"],
         }
     return manifest
@@ -423,6 +474,22 @@ def read_factor_partition(partition: Path) -> pd.DataFrame:
     report_path = report_root / "reports" / "factor_v1" / manifest["generation_id"] / "report.json"
     report = QualityReportStore().read(report_root, manifest["generation_id"], binding_type="factor_v1")
     accepted_statuses = {"passed"} if manifest["quality"]["policy"] == "reject_all" else {"passed", "warning"}
+    definition = FactorRegistry(Path(__file__).resolve().parents[3]).get(
+        manifest["factor_set"], manifest["factor_version"]
+    )
+    reviewed_factors = {factor["name"] for factor in definition.factors}
+    if definition.factor_set.startswith("alpha"):
+        expected_columns = {"instrument", "datetime", *reviewed_factors}
+        if set(frame.columns) != expected_columns:
+            raise ContractError("factor artifact columns do not match reviewed factor set")
+    elif not reviewed_factors.issuperset(set(frame.columns) - {"instrument", "datetime"}):
+        raise ContractError("factor artifact columns are outside the reviewed factor set")
+    try:
+        factor_values = frame[list(set(frame.columns) - {"instrument", "datetime"})].to_numpy(dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ContractError("factor artifact values must be numeric") from exc
+    if np.isinf(factor_values).any():
+        raise ContractError("factor artifact contains non-finite values")
     if (
         report["policy"] != manifest["quality"]["policy"]
         or report["status"] not in accepted_statuses

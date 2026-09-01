@@ -12,7 +12,9 @@
     "required_columns",
     "quality_policy",
     "dependencies",
-    "factors"
+    "factors",
+    "reviewed_engine_versions",
+    "input_bindings"
   ],
   "properties": {
     "set_definition_version": {
@@ -135,6 +137,46 @@
           "minimum_history": {
             "type": "integer",
             "minimum": 1
+          }
+        }
+      }
+    },
+    "reviewed_engine_versions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_datasets",
+        "required_schema_versions"
+      ],
+      "properties": {
+        "allowed_datasets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required_schema_versions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       }

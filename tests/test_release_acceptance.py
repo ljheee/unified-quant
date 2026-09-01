@@ -11,26 +11,31 @@ from uq.contracts.factor_governance import FactorRegistry
 from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.errors import ContractError
 from uq.factors.raw_price import calculate_raw_price_factors, logical_fingerprint
-from uq.factors.store import FactorStore, factor_generation, quarantine_rejected, read_factor_partition
+from uq.factors.store import FactorStore, _validate_factor_frame, factor_generation, quarantine_rejected, read_factor_partition
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def frame(days=21):
+def frame(days=21, warmup=True):
+    input_days = days + 20 if warmup else days
+    dates = pd.bdate_range(end="2026-08-21", periods=input_days)
     rows = [
         {
             "instrument": "600000.XSHG",
-            "datetime": pd.Timestamp(2026, 8, day),
+            "datetime": date_value,
             "high": 11.0,
             "low": 9.0,
             "close": 10.0,
-            "volume": float(day),
-            "amount": float(day),
+            "volume": float(index + 1),
+            "amount": float(index + 1),
         }
-        for day in range(1, days + 1)
+        for index, date_value in enumerate(dates)
     ]
-    return calculate_raw_price_factors(pd.DataFrame(rows))
+    factors = calculate_raw_price_factors(pd.DataFrame(rows))
+    if warmup:
+        factors = factors[factors["datetime"] == pd.Timestamp(2026, 8, 21)]
+    return factors.reset_index(drop=True)
 
 
 def quality_document(generation, *, status="passed", result="passed"):
@@ -65,11 +70,10 @@ def kwargs(**overrides):
 
 
 def local_checks(arguments):
-    value_columns = [column for column in arguments["frame"].columns if column not in {"instrument", "datetime"}]
-    observed = float(arguments["frame"][value_columns].isna().to_numpy().mean())
-    return [
-        {"name": "null_rate", "threshold": 0.5, "observed": observed, "level": "error", "result": "failed" if observed > 0.5 else "passed"},
-    ]
+    definition = FactorRegistry(ROOT).get(
+        arguments.get("factor_set", "basic"), arguments.get("factor_version", "1.0.0")
+    )
+    return _validate_factor_frame(arguments["frame"], definition)["checks"]
 
 
 def publish(tmp_path, **overrides):
@@ -79,7 +83,7 @@ def publish(tmp_path, **overrides):
     generation = factor_generation(**arguments)
     report_path = root / "reports" / "factor_v1" / generation / "report.json"
     if not (root / "reports").exists():
-        QualityReportStore().save(root, {**quality_document(generation), "checks": [*local_checks(arguments), *quality_document(generation)["checks"]]})
+        QualityReportStore().save(root, {**quality_document(generation), "checks": local_checks(arguments)})
     arguments["quality_report_checksum"] = file_sha256_bytes(report_path.read_bytes())
     return FactorStore(root, FactorRegistry(ROOT)).publish(**arguments)
 
@@ -176,7 +180,7 @@ def test_null_rate_threshold_rejects_publication(tmp_path):
             **quality_document(factor_generation(**arguments), status="rejected", result="passed"),
             "bound_generation_id": factor_generation(**arguments),
             "errors": ["null rate threshold failed"],
-            "checks": local_checks(arguments) + [{"name": "coverage", "threshold": 0.0, "observed": 1.0, "level": "error", "result": "passed"}],
+            "checks": local_checks(arguments),
         },
     )
     with pytest.raises(ContractError, match="factor quality report rejects publication"):
@@ -389,7 +393,7 @@ def test_warning_policy_publishes_and_reads_bound_warning_report(tmp_path, monke
     report = quality_document(generation)
     report["policy"] = "accept_with_warnings"
     report["status"] = "passed"
-    QualityReportStore().save(root, {**report, "checks": [*local_checks(arguments), *report["checks"]]})
+    QualityReportStore().save(root, {**report, "checks": local_checks(arguments)})
     arguments["quality_report_checksum"] = file_sha256_bytes(
         (root / "reports/factor_v1" / generation / "report.json").read_bytes()
     )
@@ -417,16 +421,15 @@ def test_coverage_threshold_rejects_publication(tmp_path):
 
 
 def test_local_and_bound_quality_checks_must_agree(tmp_path):
-    bad = frame()
-    bad[bad.columns[-1]] = None
     root = tmp_path / "root"
     root.mkdir()
-    arguments = kwargs(frame=bad)
+    arguments = kwargs()
     generation = factor_generation(**arguments)
-    local = [check for check in local_checks(arguments) if check["name"] != "null_rate"]
-    local.append({"name": "null_rate", "threshold": 0.5, "observed": 1.0, "level": "error", "result": "passed"})
     report = quality_document(generation)
-    QualityReportStore().save(root, {**report, "checks": [*local, *report["checks"]]})
+    local = local_checks(arguments)
+    mismatch_index = next(index for index, check in enumerate(local) if check["name"] == "coverage")
+    local[mismatch_index] = {**local[mismatch_index], "observed": 0.99}
+    QualityReportStore().save(root, {**report, "checks": local})
     with pytest.raises(ContractError, match="factor quality report rejects publication"):
         FactorStore(root, FactorRegistry(ROOT)).publish(**arguments)
 

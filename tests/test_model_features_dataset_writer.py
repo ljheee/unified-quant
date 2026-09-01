@@ -36,7 +36,7 @@ def _factor_frame() -> pd.DataFrame:
 
 
 def _publish_factor(root: Path) -> None:
-    from uq.factors.store import FactorStore, factor_generation
+    from uq.factors.store import FactorStore, factor_generation, _validate_factor_frame
     from uq.contracts.factor_governance import FactorRegistry
     from uq.contracts.artifacts import QualityReportStore
     from uq.contracts.canonical_v2 import file_sha256_bytes
@@ -51,20 +51,18 @@ def _publish_factor(root: Path) -> None:
         "quality_report_checksum": "",
         "upstream_created_at": datetime.fromisoformat("2026-01-04T15:00:00+08:00"),
     }
+    registry = FactorRegistry(Path(__file__).resolve().parents[1])
+    frame = arguments["frame"]
     generation = factor_generation(**arguments)
     report_path = root / "reports" / "factor_v1" / generation / "report.json"
     if not (root / "reports").exists():
         QualityReportStore().save(root, {
             "report_version": 1, "binding_type": "factor_v1",
             "bound_generation_id": generation, "policy": "reject_all", "status": "passed",
-            "checks": [
-                {"name": "null_rate", "threshold": 0.5, "observed": 0.0, "level": "error", "result": "passed"},
-                {"name": "coverage", "threshold": 0.0, "observed": 1.0, "level": "error", "result": "passed"},
-            ],
+            "checks": _validate_factor_frame(frame, registry.get("basic", "1.0.0"))["checks"],
             "errors": [], "warnings": [],
         })
     arguments["quality_report_checksum"] = file_sha256_bytes(report_path.read_bytes())
-    registry = FactorRegistry(Path(__file__).resolve().parents[1])
     FactorStore(root, registry).publish(**{k: v for k, v in arguments.items() if k != "frame"}, frame=arguments["frame"])
 
 

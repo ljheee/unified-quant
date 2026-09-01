@@ -9,7 +9,7 @@ from uq.contracts.artifacts import QualityReportStore
 from uq.contracts.factor_governance import FactorRegistry
 from uq.errors import ContractError
 from uq.factors.engine import FactorEngine
-from uq.factors.store import FactorStore, factor_generation, read_factor_partition
+from uq.factors.store import FactorStore, _validate_factor_frame, factor_generation, read_factor_partition
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,6 +58,7 @@ def _publish(tmp_path: Path):
     output = frame().iloc[-1:].copy()
     for column in ["return_1d", "return_5d", "return_20d", "volatility_20d"]:
         output[column] = 0.01
+    output = output.drop(columns=["close", "adj_factor"])
     generation_id = factor_generation(
         factor_set="adjusted", factor_version="1.0.0",
         frame=output, partition_date=date(2026, 8, 21),
@@ -74,10 +75,10 @@ def _publish(tmp_path: Path):
         "bound_generation_id": generation_id,
         "policy": "reject_all",
         "status": "passed",
-        "checks": [
-            {"name": "null_rate", "threshold": 0.5, "observed": 0.0, "level": "error", "result": "passed"},
-            {"name": "coverage", "threshold": 0.0, "observed": 1.0, "level": "error", "result": "passed"},
-        ],
+        "checks": _validate_factor_frame(
+            output,
+            FactorRegistry(ROOT).get("adjusted", "1.0.0"),
+        )["checks"],
         "errors": [],
         "warnings": [],
     })
@@ -108,9 +109,13 @@ def test_adjusted_partition_publishes_and_reads_with_lineage(tmp_path: Path):
 
 
 def test_adjusted_store_rejects_raw_input_binding(tmp_path: Path):
+    output = frame().iloc[-1:].copy()
+    for column in ["return_1d", "return_5d", "return_20d", "volatility_20d"]:
+        output[column] = 0.01
+    output = output.drop(columns=["close", "adj_factor"])
     with pytest.raises(ContractError, match="adjusted factor input binding"):
         FactorStore(tmp_path, FactorRegistry(ROOT)).publish(
-            factor_set="adjusted", factor_version="1.0.0", frame=frame().iloc[-1:],
+            factor_set="adjusted", factor_version="1.0.0", frame=output,
             partition_date=date(2026, 8, 21), input_dataset="bars_daily",
             input_schema_version="research-v1", upstream_generation_id="d" * 64,
             upstream_data_checksum="e" * 64, quality_report_checksum="f" * 64,

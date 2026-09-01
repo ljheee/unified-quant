@@ -1,5 +1,6 @@
 import json
 import sys
+import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.contracts.factor_governance import FactorRegistry
 from uq.errors import ContractError
 from uq.factors.qlib_adapter import QlibFactorAdapter, QlibNotInstalledError
-from uq.factors.store import FactorStore, factor_generation, read_factor_partition
+from uq.factors.store import FactorStore, _validate_factor_frame, factor_generation, read_factor_partition
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +34,7 @@ def _synthetic_panel(days: int = 300, instruments: tuple[str, ...] = ("600000.XS
                     "high": close * 1.01,
                     "low": close * 0.99,
                     "close": close,
-                    "volume": np.linspace(1_000_000, 2_000_000, days),
+                    "volume": 1_000_000 * np.exp(generator.normal(0, 0.02, days)),
                 }
             )
         )
@@ -59,28 +60,14 @@ def _publish_one(result: pd.DataFrame, root: Path, partition_date: str) -> Path:
         "upstream_created_at": datetime.fromisoformat("2024-01-01T16:00:00+08:00"),
     }
     generation = factor_generation(**arguments)
+    definition = FactorRegistry(ROOT).get("alpha158", "1.0.0")
     report = {
         "report_version": 1,
         "binding_type": "factor_v1",
         "bound_generation_id": generation,
         "policy": "reject_all",
         "status": "passed",
-        "checks": [
-            {
-                "name": "null_rate",
-                "threshold": 0.2,
-                "observed": float(frame.drop(columns=["instrument", "datetime"]).isna().to_numpy().mean()),
-                "level": "error",
-                "result": "passed",
-            },
-            {
-                "name": "coverage",
-                "threshold": 0.8,
-                "observed": 1.0 - float(frame.drop(columns=["instrument", "datetime"]).isna().to_numpy().mean()),
-                "level": "error",
-                "result": "passed",
-            },
-        ],
+        "checks": _validate_factor_frame(frame, definition)["checks"],
         "errors": [],
         "warnings": [],
     }
@@ -144,13 +131,11 @@ def test_qlib_import_guard_raises_without_qlib(tmp_path, monkeypatch):
         )
 
 
-def test_forward_looking_expression_rejected(tmp_path):
+def test_forward_looking_expression_rejected():
     definition = json.loads(DEFINITION.read_text())
-    definition["factors"][0]["expression"] = "Ref($close, -1)"
-    path = tmp_path / "forward.json"
-    path.write_text(json.dumps(definition))
+    definition["factors"][0]["expression"] = "Ref($close, - 1)"
     with pytest.raises(ContractError, match="forward-looking qlib expression"):
-        QlibFactorAdapter(path)
+        QlibFactorAdapter._validate_document(definition)
 
 
 @pytest.mark.parametrize("days", [300])
@@ -260,3 +245,132 @@ def test_tampered_partition_rejects_read(tmp_path):
     data_path.write_bytes(data_path.read_bytes() + b"tampered")
     with pytest.raises(ContractError, match="tampered factor data"):
         read_factor_partition(partition)
+
+
+def test_foreign_definition_path_rejected(tmp_path):
+    outside = tmp_path / "alpha158-v1.json"
+    outside.write_text(DEFINITION.read_text(), encoding="utf-8")
+    with pytest.raises(ContractError, match="outside the reviewed registry"):
+        QlibFactorAdapter(outside)
+
+
+def test_alpha360_contract_only_not_computable():
+    definition = json.loads((ROOT / "config/factor-sets/alpha360-v1.json").read_text())
+    definition["status"] = "reviewed"
+    assert not definition["factors"]
+    with pytest.raises(ContractError, match="no reviewed factors"):
+        QlibFactorAdapter._validate_document(definition)
+
+
+def test_engine_version_mismatch_rejected(monkeypatch):
+    qlib = pytest.importorskip("qlib")
+
+    monkeypatch.setattr(qlib, "__version__", "0.0.0-test", raising=False)
+    with pytest.raises(ContractError, match="not reviewed"):
+        _adapter()._validate_engine_version()
+
+
+def test_incomplete_qlib_panel_rejected():
+    panel, dates, instruments = _synthetic_panel(days=70)
+    incomplete = panel.drop(index=0)
+    with pytest.raises(ContractError, match="not a complete instrument/date panel"):
+        _adapter()._validate_request(
+            incomplete,
+            list(instruments),
+            str(dates[-1].date()),
+            str(dates[-1].date()),
+        )
+
+
+def test_minimum_qlib_history_rejected():
+    panel, dates, instruments = _synthetic_panel(days=59)
+    with pytest.raises(ContractError, match="shorter than reviewed minimum_history"):
+        _adapter()._validate_request(
+            panel,
+            list(instruments),
+            str(dates[-1].date()),
+            str(dates[-1].date()),
+        )
+
+
+def test_null_and_nonfinite_qlib_inputs_rejected():
+    panel, dates, instruments = _synthetic_panel(days=70)
+    with pytest.raises(ContractError, match="null required values"):
+        null_panel = panel.copy()
+        null_panel.loc[null_panel.index[0], "close"] = None
+        _adapter()._validate_request(
+            null_panel,
+            list(instruments),
+            str(dates[-1].date()),
+            str(dates[-1].date()),
+        )
+    with pytest.raises(ContractError, match="non-finite"):
+        infinite_panel = panel.copy()
+        infinite_panel.loc[infinite_panel.index[0], "close"] = np.inf
+        _adapter()._validate_request(
+            infinite_panel,
+            list(instruments),
+            str(dates[-1].date()),
+            str(dates[-1].date()),
+        )
+
+
+def test_nonfinite_qlib_result_rejected():
+    pytest.importorskip("qlib")
+    panel, dates, instruments = _synthetic_panel(days=70)
+    result = _adapter().compute(
+        panel,
+        instruments=list(instruments),
+        start_date=str(dates[-1].date()),
+        end_date=str(dates[-1].date()),
+    )
+    result.loc[result.index[0], result.columns[-1]] = np.inf
+    with pytest.raises(ContractError, match="non-finite"):
+        _adapter()._reconcile_result(
+            result,
+            panel,
+            list(instruments),
+            str(dates[-1].date()),
+            str(dates[-1].date()),
+        )
+
+
+@pytest.mark.parametrize("days", [70])
+def test_qlib_process_isolation_and_temp_cleanup(monkeypatch, days):
+    pytest.importorskip("qlib")
+    import qlib.data
+
+    captured: dict[str, Path] = {}
+
+    class CapturingTemporaryDirectory(tempfile.TemporaryDirectory):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            captured["root"] = Path(self.name)
+
+    monkeypatch.setattr(
+        "uq.factors.qlib_adapter.tempfile.TemporaryDirectory",
+        CapturingTemporaryDirectory,
+    )
+    import subprocess
+
+    original_run = subprocess.run
+    commands: list[list[str]] = []
+
+    def capturing_run(command, *args, **kwargs):
+        commands.append(list(command))
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(
+        "uq.factors.qlib_adapter.subprocess.run",
+        capturing_run,
+    )
+    panel, dates, instruments = _synthetic_panel(days=days)
+    result = _adapter().compute(
+        panel,
+        instruments=list(instruments),
+        start_date=str(dates[-1].date()),
+        end_date=str(dates[-1].date()),
+    )
+    assert result.columns.tolist() == ["instrument", "datetime", *_adapter().factor_names]
+    assert commands == [[sys.executable, "-m", "uq.factors.qlib_adapter", str(captured["root"] / "payload.json")]]
+    assert not captured["root"].exists()

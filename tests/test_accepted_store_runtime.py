@@ -11,25 +11,35 @@ import pytest
 
 from uq.contracts.artifacts import QualityReportStore
 from uq.errors import ContractError
-from uq.factors.store import FactorStore
+from uq.factors.store import FactorStore, _validate_factor_frame
 from uq.contracts.factor_governance import FactorRegistry
+from uq.factors.raw_price import calculate_raw_price_factors
 from uq.models.accepted_store import AcceptedFactorIndexRuntime
 
 
 def _frame() -> pd.DataFrame:
-    dates = pd.bdate_range("2026-01-05", periods=3)
+    dates = pd.bdate_range("2025-12-01", periods=28)
     rows = []
     for i in range(2):
-        for d in dates:
-            rows.append({"instrument": f"INST{i}", "datetime": d, "volume_ratio_20d": 1.0 + i * 0.1})
-    return pd.DataFrame(rows)
+        for index, d in enumerate(dates):
+            rows.append({
+                "instrument": f"INST{i}",
+                "datetime": d,
+                "high": 11.0 + index * 0.01 + i,
+                "low": 9.0 + index * 0.01 + i,
+                "close": 10.0 + index * 0.01 + i,
+                "volume": 1000.0 + index + i * 10,
+                "amount": 10000.0 + index + i * 10,
+            })
+    return calculate_raw_price_factors(pd.DataFrame(rows))
 
 
 def _publish_factor(root: Path) -> Path:
     from uq.factors.store import factor_generation
     from uq.contracts.artifacts import QualityReportStore
     from uq.contracts.canonical_v2 import file_sha256_bytes
-    frame = _frame()
+    factor_frame = _frame()
+    frame = factor_frame[factor_frame["datetime"] == pd.Timestamp(2026, 1, 5)].reset_index(drop=True)
     arguments = {
         "frame": frame,
         "partition_date": date(2026, 1, 5),
@@ -43,13 +53,11 @@ def _publish_factor(root: Path) -> Path:
     generation = factor_generation(**arguments)
     report_path = root / "reports" / "factor_v1" / generation / "report.json"
     if not (root / "reports").exists():
+        definition = FactorRegistry(Path(__file__).resolve().parents[1]).get("basic", "1.0.0")
         QualityReportStore().save(root, {
             "report_version": 1, "binding_type": "factor_v1",
             "bound_generation_id": generation, "policy": "reject_all", "status": "passed",
-            "checks": [
-                {"name": "null_rate", "threshold": 0.5, "observed": 0.0, "level": "error", "result": "passed"},
-                {"name": "coverage", "threshold": 0.0, "observed": 1.0, "level": "error", "result": "passed"},
-            ],
+            "checks": _validate_factor_frame(frame, definition)["checks"],
             "errors": [], "warnings": [],
         })
     arguments["quality_report_checksum"] = file_sha256_bytes(report_path.read_bytes())
@@ -86,7 +94,7 @@ class TestAcceptedFactorIndexRuntime:
         entries = runtime.list(query)
         gen_id = entries[0]["generation_id"]
         frame = runtime.read(gen_id)
-        assert list(frame.columns) == ["instrument", "datetime", "volume_ratio_20d"]
+        assert list(frame.columns) == ["instrument", "datetime", "range_ratio_1d", "close_location_1d", "amount_20d", "volume_ratio_20d"]
 
     def test_unverified_generation_rejected_on_read(self, tmp_path: Path) -> None:
         runtime = AcceptedFactorIndexRuntime(tmp_path)

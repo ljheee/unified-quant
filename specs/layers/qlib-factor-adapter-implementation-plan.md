@@ -98,4 +98,13 @@ Phase 0 ──> Phase 1 ──> Phase 2
 | QA1h | 1 | tests/test_qlib_adapter.py::test_per_date_partition_slicing | passed |
 | QA1i | 1 | tests/test_qlib_adapter.py::test_vwap_factors_excluded | passed |
 | QA1j | 1 | tests/test_qlib_adapter.py::test_tampered_partition_rejects_read | passed |
+| QA1k | 1 | tests/test_qlib_adapter.py::test_foreign_definition_path_rejected | passed |
+| QA1l | 1 | tests/test_qlib_adapter.py::test_alpha360_contract_only_not_computable | passed |
+| QA1m | 1 | tests/test_qlib_adapter.py::test_engine_version_mismatch_rejected | passed |
+| QA1n | 1 | tests/test_qlib_adapter.py::test_incomplete_qlib_panel_rejected | passed |
+| QA1o | 1 | tests/test_qlib_adapter.py::test_minimum_qlib_history_rejected | passed |
+| QA1p | 1 | tests/test_qlib_adapter.py::test_null_and_nonfinite_qlib_inputs_rejected | passed |
+| QA1q | 1 | tests/test_qlib_adapter.py::test_nonfinite_qlib_result_rejected | passed |
+| QA1r | 1 | tests/test_qlib_adapter.py::test_qlib_process_isolation_and_temp_cleanup | passed |
+| QA1s | 1 | tests/test_release_acceptance.py::test_local_and_bound_quality_checks_must_agree | passed |
 | QA2a | 2 | scripts/run_gate.sh | pending-final-head-gate |

@@ -1282,5 +1282,18 @@
       "version": "1.0.0",
       "implementation_fingerprint": "9a92419659b817787e538cc6e8bb5c55932e365d0e34b3cca4c878071a5d8517"
     }
-  ]
+  ],
+  "reviewed_engine_versions": [
+    "0.9.7"
+  ],
+  "input_bindings": {
+    "allowed_datasets": [
+      "bars_daily"
+    ],
+    "required_schema_versions": {
+      "bars_daily": [
+        "research-v1"
+      ]
+    }
+  }
 }
