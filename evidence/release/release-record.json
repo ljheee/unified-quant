@@ -1,27 +1,28 @@
 {
-  "bound_commit": "56f5aaa5b7b43ddcbaf32e9e08268975c096694a",
-  "ci_run_id": "32955140635",
+  "bound_commit": "03d1f0c73a51976445c561718d744317684bf644",
+  "ci_run_id": "33523302538",
   "external_quality_reviews": {
     "contract": "config/model-quality-reviews.v1.json",
     "publisher_self_approval_forbidden": true,
     "schema": "config/schemas/contracts/model_quality_report.v2.json"
   },
   "local_gate": {
-    "path": "../phase-0/gate-reports/gate-report.json",
+    "path": "final-head-ci/33523302538/local-gate/gate-report.json",
     "platform": "macOS-26.3-arm64-arm-64bit",
     "python_version": "3.12.13",
+    "requirements_lock_sha256": "cbfec94e5d552d069c9621cd49ce0c8d9068f5490d8011f522b09c0fe373fc2b",
     "result": "passed",
     "runner": "uv"
   },
   "notes": [
-    "This record binds CI evidence to the exact commit that contains it.",
+    "This record binds the real Qlib runtime slice to final implementation HEAD 03d1f0c.",
     "A final marker commit may change HEAD but must not alter implementation or lockfiles."
   ],
   "post_release_hardening": {
-    "base_commit": "56f5aaa5b7b43ddcbaf32e9e08268975c096694a",
+    "base_commit": "03d1f0c73a51976445c561718d744317684bf644",
     "requires_fresh_local_and_remote_gate_after_marker": false
   },
-  "record_version": 1,
+  "record_version": 2,
   "remote_matrix": {
     "covered_cells": [
       "macos-latest/3.11",
@@ -29,7 +30,11 @@
       "macos-latest/3.13",
       "ubuntu-latest/3.11",
       "ubuntu-latest/3.12",
-      "ubuntu-latest/3.13"
+      "ubuntu-latest/3.13",
+      "macos-latest/3.11/qlib",
+      "macos-latest/3.12/qlib",
+      "ubuntu-latest/3.11/qlib",
+      "ubuntu-latest/3.12/qlib"
     ],
     "expected_cells": [
       "macos-latest/3.11",
@@ -37,10 +42,14 @@
       "macos-latest/3.13",
       "ubuntu-latest/3.11",
       "ubuntu-latest/3.12",
-      "ubuntu-latest/3.13"
+      "ubuntu-latest/3.13",
+      "macos-latest/3.11/qlib",
+      "macos-latest/3.12/qlib",
+      "ubuntu-latest/3.11/qlib",
+      "ubuntu-latest/3.12/qlib"
     ],
     "result": "passed"
   },
-  "status": "released_pending_final_marker",
-  "valid_matrix_evidence": "final-head-ci/32955140635/aggregated-gates.json"
+  "status": "released",
+  "valid_matrix_evidence": "final-head-ci/33523302538/aggregated-gates.json"
 }

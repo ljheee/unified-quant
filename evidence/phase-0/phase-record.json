@@ -39,16 +39,16 @@
       "test_id": "tests/test_model_layer_contracts.py::test_cross_manifest_binding_resolver_passes_and_fails"
     },
     {
-      "bound_commit": "801c2279d58d67071a49306c49e379fc5ee6b1a2",
+      "bound_commit": "03d1f0c73a51976445c561718d744317684bf644",
       "evidence_path": "evidence/phase-0/gate-reports/gate-report.json",
       "id": "E0-exit-unified-gate-green-head-bound",
-      "note": "Final implementation gate at release candidate HEAD 801c227.",
+      "note": "Final Qlib runtime slice gate at implementation HEAD 03d1f0c.",
       "status": "passed",
       "test_id": "scripts/run_gate.sh"
     }
   ],
-  "exited_at_commit": "5a7559084f9505ebc450d69ed22e8689a43fe19f",
+  "exited_at_commit": "03d1f0c73a51976445c561718d744317684bf644",
   "phase": 0,
-  "record_version": 1,
+  "record_version": 2,
   "status": "exited"
 }

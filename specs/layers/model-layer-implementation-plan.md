@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.9; phases 0–5 implemented and prior evidence is superseded by the real Qlib runtime slice. Final HEAD local and remote gates are pending.**
+Status: **gated implementation order v1.10; phases 0–5 implemented and released. Final local and remote gates bind to `03d1f0c73a51976445c561718d744317684bf644`.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -376,8 +376,8 @@ later phases must expand their rows before entering implementation.
 | M8c-partial-export-read-reject | 2A | Phase 1 exit | test_partial_export_rejected_on_read | generated Qlib export snapshot | local unified gate report | passed |
 | M8d-feature-order-mutation-reject | 2A | Phase 1 exit | test_feature_order_mutation_rejected_on_read | generated Qlib export snapshot | local unified gate report | passed |
 | M8e-cache-substitution-outside-root | 2A | Phase 1 exit | test_cache_substitution_outside_approved_root_rejected + test_external_cache_writes_are_recorded_in_receipt | synthetic cache diff fixtures | local unified gate report | passed |
-| M8f-real-qlib-provider-training | 3 | Phase 2A exit | TestEndToEndPipeline::test_full_chain_from_factor_to_prediction (Qlib runtime branch) | generated native Qlib provider snapshot | pending final HEAD unified gate | pending_final_gate |
-| M8g-provider-bin-tamper-reject | 3 | Phase 2A exit | TestQlibRuntimeTrainer::test_tampered_provider_bin_rejects_training | generated native Qlib provider snapshot | pending final HEAD unified gate | pending_final_gate |
+| M8f-real-qlib-provider-training | 3 | Phase 2A exit | TestEndToEndPipeline::test_full_chain_from_factor_to_prediction (Qlib runtime branch) | generated native Qlib provider snapshot | evidence/release/final-head-ci/33523302538/local-gate/gate-report.json | passed |
+| M8g-provider-bin-tamper-reject | 3 | Phase 2A exit | TestQlibRuntimeTrainer::test_tampered_provider_bin_rejects_training | generated native Qlib provider snapshot | evidence/release/final-head-ci/33523302538/local-gate/gate-report.json | passed |
 | M10a-quarantine-path-invisible | 4 | Phase 3 exit | test_quarantine_path_is_not_visible_as_accepted + test_quarantine_manifest_records_input_generations_and_is_not_accepted | tests/test_model_trainer.py | evidence/phase-0/phase-record.json | passed |
 | M12a-reviewed-definition-required | 3 | Phase 2A exit | ModelDefinitionBuilder external `reviewed=True` rejection tests | tests/test_model_definition.py | local unified gate report | passed |
 | M11a-manifest-tamper-reject | 0 | none | test_typed_loader_rejects_absent_malformed_and_tampered_documents | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
@@ -389,47 +389,16 @@ their existing phase-specific negative suites; no security/lineage row is deferr
 
 ## Immediate Next Actions
 
-The release evidence through `56f5aaa5b7b43ddcbaf32e9e08268975c096694a` is
-historical context and no longer binds the real Qlib runtime slice. The next
-required actions are a final-HEAD local gate, a fresh remote run that includes
-the Qlib-compatible gate path where the locked wheel supports it, and refreshed
-evidence records. Do not reuse the prior release marker.
+The real Qlib runtime slice is complete. Release evidence is recorded in
+`evidence/release/final-head-ci/33523302538/aggregated-gates.json` for local and
+remote gates bound to `03d1f0c73a51976445c561718d744317684bf644`.
 
-Historical completion for `801c2279d58d67071a49306c49e379fc5ee6b1a2`:
+Remote coverage comprises the standard six-cell matrix (`macos-latest` and
+`ubuntu-latest` with Python 3.11–3.13) plus four Qlib-extras cells
+(`macos-latest` and `ubuntu-latest` with Python 3.11–3.12). The local gate used
+the `dev`, `real`, and `qlib` extras. Uncovered OS/CPU/BLAS/GPU combinations
+remain outside the certified matrix.
 
-1. Local unified gate passed at that HEAD.
-2. Remote six-cell matrix run `32928412607` passed and its artifacts are archived
-   under `evidence/release/final-head-ci/32928412607/`.
-3. `evidence/phase-0/gate-reports/`, the phase record, evidence index, and
-   `evidence/release/release-record.json` bind to that release-candidate HEAD.
-
-A later marker commit may update these evidence files only; it must not alter
-implementation code, schemas, lockfiles, or gate commands. If it does, all local
-and remote gates must be rerun.
-
-CI run `32929762689` is invalid duplicated evidence and remains quarantined. Valid post-correction matrix evidence is CI run `32934486193` under `evidence/release/final-head-ci/32934486193/`.
-
-## Quality Report Governance Correction
-
-Publishers no longer synthesize `passed` reports. Dataset, export, run, receipt, and prediction publication requires an externally supplied report whose canonical checksum participates in manifest digest identity. Existing artifacts must be republished before any release claim.
-
-The valid six-cell archive contains distinct platform/Python reports bound to implementation commit `8213233aa72522145b959ee5f04a163e4f02cc32`; it proves environment execution only and does not approve self-produced quality reports.
-
-
-## External Review Implementation Status
-
-Implemented in this slice:
-
-- reviewed registry `config/model-quality-reviews.v1.json`;
-- immutable external decisions with deterministic signatures;
-- mechanical binding to stable subject generations;
-- required external decisions for dataset/export/receipt/run/prediction;
-- artifact publication restricted to reviewed v2 reports;
-- missing/wrong-binding/signature negative tests;
-- non-empty train/validation split coverage;
-- prediction publish-time artifact revalidation;
-- immutable `external_quality_reviews` governance storage.
-
-Release still requires a successful final-HEAD unified gate and remote matrix after this behavior change.
-
-Final reconciliation uses independently downloaded artifacts from CI run `32955140635`; all six reports bind to `56f5aaa5b7b43ddcbaf32e9e08268975c096694a` with distinct platform/Python/timestamp fields.
+The evidence marker commit may update documentation and preserved evidence only;
+it must not alter implementation code, schemas, lockfiles, or gate commands. If
+it does, local and remote gates must be rerun.

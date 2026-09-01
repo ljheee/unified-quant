@@ -1,5 +1,5 @@
 {
-  "bound_commit": "56f5aaa5b7b43ddcbaf32e9e08268975c096694a",
+  "bound_commit": "03d1f0c73a51976445c561718d744317684bf644",
   "entry_criteria": [
     {
       "id": "Ephase-1-entry-upstream-exit",
@@ -17,11 +17,11 @@
   ],
   "final_evidence": {
     "external_quality_review_contract": "config/model-quality-reviews.v1.json",
-    "local_gate": "evidence/release/final-head-ci/32955140635/aggregated-gates.json",
-    "remote_matrix": "evidence/release/final-head-ci/32955140635/aggregated-gates.json"
+    "local_gate": "evidence/release/final-head-ci/33523302538/aggregated-gates.json",
+    "remote_matrix": "evidence/release/final-head-ci/33523302538/aggregated-gates.json"
   },
   "phase": 1,
-  "record_version": 1,
+  "record_version": 2,
   "status": "exited",
   "test_evidence_paths": [
     "evidence/phase-0/gate-reports/gate-report.json",

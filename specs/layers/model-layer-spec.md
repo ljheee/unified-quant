@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.0.6; phases 0–5 implemented; real Qlib runtime slice pending final gate**
+Status: **design v1.0.7; phases 0–5 implemented; real Qlib runtime slice released at commit `03d1f0c73a51976445c561718d744317684bf644`**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
