@@ -66,6 +66,14 @@ def _dataset_report() -> dict:
     )
 
 
+def _input_schema(frame: pd.DataFrame) -> dict:
+    schema = FeatureSchemaBuilder().build(
+        frame, source_factor_set="basic", source_factor_version="1.0.0"
+    )
+    ModelContractLoader.validate("feature_schema", schema)
+    return schema
+
+
 def _standardized(frame: pd.DataFrame) -> pd.DataFrame:
     output = frame.copy()
     grouped = output.groupby("datetime", sort=False)["volume_ratio_20d"]
@@ -87,7 +95,11 @@ def _output_schema(output_frame: pd.DataFrame) -> dict:
     return schema
 
 
-def _dataset_manifest(output_frame: pd.DataFrame, preprocessing: dict | None = None) -> dict:
+def _dataset_manifest(
+    output_frame: pd.DataFrame,
+    preprocessing: dict | None = None,
+    input_feature_schema: dict | None = None,
+) -> dict:
     digest = "0" * 64
     return DatasetBuilder(dataset_name="preprocessed_slice", semantic_version="1.0.0").build(
         ordered_features=["volume_ratio_20d"],
@@ -106,6 +118,7 @@ def _dataset_manifest(output_frame: pd.DataFrame, preprocessing: dict | None = N
             ],
         },
         feature_preprocessing_generation_id=None if preprocessing is None else preprocessing["generation_id"],
+        input_feature_schema=input_feature_schema,
         row_count=len(output_frame),
     )
 
@@ -141,7 +154,9 @@ def test_manifest_rejects_transform_output_mismatch_and_sparse_group() -> None:
     )
     bad_output = builder.transform(frame)
     bad_output.loc[0, "volume_ratio_20d"] += 1.0
-    with pytest.raises(AssertionError):
+    input_schema = _input_schema(frame)
+    output_schema = _output_schema(bad_output)
+    with pytest.raises(ContractError, match="preprocessing output does not match"):
         builder.build(
             frame,
             bad_output,
@@ -149,6 +164,8 @@ def test_manifest_rejects_transform_output_mismatch_and_sparse_group() -> None:
             input_factor_version="1.0.0",
             input_factor_generation_ids=["0" * 64],
             ordered_features=["volume_ratio_20d"],
+            input_feature_schema=input_schema,
+            output_feature_schema=output_schema,
         )
 
     sparse = frame.copy()
@@ -178,6 +195,8 @@ def test_manifest_identity_is_stable_across_run_metadata() -> None:
         input_factor_version="1.0.0",
         input_factor_generation_ids=["0" * 64],
         ordered_features=["volume_ratio_20d"],
+        input_feature_schema=_input_schema(frame),
+        output_feature_schema=_output_schema(output),
     )
     second = dict(first)
     second["run_id"] = str(uuid.uuid4())
@@ -200,6 +219,7 @@ def test_dataset_write_and_readback_bind_preprocessing(tmp_path: Path) -> None:
         semantic_version="1.0.0",
         transform="standardize_cross_section",
     )
+    input_schema = _input_schema(frame)
     preprocessing = builder.build(
         frame,
         output,
@@ -207,16 +227,19 @@ def test_dataset_write_and_readback_bind_preprocessing(tmp_path: Path) -> None:
         input_factor_version="1.0.0",
         input_factor_generation_ids=["0" * 64],
         ordered_features=["volume_ratio_20d"],
+        input_feature_schema=input_schema,
+        output_feature_schema=schema,
     )
     writer = DatasetWriter(tmp_path)
     partition = writer.write(
-        _dataset_manifest(output, preprocessing),
+        _dataset_manifest(output, preprocessing, input_schema),
         output,
         feature_schema=schema,
         quality_report=_dataset_report(),
         preprocessing_manifest=preprocessing,
         preprocessing_input_frame=frame,
         preprocessing_frame=output,
+        preprocessing_input_feature_schema=input_schema,
         preprocessing_quality_report=_report(),
     )
     assert (partition / "feature_preprocessing.json").is_file()
@@ -239,6 +262,7 @@ def test_dataset_read_rejects_preprocessing_manifest_tamper(tmp_path: Path) -> N
         semantic_version="1.0.0",
         transform="standardize_cross_section",
     )
+    input_schema = _input_schema(frame)
     preprocessing = builder.build(
         frame,
         output,
@@ -246,21 +270,148 @@ def test_dataset_read_rejects_preprocessing_manifest_tamper(tmp_path: Path) -> N
         input_factor_version="1.0.0",
         input_factor_generation_ids=["0" * 64],
         ordered_features=["volume_ratio_20d"],
+        input_feature_schema=input_schema,
+        output_feature_schema=schema,
     )
     writer = DatasetWriter(tmp_path)
     partition = writer.write(
-        _dataset_manifest(output, preprocessing),
+        _dataset_manifest(output, preprocessing, input_schema),
         output,
         feature_schema=schema,
         quality_report=_dataset_report(),
         preprocessing_manifest=preprocessing,
         preprocessing_input_frame=frame,
         preprocessing_frame=output,
+        preprocessing_input_feature_schema=input_schema,
         preprocessing_quality_report=_report(),
     )
     preprocessing_path = partition / "feature_preprocessing.json"
     document = json.loads(preprocessing_path.read_text())
     document["ordered_features"] = ["tampered_feature"]
     preprocessing_path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n")
+    with pytest.raises(ContractError, match="tampered or malformed feature preprocessing"):
+        writer.read("preprocessed_slice", "1.0.0", writer.last_published_manifest["generation_id"])
+
+
+def test_build_rejects_infinity_in_input_or_output() -> None:
+    frame = _frame()
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="basic-standardized-v1", semantic_version="1.0.0",
+        transform="standardize_cross_section",
+    )
+    with pytest.raises(ContractError, match="contains infinity"):
+        bad_input = frame.copy()
+        bad_input.loc[0, "volume_ratio_20d"] = float("inf")
+        builder.transform(bad_input)
+    output = builder.transform(frame)
+    output.loc[0, "volume_ratio_20d"] = float("inf")
+    with pytest.raises(ContractError, match="contains infinity"):
+        builder.build(
+            frame, output, input_factor_set="basic", input_factor_version="1.0.0",
+            input_factor_generation_ids=["0" * 64], ordered_features=["volume_ratio_20d"],
+            input_feature_schema=_input_schema(frame), output_feature_schema=_output_schema(output),
+        )
+
+
+def test_dataset_write_rejects_preprocessing_input_frame_mismatch(tmp_path: Path) -> None:
+    frame = _frame()
+    output = _standardized(frame)
+    schema = _output_schema(output)
+    input_schema = _input_schema(frame)
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="basic-standardized-v1", semantic_version="1.0.0",
+        transform="standardize_cross_section",
+    )
+    preprocessing = builder.build(
+        frame, output, input_factor_set="basic", input_factor_version="1.0.0",
+        input_factor_generation_ids=["0" * 64], ordered_features=["volume_ratio_20d"],
+        input_feature_schema=input_schema, output_feature_schema=schema,
+    )
+    writer = DatasetWriter(tmp_path)
+    with pytest.raises(ContractError, match="input frame fingerprint mismatch"):
+        writer.write(
+            _dataset_manifest(output, preprocessing, input_schema), output, feature_schema=schema,
+            quality_report=_dataset_report(), preprocessing_manifest=preprocessing,
+            preprocessing_input_frame=frame.iloc[:-1], preprocessing_frame=output,
+            preprocessing_input_feature_schema=input_schema, preprocessing_quality_report=_report(),
+        )
+
+
+def test_dataset_write_rejects_wrong_input_feature_schema_binding(tmp_path: Path) -> None:
+    frame = _frame()
+    output = _standardized(frame)
+    schema = _output_schema(output)
+    input_schema = _input_schema(frame)
+    wrong_input_schema = _input_schema(frame.assign(volume_ratio_20d=frame["volume_ratio_20d"] + 1.0))
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="basic-standardized-v1", semantic_version="1.0.0",
+        transform="standardize_cross_section",
+    )
+    preprocessing = builder.build(
+        frame, output, input_factor_set="basic", input_factor_version="1.0.0",
+        input_factor_generation_ids=["0" * 64], ordered_features=["volume_ratio_20d"],
+        input_feature_schema=input_schema, output_feature_schema=schema,
+    )
+    writer = DatasetWriter(tmp_path)
+    with pytest.raises(ContractError, match="input feature schema"):
+        writer.write(
+            _dataset_manifest(output, preprocessing, input_schema), output, feature_schema=schema,
+            quality_report=_dataset_report(), preprocessing_manifest=preprocessing,
+            preprocessing_input_frame=frame, preprocessing_frame=output,
+            preprocessing_input_feature_schema=wrong_input_schema,
+            preprocessing_quality_report=_report(),
+        )
+
+
+def test_dataset_write_rejects_invalid_preprocessing_manifest(tmp_path: Path) -> None:
+    frame = _frame()
+    output = _standardized(frame)
+    schema = _output_schema(output)
+    input_schema = _input_schema(frame)
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="basic-standardized-v1", semantic_version="1.0.0",
+        transform="standardize_cross_section",
+    )
+    preprocessing = builder.build(
+        frame, output, input_factor_set="basic", input_factor_version="1.0.0",
+        input_factor_generation_ids=["0" * 64], ordered_features=["volume_ratio_20d"],
+        input_feature_schema=input_schema, output_feature_schema=schema,
+    )
+    del preprocessing["input_frame_sha256"]
+    writer = DatasetWriter(tmp_path)
+    with pytest.raises(ContractError, match=r"feature_preprocessing\.v1\.json validation failed"):
+        writer.write(
+            _dataset_manifest(output, preprocessing, input_schema), output, feature_schema=schema,
+            quality_report=_dataset_report(), preprocessing_manifest=preprocessing,
+            preprocessing_input_frame=frame, preprocessing_frame=output,
+            preprocessing_input_feature_schema=input_schema, preprocessing_quality_report=_report(),
+        )
+
+
+def test_dataset_read_rejects_stored_input_feature_schema_tamper(tmp_path: Path) -> None:
+    frame = _frame()
+    output = _standardized(frame)
+    schema = _output_schema(output)
+    input_schema = _input_schema(frame)
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="basic-standardized-v1", semantic_version="1.0.0",
+        transform="standardize_cross_section",
+    )
+    preprocessing = builder.build(
+        frame, output, input_factor_set="basic", input_factor_version="1.0.0",
+        input_factor_generation_ids=["0" * 64], ordered_features=["volume_ratio_20d"],
+        input_feature_schema=input_schema, output_feature_schema=schema,
+    )
+    writer = DatasetWriter(tmp_path)
+    partition = writer.write(
+        _dataset_manifest(output, preprocessing, input_schema), output, feature_schema=schema,
+        quality_report=_dataset_report(), preprocessing_manifest=preprocessing,
+        preprocessing_input_frame=frame, preprocessing_frame=output,
+        preprocessing_input_feature_schema=input_schema, preprocessing_quality_report=_report(),
+    )
+    stored_schema_path = partition / "feature_schemas" / "input.json"
+    document = json.loads(stored_schema_path.read_text())
+    document["generation_id"] = "1" * 64
+    stored_schema_path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n")
     with pytest.raises(ContractError, match="tampered or malformed feature preprocessing"):
         writer.read("preprocessed_slice", "1.0.0", writer.last_published_manifest["generation_id"])

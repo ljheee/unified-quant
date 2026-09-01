@@ -12,6 +12,10 @@
     "input_factor_version",
     "input_factor_generation_ids",
     "input_frame_sha256",
+    "output_feature_schema_manifest_digest_sha256",
+    "output_feature_schema_generation_id",
+    "input_feature_schema_manifest_digest_sha256",
+    "input_feature_schema_generation_id",
     "ordered_features",
     "key_columns",
     "policy",
@@ -76,7 +80,10 @@
       "required": [
         "type",
         "null_result",
-        "min_group_observations"
+        "min_group_observations",
+        "standardization_ddof",
+        "rank_method",
+        "rank_ascending"
       ],
       "properties": {
         "type": {
@@ -88,6 +95,15 @@
         "min_group_observations": {
           "type": "integer",
           "minimum": 2
+        },
+        "standardization_ddof": {
+          "const": 0
+        },
+        "rank_method": {
+          "const": "average"
+        },
+        "rank_ascending": {
+          "const": true
         }
       }
     },
@@ -98,7 +114,7 @@
     },
     "output_frame_row_count": {
       "type": "integer",
-      "minimum": 0
+      "minimum": 1
     },
     "output_frame_sha256": {
       "$ref": "#/$defs/sha256"
@@ -130,6 +146,18 @@
         "standardize_cross_section",
         "rank_cross_section"
       ]
+    },
+    "input_feature_schema_generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "input_feature_schema_manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "output_feature_schema_generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "output_feature_schema_manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
     }
   },
   "$defs": {

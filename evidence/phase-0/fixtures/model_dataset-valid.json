@@ -9,11 +9,11 @@
   ],
   "factor_set": "basic",
   "factor_version": "1.0.0",
-  "generation_id": "8aee3603b9d84532d9d681264e756febde50b29023d380e042618d897f08307d",
+  "generation_id": "0488a2d857756ce5692a9c53ad7eb02fd08c71b3507becdd513a18ed93e98987",
   "label_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
   "label_set_name": "return_5d",
   "logical_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
-  "manifest_digest_sha256": "d0fdd8a3226b0d658b14c5b18594e48a480663bfb98760fbf80f8a0b09d4fc9a",
+  "manifest_digest_sha256": "97cb0d8e76566fb64d382027aaba66b05ccb7e2d4cd9fa63622def3f8f81ac71",
   "missing_policy": "fail_closed",
   "ordered_features": [
     "volume_ratio_20d"
@@ -39,5 +39,8 @@
       }
     ]
   },
-  "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000"
+  "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "input_feature_schema_generation_id": null,
+  "input_feature_schema_manifest_digest_sha256": null,
+  "input_feature_schema_path": null
 }

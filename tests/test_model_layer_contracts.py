@@ -50,7 +50,11 @@ def base_document(schema_name: str) -> dict:
             "factor_set": "basic", "factor_version": "1.0.0", "factor_generation_ids": [digest],
             "label_set_name": "return_5d", "label_generation_id": digest, "universe_snapshot_generation_id": digest,
             "split_policy": {"purge_trading_days": 5, "embargo_trading_days": 2, "splits": [{"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-12"}, {"name": "validation", "start_date": "2026-01-23", "end_date": "2026-01-26"}]},
-            "missing_policy": "fail_closed", "row_count": 10, "data_checksum_sha256": digest,
+            "missing_policy": "fail_closed", "row_count": 10,
+            "input_feature_schema_generation_id": None,
+            "input_feature_schema_manifest_digest_sha256": None,
+            "input_feature_schema_path": None,
+            "data_checksum_sha256": digest,
             "logical_fingerprint": digest, "code_fingerprint": digest, "serialization_profile_id": "uq-parquet-v1",
             "quality_report_checksum_sha256": digest,
         })
@@ -271,7 +275,7 @@ EVIDENCE_DIR = ROOT / "evidence" / "phase-0"
 
 def test_all_families_have_valid_and_negative_fixtures_on_disk() -> None:
     fixture_dir = EVIDENCE_DIR / "fixtures"
-    for family in ["label_set","model_dataset","model_definition","model_run","model_artifact","qlib_dataset_export","qlib_init_receipt","prediction_set"]:
+    for family in ["label_set","model_dataset","model_definition","model_run","model_artifact","qlib_dataset_export","qlib_init_receipt","prediction_set","feature_preprocessing"]:
         valid_path = fixture_dir / f"{family}-valid.json"
         negative_path = fixture_dir / f"{family}-negative.json"
         assert valid_path.is_file(), f"missing valid fixture: {valid_path}"
@@ -283,7 +287,7 @@ def test_all_families_have_valid_and_negative_fixtures_on_disk() -> None:
 def test_golden_vectors_cover_all_manifest_families() -> None:
     golden_path = EVIDENCE_DIR / "golden-vectors" / "identity-golden-vectors.json"
     vectors = json.loads(golden_path.read_text())
-    expected = {"label_set","model_dataset","model_definition","model_run","model_artifact","qlib_dataset_export","qlib_init_receipt","prediction_set"}
+    expected = {"label_set","model_dataset","model_definition","model_run","model_artifact","qlib_dataset_export","qlib_init_receipt","prediction_set","feature_preprocessing"}
     assert set(vectors.keys()) == expected
     for family, entry in vectors.items():
         assert entry["run_metadata_change_stable"] is True

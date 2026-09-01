@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.11; phases 0–5 and FP0/FP1 implemented and released. Final local and remote gates bind to `0341ae9f7ea71a34196080a6544c15bcb663c188`.**
+Status: **gated implementation order v1.12; phases 0–5 released; FP0/FP1 remediated and pending fresh head-bound local plus remote gate evidence.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -373,9 +373,13 @@ Exit criteria:
 
 1. Existing dataset tests remain green.
 2. `tests/test_feature_preprocessing.py` covers deterministic transforms,
-   leakage-safe date grouping, identity stability, quality binding, and
+   leakage-safe date grouping, exact input/output schema bindings, persisted
+   input schema reconciliation, identity stability, quality binding, and
    fail-closed tamper paths.
 3. Final unified gate evidence records the FP addendum at implementation HEAD.
+4. The fixture and golden-vector tests include the `feature_preprocessing`
+   durable family; stale fixture identities must be regenerated when a required
+   semantic field is added.
 
 ## Acceptance Matrix Expansion
 
@@ -408,7 +412,11 @@ later phases must expand their rows before entering implementation.
 | FP1b-output-mismatch-reject | FP | none | test_manifest_rejects_transform_output_mismatch_and_sparse_group | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
 | FP1c-identity-stability | FP | none | test_manifest_identity_is_stable_across_run_metadata | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
 | FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
-| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
+| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper + test_dataset_read_rejects_stored_input_feature_schema_tamper | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
+| FP1f-schema-binding-fail-closed | FP | none | test_dataset_write_rejects_wrong_input_feature_schema_binding | generated frame | tests/test_feature_preprocessing.py | TBD-final-head-gate | blocked |
+| FP1g-infinity-reject | FP | none | test_build_rejects_infinity_in_input_or_output | generated frame | tests/test_feature_preprocessing.py | TBD-final-head-gate | blocked |
+| FP1h-input-frame-mismatch | FP | none | test_dataset_write_rejects_preprocessing_input_frame_mismatch | generated frame | tests/test_feature_preprocessing.py | TBD-final-head-gate | blocked |
+| FP1i-invalid-manifest | FP | none | test_dataset_write_rejects_invalid_preprocessing_manifest | generated frame | tests/test_feature_preprocessing.py | TBD-final-head-gate | blocked |
 
 The remaining source-spec rows are covered by the runtime tests named above or by
 their existing phase-specific negative suites; no security/lineage row is deferred.

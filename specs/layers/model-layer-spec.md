@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.1.0; phases 0–5 released; stateless feature preprocessing addendum FP0/FP1 implemented**
+Status: **design v1.1.1; phases 0–5 released; FP0/FP1 remediated pending fresh head-bound gate evidence**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
@@ -205,13 +205,14 @@ The first governed slice is stateless and cross-sectional:
 - do not fit or persist mean/std/quantile state across dates or splits.
 
 `feature_preprocessing.v1` binds the preprocessing name/version, transform,
-input factor set/version/generations, exact input frame fingerprint, output
-frame fingerprint, ordered features, code fingerprint, serialization profile,
-quality-report checksum, stable generation, and manifest digest. `DatasetWriter`
-must reconcile this manifest with the feature schema and recompute the declared
-transform before publication. Readback verifies the dataset manifest, sidecar,
-feature schema, preprocessing manifest, preprocessing quality report, row keys,
-row count, physical checksum, and logical fingerprints.
+input factor set/version/generations, exact input frame fingerprint, exact
+input/output feature-schema generation and manifest digest, ordered features,
+code fingerprint, serialization profile, quality-report checksum, stable
+generation, and manifest digest. `DatasetWriter` must reconcile this manifest
+with both schemas, recompute the declared transform, and persist
+`feature_schemas/input.json`. Readback verifies the dataset manifest, sidecar,
+input/output feature schemas, preprocessing manifest and bindings, preprocessing
+quality report, row keys, row count, physical checksum, and logical fingerprints.
 
 A learned or rolling preprocessing policy (for example train-fit z-score,
 winsorization bounds, neutralization, or online scaling) requires a new contract

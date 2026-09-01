@@ -40,6 +40,7 @@ class DatasetWriter:
         preprocessing_manifest: dict[str, Any] | None = None,
         preprocessing_frame: pd.DataFrame | None = None,
         preprocessing_input_frame: pd.DataFrame | None = None,
+        preprocessing_input_feature_schema: dict[str, Any] | None = None,
         preprocessing_quality_report: dict[str, Any] | None = None,
     ) -> Path:
         published_manifest = dict(manifest)
@@ -50,7 +51,7 @@ class DatasetWriter:
         FeatureSchemaValidator.validate_against_frame(feature_schema, frame)
         self._validate_preprocessing(
             published_manifest, frame, feature_schema, preprocessing_manifest,
-            preprocessing_input_frame, preprocessing_frame,
+            preprocessing_input_frame, preprocessing_input_feature_schema, preprocessing_frame,
         )
         policy = published_manifest["split_policy"]
         trading_dates = sorted({timestamp.strftime("%Y-%m-%d") for timestamp in frame["datetime"]})
@@ -134,6 +135,11 @@ class DatasetWriter:
                 (staging / "manifest.json").write_text(
                     json.dumps(published_manifest, sort_keys=True, indent=2) + "\n"
                 )
+                input_schema_dir = staging / "feature_schemas"
+                input_schema_dir.mkdir()
+                stored_input_schema = preprocessing_input_feature_schema or feature_schema
+                input_schema_bytes = json.dumps(stored_input_schema, sort_keys=True, indent=2).encode() + b"\n"
+                (input_schema_dir / "input.json").write_bytes(input_schema_bytes)
                 (staging / "feature_schema.json").write_text(
                     json.dumps(feature_schema, sort_keys=True, indent=2) + "\n"
                 )
@@ -220,7 +226,11 @@ class DatasetWriter:
             try:
                 preprocessing_doc = json.loads(preprocessing_path.read_text())
                 ModelContractLoader.validate("feature_preprocessing", preprocessing_doc)
-                self._validate_preprocessing_references(manifest, preprocessing_doc, fs_doc)
+                input_schema_path = partition / manifest["input_feature_schema_path"]
+                if not input_schema_path.is_file():
+                    raise ContractError("dataset input feature schema is unavailable")
+                input_feature_schema = json.loads(input_schema_path.read_text())
+                self._validate_preprocessing_references(manifest, preprocessing_doc, fs_doc, input_feature_schema)
                 self._validate_preprocessing_quality_report(preprocessing_doc)
             except (json.JSONDecodeError, ContractError) as exc:
                 raise ContractError("tampered or malformed feature preprocessing in dataset partition") from exc
@@ -293,6 +303,7 @@ class DatasetWriter:
         feature_schema: dict[str, Any],
         preprocessing_manifest: dict[str, Any] | None,
         preprocessing_input_frame: pd.DataFrame | None,
+        preprocessing_input_feature_schema: dict[str, Any] | None,
         preprocessing_frame: pd.DataFrame | None,
     ) -> None:
         if (manifest.get("feature_preprocessing_generation_id") is None) != (preprocessing_manifest is None):
@@ -303,7 +314,15 @@ class DatasetWriter:
             raise ContractError("preprocessing manifest requires preprocessing output frame")
         if preprocessing_input_frame is None:
             raise ContractError("preprocessing manifest requires preprocessing input frame")
-        self._validate_preprocessing_references(manifest, preprocessing_manifest, feature_schema)
+        ModelContractLoader.validate("feature_preprocessing", preprocessing_manifest)
+        if preprocessing_input_feature_schema is None:
+            raise ContractError("preprocessing manifest requires input feature schema")
+        self._validate_preprocessing_references(
+            manifest, preprocessing_manifest, feature_schema, preprocessing_input_feature_schema
+        )
+        input_fingerprint = FeaturePreprocessorBuilder.frame_fingerprint(preprocessing_input_frame)
+        if input_fingerprint != preprocessing_manifest["input_frame_sha256"]:
+            raise ContractError("preprocessing input frame fingerprint mismatch")
         builder = FeaturePreprocessorBuilder(
             preprocess_name=preprocessing_manifest["preprocess_name"],
             semantic_version=preprocessing_manifest["semantic_version"],
@@ -331,6 +350,7 @@ class DatasetWriter:
         manifest: dict[str, Any],
         preprocessing_manifest: dict[str, Any],
         feature_schema: dict[str, Any],
+        input_feature_schema: dict[str, Any],
     ) -> None:
         if manifest.get("feature_preprocessing_generation_id") != preprocessing_manifest.get("generation_id"):
             raise ContractError("dataset preprocessing generation mismatch")
@@ -340,6 +360,20 @@ class DatasetWriter:
             raise ContractError("preprocessing input factor version mismatch")
         if preprocessing_manifest.get("input_factor_generation_ids") != manifest.get("factor_generation_ids"):
             raise ContractError("preprocessing input factor generation mismatch")
+        if preprocessing_manifest.get("output_feature_schema_generation_id") != feature_schema.get("generation_id"):
+            raise ContractError("preprocessing output feature schema generation mismatch")
+        if preprocessing_manifest.get("output_feature_schema_manifest_digest_sha256") != feature_schema.get("manifest_digest_sha256"):
+            raise ContractError("preprocessing output feature schema digest mismatch")
+        if preprocessing_manifest.get("input_feature_schema_generation_id") != input_feature_schema.get("generation_id"):
+            raise ContractError("preprocessing input feature schema generation mismatch")
+        if preprocessing_manifest.get("input_feature_schema_manifest_digest_sha256") != input_feature_schema.get("manifest_digest_sha256"):
+            raise ContractError("preprocessing input feature schema digest mismatch")
+        if manifest.get("input_feature_schema_generation_id") != input_feature_schema.get("generation_id"):
+            raise ContractError("dataset input feature schema generation mismatch")
+        if manifest.get("input_feature_schema_manifest_digest_sha256") != input_feature_schema.get("manifest_digest_sha256"):
+            raise ContractError("dataset input feature schema digest mismatch")
+        if manifest.get("input_feature_schema_path") != "feature_schemas/input.json":
+            raise ContractError("dataset input feature schema path mismatch")
         ordered_features = preprocessing_manifest.get("ordered_features")
         schema_features = [column["name"] for column in feature_schema["columns"]]
         if ordered_features != schema_features:

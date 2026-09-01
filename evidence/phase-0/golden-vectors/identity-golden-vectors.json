@@ -62,5 +62,13 @@
     "negative_fixture": "evidence/phase-0/fixtures/qlib_init_receipt-negative.json",
     "run_metadata_change_stable": true,
     "valid_fixture": "evidence/phase-0/fixtures/qlib_init_receipt-valid.json"
+  },
+  "feature_preprocessing": {
+    "changed_run_generation_matches": true,
+    "generation_id": "694e0d3f3885b6ffd95c2a76c6bd130f7887c5aed08704570a07b569abef89e5",
+    "manifest_digest_sha256": "c7e177361aa6d3e4f01db834dc3243d451b96b2a17df77c46420c92202b4f83c",
+    "negative_fixture": "evidence/phase-0/fixtures/feature_preprocessing-negative.json",
+    "run_metadata_change_stable": true,
+    "valid_fixture": "evidence/phase-0/fixtures/feature_preprocessing-valid.json"
   }
 }

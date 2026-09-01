@@ -1,0 +1,51 @@
+{
+  "blocked_by": [
+    "fresh final-head unified local gate",
+    "fresh final-head remote CI matrix",
+    "evidence-only reconciliation commit"
+  ],
+  "entry_criteria": [
+    {
+      "id": "FP0-entry-contract",
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_all_families_have_valid_and_negative_fixtures_on_disk"
+    },
+    {
+      "id": "FP0-entry-identity",
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_golden_vectors_cover_all_manifest_families"
+    }
+  ],
+  "exit_criteria": [
+    {
+      "id": "FP0-exit-contract-fixture",
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_all_families_have_valid_and_negative_fixtures_on_disk"
+    },
+    {
+      "id": "FP0-exit-golden-vector",
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_golden_vectors_cover_all_manifest_families"
+    },
+    {
+      "id": "FP0-exit-runtime",
+      "status": "passed",
+      "test_id": "tests/test_feature_preprocessing.py"
+    },
+    {
+      "evidence_path": null,
+      "id": "FP0-exit-final-head-gate",
+      "status": "blocked",
+      "test_id": "UQ_GATE_EXTRAS=qlib scripts/run_gate.sh"
+    },
+    {
+      "evidence_path": null,
+      "id": "FP0-exit-remote-matrix",
+      "status": "blocked",
+      "test_id": "CI unified gate matrix"
+    }
+  ],
+  "phase": "FP0/FP1",
+  "record_version": 1,
+  "status": "in_progress"
+}

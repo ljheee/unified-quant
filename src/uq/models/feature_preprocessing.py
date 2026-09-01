@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
+import numpy as np
 import pandas as pd
 
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
@@ -54,6 +55,8 @@ class FeaturePreprocessorBuilder:
         input_factor_version: str,
         input_factor_generation_ids: list[str],
         ordered_features: list[str],
+        input_feature_schema: dict[str, Any],
+        output_feature_schema: dict[str, Any],
     ) -> dict[str, Any]:
         if input_frame.empty or output_frame.empty:
             raise ContractError("preprocessing requires non-empty input and output frames")
@@ -67,8 +70,24 @@ class FeaturePreprocessorBuilder:
             raise ContractError("input frame columns do not match ordered features")
         if list(output_frame.columns) != ["instrument", "datetime", *ordered_features]:
             raise ContractError("output frame columns do not match ordered features")
-        expected_output = self._apply(input_frame.copy(), ordered_features)
-        pd.testing.assert_frame_equal(output_frame, expected_output, check_exact=False, rtol=1e-12, atol=1e-12)
+        ModelContractLoader.validate("feature_schema", input_feature_schema)
+        ModelContractLoader.validate("feature_schema", output_feature_schema)
+        self._validate_feature_schema(input_feature_schema, ordered_features, "input")
+        self._validate_feature_schema(
+            output_feature_schema,
+            ordered_features,
+            "output",
+            "standardized" if self.transform_type == "standardize_cross_section" else "ranked",
+        )
+        self.validate_feature_values(input_frame, ordered_features)
+        self.validate_feature_values(output_frame, ordered_features)
+        try:
+            expected_output = self._apply(input_frame.copy(), ordered_features)
+            pd.testing.assert_frame_equal(
+                output_frame, expected_output, check_exact=False, rtol=1e-12, atol=1e-12
+            )
+        except AssertionError as exc:
+            raise ContractError("preprocessing output does not match declared transform") from exc
 
         manifest: dict[str, Any] = {
             "contract_version": 1,
@@ -78,6 +97,10 @@ class FeaturePreprocessorBuilder:
             "input_factor_version": input_factor_version,
             "input_factor_generation_ids": list(input_factor_generation_ids),
             "input_frame_sha256": _frame_fingerprint(input_frame),
+            "input_feature_schema_generation_id": input_feature_schema["generation_id"],
+            "input_feature_schema_manifest_digest_sha256": input_feature_schema["manifest_digest_sha256"],
+            "output_feature_schema_generation_id": output_feature_schema["generation_id"],
+            "output_feature_schema_manifest_digest_sha256": output_feature_schema["manifest_digest_sha256"],
             "ordered_features": list(ordered_features),
             "key_columns": ["instrument", "datetime"],
             "transform": self.transform_type,
@@ -85,6 +108,9 @@ class FeaturePreprocessorBuilder:
                 "type": "cross_sectional_stateless_v1",
                 "null_result": "preserve_null",
                 "min_group_observations": self.min_group_observations,
+                "standardization_ddof": 0,
+                "rank_method": "average",
+                "rank_ascending": True,
             },
             "group_columns": ["datetime"],
             "output_frame_row_count": len(output_frame),
@@ -105,6 +131,20 @@ class FeaturePreprocessorBuilder:
         ModelContractLoader.validate("feature_preprocessing", manifest)
         return manifest
 
+    @staticmethod
+    def _validate_feature_schema(
+        schema: dict[str, Any],
+        ordered_features: list[str],
+        label: str,
+        expected_status: str = "identity",
+    ) -> None:
+        names = [column["name"] for column in schema["columns"]]
+        if names != ordered_features:
+            raise ContractError(f"{label} feature schema columns do not match ordered features")
+        for column in schema["columns"]:
+            if column["transform_status"] != expected_status:
+                raise ContractError(f"{label} feature schema transform status mismatch for {column['name']}")
+
     def validate_frame_keys(self, frame: pd.DataFrame) -> None:
         if list(frame.columns[:2]) != ["instrument", "datetime"]:
             raise ContractError("preprocessing frame keys must be instrument then datetime")
@@ -115,10 +155,27 @@ class FeaturePreprocessorBuilder:
         if frame["instrument"].isna().any() or frame["datetime"].isna().any():
             raise ContractError("null preprocessing keys")
 
+    @staticmethod
+    def frame_fingerprint(frame: pd.DataFrame) -> str:
+        return _frame_fingerprint(frame)
+
+    def validate_feature_values(self, frame: pd.DataFrame, ordered_features: list[str] | None = None) -> None:
+        features = ordered_features if ordered_features is not None else list(frame.columns[2:])
+        for name in features:
+            if name not in frame.columns:
+                raise ContractError(f"feature column {name} is absent")
+            values = frame[name].to_numpy(dtype=float, na_value=np.nan)
+            if np.isinf(values).any():
+                raise ContractError(f"feature column {name} contains infinity")
+
     def transform(self, frame: pd.DataFrame, ordered_features: list[str] | None = None) -> pd.DataFrame:
-        return self._apply(frame, ordered_features).sort_values(
+        self.validate_frame_keys(frame)
+        self.validate_feature_values(frame, ordered_features)
+        output = self._apply(frame, ordered_features).sort_values(
             ["instrument", "datetime"], kind="mergesort"
         ).reset_index(drop=True)
+        self.validate_feature_values(output, ordered_features)
+        return output
 
     def _apply(self, frame: pd.DataFrame, ordered_features: list[str] | None = None) -> pd.DataFrame:
         features = ordered_features if ordered_features is not None else list(frame.columns[2:])

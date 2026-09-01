@@ -26,7 +26,10 @@
     "created_at",
     "quality_report_checksum_sha256",
     "manifest_digest_sha256",
-    "generation_id"
+    "generation_id",
+    "input_feature_schema_generation_id",
+    "input_feature_schema_manifest_digest_sha256",
+    "input_feature_schema_path"
   ],
   "properties": {
     "contract_version": {
@@ -164,6 +167,36 @@
         },
         {
           "$ref": "#/$defs/sha256"
+        }
+      ]
+    },
+    "input_feature_schema_generation_id": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/sha256"
+        }
+      ]
+    },
+    "input_feature_schema_manifest_digest_sha256": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/sha256"
+        }
+      ]
+    },
+    "input_feature_schema_path": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "const": "feature_schemas/input.json"
         }
       ]
     }

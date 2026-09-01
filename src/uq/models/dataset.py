@@ -94,6 +94,7 @@ class DatasetBuilder:
         split_policy: dict[str, Any],
         missing_policy: str = "fail_closed",
         feature_preprocessing_generation_id: str | None = None,
+        input_feature_schema: dict[str, Any] | None = None,
         row_count: int,
     ) -> dict[str, Any]:
         if missing_policy not in ("fail_closed", "declared_fill"):
@@ -117,6 +118,9 @@ class DatasetBuilder:
             "split_policy": split_policy,
             "missing_policy": missing_policy,
             "feature_preprocessing_generation_id": feature_preprocessing_generation_id,
+            "input_feature_schema_generation_id": None if input_feature_schema is None else input_feature_schema["generation_id"],
+            "input_feature_schema_manifest_digest_sha256": None if input_feature_schema is None else input_feature_schema["manifest_digest_sha256"],
+            "input_feature_schema_path": "feature_schemas/input.json",
             "row_count": row_count,
             "data_checksum_sha256": sha256_json({"features": ordered_features, "row_count": row_count}),
             "logical_fingerprint": sha256_json({"features": ordered_features}),

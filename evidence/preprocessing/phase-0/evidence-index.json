@@ -1,0 +1,27 @@
+{
+  "entries": [
+    {
+      "negative_fixture": "../phase-0/fixtures/feature_preprocessing-negative.json",
+      "path": "../phase-0/fixtures/feature_preprocessing-valid.json",
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_all_families_have_valid_and_negative_fixtures_on_disk",
+      "type": "contract_fixtures"
+    },
+    {
+      "generation_id": "694e0d3f3885b6ffd95c2a76c6bd130f7887c5aed08704570a07b569abef89e5",
+      "manifest_digest_sha256": "d90edeebeba9d9794d099d18d01bea00c10b819b4073765c41655eaf7c20f2f7",
+      "path": "../phase-0/golden-vectors/identity-golden-vectors.json",
+      "status": "passed",
+      "test_id": "tests/test_model_layer_contracts.py::test_golden_vectors_cover_all_manifest_families",
+      "type": "identity_golden_vector"
+    },
+    {
+      "path": "phase-record.json",
+      "status": "in_progress",
+      "type": "phase_record"
+    }
+  ],
+  "index_version": 1,
+  "phase": "FP0/FP1",
+  "status": "in_progress"
+}
