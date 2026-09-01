@@ -27,6 +27,29 @@ class QlibNotInstalledError(ContractError):
     """Raised when the reviewed pyqlib runtime is not available."""
 
 
+_QLIB_COMPUTE_TIMEOUT_SECONDS = 600
+_INSTRUMENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+
+
+def _validate_worker_payload(payload: object) -> None:
+    if not isinstance(payload, dict):
+        raise ContractError("malformed qlib worker payload")
+    required = {
+        "provider_uri", "instruments", "expressions", "factor_names",
+        "start_date", "end_date", "result_path",
+    }
+    if not required.issubset(payload):
+        raise ContractError("qlib worker payload is missing required fields")
+    for key in ("provider_uri", "start_date", "end_date", "result_path"):
+        if not isinstance(payload[key], str) or not payload[key]:
+            raise ContractError(f"invalid qlib worker payload field: {key}")
+    for key in ("instruments", "expressions", "factor_names"):
+        if not isinstance(payload[key], list) or not payload[key] or not all(
+            isinstance(item, str) for item in payload[key]
+        ):
+            raise ContractError(f"invalid qlib worker payload field: {key}")
+
+
 def _import_qlib():
     try:
         import qlib
@@ -40,6 +63,7 @@ def _import_qlib():
 def _qlib_worker(payload_path: str) -> int:
     """Child-process entry point. Qlib global state never escapes this process."""
     payload = json.loads(Path(payload_path).read_text(encoding="utf-8"))
+    _validate_worker_payload(payload)
     qlib = _import_qlib()
     qlib.init(
         provider_uri=payload["provider_uri"],
@@ -149,6 +173,7 @@ class QlibFactorAdapter:
                 [sys.executable, "-m", "uq.factors.qlib_adapter", str(payload_path)],
                 capture_output=True,
                 text=True,
+                timeout=_QLIB_COMPUTE_TIMEOUT_SECONDS,
             )
             if completed.returncode != 0:
                 detail = completed.stderr.strip() or completed.stdout.strip()
@@ -174,6 +199,8 @@ class QlibFactorAdapter:
     ) -> None:
         if len(set(instruments)) != len(instruments):
             raise ContractError("duplicate requested qlib instruments")
+        if any(not isinstance(instrument, str) or not _INSTRUMENT_PATTERN.fullmatch(instrument) or instrument in {".", ".."} for instrument in instruments):
+            raise ContractError("unsafe qlib instrument identifier")
         required_columns = {"instrument", "datetime", *_QLIB_INPUT_COLUMNS}
         missing_columns = sorted(required_columns - set(panel.columns))
         if missing_columns:

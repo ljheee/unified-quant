@@ -12,7 +12,7 @@ from uq.contracts.artifacts import QualityReportStore
 from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.contracts.factor_governance import FactorRegistry
 from uq.errors import ContractError
-from uq.factors.qlib_adapter import QlibFactorAdapter, QlibNotInstalledError
+from uq.factors.qlib_adapter import QlibFactorAdapter, QlibNotInstalledError, _validate_worker_payload
 from uq.factors.store import FactorStore, _validate_factor_frame, factor_generation, read_factor_partition
 
 
@@ -374,3 +374,64 @@ def test_qlib_process_isolation_and_temp_cleanup(monkeypatch, days):
     assert result.columns.tolist() == ["instrument", "datetime", *_adapter().factor_names]
     assert commands == [[sys.executable, "-m", "uq.factors.qlib_adapter", str(captured["root"] / "payload.json")]]
     assert not captured["root"].exists()
+
+
+def test_contract_only_alpha360_publish_rejected():
+    document = json.loads((ROOT / "config/factor-sets/alpha360-v1.json").read_text())
+    document["status"] = "reviewed"
+
+    class ContractOnlyRegistry:
+        def get(self, factor_set: str, factor_version: str):
+            from uq.contracts.factor_governance import FactorSetDefinition
+
+            return FactorSetDefinition(document)
+
+    with pytest.raises(ContractError, match="contract-only factor sets"):
+        FactorStore(Path("/tmp/unused"), ContractOnlyRegistry()).publish(
+            factor_set="alpha360",
+            factor_version="1.0.0",
+            frame=_synthetic_panel(days=70)[0],
+            partition_date=date(2024, 1, 2),
+            input_dataset="bars_daily",
+            input_schema_version="research-v1",
+            upstream_generation_id="a" * 64,
+            upstream_data_checksum="b" * 64,
+            quality_report_checksum="c" * 64,
+            upstream_created_at=datetime.fromisoformat("2024-01-01T16:00:00+08:00"),
+        )
+
+
+def test_unsafe_qlib_instrument_identifier_rejected():
+    panel, dates, instruments = _synthetic_panel(days=70)
+    panel = panel.copy()
+    panel["instrument"] = panel["instrument"].replace(
+        {instruments[0]: "../escape"}
+    )
+    with pytest.raises(ContractError, match="unsafe qlib instrument"):
+        _adapter()._validate_request(
+            panel,
+            [instruments[1], "../escape"],
+            str(dates[-1].date()),
+            str(dates[-1].date()),
+        )
+
+
+def test_validate_worker_payload_validation():
+    with pytest.raises(ContractError, match="missing required fields"):
+        _validate_worker_payload({})
+    with pytest.raises(ContractError, match="invalid qlib worker payload"):
+        _validate_worker_payload({
+            "provider_uri": "/tmp/data",
+            "instruments": ["a"],
+            "expressions": ["$close"],
+            "factor_names": [],
+            "start_date": "2024-01-01",
+            "end_date": "2024-01-02",
+            "result_path": "/tmp/result.parquet",
+        })
+
+
+def test_qlib_compute_timeout_is_mechanical():
+    from uq.factors import qlib_adapter
+
+    assert qlib_adapter._QLIB_COMPUTE_TIMEOUT_SECONDS > 0

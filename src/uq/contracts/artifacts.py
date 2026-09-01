@@ -6,6 +6,7 @@ import re
 import shutil
 import io
 import uuid
+from typing import Any
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -61,15 +62,19 @@ class UniverseSnapshotStore:
 
 
 class QualityReportStore:
-    def save(self, root: Path, report: dict[str, Any]) -> Path:
-        validate_contract("quality_report.v1.json", report)
-        if report["binding_type"] not in {"factor_v1", "canonical_v2"}:
-            raise ContractError("unsupported quality report binding type")
+    @staticmethod
+    def _validate_check_taxonomy(report: dict[str, Any]) -> None:
         allowed_checks = {"duplicate_keys", "null_rate", "missing_dependency", "coverage", "semantic_version"}
         def _check_name_allowed(name: str) -> bool:
             return name in allowed_checks or bool(re.fullmatch(r"(?:null_rate|finite_values)__[^_].*", name))
         if any(not _check_name_allowed(item["name"]) for item in report["checks"]):
             raise ContractError("unknown quality check taxonomy")
+
+    def save(self, root: Path, report: dict[str, Any]) -> Path:
+        validate_contract("quality_report.v1.json", report)
+        if report["binding_type"] not in {"factor_v1", "canonical_v2"}:
+            raise ContractError("unsupported quality report binding type")
+        self._validate_check_taxonomy(report)
         content = json.dumps(report, sort_keys=True, separators=(",", ":")).encode("utf-8")
         directory = root / "reports" / report["binding_type"] / report["bound_generation_id"]
         if directory.exists():
@@ -109,11 +114,7 @@ class QualityReportStore:
         validate_contract("quality_report.v1.json", report)
         if report["binding_type"] != binding_type:
             raise ContractError("quality report is not bound to requested type")
-        allowed_checks = {"duplicate_keys", "null_rate", "missing_dependency", "coverage", "semantic_version"}
-        def _check_name_allowed(name: str) -> bool:
-            return name in allowed_checks or bool(re.fullmatch(r"(?:null_rate|finite_values)__[^_].*", name))
-        if any(not _check_name_allowed(item["name"]) for item in report["checks"]):
-            raise ContractError("unknown quality check taxonomy")
+        self._validate_check_taxonomy(report)
         if report["bound_generation_id"] != bound_generation_id:
             raise ContractError("quality report bound to another run")
         actual_files = {path.name for path in directory.iterdir()}

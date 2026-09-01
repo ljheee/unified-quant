@@ -74,6 +74,8 @@ class FactorStore:
             "upstream_created_at": _iso_datetime(upstream_created_at),
         }
         definition = self.registry.get(factor_set, factor_version)
+        if definition.factor_set == "alpha360" or not definition.factors:
+            raise ContractError("contract-only factor sets cannot be published")
         local_quality = _validate_factor_frame(frame, definition)
         if definition.factor_set == "basic":
             if input_dataset != "bars_daily" or input_schema_version != "research-v1":
@@ -457,6 +459,19 @@ def read_factor_partition(partition: Path) -> pd.DataFrame:
     if manifest.get("data_checksum_sha256") != file_sha256_bytes(data_path.read_bytes()):
         raise ContractError("tampered factor data prevents factor read")
 
+    registry = FactorRegistry(Path(__file__).resolve().parents[3])
+    definition = registry.get(
+        manifest["factor_set"], manifest["factor_version"]
+    )
+    registry.validate_manifest(manifest)
+    if definition.factor_set.startswith("alpha"):
+        engine = manifest.get("engine_contract", {})
+        if engine.get("qlib_expression_set") != definition.document.get("qlib_expression_set"):
+            raise ContractError("factor engine expression set does not match reviewed definition")
+        if engine.get("engine_version") not in definition.document.get(
+            "reviewed_engine_versions", []
+        ):
+            raise ContractError("factor engine version is not reviewed")
     frame = pd.read_parquet(data_path)
     if len(frame) != manifest.get("row_count") or list(frame.columns) != manifest.get("columns"):
         raise ContractError("factor artifact shape does not match manifest")
@@ -474,9 +489,6 @@ def read_factor_partition(partition: Path) -> pd.DataFrame:
     report_path = report_root / "reports" / "factor_v1" / manifest["generation_id"] / "report.json"
     report = QualityReportStore().read(report_root, manifest["generation_id"], binding_type="factor_v1")
     accepted_statuses = {"passed"} if manifest["quality"]["policy"] == "reject_all" else {"passed", "warning"}
-    definition = FactorRegistry(Path(__file__).resolve().parents[3]).get(
-        manifest["factor_set"], manifest["factor_version"]
-    )
     reviewed_factors = {factor["name"] for factor in definition.factors}
     if definition.factor_set.startswith("alpha"):
         expected_columns = {"instrument", "datetime", *reviewed_factors}

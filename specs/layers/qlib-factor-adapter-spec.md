@@ -126,7 +126,7 @@ Example: `KMID` → `qlib_kmid`, `STD20` → `qlib_std20`.
 ### 5.5 Version Pinning
 
 The adapter records the installed pyqlib version in each manifest as
-`qlib_version`. Different Qlib versions may produce slightly different
+`engine_contract.engine_version`. Different Qlib versions may produce slightly different
 values due to floating point ordering. A change in `qlib_version` requires
 a new `factor_version` to maintain identity stability.
 
@@ -141,7 +141,7 @@ Every published partition must have:
 | generation_id | SHA-256 of canonical identity payload |
 | manifest_digest_sha256 | SHA-256 of full manifest |
 | data_checksum_sha256 | SHA-256 of Parquet artifact |
-| quality_report_checksum_sha256 | Factor quality report file digest |
+| quality.report_checksum_sha256 | Factor quality report file digest |
 | implementation_fingerprint | SHA-256 of adapter module bytes |
 | engine_contract.qlib_expression_set | `Alpha158` for this release |
 | engine_contract.engine_version | installed pyqlib version string |

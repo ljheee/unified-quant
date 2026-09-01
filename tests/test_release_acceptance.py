@@ -451,3 +451,19 @@ def test_quarantine_tampered_data_and_manifest_fail_closed(tmp_path):
     manifest_path.write_bytes(manifest_bytes.replace(b"bad", b"evil"))
     with pytest.raises(ContractError, match="tampered quarantine manifest"):
         read_quarantine_manifest(directory)
+
+
+def test_semantically_tampered_manifest_rejects_read(tmp_path):
+    partition = publish(tmp_path)
+    manifest = json.loads((partition / "manifest.json").read_text())
+    manifest["factor_definitions"] = list(reversed(manifest["factor_definitions"]))
+    unsigned = {key: value for key, value in manifest.items() if key != "manifest_digest_sha256"}
+    from uq.contracts.gate_contracts import factor_manifest_identities
+
+    unsigned.pop("generation_id")
+    generation, digest = factor_manifest_identities(unsigned)
+    manifest["generation_id"] = generation
+    manifest["manifest_digest_sha256"] = digest
+    (partition / "manifest.json").write_text(json.dumps(manifest, sort_keys=True))
+    with pytest.raises(ContractError, match="(factor definitions do not match|missing quality report)"):
+        read_factor_partition(partition)
