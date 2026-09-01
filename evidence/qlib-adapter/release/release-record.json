@@ -1,16 +1,23 @@
 {
   "binds_plan": "specs/layers/qlib-factor-adapter-implementation-plan.md",
   "binds_spec": "specs/layers/qlib-factor-adapter-spec.md",
-  "bound_commit": "8e06651cbea43a62b50a3e61b22d545a6fdf8f98",
-  "gate_evidence": "gate-report.json",
+  "bound_commit": "5f89b535bd7fd94cbea252f77b8ef24a74bc62be",
+  "gate_evidence": "evidence/qlib-adapter/phase-2/gate-reports/gate-report.json",
   "notes": [
-    "Unified gate was green at the implementing commit; this release marker only adds evidence and status.",
-    "Remote six-cell CI evidence remains a separate release prerequisite unless this adapter is explicitly covered by the current unified gate policy."
+    "Final HEAD local gate and six-cell remote CI passed at the implementation commit."
   ],
   "phase_records": {
     "phase_0": "evidence/qlib-adapter/phase-0/phase-record.json",
-    "phase_1": "evidence/qlib-adapter/phase-1/phase-record.json"
+    "phase_1": "evidence/qlib-adapter/phase-1/phase-record.json",
+    "phase_2": "evidence/qlib-adapter/phase-2/phase-record.json"
   },
   "record_version": 1,
-  "status": "pending_final_head_remote_gate"
+  "released_at": "2026-09-01T09:59:40.940352+00:00",
+  "remote_gate": {
+    "evidence_path": "evidence/qlib-adapter/phase-2/final-head-ci",
+    "f4_certification_job": "f4-certification",
+    "passed": true,
+    "run_id": "33494854629"
+  },
+  "status": "released"
 }

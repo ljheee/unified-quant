@@ -1,0 +1,29 @@
+{
+  "entry_criteria": [
+    {
+      "id": "phase-2-entry",
+      "status": "passed",
+      "test_id": "evidence/qlib-adapter/phase-1/phase-record.json"
+    }
+  ],
+  "exit_criteria": [
+    {
+      "bound_commit": "5f89b535bd7fd94cbea252f77b8ef24a74bc62be",
+      "evidence_path": "evidence/qlib-adapter/phase-2/gate-reports/gate-report.json",
+      "id": "Q2a",
+      "status": "passed",
+      "test_id": "scripts/run_gate.sh"
+    },
+    {
+      "bound_commit": "5f89b535bd7fd94cbea252f77b8ef24a74bc62be",
+      "evidence_path": "evidence/qlib-adapter/phase-2/final-head-ci",
+      "id": "Q2b",
+      "status": "passed",
+      "test_id": "github-actions:33494854629:f4-certification"
+    }
+  ],
+  "exited_at_commit": "5f89b535bd7fd94cbea252f77b8ef24a74bc62be",
+  "phase": 2,
+  "record_version": 1,
+  "status": "exited"
+}

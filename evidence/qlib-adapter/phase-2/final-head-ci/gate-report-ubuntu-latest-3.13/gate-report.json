@@ -1,0 +1,15 @@
+{
+  "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+  "extras": [
+    "dev",
+    "real"
+  ],
+  "git_commit": "5f89b5352c1bdf1604e0355f22eec3ba0a3b0636",
+  "lockfile_sha256": "da51355b8f5100eacc19292622db1bf97b104926eed3d61ce4aac6133250fccc",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python_version": "3.13.15",
+  "requirements_lock_sha256": "7c98616a8e3fa074c34d218e287225ff0cf0290e4a9487f87dee23f66a61ab08",
+  "runner": "uv",
+  "test_result": "passed",
+  "utc_timestamp": "2026-09-01T09:57:09.082044+00:00"
+}

@@ -1,6 +1,6 @@
 # Qlib Factor Adapter Implementation Plan
 
-Status: **implementation complete; local gate passed at implementing HEAD; final release evidence pending marker + remote gate.**
+Status: **released v1.0.0; final HEAD local and remote six-cell gates passed.**
 
 Source spec: `specs/layers/qlib-factor-adapter-spec.md`
 
@@ -107,4 +107,5 @@ Phase 0 ──> Phase 1 ──> Phase 2
 | QA1q | 1 | tests/test_qlib_adapter.py::test_nonfinite_qlib_result_rejected | passed |
 | QA1r | 1 | tests/test_qlib_adapter.py::test_qlib_process_isolation_and_temp_cleanup | passed |
 | QA1s | 1 | tests/test_release_acceptance.py::test_local_and_bound_quality_checks_must_agree | passed |
-| QA2a | 2 | scripts/run_gate.sh | pending-final-head-gate |
+| QA2a | 2 | scripts/run_gate.sh | passed |
+| QA2b | 2 | github-actions:33494854629:f4-certification | passed |

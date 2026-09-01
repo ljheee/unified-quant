@@ -1,5 +1,5 @@
 {
-  "implementation_commit": "8e06651cbea43a62b50a3e61b22d545a6fdf8f98",
+  "implementation_commit": "5f89b535bd7fd94cbea252f77b8ef24a74bc62be",
   "index_version": 1,
   "items": [
     {
@@ -23,9 +23,21 @@
       "type": "optional-runtime-test-summary"
     },
     {
+      "path": "evidence/qlib-adapter/phase-2/phase-record.json",
+      "type": "phase-record"
+    },
+    {
+      "path": "evidence/qlib-adapter/phase-2/gate-reports/gate-report.json",
+      "type": "gate-report"
+    },
+    {
+      "path": "evidence/qlib-adapter/phase-2/final-head-ci",
+      "type": "remote-six-cell-gate-evidence"
+    },
+    {
       "path": "evidence/qlib-adapter/release/release-record.json",
       "type": "release-record"
     }
   ],
-  "status": "implementation-gate-passed; pending final marker remote gate"
+  "status": "released; final HEAD local and remote gates passed"
 }
