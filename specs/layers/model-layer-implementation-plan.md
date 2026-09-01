@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.11; phases 0–5 released. Stateless feature preprocessing addendum FP0/FP1 implemented pending final HEAD gate evidence.**
+Status: **gated implementation order v1.11; phases 0–5 and FP0/FP1 implemented and released. Final local and remote gates bind to `0341ae9f7ea71a34196080a6544c15bcb663c188`.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -404,11 +404,11 @@ later phases must expand their rows before entering implementation.
 | M11a-manifest-tamper-reject | 0 | none | test_typed_loader_rejects_absent_malformed_and_tampered_documents | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
 | M11b-path-mismatch-reject | 0 | none | test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
 | M11c-checksum-mismatch-reject | 0 | none | test_quality_report_checksum_and_binding_are_enforced | evidence/phase-0/fixtures/model_artifact-valid.json | evidence/phase-0/phase-record.json | passed |
-| FP1a-cross-section-transform | FP | none | test_cross_sectional_standardization_and_rank_are_date_bounded | generated frame | tests/test_feature_preprocessing.py | pending_final_gate |
-| FP1b-output-mismatch-reject | FP | none | test_manifest_rejects_transform_output_mismatch_and_sparse_group | generated frame | tests/test_feature_preprocessing.py | pending_final_gate |
-| FP1c-identity-stability | FP | none | test_manifest_identity_is_stable_across_run_metadata | generated frame | tests/test_feature_preprocessing.py | pending_final_gate |
-| FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | generated frame | tests/test_feature_preprocessing.py | pending_final_gate |
-| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper | generated frame | tests/test_feature_preprocessing.py | pending_final_gate |
+| FP1a-cross-section-transform | FP | none | test_cross_sectional_standardization_and_rank_are_date_bounded | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
+| FP1b-output-mismatch-reject | FP | none | test_manifest_rejects_transform_output_mismatch_and_sparse_group | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
+| FP1c-identity-stability | FP | none | test_manifest_identity_is_stable_across_run_metadata | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
+| FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
+| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper | generated frame | tests/test_feature_preprocessing.py | evidence/release/final-head-ci/33528431875/local-gate/gate-report.json | passed |
 
 The remaining source-spec rows are covered by the runtime tests named above or by
 their existing phase-specific negative suites; no security/lineage row is deferred.
