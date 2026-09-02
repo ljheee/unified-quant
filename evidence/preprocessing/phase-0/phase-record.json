@@ -1,6 +1,5 @@
 {
   "blocked_by": [
-    "fresh final-head unified gate and ten-cell remote matrix for schema identity, review-root containment, and digest anchoring",
     "external reviewer trust anchor outside publisher process"
   ],
   "entry_criteria": [
@@ -46,19 +45,19 @@
     {
       "evidence_path": "gate-reports/gate-report.json",
       "id": "FP0-exit-final-head-gate",
-      "status": "blocked",
+      "status": "passed",
       "test_id": "UQ_GATE_EXTRAS=qlib scripts/run_gate.sh",
-      "note": "Existing report is superseded: it binds remediation HEAD 0a44b3c, not the latest enforcement changes."
+      "note": "Local unified gate passed at implementation HEAD a4968b7."
     },
     {
-      "evidence_path": "remote-matrix/cells.json",
+      "evidence_path": "remote-matrix/a4968b7-33584899447/cells.json",
       "id": "FP0-exit-remote-matrix",
-      "status": "blocked",
-      "test_id": "CI run 33541194434; ten cells, superseded by latest enforcement changes",
+      "status": "passed",
+      "test_id": "CI run 33584899447; ten distinct OS/Python/Qlib cells",
       "note": "Existing aggregate is superseded: it binds 0a44b3c, not the latest enforcement changes."
     }
   ],
   "phase": "FP0/FP1",
-  "record_version": 2,
+  "record_version": 3,
   "status": "in_progress"
 }

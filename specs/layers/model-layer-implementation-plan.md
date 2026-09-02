@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.13; phases 0–5 released; FP contracts/runtime and fresh local plus ten-cell remote gates passed, but FP gate exit remains blocked by external reviewer trust boundary.**
+Status: **gated implementation order v1.14; phases 0–5 released; FP enforcement fixes have fresh local plus ten-cell remote gates, but FP gate exit remains blocked by external reviewer trust boundary.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -417,9 +417,9 @@ later phases must expand their rows before entering implementation.
 | FP1g-infinity-reject | FP | none | test_build_rejects_infinity_in_input_or_output | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1h-input-frame-mismatch | FP | none | test_dataset_write_rejects_preprocessing_input_frame_mismatch | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1i-invalid-manifest | FP | none | test_dataset_write_rejects_invalid_preprocessing_manifest | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1j-input-schema-identity | FP | FP remediation | test_dataset_read_rejects_semantically_tampered_input_schema | generated frame | TBD-final-head-gate | blocked |
-| FP1k-review-root-containment | FP | FP remediation | test_dataset_read_rejects_external_review_root_symlink | generated frame | TBD-final-head-gate | blocked |
-| FP1l-quality-digest-anchor | FP | FP remediation | test_quality_report_checksum_changes_manifest_digest_but_not_generation | generated frame | TBD-final-head-gate | blocked |
+| FP1j-input-schema-identity | FP | FP remediation | test_dataset_read_rejects_semantically_tampered_input_schema | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1k-review-root-containment | FP | FP remediation | test_dataset_read_rejects_external_review_root_symlink | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1l-quality-digest-anchor | FP | FP remediation | test_quality_report_checksum_changes_manifest_digest_but_not_generation | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 
 The remaining source-spec rows are covered by the runtime tests named above or by
 their existing phase-specific negative suites; no security/lineage row is deferred.
