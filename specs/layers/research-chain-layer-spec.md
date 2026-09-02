@@ -1,6 +1,6 @@
 # Research Chain Integration Layer Specification
 
-Status: **draft v0.2; contract-first; all runtime stages paused until Phase 0 exits**
+Status: **draft v0.3; contract-first; all runtime stages paused until Phase 0 exits**
 
 Source specs:
 
@@ -96,28 +96,42 @@ Required logical fields:
 - factor set, factor version, universe snapshot binding;
 - adjusted-price dataset binding for labels;
 - label name, semantic version, horizon, split policy binding;
-- seed model definition template: reviewed algorithm, hyperparameters, seed
-  policy, compatible dataset versions, metrics, selection rule, quality policy,
-  serializer version, and code fingerprint. It must not require the later
-  `feature_schema_generation_id` or `model_run_content_generation_id`;
-- portfolio definition template: reviewed portfolio name, weight scheme,
-  scheme parameters, score policy, constraints, rebalance schedule, universe
-  snapshot binding, and industry-source policy. It must not require the later
-  `prediction_set_generation_id`;
+- `model_definition_template.v1`: a closed, request-embedded object with
+  `model_set`, `model_version`, reviewed `status`, algorithm, hyperparameters,
+  seed policy, compatible dataset versions, metrics, selection rule, quality
+  policy, serializer version, and code fingerprint. It is a separate Phase 0
+  validation shape and excludes runtime identity fields. The runner synthesizes
+  `model_definition.v1` by adding the resolved
+  `feature_schema_generation_id`, the newly produced
+  `model_run_content_generation_id`, run metadata, identity/digest fields, and
+  the owning store's accepted quality decision;
+- `portfolio_definition_template.v1`: a closed, request-embedded object with
+  reviewed status, portfolio name, weight scheme, scheme parameters, score
+  policy, constraints, rebalance schedule, universe snapshot binding, and
+  industry-source policy. It is a separate Phase 0 validation shape and excludes
+  runtime identity fields. The runner synthesizes `portfolio_definition.v1` by
+  adding the newly produced `prediction_set_generation_id`, run metadata,
+  identity/digest fields, and the owning store's accepted quality decision;
 - backtest config binding;
 - deterministic environment binding: code fingerprint, environment lock digest,
   serialization profile, thread count, and seed;
 - `stage_plan_sha256`;
 - run-local metadata: `run_id` and `created_at`;
-- stable `generation_id` and complete `manifest_digest_sha256`.
+- stable `request_content_generation_id`;
+- complete `manifest_digest_sha256`.
 
 Normative rules:
 
-- Stable `generation_id` excludes run-local fields and stage timestamps.
-- `manifest_digest_sha256` covers the complete request document.
-- `stage_plan_sha256` is the reviewed digest of the fixed ordered stage names,
-  owning-layer contract versions, and request input families. The resolver must
-  reject a value that does not match the normative Phase 0 stage plan.
+- `request_content_generation_id` is the stable semantic identity. Its excluded
+  canonical field set is exactly `run_id`, `created_at`, and
+  `manifest_digest_sha256`; it is invariant under key reorder.
+- `manifest_digest_sha256` covers the complete request document after all
+  identity fields are populated, excluding `manifest_digest_sha256` itself. It
+  is attempt-sensitive and is recorded in state history, but it must not
+determine result stability.
+- `stage_plan_sha256` is the canonical JSON SHA-256 of this exact object:
+  `{"schema_version":"v1","stage_plan":["resolve_request","factor_computation","dataset_preparation","qlib_export","model_training","prediction_publication","portfolio_construction","backtest_execution","result_reconciliation"]}`.
+  The resolver must reject any other value.
 - `resolved_execution_plan_sha256` is a separate resolver output, not a request
   input.
 - Every generation/checksum reference must be a 64-character lowercase SHA-256.
@@ -137,7 +151,7 @@ The state is the durable stage ledger.
 
 Required logical fields:
 
-- request identity and digest;
+- `request_content_generation_id` and complete request manifest digest;
 - runner identity: code fingerprint, environment profile, lock digest;
 - ordered stage results;
 - for each stage: name, status, output family bindings, output generation IDs,
@@ -153,6 +167,8 @@ run-local attempt nested beneath it:
 
 Normative rules:
 
+- A `run_id` identifies one immutable attempt. Resume is not supported in v1;
+  a new attempt, including retry after any failure, must use a new `run_id`.
 - State documents are append-forward by stage order; an earlier state document
   is never rewritten.
 - Each completed state snapshot has its own canonical generation and manifest
@@ -169,16 +185,23 @@ The result is the final reconciled evidence index.
 
 Required logical fields:
 
-- request generation and digest;
+- `request_content_generation_id`, request attempt manifest digest, and run
+  metadata;
 - runner code/environment fingerprints;
 - ordered output bindings for every stage;
 - final readback status for every output;
 - overall logical fingerprint;
-- optional artifact checksum for the result document in the current locked
-  environment;
-- run-local metadata, stable generation, and manifest digest.
+- optional `result_artifact_digest_sha256`, defined as the Parquet/file-byte
+  SHA-256 of the optional physical result export; it is distinct from canonical
+  JSON identity;
+- run-local metadata, stable `result_content_generation_id`, and
+  `manifest_digest_sha256`.
 
 Normative rules:
+- `result_content_generation_id` excludes `run_id`, `created_at`, the request
+  attempt manifest digest, state timestamps, and its own manifest digest. It
+  changes with bound output identities, semantic request fields, runner
+  identity, and semantic stage status.
 
 - A successful result may only exist after every listed manifest has been read
   back through its owning store.
@@ -191,8 +214,8 @@ Normative rules:
 ## 6. Identity and Binding Rules
 
 1. All identities use canonical JSON SHA-256.
-2. `research_run_request.generation_id` is stable under key reorder and run
-   metadata changes.
+2. `request_content_generation_id` is stable under key reorder and run
+   metadata changes. The complete request manifest digest is attempt-sensitive.
 3. `research_run_result.generation_id` is stable under state timestamp and run
    metadata changes, but changes with any bound artifact identity or semantic
    stage status.
@@ -217,9 +240,16 @@ Normative rules:
   a parallel accepted layout.
 - The only Research Chain-owned durable artifacts are request, state, result,
   and their fixtures/golden vectors.
-- Phase 0 must define typed request, state, and result store interfaces. The
-  result store must provide atomic, overwrite-safe publish and verified read;
-  its publisher is implemented in Phase 5.
+- Phase 0 must define typed request, state, and result store interfaces:
+  `publish_request(manifest, path_policy) -> PublishedRequest`,
+  `read_request(request_content_generation_id, manifest_digest_sha256) -> Request`,
+  `publish_state(manifest, stage) -> PublishedState`,
+  `read_state(request_content_generation_id, run_id, stage) -> State`,
+  `publish_result(manifest, path_policy) -> PublishedResult`, and
+  `read_result(result_generation_id, manifest_digest_sha256) -> Result`. All
+  publishers are atomic and overwrite-safe; the result publisher is implemented
+  in Phase 5. State and result paths must reject traversal, symlink escape,
+  missing parent, and overwrite.
 
 ## 8. Quality and External Review
 
@@ -243,7 +273,23 @@ The Phase 0 provider contract is:
   cache a substitute decision, or accept a decision whose binding or checksum
   does not match the exact subject;
 - configuration: the provider implementation and trust anchor are supplied by
-  the CLI/store wiring, not inferred from the request or current process.
+  the CLI/store wiring, not inferred from the request or current process;
+- frozen interface:
+  `resolve(binding_type, subject_generation_id, subject_manifest_digest_or_none, output_family, provider_config_ref) -> QualityDecision`;
+- accepted decision documents use one Phase 0 `quality_decision.v1` schema with
+  a closed `binding_type` enum covering factor, dataset, qlib export, model
+  artifact, prediction, target weights, and backtest result publication;
+- canonical decision checksum is `sha256_json(decision_document)`; a byte digest
+  is stored separately when a physical decision file exists. Signature
+  verification must reject unregistered trust anchors, malformed signatures,
+  binding mismatches, and non-matching checksums before the decision is visible
+  to a stage;
+- `provider_config_ref` is a registered configuration identifier and path token
+  under the CLI trust root. It must reject traversal, symlink escape, unregistered
+  configuration, and unregistered trust anchors;
+- provider unreachable and provider configuration invalid map to
+  `quality_decision_missing`; untrusted keys map to
+  `quality_decision_rejected`.
 
 The runner must persist:
 
@@ -299,12 +345,18 @@ The first command is:
 
 ```bash
 uq-research-run \
+  --project-root /path/to/project/root \
   --request /path/to/research_run_request.json \
   --data-root /path/to/governed/root \
   --mode dry-run
 ```
 
-`execute` publication requires explicit `--mode execute`.
+`--project-root` resolves schemas, review registries, provider configuration,
+and supported store wiring. `execute` publication requires explicit
+`--mode execute`.
+
+`--request` may point to any readable request document outside the governed
+data root. The runner validates it before treating it as a chain input.
 
 Command output is JSON and must include:
 

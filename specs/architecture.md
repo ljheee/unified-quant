@@ -395,6 +395,23 @@ target weights. The backtest layer simulates execution against governed price
 data with costs, T+1 alignment, and trading guards. Both layers inherit the
 model layer's manifest, checksum, and quality-report governance.
 
+## 11.6 Research Chain Orchestrator Boundary
+
+```text
+Reviewed Research Run Request
+  -> Request Resolver / Stage Plan
+  -> Factor Layer
+  -> Model Layer (dataset -> Qlib export -> run -> prediction)
+  -> Portfolio Layer
+  -> Backtest Layer
+  -> Research Run State / Result Evidence Index
+```
+
+Research Chain is a governed orchestrator, not a new computation engine. It
+resolves reviewed templates and immutable inputs, invokes owning-layer stores,
+records stage lineage, and reconciles readback evidence. It never bypasses
+manifests, quality decisions, immutable publication, or accepted reader APIs.
+
 ## 12. Acceptance Criteria for the Stable Contract
 
 The architecture is considered implemented only when all pass:

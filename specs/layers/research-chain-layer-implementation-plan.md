@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.2; Phase 0 not started; all runtime phases paused**
+Status: **gated implementation order v0.3; Phase 0 not started; all runtime phases paused**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -43,37 +43,43 @@ Deliverables:
 1. `config/schemas/contracts/research_run_request.v1.json`
 2. `config/schemas/contracts/research_run_state.v1.json`
 3. `config/schemas/contracts/research_run_result.v1.json`
-4. Typed loader registration and canonical identity helpers for the three
-   families.
-5. Valid fixtures plus at least two negative fixtures for each family.
-6. Golden vectors for request stability under key reorder/run metadata change
+4. `config/schemas/contracts/model_definition_template.v1.json`
+5. `config/schemas/contracts/portfolio_definition_template.v1.json`
+6. `config/schemas/contracts/quality_decision.v1.json`
+7. Typed loader registration and canonical identity helpers for the three run
+   families plus the two definition templates and quality decision envelope.
+8. Valid fixtures plus at least two negative fixtures for each required family.
+9. Golden vectors for request stability under key reorder/run metadata change
    and result instability under output-generation change.
-7. Frozen stage enum, stage order, output binding shape, and failure taxonomy.
-8. Physical layout contract:
-   - `research_runs/requests/request=<generation>/manifest.json`;
-   - `research_runs/states/request=<request_generation>/run=<run_id>/stage=<NN>/manifest.json`;
-   - `research_runs/results/result=<generation>/manifest.json`;
+10. Frozen stage enum, stage order, output binding shape, failure taxonomy,
+    canonical stage-plan payload, quality decision binding enum, provider
+    interface, trust-anchor/checksum rules, and provider config path safety.
+11. Physical layout contract:
+   - `research_runs/requests/request=<request_content_generation_id>/run=<run_id>/manifest.json`;
+   - `research_runs/states/request=<request_content_generation_id>/run=<run_id>/stage=<NN>/manifest.json`;
+   - `research_runs/results/request=<request_content_generation_id>/run=<run_id>/result=<result_content_generation_id>/manifest.json`;
    - staging and quarantine directories are outside accepted state/result paths.
-9. Contract for a typed external quality decision provider; no provider may be
-   constructed inside publication code at runtime.
-10. Code fingerprint and environment-profile rules.
+12. Code fingerprint and environment-profile rules.
 
 Entry criteria: none.
 
 Exit criteria:
 
-1. All three schemas validate representative fixtures.
+1. All six schemas validate representative fixtures and negative fixtures.
 2. Every negative fixture produces a typed rejection.
-3. Request identity is stable under run metadata and key reorder.
+3. Request content identity is stable under run metadata and key reorder; the
+   complete manifest digest changes under run metadata.
 4. Result identity changes for any bound output, stage status, runner identity,
-   or semantic request field change.
+   or semantic request field change and remains stable when only run metadata
+   changes.
 5. State and result paths reject traversal, symlink escape, missing parent, and
-   overwrite.
+   overwrite; provider configuration references reject the same path failures.
 6. Golden vectors are persisted and fail closed when absent.
-7. Unified gate is green and evidence is preserved.
-
-Before Phase 0 exit, the `RC0*` planned acceptance rows must be expanded to
-concrete test IDs, fixture files, and evidence paths.
+7. Provider binding, checksum, trust-anchor, missing/rejected, and malformed
+   signature paths are tested.
+8. The Phase 0 acceptance rows replace `planned:` IDs with concrete test IDs,
+   fixture files, and evidence paths before exit.
+9. Unified gate is green and evidence is preserved.
 
 Unblocks the dry-run resolver only.
 
@@ -92,7 +98,8 @@ Deliverables:
 4. Dry-run state snapshot with `intent=dry_run`.
 5. No factor, dataset, model, prediction, portfolio, or backtest mutation.
 6. Negative tests for missing, tampered, malformed, duplicate, unordered,
-   wrong-generation, and wrong-digest bindings.
+   wrong-generation, wrong-digest, provider-unreachable, provider-config-invalid,
+   and untrusted-key bindings.
 
 Entry criteria:
 
