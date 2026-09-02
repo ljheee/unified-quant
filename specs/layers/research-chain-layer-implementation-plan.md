@@ -1,0 +1,308 @@
+# Research Chain Layer Implementation Plan
+
+Status: **gated implementation order v0.1; Phase 0 not started; all runtime phases paused**
+
+Source spec: `specs/layers/research-chain-layer-spec.md`
+
+## 0. Scope
+
+Implement the first full governed research run:
+
+- one reviewed factor slice;
+- one reviewed adjusted-return label;
+- one reviewed feature schema/dataset;
+- one reviewed Qlib export/receipt;
+- one Qlib runtime model artifact;
+- one reviewed prediction set;
+- one top-N equal-weight target portfolio;
+- one daily T+1 backtest;
+- durable request/state/result manifests and CLI.
+
+The plan does not add algorithms or bypass existing governance.
+
+## 1. Execution Rules
+
+1. `scripts/run_gate.sh` is the mechanical gate.
+2. Every phase exit requires focused tests plus a successful unified gate.
+3. Contract drafting may occur during plan preparation; runtime reads,
+   publications, training, and CLI execution require phase entry criteria.
+4. A semantic schema change requires a new schema version.
+5. Each phase has a machine-readable record under
+   `evidence/research-chain/phase-N/phase-record.json`.
+6. Every acceptance ID must map to a concrete test ID or named mechanical
+   command before its phase can be declared executable.
+7. Evidence cannot be copied from an older commit without preserving the bound
+   commit, lockfile digest, and requirements digest.
+
+## 2. Phase 0 — Run Contract Gate
+
+Goal: freeze the run ledger before any orchestration runtime is enabled.
+
+Deliverables:
+
+1. `config/schemas/contracts/research_run_request.v1.json`
+2. `config/schemas/contracts/research_run_state.v1.json`
+3. `config/schemas/contracts/research_run_result.v1.json`
+4. Typed loader registration and canonical identity helpers for the three
+   families.
+5. Valid fixtures plus at least two negative fixtures for each family.
+6. Golden vectors for request stability under key reorder/run metadata change
+   and result instability under output-generation change.
+7. Frozen stage enum, stage order, output binding shape, and failure taxonomy.
+8. Physical layout contract:
+   - `research_runs/requests/request=<generation>/manifest.json`;
+   - `research_runs/states/run=<run_id>/stage=<NN>/manifest.json`;
+   - `research_runs/results/result=<generation>/manifest.json`;
+   - staging and quarantine directories are outside accepted state/result paths.
+9. Contract for a typed external quality decision provider; no provider may be
+   constructed inside publication code at runtime.
+10. Code fingerprint and environment-profile rules.
+
+Entry criteria: none.
+
+Exit criteria:
+
+1. All three schemas validate representative fixtures.
+2. Every negative fixture produces a typed rejection.
+3. Request identity is stable under run metadata and key reorder.
+4. Result identity changes for any bound output, stage status, runner identity,
+   or semantic request field change.
+5. State and result paths reject traversal, symlink escape, missing parent, and
+   overwrite.
+6. Golden vectors are persisted and fail closed when absent.
+7. Unified gate is green and evidence is preserved.
+
+Unblocks the dry-run resolver only.
+
+## 3. Phase 1 — Resolver and Dry Run
+
+Goal: make request resolution mechanical before any publication.
+
+Deliverables:
+
+1. `ResearchChainRequestResolver` validating the request and all upstream
+   manifest references.
+2. Typed error mapping for all spec §10 failure reasons.
+3. Ordered execution-plan digest derived only from request and resolved
+   manifests.
+4. Dry-run state snapshot with `intent=dry_run`.
+5. No factor, dataset, model, prediction, portfolio, or backtest mutation.
+6. Negative tests for missing, tampered, malformed, duplicate, unordered,
+   wrong-generation, and wrong-digest bindings.
+
+Entry criteria:
+
+- Phase 0 exits.
+
+Exit criteria:
+
+1. Dry run resolves the representative valid request.
+2. Every negative request path fails with the expected typed reason.
+3. Dry-run state has no output generation IDs.
+4. Repeated dry runs produce the same execution-plan digest when inputs are
+   unchanged.
+5. Unified gate remains green.
+
+Unblocks stage adapters.
+
+## 4. Phase 2 — Factor and Dataset Stage Adapters
+
+Goal: connect the existing governed factor and model dataset APIs.
+
+Deliverables:
+
+1. Factor adapter invoking `FactorEngine` and `FactorStore` only.
+2. Dataset adapter invoking `LabelBuilder`, `FeatureSchemaBuilder`,
+   `DatasetBuilder`, and `DatasetWriter` only.
+3. Stage state writers capturing exact generation/digest/path bindings.
+4. Missing/tampered/misbound upstream rejection tests for canonical bars,
+   adjusted bars, universe snapshot, factor definition, label definition, and
+   quality decisions.
+5. Readback validation after every publication.
+6. Explicit handling of already-published exact generations: bind only after
+   manifest digest and data checksum match; otherwise fail.
+
+Entry criteria:
+
+- Phase 1 exits.
+- Factor, preprocessing, and model dataset APIs are released.
+
+Exit criteria:
+
+1. Full factor/dataset stage succeeds from governed inputs.
+2. Every stage output is read back through its owning API.
+3. Failed or quarantined outputs cannot enter stage state.
+4. Semantic input changes change downstream manifest identities.
+5. Unified gate remains green.
+
+Unblocks Qlib export/training.
+
+## 5. Phase 3 — Qlib Training and Prediction Adapters
+
+Goal: train and predict without bypassing the model-layer boundary.
+
+Deliverables:
+
+1. Qlib export and receipt adapter invoking `QlibDatasetExporter`,
+   `QlibDatasetExporter.read`, and `QlibInitReceiptBuilder`.
+2. Model run/artifact adapter invoking `ModelRunBuilder`,
+   `QlibRuntimeTrainer`, and `ArtifactStore`.
+3. Prediction adapter invoking `PredictionBuilder.build` and
+   `PredictionBuilder.read`.
+4. Stage state bindings for dataset, export, receipt, run content, definition,
+   artifact, and prediction generations.
+5. Tests for export tampering, receipt mismatch, unverified export,
+   artifact tampering, prediction key/score/eligibility failure, and quality
+   report rejection.
+
+Entry criteria:
+
+- Phase 2 exits.
+- Qlib runtime trainer and adapter dependencies are available in the declared
+  gate environment.
+
+Exit criteria:
+
+1. Training consumes only the verified governed Qlib export.
+2. Artifact and prediction readback succeeds.
+3. A tampered export, receipt, artifact, prediction manifest, or quality report
+   fails before downstream stage execution.
+4. Repeated locked-environment training satisfies the declared reproducibility
+   mode.
+5. Unified gate with Qlib extras remains green.
+
+Unblocks downstream portfolio/backtest stages.
+
+## 6. Phase 4 — Portfolio and Backtest Adapters
+
+Goal: consume governed predictions without manual DataFrame wiring.
+
+Deliverables:
+
+1. Portfolio adapter invoking `PortfolioBuilder` and `TargetWeightStore`.
+2. Backtest adapter invoking `BacktestEngine` and `BacktestResultStore`.
+3. Price/calendar/suspension/corporate-action input resolution from governed
+   manifests.
+4. Ordered target-weight binding list matching backtest decision dates.
+5. Tests for missing prediction, tampered prediction, universe mismatch, weight
+   overwrite, backtest price tampering, suspension/corporate-action rejection,
+   and missing quality decision.
+6. Result readback for equity curve, daily metrics, and fills.
+
+Entry criteria:
+
+- Phase 3 exits.
+
+Exit criteria:
+
+1. Prediction generation is the only score source for portfolio construction.
+2. Target weights bind prediction, universe, and portfolio definition.
+3. Backtest result binds ordered target weights and price/calendar/suspension/
+   corporate-action sources.
+4. Tampered or missing inputs fail closed.
+5. Unified gate remains green.
+
+Unblocks final reconciliation.
+
+## 7. Phase 5 — Runner, CLI, and End-to-End Gate
+
+Goal: expose one governed command and prove the full chain.
+
+Deliverables:
+
+1. `ResearchChainRunner` implementing the fixed stage graph.
+2. State/result publishers with atomic, manifest-last promotion.
+3. `uq-research-run` CLI with `--mode dry-run|execute`.
+4. JSON exit/status contract.
+5. End-to-end test from governed inputs to published backtest result.
+6. End-to-end negative tests for a failure at every stage.
+7. Deterministic rebuild test under the locked environment.
+8. Evidence-index test ensuring all output identities are present.
+
+Entry criteria:
+
+- Phase 4 exits.
+
+Exit criteria:
+
+1. Dry run publishes only request and state, never downstream artifacts.
+2. Execute publishes all expected outputs and one successful result.
+3. Each simulated stage failure stops later stages.
+4. The final result can be revalidated from disk.
+5. Rebuild under one locked environment satisfies the declared reproducibility
+   mode.
+6. Unified gate remains green.
+
+Unblocks release reconciliation.
+
+## 8. Phase 6 — Release Reconciliation
+
+Deliverables:
+
+1. Final local gate evidence bound to implementation HEAD.
+2. Remote 10-cell unified-gate matrix result.
+3. Updated spec/plan status markers.
+4. Release record and evidence index.
+5. Machine-readable Phase 0–6 records.
+
+Entry criteria:
+
+- Phase 5 exits.
+
+Exit criteria:
+
+1. Local gate passes on final implementation commit.
+2. Remote 10-cell matrix passes.
+3. All acceptance rows are executable or explicitly deferred with release-scope
+   limitation.
+4. Security/lineage/fail-closed rows cannot be deferred.
+5. Release record is committed.
+
+## 9. Acceptance Matrix Expansion
+
+Rows marked `planned:` do not unlock runtime. They must be replaced by existing
+test node IDs before their owning phase exits.
+
+| ID | Phase | Test ID | Fixture path | Evidence path | Status |
+|---|---|---|---|---|---|
+| RC0a | 0 | `planned:test_research_run_request_schema_and_identities` | `planned:phase-0/fixtures/research_run_request-valid.json` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
+| RC0b | 0 | `planned:test_research_run_request_negative_fixtures` | `planned:phase-0/fixtures/` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
+| RC0c | 0 | `planned:test_research_run_state_schema_and_append_forward_semantics` | `planned:phase-0/fixtures/` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
+| RC0d | 0 | `planned:test_research_run_result_identity_sensitivity` | `planned:phase-0/golden-vectors/identity-golden-vectors.json` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
+| RC0e | 0 | `planned:test_research_run_path_safety_and_overwrite_rejection` | `planned:phase-0/fixtures/` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
+| RC1a | 1 | `planned:test_request_resolver_resolves_all_reviewed_inputs` | `planned:phase-1/fixtures/valid-request.json` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
+| RC1b | 1 | `planned:test_dry_run_does_not_mutate_downstream_stores` | `planned:phase-1/fixtures/` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
+| RC1c | 1 | `planned:test_resolver_failure_taxonomy_is_typed` | `planned:phase-1/fixtures/` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
+| RC2a | 2 | `planned:test_factor_stage_publishes_and_reads_back` | `planned:phase-2/fixtures/` | `planned:phase-2/gate-reports/gate-report.json` | blocked |
+| RC2b | 2 | `planned:test_dataset_stage_binds_factor_label_schema_and_universe` | `planned:phase-2/fixtures/` | `planned:phase-2/gate-reports/gate-report.json` | blocked |
+| RC2c | 2 | `planned:test_stage_failure_does_not_enter_accepted_state` | `planned:phase-2/fixtures/` | `planned:phase-2/gate-reports/gate-report.json` | blocked |
+| RC3a | 3 | `planned:test_qlib_export_receipt_and_training_chain` | `planned:phase-3/fixtures/` | `planned:phase-3/gate-reports/gate-report.json` | blocked |
+| RC3b | 3 | `planned:test_prediction_stage_requires_verified_artifact` | `planned:phase-3/fixtures/` | `planned:phase-3/gate-reports/gate-report.json` | blocked |
+| RC3c | 3 | `planned:test_model_stage_quality_and_tamper_failures_stop_run` | `planned:phase-3/fixtures/` | `planned:phase-3/gate-reports/gate-report.json` | blocked |
+| RC4a | 4 | `planned:test_portfolio_stage_binds_prediction_and_universe` | `planned:phase-4/fixtures/` | `planned:phase-4/gate-reports/gate-report.json` | blocked |
+| RC4b | 4 | `planned:test_backtest_stage_binds_ordered_target_weights_and_inputs` | `planned:phase-4/fixtures/` | `planned:phase-4/gate-reports/gate-report.json` | blocked |
+| RC4c | 4 | `planned:test_market_input_tampering_rejects_before_execution` | `planned:phase-4/fixtures/` | `planned:phase-4/gate-reports/gate-report.json` | blocked |
+| RC5a | 5 | `planned:test_full_research_chain_end_to_end` | `planned:phase-5/fixtures/full-run.json` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
+| RC5b | 5 | `planned:test_every_stage_failure_stops_later_stages` | `planned:phase-5/fixtures/` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
+| RC5c | 5 | `planned:test_cli_dry_run_and_execute_modes` | `planned:phase-5/fixtures/` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
+| RC5d | 5 | `planned:test_locked_environment_rebuild_is_reproducible` | `planned:phase-5/fixtures/` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
+| RC6a | 6 | `scripts/run_gate.sh` | `evidence/research-chain/release/final-gate-report.json` | `evidence/research-chain/release/final-gate-report.json` | blocked |
+| RC6b | 6 | `github-actions:10-cell unified gate` | `evidence/research-chain/release/remote-matrix/` | `evidence/research-chain/release/remote-matrix/` | blocked |
+
+## 10. Risks
+
+| Risk | Gate | Resolution |
+|---|---|---|
+| Quality decisions may be bound to provisional generations | Blocks production use | Freeze provider and binding semantics in Phase 0; no runner may call decision creation directly |
+| Stage adapters may duplicate layer logic | Blocks implementation | Adapters may translate and validate only; computation/publication stays in owning stores |
+| Partial failure leaves immutable downstream outputs | Cannot be undone | Keep outputs immutable, mark run failed, exclude them from successful result |
+| Cross-platform bytes differ | Cannot be solved by runner | Compare logical fingerprints cross-platform; byte checks only in locked cells |
+| Factor layer provenance remains pending | Blocks factor release claim | Research Chain may exercise governed slices but cannot certify the unresolved official reference prices |
+
+## 11. Immediate Next Actions
+
+1. Implement Phase 0 schemas, fixtures, golden vectors, typed loader helpers,
+   and machine-readable phase record.
+2. Run unified gate and preserve Phase 0 evidence.
+3. Only after Phase 0 exits, implement the Phase 1 read-only resolver and
+   dry-run state.
