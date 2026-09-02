@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.3; Phase 0 not started; all runtime phases paused**
+Status: **gated implementation order v0.4; Phase 0 not started; all runtime phases paused**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -45,21 +45,30 @@ Deliverables:
 3. `config/schemas/contracts/research_run_result.v1.json`
 4. `config/schemas/contracts/model_definition_template.v1.json`
 5. `config/schemas/contracts/portfolio_definition_template.v1.json`
-6. `config/schemas/contracts/quality_decision.v1.json`
+6. `config/schemas/contracts/quality_decision.v1.json` as a strict wrapper
+   around existing `model_quality_report.v2`, not a replacement report format.
 7. Typed loader registration and canonical identity helpers for the three run
-   families plus the two definition templates and quality decision envelope.
+   families plus the two definition templates and quality decision wrapper. The
+   helpers must be additive to `ModelContractLoader` and expose explicit
+   excluded-field sets per family; they must not fork identity rules.
 8. Valid fixtures plus at least two negative fixtures for each required family.
 9. Golden vectors for request stability under key reorder/run metadata change
    and result instability under output-generation change.
-10. Frozen stage enum, stage order, output binding shape, failure taxonomy,
-    canonical stage-plan payload, quality decision binding enum, provider
-    interface, trust-anchor/checksum rules, and provider config path safety.
+10. Frozen stage enum, stage order, closed `stage_output_binding` schema,
+    failure taxonomy, canonical stage-plan payload, quality decision wrapper
+    binding enum, provider interface, trust-anchor/checksum rules, and provider
+    config path safety.
+11. Owning-layer additive read/binding API contracts: factor manifest and
+    partition readers, feature-schema/label/universe manifest and data readers,
+    and explicit reuse/readback boundaries for existing model, prediction,
+    target-weight, and backtest result APIs. These are contracts only; owning
+    runtime implementations remain in their later phase slices.
 11. Physical layout contract:
    - `research_runs/requests/request=<request_content_generation_id>/run=<run_id>/manifest.json`;
    - `research_runs/states/request=<request_content_generation_id>/run=<run_id>/stage=<NN>/manifest.json`;
    - `research_runs/results/request=<request_content_generation_id>/run=<run_id>/result=<result_content_generation_id>/manifest.json`;
    - staging and quarantine directories are outside accepted state/result paths.
-12. Code fingerprint and environment-profile rules.
+13. Code fingerprint and environment-profile rules.
 
 Entry criteria: none.
 
@@ -94,12 +103,14 @@ Deliverables:
 2. Typed error mapping for all spec §10 failure reasons.
 3. Ordered execution-plan digest derived only from request and resolved
    manifests. This is `resolved_execution_plan_sha256`, distinct from the
-   reviewed request-level `stage_plan_sha256`.
+   reviewed request-level `stage_plan_sha256`. State/result bindings record the
+   request manifest digest for audit, but result identity excludes it as
+   specified in the source spec.
 4. Dry-run state snapshot with `intent=dry_run`.
 5. No factor, dataset, model, prediction, portfolio, or backtest mutation.
 6. Negative tests for missing, tampered, malformed, duplicate, unordered,
    wrong-generation, wrong-digest, provider-unreachable, provider-config-invalid,
-   and untrusted-key bindings.
+   untrusted-key, and unsupported owning-family bindings.
 
 Entry criteria:
 
@@ -122,9 +133,11 @@ Goal: connect the existing governed factor and model dataset APIs.
 
 Deliverables:
 
-1. Factor adapter invoking `FactorEngine` and `FactorStore` only.
-2. Dataset adapter invoking `LabelBuilder`, `FeatureSchemaBuilder`,
-   `DatasetBuilder`, and `DatasetWriter` only.
+1. Factor adapter invoking `FactorEngine` and the owning
+   `FactorStore.read_manifest/read_partition` contracts only.
+2. Dataset adapter invoking `LabelBuilder`, `FeatureSchemaBuilder`, owning
+   feature-schema/label/universe reader contracts, `DatasetBuilder`, and
+   `DatasetWriter` only.
 3. Stage state writers capturing exact generation/digest/path bindings.
 4. Missing/tampered/misbound upstream rejection tests for canonical bars,
    adjusted bars, universe snapshot, factor definition, label definition, and
@@ -306,7 +319,7 @@ test node IDs before their owning phase exits.
 
 | Risk | Gate | Resolution |
 |---|---|---|
-| Quality decisions may be bound to provisional generations | Blocks production use | Freeze provider and binding semantics in Phase 0; no runner may call decision creation directly |
+| Quality decisions may be bound to provisional generations | Blocks production use | Freeze the v2 wrapper and owning binding semantics in Phase 0; no runner may call decision creation directly |
 | Stage adapters may duplicate layer logic | Blocks implementation | Adapters may translate and validate only; computation/publication stays in owning stores |
 | Partial failure leaves immutable downstream outputs | Cannot be undone | Keep outputs immutable, mark run failed, exclude them from successful result |
 | Cross-platform bytes differ | Cannot be solved by runner | Compare logical fingerprints cross-platform; byte checks only in locked cells |
@@ -315,7 +328,7 @@ test node IDs before their owning phase exits.
 ## 11. Immediate Next Actions
 
 1. Implement Phase 0 schemas, fixtures, golden vectors, typed loader helpers,
-   and machine-readable phase record.
+   owning-layer API contracts, and machine-readable phase record.
 2. Run unified gate and preserve Phase 0 evidence.
 3. Only after Phase 0 exits, implement the Phase 1 read-only resolver and
    dry-run state.

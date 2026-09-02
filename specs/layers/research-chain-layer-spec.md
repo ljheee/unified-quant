@@ -1,6 +1,6 @@
 # Research Chain Integration Layer Specification
 
-Status: **draft v0.3; contract-first; all runtime stages paused until Phase 0 exits**
+Status: **draft v0.4; contract-first; all runtime stages paused until Phase 0 exits**
 
 Source specs:
 
@@ -100,11 +100,15 @@ Required logical fields:
   `model_set`, `model_version`, reviewed `status`, algorithm, hyperparameters,
   seed policy, compatible dataset versions, metrics, selection rule, quality
   policy, serializer version, and code fingerprint. It is a separate Phase 0
-  validation shape and excludes runtime identity fields. The runner synthesizes
-  `model_definition.v1` by adding the resolved
-  `feature_schema_generation_id`, the newly produced
-  `model_run_content_generation_id`, run metadata, identity/digest fields, and
-  the owning store's accepted quality decision;
+  validation shape and excludes runtime identity fields. The request schema
+  must `$ref` these template schemas so request/template validation cannot
+  drift. The runner synthesizes `model_definition.v1` by calling the owning
+  `ModelRunBuilder.build()` only. The runner never pre-writes a bound
+  definition. The builder receives the template materialized as a provisional
+  definition with zero identity fields plus the verified dataset/export/
+  receipt/label/universe/factor manifests and external quality decision. The
+  builder assigns `model_run_content_generation_id`, run metadata, immutable
+  definition identities, and the accepted model-run quality report;
 - `portfolio_definition_template.v1`: a closed, request-embedded object with
   reviewed status, portfolio name, weight scheme, scheme parameters, score
   policy, constraints, rebalance schedule, universe snapshot binding, and
@@ -154,9 +158,10 @@ Required logical fields:
 - `request_content_generation_id` and complete request manifest digest;
 - runner identity: code fingerprint, environment profile, lock digest;
 - ordered stage results;
-- for each stage: name, status, output family bindings, output generation IDs,
-  manifest digests, physical paths, quality report checksums, and failure
-  taxonomy;
+- for each stage: one closed `stage_output_binding` object with exact keys
+  `stage`, `output_family`, `generation_id`, `manifest_digest_sha256`,
+  `physical_path`, `quality_decision_checksum_sha256`, and `failure_reason`
+  (`null` unless failed);
 - final status: `running`, `passed`, `warning`, `blocked`, or `failed`;
 - run-local metadata and identities.
 
@@ -188,7 +193,8 @@ Required logical fields:
 - `request_content_generation_id`, request attempt manifest digest, and run
   metadata;
 - runner code/environment fingerprints;
-- ordered output bindings for every stage;
+- ordered `stage_output_binding` objects using the same closed schema as
+  state;
 - final readback status for every output;
 - overall logical fingerprint;
 - optional `result_artifact_digest_sha256`, defined as the Parquet/file-byte
@@ -198,10 +204,11 @@ Required logical fields:
   `manifest_digest_sha256`.
 
 Normative rules:
-- `result_content_generation_id` excludes `run_id`, `created_at`, the request
-  attempt manifest digest, state timestamps, and its own manifest digest. It
-  changes with bound output identities, semantic request fields, runner
-  identity, and semantic stage status.
+- `result_content_generation_id` is invariant under key reorder. Its excluded
+  canonical field set is exactly `run_id`, `created_at`,
+  `request_manifest_digest_sha256`, state document timestamps, state attempt
+  digest, and `manifest_digest_sha256`. It changes with bound output identities,
+  semantic request fields, runner identity, and semantic stage status.
 
 - A successful result may only exist after every listed manifest has been read
   back through its owning store.
@@ -276,9 +283,21 @@ The Phase 0 provider contract is:
   the CLI/store wiring, not inferred from the request or current process;
 - frozen interface:
   `resolve(binding_type, subject_generation_id, subject_manifest_digest_or_none, output_family, provider_config_ref) -> QualityDecision`;
-- accepted decision documents use one Phase 0 `quality_decision.v1` schema with
-  a closed `binding_type` enum covering factor, dataset, qlib export, model
-  artifact, prediction, target weights, and backtest result publication;
+- Research Chain does not introduce a second governance format. The Phase 0
+  `quality_decision.v1` envelope is a strict input wrapper around the existing
+  `model_quality_report.v2`; it normalizes the signed review into the owning
+  store's required report and never replaces or re-signs it. The wrapper carries
+  the report's canonical `report_checksum_sha256`, binding type, subject
+  generation, subject manifest digest when applicable, provider identity, and
+  registry anchor. The canonical wrapper checksum is
+  `sha256_json(wrapper_with_report_checksum)`;
+- the Phase 0 binding enum is the closed union of the existing
+  `model_quality_report.v2` enum plus `factor_partition_v1`; chain stages must
+  use the exact owning binding names: label set, feature preprocessing, model
+  dataset, Qlib export/receipt, model definition/run/artifact, prediction,
+  portfolio definition, target weights, backtest config, backtest result, and
+  factor partition. If an owning report family is missing, its Phase 0 slice
+  remains blocked until that owning contract is added;
 - canonical decision checksum is `sha256_json(decision_document)`; a byte digest
   is stored separately when a physical decision file exists. Signature
   verification must reject unregistered trust anchors, malformed signatures,
@@ -300,6 +319,24 @@ The runner must persist:
 If a decision is missing, rejected, bound to another generation, or signed by
 an untrusted key, the run fails before publication.
 
+## 8.1 Owning Layer Contract APIs
+
+The following readback and binding APIs are Phase 0 contract deliverables.
+They are additive owning-layer APIs, not runner-side fallbacks:
+
+- `FactorStore.read_manifest(generation_id)` and
+  `FactorStore.read_partition(generation_id)`, both manifest-first and
+  checksum/identity verified;
+- typed `FeatureSchemaStore.read_manifest/read_schema(generation_id)`;
+- typed `LabelStore.read_manifest/read_frame(generation_id)`;
+- typed `UniverseSnapshotStore.read_manifest/read_members(generation_id)`;
+- existing model artifact, prediction, target-weight, and backtest result read
+  APIs must be declared as the only accepted reuse/readback boundary for their
+  families.
+
+If an API does not exist, the dependent Phase 2–4 slice is blocked; the runner
+must not scan manifests, reconstruct identity, or read physical files directly.
+
 ## 9. Determinism and Reproducibility
 
 The request records the execution environment:
@@ -313,10 +350,16 @@ The request records the execution environment:
 
 Reproducibility rules:
 
-- Within one locked environment, repeated staging outputs must match the mode
-  selected by the request.
-- Cross-platform comparison is by logical fingerprints and declared tolerances.
-- Parquet byte equality is claimed only for the same locked environment.
+- `reproducibility_mode` has exactly two v1 values:
+  `logical_fingerprint` and `locked_byte_identity`.
+- `logical_fingerprint` compares stable manifest generations, logical
+  fingerprints, and checksums of logical content; it tolerates Parquet byte
+  drift.
+- `locked_byte_identity` additionally compares all Parquet/file bytes inside the
+  same locked OS/Python/dependency cell and fails on any byte difference.
+- Cross-platform acceptance may use only `logical_fingerprint`; tolerance is the
+  exact numeric tolerance recorded in the manifest. Binary model states are
+  byte-compared only under `locked_byte_identity`.
 - Any change to a semantic input, stage order, runner logic, serialization
   profile, seed, or bound upstream output produces a new request/result
   generation.
