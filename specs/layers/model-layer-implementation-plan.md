@@ -417,7 +417,7 @@ unlock a new implementation slice. The source of truth is
 | M6a-missing-dataset-report-reject | 4 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_missing_external_quality_decision_rejected` | runtime-generated dataset/report fixture | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M6b-wrong-dataset-report-reject | 4 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_wrong_binding_external_quality_decision_rejected` | runtime-generated dataset/report fixture | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M6c-quality-checksum-and-binding | 0 contract | none | `tests/test_model_layer_contracts.py::test_quality_report_checksum_and_binding_are_enforced` | evidence/phase-0/fixtures/model_quality_report-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
-| M6d-review-signature-mutation-reject | FP trust anchor | none | `tests/test_feature_preprocessing.py::test_quality_review_signature_binds_all_decision_fields` | runtime-generated signed review decision | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M6d-review-signature-mutation-reject | FP trust anchor | none | `tests/test_feature_preprocessing.py::test_quality_review_signature_binds_all_decision_fields` | runtime-generated signed review decision | evidence/model-layer/remediation/gate-report.json | passed |
 | M6e-unanchored-review-registry-reject | FP trust anchor | none | `tests/test_feature_preprocessing.py::test_trust_anchor_rejects_unanchored_review_registry` | config/model-quality-trust-anchor.v1.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M6f-artifact-report-fail-closed | 4/5 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_artifact_report_missing_wrong_generation_and_failed_reject_publication_read` | runtime-generated artifact quality-report fixtures | evidence/model-layer/remediation/gate-report.json | passed |
 | M6g-prediction-report-fail-closed | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_prediction_report_missing_wrong_generation_and_failed_reject_publication_read` | runtime-generated prediction quality-report fixtures | evidence/model-layer/remediation/gate-report.json | passed |
@@ -454,8 +454,9 @@ unlock a new implementation slice. The source of truth is
 ## Immediate Next Actions
 
 All seven previously blocked acceptance rows now map to exact fail-closed tests.
-The remediation gate is preserved under `evidence/model-layer/remediation/`.
-Remote CI run `33591845100` records 10/10 passed cells (six standard, four Qlib
-extras) for final commit `0734521` at
-`evidence/model-layer/remediation/remote-matrix/0734521-33591845100/cells.json`.
+The latest remediation gate is preserved under `evidence/model-layer/remediation/`.
+The local gate, locked requirements, and digest bind final commit `396b0cf`.
+Remote CI run `33595783191` records 10/10 passed cells (six standard, four Qlib
+extras) for the same commit at
+`evidence/model-layer/remediation/remote-matrix/396b0cf-33595783191/cells.json`.
 The next model-layer slice may be planned from this evidence.

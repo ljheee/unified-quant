@@ -279,7 +279,7 @@
       "blocked_by": "none",
       "test_id": "tests/test_feature_preprocessing.py::test_quality_review_signature_binds_all_decision_fields",
       "fixture_path": "runtime-generated signed review decision",
-      "evidence_path": "evidence/preprocessing/phase-0/gate-reports/gate-report.json",
+      "evidence_path": "evidence/model-layer/remediation/gate-report.json",
       "status": "passed"
     },
     {
@@ -606,13 +606,13 @@
   "evidence_status": {
     "local_gate": {
       "path": "evidence/model-layer/remediation/gate-report.json",
-      "git_commit": "0734521ed602f6c18d324a01662839c74fbdba56",
+      "git_commit": "396b0cfe404f6ae86c4dc38ff0c47156a3bfa144",
       "status": "passed"
     },
     "remote_gate": {
-      "cells_path": "evidence/model-layer/remediation/remote-matrix/0734521-33591845100/cells.json",
-      "run_id": 33591845100,
-      "git_commit": "0734521ed602f6c18d324a01662839c74fbdba56",
+      "cells_path": "evidence/model-layer/remediation/remote-matrix/396b0cf-33595783191/cells.json",
+      "run_id": 33595783191,
+      "git_commit": "396b0cfe404f6ae86c4dc38ff0c47156a3bfa144",
       "status": "passed"
     }
   }
