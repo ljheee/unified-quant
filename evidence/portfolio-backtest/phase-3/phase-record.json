@@ -1,0 +1,20 @@
+{
+  "phase": 3,
+  "layer": "portfolio_backtest",
+  "status": "in_progress",
+  "entry_criteria": "Phase 2 exited",
+  "exit_criteria_tests": [
+    "scripts/run_gate.sh",
+    "CI unified-gate matrix"
+  ],
+  "evidence_paths": [
+    "evidence/portfolio-backtest/release/final-gate-report.json",
+    "evidence/portfolio-backtest/release/remote-matrix/",
+    "evidence/portfolio-backtest/release/release-record.json"
+  ],
+  "blocked_by": [
+    "refresh final implementation gate evidence",
+    "record final remote CI matrix"
+  ],
+  "gate_evidence": "evidence/portfolio-backtest/release/final-gate-report.json"
+}

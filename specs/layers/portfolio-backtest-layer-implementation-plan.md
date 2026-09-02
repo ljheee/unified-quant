@@ -1,6 +1,6 @@
 # Portfolio and Backtest Layer Implementation Plan
 
-Status: **gated implementation order v1.0; phases 0–2 exited and release-reconciled; CR remediation rounds applied. Latest gate evidence in release/final-gate-report.json.**
+Status: **gated implementation order v1.1; release reconciliation in progress. Phase 0 test IDs normalized; Phase 3 record is now explicit.**
 
 Source spec: `specs/layers/portfolio-backtest-layer-spec.md`
 
@@ -104,18 +104,18 @@ implementation commit; release record committed.
 
 | ID | Phase | Test ID | Status |
 |---|---|---|---|
-| PB0a | 0 | test_portfolio_definition_valid_fixture | passed |
-| PB0b | 0 | test_portfolio_definition_negative_fixture_1 | passed |
-| PB0b2 | 0 | test_portfolio_definition_negative_fixture_2 | passed |
-| PB0c | 0 | test_target_weights_valid_fixture | passed |
-| PB0d | 0 | test_target_weights_negative_fixture_1 | passed |
-| PB0d2 | 0 | test_target_weights_negative_fixture_2 | passed |
-| PB0e | 0 | test_backtest_config_valid_fixture | passed |
-| PB0f | 0 | test_backtest_config_negative_fixture_1 | passed |
-| PB0f2 | 0 | test_backtest_config_negative_fixture_2 | passed |
-| PB0g | 0 | test_backtest_result_valid_fixture | passed |
-| PB0h | 0 | test_backtest_result_negative_fixture_1 | passed |
-| PB0h2 | 0 | test_backtest_result_negative_fixture_2 | passed |
+| PB0a | 0 | test_portfolio_backtest_contracts.py::TestPortfolioDefinitionSchema::test_valid_fixture | passed |
+| PB0b | 0 | test_portfolio_backtest_contracts.py::TestPortfolioDefinitionSchema::test_negative_fixture_1 | passed |
+| PB0b2 | 0 | test_portfolio_backtest_contracts.py::TestPortfolioDefinitionSchema::test_negative_fixture_2 | passed |
+| PB0c | 0 | test_portfolio_backtest_contracts.py::TestTargetWeightsSchema::test_valid_fixture | passed |
+| PB0d | 0 | test_portfolio_backtest_contracts.py::TestTargetWeightsSchema::test_negative_fixture_1 | passed |
+| PB0d2 | 0 | test_portfolio_backtest_contracts.py::TestTargetWeightsSchema::test_negative_fixture_2 | passed |
+| PB0e | 0 | test_portfolio_backtest_contracts.py::TestBacktestConfigSchema::test_valid_fixture | passed |
+| PB0f | 0 | test_portfolio_backtest_contracts.py::TestBacktestConfigSchema::test_negative_fixture_1 | passed |
+| PB0f2 | 0 | test_portfolio_backtest_contracts.py::TestBacktestConfigSchema::test_negative_fixture_2 | passed |
+| PB0g | 0 | test_portfolio_backtest_contracts.py::TestBacktestResultSchema::test_valid_fixture | passed |
+| PB0h | 0 | test_portfolio_backtest_contracts.py::TestBacktestResultSchema::test_negative_fixture_1 | passed |
+| PB0h2 | 0 | test_portfolio_backtest_contracts.py::TestBacktestResultSchema::test_negative_fixture_2 | passed |
 | PB0i | 0 | test_golden_vectors_deterministic_and_persisted | passed |
 | PB1a | 1 | test_e2e_publish_read | passed |
 | PB1b | 1 | test_single_position_cap | passed |
@@ -138,7 +138,7 @@ implementation commit; release record committed.
 | PB2h | 2 | test_corporate_action_rejected | passed |
 | PB2i | 2 | test_t1_sellable_quantity_enforced | passed |
 | PB2j | 2 | test_insufficient_cash_skip_recorded | passed |
-| PB3a | 3 | test_final_head_local_gate_passes | passed |
+| PB3a | 3 | scripts/run_gate.sh | passed |
 
 ## 3. CI Matrix Note
 
