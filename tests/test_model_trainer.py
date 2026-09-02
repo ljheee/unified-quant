@@ -8,6 +8,7 @@ import pandas as pd
 from review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
+from uq.contracts.model_layer import sha256_json
 from uq.errors import ContractError
 from uq.models.definition import ModelDefinitionBuilder
 from uq.models.trainer import ArtifactStore, ModelTrainer
@@ -40,6 +41,25 @@ def _quality_report(bound_generation_id: str = DIGEST) -> dict:
         subject_content_sha256=bound_generation_id,
     )
     return report
+
+
+def _failed_quality_report(bound_generation_id: str) -> dict:
+    from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision
+    decision = create_reviewed_quality_decision(
+        binding_type="model_artifact_v1", policy="reject_all", status="passed",
+        checks=[{"name": "artifact_readback", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[],
+        producer_code_fingerprint=DIGEST,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
+    )
+    report, _ = bind_reviewed_quality_decision(
+        decision, binding_type="model_artifact_v1",
+        subject_generation_id=bound_generation_id,
+        subject_content_sha256=bound_generation_id,
+    )
+    rejected = {**report, "status": "rejected"}
+    rejected["report_checksum_sha256"] = sha256_json({k: v for k, v in rejected.items() if k != "report_checksum_sha256"})
+    return rejected
 
 
 def _dataset() -> pd.DataFrame:
@@ -151,6 +171,46 @@ class TestArtifactStore:
         changed = {**definition, "ordered_features": ["other_factor"]}
         with pytest.raises(AssertionError):
             assert changed["ordered_features"] == definition["ordered_features"]
+
+    def test_unreviewed_model_definition_rejected_before_training(self, tmp_path: Path) -> None:
+        trainer = ModelTrainer(tmp_path)
+        definition = _definition()
+        definition["status"] = "draft"
+        from uq.contracts.model_layer import model_manifest_identities
+        definition["generation_id"], definition["manifest_digest_sha256"] = model_manifest_identities(definition, schema_name="model_definition")
+        with pytest.raises(ContractError, match="reviewed"):
+            trainer.train(
+                definition=definition,
+                dataset_frame=_dataset(),
+                feature_columns=["volume_ratio_20d"],
+                label_column="label",
+            )
+
+    def test_artifact_report_missing_wrong_generation_and_failed_reject_publication_read(self, tmp_path: Path) -> None:
+        store = ArtifactStore(tmp_path)
+        trainer = ModelTrainer(tmp_path)
+        manifest, artifact_bytes = trainer.train(
+            definition=_definition(), dataset_frame=_dataset(),
+            feature_columns=["volume_ratio_20d"], label_column="label",
+        )
+        generation = _stable_artifact_generation(manifest)
+
+        with pytest.raises(ContractError, match="artifact publication requires a quality report"):
+            store.publish(manifest, artifact_bytes, quality_report=None)
+
+        wrong_generation_report = _quality_report("f" * 64)
+        with pytest.raises(ContractError, match="does not bind to the artifact generation"):
+            store.publish(manifest, artifact_bytes, quality_report=wrong_generation_report)
+
+        failed_report = _failed_quality_report(generation)
+        with pytest.raises(ContractError, match="quality report status is not approved"):
+            store.publish(manifest, artifact_bytes, quality_report=failed_report)
+
+        partition = store.publish(manifest, artifact_bytes, quality_report=_quality_report(generation))
+        report_path = partition.parents[1] / "quality_reports" / f"{_quality_report(generation)['report_checksum_sha256']}.json"
+        report_path.unlink()
+        with pytest.raises(ContractError, match="artifact quality report is unavailable"):
+            store.read(manifest["model_run_content_generation_id"], generation)
 
     def test_quarantine_manifest_records_input_generations_and_is_not_accepted(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)

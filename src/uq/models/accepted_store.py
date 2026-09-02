@@ -24,6 +24,7 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
         self.store_root = Path(store_root)
         self._factors_dir = self.store_root / "factors"
         self._frames: dict[str, pd.DataFrame] = {}
+        self._partition_paths: dict[str, Path] = {}
         self._tampered_generations: set[str] = set()
 
     def _scan_partitions(self) -> list[dict[str, Any]]:
@@ -32,6 +33,8 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
         entries: list[dict[str, Any]] = []
         for manifest_path in sorted(self._factors_dir.rglob("manifest.json")):
             partition = manifest_path.parent
+            if any(".staging." in part or part == "quarantine" for part in partition.relative_to(self._factors_dir).parts):
+                continue
             try:
                 manifest = json.loads(manifest_path.read_text())
                 frame = read_factor_partition(partition)
@@ -57,6 +60,7 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
             entries.append(entry)
             self.register_verified_generation(manifest["generation_id"])
             self._frames[manifest["generation_id"]] = frame
+            self._partition_paths[manifest["generation_id"]] = partition
         return entries
 
     def list(self, query: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -103,10 +107,8 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
             raise ContractError(f"generation {generation_id[:12]}... has tampered or invalid partition data")
         if generation_id not in self._verified_generations or generation_id not in self._frames:
             raise ContractError("generation not verified as accepted; call list/index first")
-        partition = next(
-            (path.parent for path in self._factors_dir.rglob("manifest.json")),
-            None,
-        )
-        if partition is not None:
-            read_factor_partition(partition)
+        partition = self._partition_paths.get(generation_id)
+        if partition is None:
+            raise ContractError(f"accepted factor generation is not uniquely addressable: {generation_id}")
+        read_factor_partition(partition)
         return self._frames[generation_id]

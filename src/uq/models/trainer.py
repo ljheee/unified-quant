@@ -13,7 +13,7 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
-from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
 from ..errors import ContractError
 
 
@@ -31,6 +31,9 @@ class ModelTrainer:
         feature_columns: list[str],
         label_column: str,
     ) -> tuple[dict[str, Any], bytes]:
+        ModelContractLoader.validate("model_definition", definition)
+        if definition.get("status") != "reviewed":
+            raise ContractError("training requires an externally reviewed model definition")
         if definition["algorithm"] != "regularized_linear":
             raise ContractError(f"trainer only supports regularized_linear, got {definition['algorithm']}")
 
@@ -87,11 +90,14 @@ class ArtifactStore:
         *,
         quality_report: dict[str, Any],
     ) -> Path:
+        if quality_report is None:
+            raise ContractError("artifact publication requires a quality report")
         ModelContractLoader.validate("model_quality_report", quality_report)
+        ModelQualityReviewRegistry().validate_report(quality_report)
         if (
             quality_report.get("report_version") != 2
             or quality_report["binding_type"] != "model_artifact_v1"
-            or quality_report["status"] == "rejected"
+            or quality_report["status"] not in {"passed", "warning"}
             or not quality_report.get("reviewer")
             or not quality_report.get("subject_content_sha256")
             or not quality_report.get("review_signature_sha256")
@@ -205,6 +211,7 @@ class ArtifactStore:
         try:
             report = json.loads(report_path.read_text())
             ModelContractLoader.validate("model_quality_report", report)
+            ModelQualityReviewRegistry().validate_report(report)
         except (OSError, json.JSONDecodeError) as exc:
             raise ContractError("artifact quality report is unavailable or malformed") from exc
         if (

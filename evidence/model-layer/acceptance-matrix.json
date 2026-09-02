@@ -8,8 +8,8 @@
   },
   "counts": {
     "total": 59,
-    "passed": 52,
-    "blocked": 7
+    "passed": 59,
+    "blocked": 0
   },
   "rows": [
     {
@@ -106,11 +106,11 @@
       "id": "M2d-label-eligibility-exclusions",
       "requirement": "Label eligibility excludes suspension/listing-age/limit/delisting rows and records the policy.",
       "owning_phase": "FP remediation",
-      "blocked_by": "exact regression test not yet implemented",
-      "test_id": "planned:test_label_eligibility_rules_exclude_ineligible_rows",
-      "fixture_path": "runtime-generated ineligible adjusted-price frame",
-      "evidence_path": "pending",
-      "status": "blocked"
+      "blocked_by": "none",
+      "test_id": "tests/test_model_labels_dataset.py::TestLabelBuilder::test_label_eligibility_rules_exclude_ineligible_rows",
+      "fixture_path": "runtime-generated ineligible adjusted-price frames",
+      "evidence_path": "evidence/model-layer/remediation/gate-report.json",
+      "status": "passed"
     },
     {
       "id": "M3a-valid-splits-pass",
@@ -146,11 +146,11 @@
       "id": "M3d-overlap-duplicate-split-reject",
       "requirement": "SplitValidator rejects duplicate names and overlapping intervals.",
       "owning_phase": "FP remediation",
-      "blocked_by": "exact regression test not yet implemented",
-      "test_id": "planned:test_split_overlap_and_duplicate_names_fail_closed",
+      "blocked_by": "none",
+      "test_id": "tests/test_model_labels_dataset.py::TestSplitValidator::test_split_overlap_and_duplicate_names_fail_closed",
       "fixture_path": "runtime-generated invalid split policies",
-      "evidence_path": "pending",
-      "status": "blocked"
+      "evidence_path": "evidence/model-layer/remediation/gate-report.json",
+      "status": "passed"
     },
     {
       "id": "M4a-dataset-byte-rebuild-locked-cell",
@@ -296,21 +296,21 @@
       "id": "M6f-artifact-report-fail-closed",
       "requirement": "Artifact publish/read rejects missing, wrong-generation, and failed reports.",
       "owning_phase": "4/5 runtime",
-      "blocked_by": "exact publication/read regression trio not yet implemented",
-      "test_id": "planned:test_artifact_report_missing_wrong_generation_and_failed_reject_publication_read",
-      "fixture_path": "runtime-generated artifact report fixtures",
-      "evidence_path": "pending",
-      "status": "blocked"
+      "blocked_by": "none",
+      "test_id": "tests/test_model_trainer.py::TestArtifactStore::test_artifact_report_missing_wrong_generation_and_failed_reject_publication_read",
+      "fixture_path": "runtime-generated artifact quality-report fixtures",
+      "evidence_path": "evidence/model-layer/remediation/gate-report.json",
+      "status": "passed"
     },
     {
       "id": "M6g-prediction-report-fail-closed",
       "requirement": "Prediction publish/read rejects missing, wrong-generation, and failed reports.",
       "owning_phase": "5 runtime",
-      "blocked_by": "exact publication/read regression trio not yet implemented",
-      "test_id": "planned:test_prediction_report_missing_wrong_generation_and_failed_reject_publication_read",
-      "fixture_path": "runtime-generated prediction report fixtures",
-      "evidence_path": "pending",
-      "status": "blocked"
+      "blocked_by": "none",
+      "test_id": "tests/test_model_predictions.py::TestPredictionBuilder::test_prediction_report_missing_wrong_generation_and_failed_reject_publication_read",
+      "fixture_path": "runtime-generated prediction quality-report fixtures",
+      "evidence_path": "evidence/model-layer/remediation/gate-report.json",
+      "status": "passed"
     },
     {
       "id": "M7a-deterministic-training-same-seed",
@@ -476,11 +476,11 @@
       "id": "M9f-prediction-eligibility-enforced",
       "requirement": "Prediction eligibility is validated against the reviewed policy, not accepted as free text.",
       "owning_phase": "FP remediation",
-      "blocked_by": "exact eligibility policy regression not yet implemented",
-      "test_id": "planned:test_prediction_eligibility_policy_and_status_fail_closed",
+      "blocked_by": "none",
+      "test_id": "tests/test_model_predictions.py::TestPredictionBuilder::test_prediction_eligibility_policy_and_status_fail_closed",
       "fixture_path": "runtime-generated prediction eligibility fixtures",
-      "evidence_path": "pending",
-      "status": "blocked"
+      "evidence_path": "evidence/model-layer/remediation/gate-report.json",
+      "status": "passed"
     },
     {
       "id": "M10a-quarantine-path-invisible",
@@ -506,11 +506,11 @@
       "id": "M10c-staging-invisible-to-accepted-read",
       "requirement": "All staging directories are invisible to accepted readers.",
       "owning_phase": "FP remediation",
-      "blocked_by": "needs store-family parameterized negative test",
-      "test_id": "planned:test_staging_directories_are_invisible_to_accepted_readers",
-      "fixture_path": "runtime-generated staging directories",
-      "evidence_path": "pending",
-      "status": "blocked"
+      "blocked_by": "none",
+      "test_id": "tests/test_model_store_isolation.py::test_staging_directories_are_invisible_to_accepted_readers",
+      "fixture_path": "runtime-generated accepted factor/dataset/artifact/prediction staging directories",
+      "evidence_path": "evidence/model-layer/remediation/gate-report.json",
+      "status": "passed"
     },
     {
       "id": "M10d-temporary-bin-outside-accepted",
@@ -586,11 +586,11 @@
       "id": "M12b-reviewed-definition-required",
       "requirement": "Unreviewed model definitions cannot enter training/publication.",
       "owning_phase": "FP remediation",
-      "blocked_by": "current registry assertion is not an exact fail-closed test",
-      "test_id": "planned:test_unreviewed_model_definition_rejected_before_training",
-      "fixture_path": "runtime-generated reviewed/unreviewed definitions",
-      "evidence_path": "pending",
-      "status": "blocked"
+      "blocked_by": "none",
+      "test_id": "tests/test_model_trainer.py::TestArtifactStore::test_unreviewed_model_definition_rejected_before_training",
+      "fixture_path": "runtime-generated reviewed/unreviewed model definitions",
+      "evidence_path": "evidence/model-layer/remediation/gate-report.json",
+      "status": "passed"
     },
     {
       "id": "M12c-feature-schema-change-gated",

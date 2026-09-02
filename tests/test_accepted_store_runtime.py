@@ -143,3 +143,22 @@ class TestAcceptedFactorIndexRuntime:
             "visibility": "accepted_only", "pagination": {"limit": 10},
         }
         assert runtime.list(query) == []
+
+    def test_staging_directories_are_invisible_to_accepted_readers(self, tmp_path: Path) -> None:
+        partition = _publish_factor(tmp_path)
+        runtime = AcceptedFactorIndexRuntime(tmp_path)
+        query = {"contract_version": 1, "filters": {}, "ordering": ["partition_date"], "visibility": "accepted_only", "pagination": {"limit": 10}}
+        generation = runtime.list(query)[0]["generation_id"]
+        assert [entry["generation_id"] for entry in runtime.list(query)] == [generation]
+
+        staging = partition.with_name(partition.name + ".staging.x")
+        staging.mkdir()
+        for filename in ("manifest.json", "data.parquet"):
+            (staging / filename).write_bytes((partition / filename).read_bytes())
+        quarantine = tmp_path / "factors" / "quarantine" / partition.name
+        quarantine.mkdir(parents=True)
+        for filename in ("manifest.json", "data.parquet"):
+            (quarantine / filename).write_bytes((partition / filename).read_bytes())
+
+        assert [entry["generation_id"] for entry in runtime.list(query)] == [generation]
+        assert runtime.read(generation).equals(runtime._frames[generation])

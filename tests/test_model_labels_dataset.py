@@ -93,6 +93,24 @@ class TestLabelBuilder:
         # run_id/created_at differ but generation should be same if content is same
         assert m1["run_id"] != m2["run_id"]
 
+    @pytest.mark.parametrize(
+        "field",
+        ["suspended", "limit_up", "limit_down", "delisted"],
+    )
+    def test_label_eligibility_rules_exclude_ineligible_rows(self, field: str) -> None:
+        builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
+        frame = _adjusted_frame()
+        frame.loc[0, field] = True
+        manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
+        assert manifest["row_count"] == len(frame) - 1
+
+    def test_new_listing_rows_are_excluded_until_listing_age_threshold(self) -> None:
+        builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
+        frame = _adjusted_frame()
+        frame.loc[:9, "listing_date"] = pd.Timestamp("2026-01-10", tz="UTC")
+        manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
+        assert manifest["row_count"] == len(frame) - 10
+
 
 class TestLabelValidator:
     def test_validate_passes_on_valid_manifest(self) -> None:
@@ -144,7 +162,27 @@ class TestSplitValidator:
                     {"name": "train", "start_date": dates[0], "end_date": dates[14]},
                     {"name": "validation", "start_date": dates[17], "end_date": dates[29]},
                 ],
-                horizon=5, embargo_days=2, trading_dates=dates,
+            horizon=5, embargo_days=2, trading_dates=dates,
+        )
+
+    def test_split_overlap_and_duplicate_names_fail_closed(self) -> None:
+        dates = self._dates()
+        splits = [
+            {"name": "train", "start_date": dates[0], "end_date": dates[14]},
+            {"name": "validation", "start_date": dates[10], "end_date": dates[29]},
+        ]
+        with pytest.raises(ContractError):
+            SplitValidator.validate_splits(
+                splits, horizon=5, embargo_days=2, trading_dates=dates,
+            )
+        duplicate_name_splits = [
+            {"name": "train", "start_date": dates[0], "end_date": dates[14]},
+            {"name": "train", "start_date": dates[25], "end_date": dates[29]},
+            {"name": "validation", "start_date": dates[25], "end_date": dates[29]},
+        ]
+        with pytest.raises(ContractError, match="duplicate split names"):
+            SplitValidator.validate_splits(
+                duplicate_name_splits, horizon=5, embargo_days=2, trading_dates=dates,
             )
 
 

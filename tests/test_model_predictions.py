@@ -9,7 +9,7 @@ import pytest
 
 from uq.errors import ContractError
 from uq.models.definition import ModelDefinitionBuilder
-from uq.contracts.model_layer import create_reviewed_quality_decision
+from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision, sha256_json
 from uq.models.predictions import PredictionBuilder
 from uq.models.trainer import ArtifactStore, ModelTrainer
 
@@ -19,7 +19,10 @@ DIGEST = "0" * 64
 def prediction_decision() -> dict:
     return create_reviewed_quality_decision(
         binding_type="prediction_set_v1", policy="reject_all", status="passed",
-        checks=[{"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        checks=[
+            {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+            {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
+        ],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
         private_key_pem=REVIEWER_PRIVATE_KEY,
     )
@@ -88,7 +91,7 @@ class TestPredictionBuilder:
             prediction_set_name=name, artifact_store=None,
             model_artifact_generation_id=artifact_generation_id,
             model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
-            run_generation_id=run_generation_id, eligibility_status="passed",
+            run_generation_id=run_generation_id, eligibility_policy="reviewed-v1", eligibility_status="passed",
             decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision(),
         )
         return builder, manifest, artifact
@@ -101,7 +104,7 @@ class TestPredictionBuilder:
             prediction_set_name="daily", artifact_store=None,
             model_artifact_generation_id=artifact_generation_id,
             model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
-            run_generation_id=run_generation_id, eligibility_status="passed",
+            run_generation_id=run_generation_id, eligibility_policy="reviewed-v1", eligibility_status="passed",
             decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision(),
         )
         assert len(manifest["generation_id"]) == 64
@@ -122,7 +125,7 @@ class TestPredictionBuilder:
                 prediction_set_name="x", artifact_store=ArtifactStore(tmp_path),
                 model_artifact_generation_id="a" * 64, model_artifact_checksum="b" * 64,
                 input_dataset_generation_id="c" * 64, run_generation_id=DIGEST,
-                eligibility_status="passed", decision_date="2026-02-15", scores=scores,
+                eligibility_policy="reviewed-v1", eligibility_status="passed", decision_date="2026-02-15", scores=scores,
                 quality_decision=prediction_decision(),
             )
 
@@ -149,7 +152,7 @@ class TestPredictionBuilder:
                 prediction_set_name="blocked", artifact_store=None,
                 model_artifact_generation_id=artifact_generation_id,
                 model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
-                run_generation_id=run_generation_id, eligibility_status="passed",
+                run_generation_id=run_generation_id, eligibility_policy="reviewed-v1", eligibility_status="passed",
                 decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision(),
             )
 
@@ -159,7 +162,102 @@ class TestPredictionBuilder:
                 prediction_set_name="x", artifact_store=None,
                 model_artifact_generation_id="a" * 64, model_artifact_checksum="b" * 64,
                 input_dataset_generation_id="c" * 64, run_generation_id=DIGEST,
-                eligibility_status="passed", decision_date="2026-02-15",
+                eligibility_policy="reviewed-v1", eligibility_status="passed", decision_date="2026-02-15",
                 scores=pd.DataFrame(columns=["instrument", "datetime", "score"]),
                 quality_decision=None,
+            )
+
+    def test_prediction_report_missing_wrong_generation_and_failed_reject_publication_read(self, tmp_path: Path) -> None:
+        builder, manifest, artifact = self._build_valid(tmp_path)
+        partition = builder.publish(manifest, artifact)
+        report_path = tmp_path / "external_quality_reviews" / f"{manifest['quality_report_checksum_sha256']}.json"
+        original_report = json.loads(report_path.read_text())
+
+        report_path.unlink()
+        with pytest.raises(ContractError, match="prediction quality report unavailable"):
+            builder.read(manifest["generation_id"], manifest["decision_date"])
+
+        wrong_decision = create_reviewed_quality_decision(
+            binding_type="prediction_set_v1", policy="reject_all", status="passed",
+            checks=[
+                {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
+            ],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+        )
+        wrong_generation, _ = bind_reviewed_quality_decision(
+            wrong_decision, binding_type="prediction_set_v1",
+            subject_generation_id="f" * 64, subject_content_sha256="f" * 64,
+        )
+        report_path.write_text(json.dumps(wrong_generation, sort_keys=True))
+        with pytest.raises(ContractError, match="prediction quality report rejects read"):
+            builder.read(manifest["generation_id"], manifest["decision_date"])
+
+        data_path = partition / "data.parquet"
+        data_bytes = data_path.read_bytes()
+        report_path.write_text(json.dumps(original_report, sort_keys=True))
+        data_path.write_bytes(b"tampered")
+        with pytest.raises(ContractError, match="tampered prediction data"):
+            builder.read(manifest["generation_id"], manifest["decision_date"])
+        data_path.write_bytes(data_bytes)
+
+        failed_decision = create_reviewed_quality_decision(
+            binding_type="prediction_set_v1", policy="reject_all", status="passed",
+            checks=[
+                {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
+            ],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+        )
+        failed_report = {
+            **failed_decision,
+            "bound_generation_id": manifest["generation_id"],
+            "subject_content_sha256": manifest["generation_id"],
+            "status": "rejected",
+        }
+        failed_report["report_checksum_sha256"] = sha256_json(failed_report)
+        report_path.write_text(json.dumps(failed_report, sort_keys=True))
+        tampered = {**manifest, "quality_report_checksum_sha256": failed_report["report_checksum_sha256"]}
+        tampered["manifest_digest_sha256"] = sha256_json(tampered)
+        with pytest.raises(ContractError, match="prediction quality report rejects read"):
+            builder.read(tampered["generation_id"], tampered["decision_date"])
+
+    def test_prediction_eligibility_policy_and_status_fail_closed(self, tmp_path: Path) -> None:
+        builder = PredictionBuilder(tmp_path)
+        artifact_generation_id, checksum, run_generation_id = self._publish_artifact(tmp_path)
+        for status in ("rejected", "unknown"):
+            with pytest.raises(ContractError, match="eligibility policy and passed status"):
+                builder.build(
+                    prediction_set_name="blocked", artifact_store=None,
+                    model_artifact_generation_id=artifact_generation_id,
+                    model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
+                    run_generation_id=run_generation_id, decision_date="2026-02-15",
+                    scores=_scores(), eligibility_policy="reviewed-v1", eligibility_status=status, quality_decision=prediction_decision(),
+                )
+        missing_eligibility_decision = create_reviewed_quality_decision(
+            binding_type="prediction_set_v1", policy="reject_all", status="passed",
+            checks=[{"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+        )
+        with pytest.raises(ContractError, match="passed eligibility_coverage"):
+            builder.build(
+                prediction_set_name="blocked", artifact_store=None,
+                model_artifact_generation_id=artifact_generation_id,
+                model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
+                run_generation_id=run_generation_id, decision_date="2026-02-15",
+                scores=_scores(), eligibility_policy="reviewed-v1", eligibility_status="passed",
+                quality_decision=missing_eligibility_decision,
+            )
+        with pytest.raises(ContractError, match="unsupported reviewed prediction"):
+            builder.build(
+                prediction_set_name="blocked", artifact_store=None,
+                model_artifact_generation_id=artifact_generation_id,
+                model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
+                run_generation_id=run_generation_id, decision_date="2026-02-15",
+                scores=_scores(), eligibility_policy="reviewed-v1", eligibility_status="passed",
+                score_semantics={"unit": "raw_score", "direction": "higher_better", "ranking_scope": "global", "tie_policy": "instrument_order", "normalization": "none"},
+                quality_decision=prediction_decision(),
             )

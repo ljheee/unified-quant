@@ -16,7 +16,7 @@ import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
-from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
 from ..errors import ContractError
 from .trainer import ArtifactStore
 
@@ -40,7 +40,9 @@ class PredictionBuilder:
         artifact_store: ArtifactStore | None,
         decision_date: str,
         scores: pd.DataFrame,
+        eligibility_policy: str,
         eligibility_status: str,
+        score_semantics: dict[str, Any] | None = None,
         quality_decision: dict[str, Any],
     ) -> tuple[dict[str, Any], bytes]:
         from datetime import date as _date
@@ -57,6 +59,31 @@ class PredictionBuilder:
         for col in score_columns:
             if scores[col].isna().any() or not np.isfinite(scores[col].dropna()).all():
                 raise ContractError(f"non-finite score detected in column {col}")
+        if eligibility_policy != "reviewed-v1" or eligibility_status != "passed":
+            raise ContractError("prediction eligibility policy and passed status are mandatory")
+        expected_score_semantics = {
+            "unit": {"raw_score", "rank_percent"},
+            "direction": {"higher_better", "lower_better"},
+            "ranking_scope": {"universe"},
+            "tie_policy": {"instrument_order", "score_stable"},
+            "normalization": {"none", "cross_sectional_rank"},
+        }
+        score_semantics = score_semantics or {
+            "unit": "raw_score",
+            "direction": "higher_better",
+            "ranking_scope": "universe",
+            "tie_policy": "instrument_order",
+            "normalization": "none",
+        }
+        for key, allowed in expected_score_semantics.items():
+            if score_semantics.get(key) not in allowed:
+                raise ContractError(f"unsupported reviewed prediction {key}: {score_semantics.get(key)}")
+        eligibility_checks = [
+            check for check in quality_decision.get("checks", [])
+            if check.get("name") == "eligibility_coverage"
+        ]
+        if len(eligibility_checks) != 1 or eligibility_checks[0].get("result") != "passed":
+            raise ContractError("prediction quality decision must contain passed eligibility_coverage")
 
         store = artifact_store or self.artifact_store
         try:
@@ -82,11 +109,7 @@ class PredictionBuilder:
             "visible_cutoff": f"{decision_date}T15:00:00+08:00",
             "score_semantics": {
                 "column": score_columns[0] if score_columns else "score",
-                "unit": "raw_score",
-                "direction": "higher_better",
-                "ranking_scope": "universe",
-                "tie_policy": "instrument_order",
-                "normalization": "none",
+                **score_semantics,
             },
             "declared_output_columns": output_columns,
             "actual_output_columns": output_columns,

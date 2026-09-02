@@ -141,7 +141,10 @@ def run_decision() -> dict:
 def prediction_decision() -> dict:
     return create_reviewed_quality_decision(
         binding_type="prediction_set_v1", policy="reject_all", status="passed",
-        checks=[{"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        checks=[
+            {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+            {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
+        ],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
         private_key_pem=REVIEWER_PRIVATE_KEY,
     )
@@ -387,7 +390,7 @@ class TestEndToEndPipeline:
             run_generation_id=artifact_manifest["model_run_content_generation_id"], artifact_store=None,
             decision_date="2026-01-09",
             scores=scores,
-            eligibility_status="passed", quality_decision=prediction_decision(),
+            eligibility_policy="reviewed-v1", eligibility_status="passed", quality_decision=prediction_decision(),
         )
         pred_partition = pred_builder.publish(pred_manifest, pred_artifact)
         assert pred_partition.is_dir()

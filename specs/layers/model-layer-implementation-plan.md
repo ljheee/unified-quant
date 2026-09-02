@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.16; phases 0–5 released; FP exited; M1–M12 acceptance matrix fully expanded with explicit blocked rows.**
+Status: **gated implementation order v1.17; phases 0–5 released; FP exited; all 59 M1–M12 sub-rows map to exact tests; local Qlib-extras gate passed, remote matrix evidence pending.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -400,11 +400,11 @@ unlock a new implementation slice. The source of truth is
 | M2a-label-terminal-horizon-null | 0 contract, 1 runtime | none | `tests/test_model_labels_dataset.py::TestLabelBuilder::test_last_n_rows_are_null` | runtime-generated adjusted-price frame | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M2b-cross-section-transform-date-bounded | FP runtime | none | `tests/test_feature_preprocessing.py::test_cross_sectional_standardization_and_rank_are_date_bounded` | evidence/phase-0/fixtures/feature_preprocessing-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M2c-purge-gap-write-reject | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_split_purge_embargo_violation_fails_closed_on_write` | evidence/phase-0/fixtures/model_dataset-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
-| M2d-label-eligibility-exclusions | FP remediation | exact regression test not yet implemented | `planned:test_label_eligibility_rules_exclude_ineligible_rows` | runtime-generated ineligible adjusted-price frame | pending | blocked |
+| M2d-label-eligibility-exclusions | FP remediation | none | `tests/test_model_labels_dataset.py::TestLabelBuilder::test_label_eligibility_rules_exclude_ineligible_rows` | runtime-generated ineligible adjusted-price frames | evidence/model-layer/remediation/gate-report.json | passed |
 | M3a-valid-splits-pass | 1 contract | none | `tests/test_model_labels_dataset.py::TestSplitValidator::test_valid_splits_pass` | evidence/phase-0/fixtures/model_dataset-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M3b-split-validator-purge-reject | 1 contract | none | `tests/test_model_labels_dataset.py::TestSplitValidator::test_purge_violation_fails` | runtime-generated invalid split policy | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M3c-writer-purge-embargo-reject | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_split_purge_embargo_violation_fails_closed_on_write` | evidence/phase-0/fixtures/model_dataset-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
-| M3d-overlap-duplicate-split-reject | FP remediation | exact regression test not yet implemented | `planned:test_split_overlap_and_duplicate_names_fail_closed` | runtime-generated invalid split policies | pending | blocked |
+| M3d-overlap-duplicate-split-reject | FP remediation | none | `tests/test_model_labels_dataset.py::TestSplitValidator::test_split_overlap_and_duplicate_names_fail_closed` | runtime-generated invalid split policies | evidence/model-layer/remediation/gate-report.json | passed |
 | M4a-dataset-byte-rebuild-locked-cell | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable` | runtime-generated governed dataset | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M4b-dataset-generation-stability | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable` | runtime-generated governed dataset | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M4c-remote-lockfile-environment | 4A certification | none | `UQ_GATE_EXTRAS=qlib scripts/run_gate.sh` | evidence/preprocessing/phase-0/gate-reports/requirements.lock.txt.sha256 | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
@@ -419,8 +419,8 @@ unlock a new implementation slice. The source of truth is
 | M6c-quality-checksum-and-binding | 0 contract | none | `tests/test_model_layer_contracts.py::test_quality_report_checksum_and_binding_are_enforced` | evidence/phase-0/fixtures/model_quality_report-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M6d-review-signature-mutation-reject | FP trust anchor | none | `tests/test_feature_preprocessing.py::test_quality_review_signature_binds_all_decision_fields` | runtime-generated signed review decision | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M6e-unanchored-review-registry-reject | FP trust anchor | none | `tests/test_feature_preprocessing.py::test_trust_anchor_rejects_unanchored_review_registry` | config/model-quality-trust-anchor.v1.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
-| M6f-artifact-report-fail-closed | 4/5 runtime | exact publication/read regression trio not yet implemented | `planned:test_artifact_report_missing_wrong_generation_and_failed_reject_publication_read` | runtime-generated artifact report fixtures | pending | blocked |
-| M6g-prediction-report-fail-closed | 5 runtime | exact publication/read regression trio not yet implemented | `planned:test_prediction_report_missing_wrong_generation_and_failed_reject_publication_read` | runtime-generated prediction report fixtures | pending | blocked |
+| M6f-artifact-report-fail-closed | 4/5 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_artifact_report_missing_wrong_generation_and_failed_reject_publication_read` | runtime-generated artifact quality-report fixtures | evidence/model-layer/remediation/gate-report.json | passed |
+| M6g-prediction-report-fail-closed | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_prediction_report_missing_wrong_generation_and_failed_reject_publication_read` | runtime-generated prediction quality-report fixtures | evidence/model-layer/remediation/gate-report.json | passed |
 | M7a-deterministic-training-same-seed | 3 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_deterministic_training_same_seed` | runtime-generated model artifact | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M7b-dataset-byte-reproducibility | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable` | runtime-generated governed dataset | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M7c-remote-environment-certification | 4A certification | none | `CI run 33586647474; ten-cell scripts/run_gate.sh matrix` | evidence/preprocessing/phase-0/remote-matrix/81ee6f9-33586647474/cells.json | evidence/preprocessing/phase-0/remote-matrix/81ee6f9-33586647474/cells.json | passed |
@@ -437,10 +437,10 @@ unlock a new implementation slice. The source of truth is
 | M9c-prediction-overwrite-reject | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_immutable_overwrite_rejected` | runtime-generated prediction partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M9d-prediction-data-tamper-reject | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_tampered_data_rejected_on_read` | runtime-generated prediction partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M9e-prediction-artifact-tamper-reject | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_tampered_artifact_before_build_rejected` | runtime-generated model artifact partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
-| M9f-prediction-eligibility-enforced | FP remediation | exact eligibility policy regression not yet implemented | `planned:test_prediction_eligibility_policy_and_status_fail_closed` | runtime-generated prediction eligibility fixtures | pending | blocked |
+| M9f-prediction-eligibility-enforced | FP remediation | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_prediction_eligibility_policy_and_status_fail_closed` | runtime-generated prediction eligibility fixtures | evidence/model-layer/remediation/gate-report.json | passed |
 | M10a-quarantine-path-invisible | 4 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_quarantine_path_is_not_visible_as_accepted` | runtime-generated accepted/quarantine partitions | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M10b-quarantine-manifest-inputs | 4 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_quarantine_manifest_records_input_generations_and_is_not_accepted` | runtime-generated quarantine manifest | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
-| M10c-staging-invisible-to-accepted-read | FP remediation | needs store-family parameterized negative test | `planned:test_staging_directories_are_invisible_to_accepted_readers` | runtime-generated staging directories | pending | blocked |
+| M10c-staging-invisible-to-accepted-read | FP remediation | none | `tests/test_model_store_isolation.py::test_staging_directories_are_invisible_to_accepted_readers` | runtime-generated accepted factor/dataset/artifact/prediction staging directories | evidence/model-layer/remediation/gate-report.json | passed |
 | M10d-temporary-bin-outside-accepted | 2A runtime | none | `tests/test_model_qlib_export.py::TestQlibDatasetExporter::test_cleanup_policy_keeps_temporary_bin_files_outside_accepted_store` | runtime-generated temporary Qlib files | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M11a-manifest-tamper-reject | 0 identity | none | `tests/test_model_layer_contracts.py::test_typed_loader_rejects_absent_malformed_and_tampered_documents` | evidence/phase-0/fixtures/model_definition-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M11b-path-mismatch-reject | 0 identity | none | `tests/test_model_layer_contracts.py::test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root` | evidence/phase-0/fixtures/model_definition-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
@@ -448,13 +448,13 @@ unlock a new implementation slice. The source of truth is
 | M11d-dataset-data-tamper-reject | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_tampered_data_rejected_on_read` | runtime-generated dataset partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M11e-prediction-data-tamper-reject | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_tampered_data_rejected_on_read` | runtime-generated prediction partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 | M12a-feature-order-change-reject | 3 runtime | none | `tests/test_model_features_dataset_writer.py::TestFeatureSchemaBuilder::test_validate_rejects_column_order_change` | runtime-generated feature schema/frame | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
-| M12b-reviewed-definition-required | FP remediation | current registry assertion is not an exact fail-closed test | `planned:test_unreviewed_model_definition_rejected_before_training` | runtime-generated reviewed/unreviewed definitions | pending | blocked |
+| M12b-reviewed-definition-required | FP remediation | none | `tests/test_model_trainer.py::TestArtifactStore::test_unreviewed_model_definition_rejected_before_training` | runtime-generated reviewed/unreviewed model definitions | evidence/model-layer/remediation/gate-report.json | passed |
 | M12c-feature-schema-change-gated | 3 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_reviewed_definition_registry_governs_feature_and_order_changes` | runtime-generated definition registry | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 
 ## Immediate Next Actions
 
-FP gate work is complete. The next model-layer action is to implement the seven
-explicitly blocked acceptance rows in
-`evidence/model-layer/acceptance-matrix.json`. No new implementation slice may
-claim executable status until each planned test ID exists, its negative fixture
-is preserved, and a fresh unified gate plus remote matrix records the result.
+All seven previously blocked acceptance rows now map to exact fail-closed tests
+and pass the local unified Qlib-extras gate. The remaining evidence action is to
+push the final implementation, preserve the remote six-cell plus Qlib-cell
+matrix, and reconcile the evidence index before opening the next model-layer
+slice.

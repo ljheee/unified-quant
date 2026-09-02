@@ -188,6 +188,31 @@ class TestDatasetWriter:
                 quality_report=_quality_report(),
             )
 
+    def test_staging_directories_are_invisible_to_accepted_dataset_flow(self, tmp_path: Path) -> None:
+        _publish_factor(tmp_path)
+        runtime = AcceptedFactorIndexRuntime(tmp_path)
+        query = {"contract_version": 1, "filters": {}, "ordering": ["partition_date"], "visibility": "accepted_only", "pagination": {"limit": 10}}
+        entries = runtime.list(query)
+        assert len(entries) == 1
+        factor_data = runtime.read(entries[0]["generation_id"])
+
+        manifest = self._build_manifest()
+        schema = FeatureSchemaBuilder().build(factor_data, source_factor_set="basic", source_factor_version="1.0.0")
+        writer = DatasetWriter(tmp_path)
+        writer.write(manifest, factor_data, feature_schema=schema, quality_report=_quality_report())
+        generation = writer.last_published_manifest["generation_id"]
+        partition = tmp_path / "datasets" / "dataset=research_slice" / "version=1.0.0" / f"generation={generation}"
+
+        staging = partition.with_name(partition.name + ".staging.x")
+        staging.mkdir()
+        for filename in ("manifest.json", "data.parquet"):
+            (staging / filename).write_bytes((partition / filename).read_bytes())
+
+        assert [path for path in tmp_path.rglob("*") if ".staging." in path.name and path.name.startswith("generation=")] == [staging]
+        loaded_manifest, loaded_frame = writer.read("research_slice", "1.0.0", generation)
+        assert loaded_manifest["generation_id"] == generation
+        assert len(loaded_frame) == len(factor_data)
+
     def test_end_to_end_with_accepted_store(self, tmp_path: Path) -> None:
         """Full chain: publish factor → accepted index → feature schema → dataset write."""
         _publish_factor(tmp_path)
