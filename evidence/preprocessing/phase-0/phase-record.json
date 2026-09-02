@@ -1,7 +1,5 @@
 {
-  "blocked_by": [
-    "external reviewer trust anchor outside publisher process"
-  ],
+  "blocked_by": [],
   "entry_criteria": [
     {
       "id": "FP0-entry-contract",
@@ -39,7 +37,10 @@
         "tests/test_feature_preprocessing.py::test_dataset_read_rejects_stored_input_feature_schema_tamper",
         "tests/test_feature_preprocessing.py::test_dataset_read_rejects_semantically_tampered_input_schema",
         "tests/test_feature_preprocessing.py::test_dataset_read_rejects_external_review_root_symlink",
-        "tests/test_feature_preprocessing.py::test_quality_report_checksum_changes_manifest_digest_but_not_generation"
+        "tests/test_feature_preprocessing.py::test_quality_report_checksum_changes_manifest_digest_but_not_generation",
+        "tests/test_feature_preprocessing.py::test_quality_review_requires_separately_held_private_key",
+        "tests/test_feature_preprocessing.py::test_quality_review_signature_binds_all_decision_fields",
+        "tests/test_feature_preprocessing.py::test_trust_anchor_rejects_unanchored_review_registry"
       ]
     },
     {
@@ -47,17 +48,28 @@
       "id": "FP0-exit-final-head-gate",
       "status": "passed",
       "test_id": "UQ_GATE_EXTRAS=qlib scripts/run_gate.sh",
-      "note": "Local unified gate passed at implementation HEAD a4968b7."
+      "note": "Local unified gate passed at implementation HEAD 81ee6f9; evidence-only commits preserve this binding."
     },
     {
-      "evidence_path": "remote-matrix/a4968b7-33584899447/cells.json",
+      "evidence_path": "remote-matrix/81ee6f9-33586647474/cells.json",
       "id": "FP0-exit-remote-matrix",
       "status": "passed",
-      "test_id": "CI run 33584899447; ten distinct OS/Python/Qlib cells",
-      "note": "Existing aggregate is superseded: it binds 0a44b3c, not the latest enforcement changes."
+      "test_id": "CI run 33586647474; ten distinct OS/Python/Qlib cells",
+      "note": "Ten distinct remote cells at implementation HEAD 81ee6f9."
+    },
+    {
+      "id": "FP0-exit-external-trust-anchor",
+      "status": "passed",
+      "test_id": [
+        "tests/test_feature_preprocessing.py::test_quality_review_requires_separately_held_private_key",
+        "tests/test_feature_preprocessing.py::test_quality_review_signature_binds_all_decision_fields",
+        "tests/test_feature_preprocessing.py::test_trust_anchor_rejects_unanchored_review_registry"
+      ],
+      "note": "Ed25519 public-key anchor binds the reviewer registry and complete review decision."
     }
   ],
   "phase": "FP0/FP1",
-  "record_version": 3,
-  "status": "in_progress"
+  "record_version": 4,
+  "status": "exited",
+  "implementation_head": "81ee6f9e76f81ffb9328bb5e71b172f83ea8bb41"
 }

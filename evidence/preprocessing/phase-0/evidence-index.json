@@ -1,8 +1,8 @@
 {
   "entries": [
     {
-      "bound_commit": "a4968b7aba2f7e9f6e6178e07fcb294b1f70ca14",
-      "note": "Fresh local unified gate after schema identity and review-root enforcement.",
+      "bound_commit": "81ee6f9e76f81ffb9328bb5e71b172f83ea8bb41",
+      "note": "Fresh local unified gate for Ed25519 external review trust anchor.",
       "path": "gate-reports/gate-report.json",
       "requirements_digest_path": "gate-reports/requirements.lock.txt.sha256",
       "requirements_path": "gate-reports/requirements.lock.txt",
@@ -10,23 +10,23 @@
       "type": "local_gate_report"
     },
     {
-      "aggregate_path": "remote-matrix/a4968b7-33584899447/cells.json",
-      "ci_run_id": "33584899447",
-      "ci_run_url": "https://github.com/ljheee/unified-quant/actions/runs/33584899447",
+      "aggregate_path": "remote-matrix/81ee6f9-33586647474/cells.json",
+      "ci_run_id": "33586647474",
+      "ci_run_url": "https://github.com/ljheee/unified-quant/actions/runs/33586647474",
       "covered_cells": [
-        "macos-latest/3.11",
-        "macos-latest/3.11/qlib",
-        "macos-latest/3.12",
-        "macos-latest/3.12/qlib",
-        "macos-latest/3.13",
-        "ubuntu-latest/3.11",
-        "ubuntu-latest/3.11/qlib",
-        "ubuntu-latest/3.12",
-        "ubuntu-latest/3.12/qlib",
-        "ubuntu-latest/3.13"
+        "gate-report-macos-latest-3.11",
+        "gate-report-macos-latest-3.12",
+        "gate-report-macos-latest-3.13",
+        "gate-report-ubuntu-latest-3.11",
+        "gate-report-ubuntu-latest-3.12",
+        "gate-report-ubuntu-latest-3.13",
+        "qlib-gate-report-macos-latest-3.11",
+        "qlib-gate-report-macos-latest-3.12",
+        "qlib-gate-report-ubuntu-latest-3.11",
+        "qlib-gate-report-ubuntu-latest-3.12"
       ],
-      "git_commit": "a4968b7aba2f7e9f6e6178e07fcb294b1f70ca14",
-      "note": "Ten distinct remote cells after schema identity and review-root enforcement.",
+      "git_commit": "81ee6f9e76f81ffb9328bb5e71b172f83ea8bb41",
+      "note": "Ten distinct remote cells for Ed25519 external review trust anchor.",
       "status": "passed",
       "type": "remote_environment_matrix"
     },
@@ -46,12 +46,18 @@
       "type": "identity_golden_vector"
     },
     {
-      "note": "Publisher-process helper is a test fixture; an external trust anchor is still required before FP exit.",
-      "status": "blocked",
+      "anchor_path": "../../../../config/model-quality-trust-anchor.v1.json",
+      "note": "Out-of-band Ed25519 public key verifies reviewer registry and immutable review decisions.",
+      "status": "passed",
+      "test_id": [
+        "tests/test_feature_preprocessing.py::test_quality_review_requires_separately_held_private_key",
+        "tests/test_feature_preprocessing.py::test_quality_review_signature_binds_all_decision_fields",
+        "tests/test_feature_preprocessing.py::test_trust_anchor_rejects_unanchored_review_registry"
+      ],
       "type": "external_review_trust_boundary"
     }
   ],
-  "index_version": 3,
+  "index_version": 4,
   "phase": "FP0/FP1",
-  "status": "blocked"
+  "status": "passed"
 }

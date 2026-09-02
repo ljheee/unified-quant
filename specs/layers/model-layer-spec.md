@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.1.3; phases 0–5 released; FP external reviewer trust boundary remediated; fresh gates pending**
+Status: **design v1.1.3; phases 0–5 released; FP trust boundary remediated and exited on fresh local plus ten-cell remote evidence**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`

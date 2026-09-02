@@ -95,6 +95,7 @@ cryptography==49.0.0
     # via
     #   google-auth
     #   mlflow
+    #   unified-quant
 cvxpy==1.9.2
     # via pyqlib
 cycler==0.12.1

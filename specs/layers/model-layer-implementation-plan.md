@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.15; phases 0–5 released; FP contracts, runtime, trust anchor, and prior evidence passed; this trust-anchor change requires fresh local and remote gates.**
+Status: **gated implementation order v1.15; phases 0–5 released; FP trust-anchor implementation has fresh local plus ten-cell remote gates and is exited.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -420,23 +420,19 @@ later phases must expand their rows before entering implementation.
 | FP1j-input-schema-identity | FP | FP remediation | test_dataset_read_rejects_semantically_tampered_input_schema | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1k-review-root-containment | FP | FP remediation | test_dataset_read_rejects_external_review_root_symlink | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1l-quality-digest-anchor | FP | FP remediation | test_quality_report_checksum_changes_manifest_digest_but_not_generation | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1m-external-trust-anchor | FP | FP trust-anchor remediation | test_quality_review_requires_separately_held_private_key + test_quality_review_signature_binds_all_decision_fields + test_trust_anchor_rejects_unanchored_review_registry | tests/test_feature_preprocessing.py | TBD-fresh-gate | blocked |
+| FP1m-external-trust-anchor | FP | FP trust-anchor remediation | test_quality_review_requires_separately_held_private_key + test_quality_review_signature_binds_all_decision_fields + test_trust_anchor_rejects_unanchored_review_registry | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 
 The remaining source-spec rows are covered by the runtime tests named above or by
 their existing phase-specific negative suites; no security/lineage row is deferred.
 
 ## Immediate Next Actions
 
-FP enforcement and the Ed25519 external reviewer trust anchor are implemented.
-The publisher verification path now uses an out-of-band public-key anchor and
-rejects unanchored registries, wrong key IDs, and signature mutations. The
-previous local and remote reports predate this trust-anchor commit, so fresh
-unified and ten-cell evidence must be regenerated before FP gate exit.
+FP enforcement and the Ed25519 external reviewer trust anchor are exited.
+The publisher verification path uses an out-of-band public-key anchor and rejects
+unanchored registries, wrong key IDs, and signature mutations. Fresh local and
+ten-cell remote evidence are preserved under `evidence/preprocessing/phase-0`.
 
-After the mechanical regressions are green:
 
-1. run the unified gate on this trust-anchor implementation HEAD;
-2. preserve the local report, locked requirements, and digest;
-3. run and aggregate the declared remote CI matrix at this same HEAD;
-4. update the FP phase record and evidence index; and
-5. only mark FP exited after both fresh evidence streams and the trust-anchor acceptance rows pass.
+All immediate FP gate actions are complete. The next development step is the
+next normative model-layer slice, with its acceptance rows expanded before
+implementation.
