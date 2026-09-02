@@ -602,5 +602,18 @@
       "evidence_path": "evidence/preprocessing/phase-0/gate-reports/gate-report.json",
       "status": "passed"
     }
-  ]
+  ],
+  "evidence_status": {
+    "local_gate": {
+      "path": "evidence/model-layer/remediation/gate-report.json",
+      "git_commit": "0734521ed602f6c18d324a01662839c74fbdba56",
+      "status": "passed"
+    },
+    "remote_gate": {
+      "cells_path": "evidence/model-layer/remediation/remote-matrix/0734521-33591845100/cells.json",
+      "run_id": 33591845100,
+      "git_commit": "0734521ed602f6c18d324a01662839c74fbdba56",
+      "status": "passed"
+    }
+  }
 }

@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.17; phases 0–5 released; FP exited; all 59 M1–M12 sub-rows map to exact tests; local Qlib-extras gate passed, remote matrix evidence pending.**
+Status: **gated implementation order v1.18; phases 0–5 released; FP exited; all 59 M1–M12 sub-rows map to exact tests; local and remote 10-cell unified gates passed.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -453,8 +453,9 @@ unlock a new implementation slice. The source of truth is
 
 ## Immediate Next Actions
 
-All seven previously blocked acceptance rows now map to exact fail-closed tests
-and pass the local unified Qlib-extras gate. The remaining evidence action is to
-push the final implementation, preserve the remote six-cell plus Qlib-cell
-matrix, and reconcile the evidence index before opening the next model-layer
-slice.
+All seven previously blocked acceptance rows now map to exact fail-closed tests.
+The remediation gate is preserved under `evidence/model-layer/remediation/`.
+Remote CI run `33591845100` records 10/10 passed cells (six standard, four Qlib
+extras) for final commit `0734521` at
+`evidence/model-layer/remediation/remote-matrix/0734521-33591845100/cells.json`.
+The next model-layer slice may be planned from this evidence.
