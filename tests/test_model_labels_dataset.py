@@ -1,15 +1,10 @@
 from __future__ import annotations
 
 import json
-import copy
-from datetime import datetime
-from pathlib import Path
-
-import numpy as np
 import pandas as pd
 import pytest
 
-from uq.contracts.model_layer import ModelContractLoader, resolve_bindings, sha256_json
+from uq.contracts.model_layer import ModelContractLoader, sha256_json
 from uq.errors import ContractError
 from uq.models.dataset import DatasetBuilder, SplitValidator
 from uq.models.labels import LabelBuilder, LabelValidator
@@ -103,6 +98,21 @@ class TestLabelBuilder:
         frame.loc[0, field] = True
         manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
         assert manifest["row_count"] == len(frame) - 1
+        assert manifest["columns"] == ["instrument", "decision_date", "label"]
+        eligible = frame.drop(index=0)
+        labels = (
+            (eligible["close"] * eligible["adj_factor"])
+            .groupby(eligible["instrument"], sort=False)
+            .transform(lambda values: values.shift(-5) / values - 1)
+        )
+        assert manifest["data_checksum_sha256"] == sha256_json({"rows": [
+            [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2])]
+            for row in pd.DataFrame({
+                "instrument": eligible["instrument"],
+                "decision_date": eligible["datetime"],
+                "label": labels,
+            }).itertuples(index=False)
+        ]})
 
     def test_new_listing_rows_are_excluded_until_listing_age_threshold(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
@@ -110,6 +120,21 @@ class TestLabelBuilder:
         frame.loc[:9, "listing_date"] = pd.Timestamp("2026-01-10", tz="UTC")
         manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
         assert manifest["row_count"] == len(frame) - 10
+        assert manifest["eligibility"]["rules"]["listing_age_minimum_days"] == 60
+        eligible = frame.iloc[10:]
+        labels = (
+            (eligible["close"] * eligible["adj_factor"])
+            .groupby(eligible["instrument"], sort=False)
+            .transform(lambda values: values.shift(-5) / values - 1)
+        )
+        assert manifest["data_checksum_sha256"] == sha256_json({"rows": [
+            [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2])]
+            for row in pd.DataFrame({
+                "instrument": eligible["instrument"],
+                "decision_date": eligible["datetime"],
+                "label": labels,
+            }).itertuples(index=False)
+        ]})
 
 
 class TestLabelValidator:
@@ -183,6 +208,31 @@ class TestSplitValidator:
         with pytest.raises(ContractError, match="duplicate split names"):
             SplitValidator.validate_splits(
                 duplicate_name_splits, horizon=5, embargo_days=2, trading_dates=dates,
+            )
+
+    def test_non_adjacent_overlap_is_rejected_after_reordering(self) -> None:
+        dates = self._dates(n=40)
+        reversed_intervals = [
+            {"name": "first", "start_date": dates[25], "end_date": dates[35]},
+            {"name": "second", "start_date": dates[0], "end_date": dates[30]},
+            {"name": "train", "start_date": dates[0], "end_date": dates[10]},
+            {"name": "validation", "start_date": dates[38], "end_date": dates[39]},
+        ]
+        with pytest.raises(ContractError, match="purge/embargo violation|overlapping split intervals"):
+            SplitValidator.validate_splits(
+                reversed_intervals, horizon=5, embargo_days=2, trading_dates=dates,
+            )
+
+    def test_duplicate_name_with_same_interval_does_not_bypass_overlap(self) -> None:
+        dates = self._dates()
+        duplicate_same_interval = [
+            {"name": "train", "start_date": dates[0], "end_date": dates[14]},
+            {"name": "train", "start_date": dates[0], "end_date": dates[14]},
+            {"name": "validation", "start_date": dates[25], "end_date": dates[29]},
+        ]
+        with pytest.raises(ContractError, match="duplicate split names"):
+            SplitValidator.validate_splits(
+                duplicate_same_interval, horizon=5, embargo_days=2, trading_dates=dates,
             )
 
 

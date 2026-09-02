@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from review_key import REVIEWER_PRIVATE_KEY
+from tests.review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.contracts.model_layer import create_reviewed_quality_decision

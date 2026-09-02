@@ -159,6 +159,7 @@ class ModelContractLoader:
                 checksum_payload = {key: value for key, value in payload.items() if key != "report_checksum_sha256"}
                 if payload["report_checksum_sha256"] != sha256_json(checksum_payload):
                     raise ContractError("model quality report checksum mismatch")
+                verify_reviewed_quality_report_signature(payload)
             return
         if schema_name in ("portfolio_definition", "target_weights", "backtest_config", "backtest_result"):
             exclude_fields = set()
@@ -260,6 +261,21 @@ class ModelQualityReviewRegistry:
 
 _MODEL_QUALITY_REVIEW_REGISTRY = ModelQualityReviewRegistry()
 _MODEL_QUALITY_TRUST_ANCHOR = ModelQualityReviewTrustAnchor()
+
+
+def verify_reviewed_quality_report_signature(report: Mapping[str, Any]) -> None:
+    """Verify that the reviewer-signed decision fields remain unchanged."""
+    signed_fields = {
+        "report_version", "binding_type", "policy", "status", "checks",
+        "errors", "warnings", "key_id", "producer_code_fingerprint", "reviewer",
+    }
+    if not signed_fields.issubset(report):
+        raise ContractError("quality report does not contain a reviewer-signed decision")
+    unsigned_payload = {key: report[key] for key in signed_fields}
+    _MODEL_QUALITY_TRUST_ANCHOR.verify(
+        unsigned_payload,
+        signature_hex=report.get("review_signature_sha256"),
+    )
 
 
 def review_signature(

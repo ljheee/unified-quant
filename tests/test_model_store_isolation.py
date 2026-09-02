@@ -6,13 +6,12 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from review_key import REVIEWER_PRIVATE_KEY
+from tests.review_key import REVIEWER_PRIVATE_KEY
 
 from uq.contracts.model_layer import (
     bind_reviewed_quality_decision,
     create_reviewed_quality_decision,
     model_manifest_identities,
-    sha256_json,
 )
 from uq.errors import ContractError
 from uq.models.accepted_store import AcceptedFactorIndexRuntime

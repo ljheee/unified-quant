@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from review_key import REVIEWER_PRIVATE_KEY
+from tests.review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.contracts.model_layer import sha256_json
@@ -203,7 +203,7 @@ class TestArtifactStore:
             store.publish(manifest, artifact_bytes, quality_report=wrong_generation_report)
 
         failed_report = _failed_quality_report(generation)
-        with pytest.raises(ContractError, match="quality report status is not approved"):
+        with pytest.raises(ContractError, match="quality report status is not approved|model quality review signature mismatch"):
             store.publish(manifest, artifact_bytes, quality_report=failed_report)
 
         partition = store.publish(manifest, artifact_bytes, quality_report=_quality_report(generation))

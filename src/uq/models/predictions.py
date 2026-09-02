@@ -151,6 +151,19 @@ class PredictionBuilder:
         if manifest.get("eligibility_status") != "passed":
             raise ContractError("prediction publication requires passed eligibility status")
         ModelContractLoader.validate("prediction_set", manifest)
+        checksum = manifest.get("quality_report_checksum_sha256")
+        report_path = self.root / "external_quality_reviews" / f"{checksum}.json"
+        try:
+            quality_report = json.loads(report_path.read_text())
+            ModelContractLoader.validate("model_quality_report", quality_report)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContractError("prediction quality report unavailable or malformed") from exc
+        if (
+            quality_report["binding_type"] != "prediction_set_v1"
+            or quality_report["bound_generation_id"] != manifest["generation_id"]
+            or quality_report["status"] not in {"passed", "warning"}
+        ):
+            raise ContractError("prediction quality report rejects publication")
         partition = (
             self.predictions_dir
             / f"prediction_set={manifest['generation_id']}"

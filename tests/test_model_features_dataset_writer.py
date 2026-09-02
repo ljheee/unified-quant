@@ -6,14 +6,14 @@ from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
-from review_key import REVIEWER_PRIVATE_KEY
+from tests.review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.errors import ContractError
 from uq.models.accepted_store import AcceptedFactorIndexRuntime
 from uq.models.dataset import DatasetBuilder
 from uq.models.dataset_writer import DatasetWriter
-from uq.contracts.model_layer import create_reviewed_quality_decision, sha256_json
+from uq.contracts.model_layer import create_reviewed_quality_decision
 from uq.models.features import FeatureSchemaBuilder, FeatureSchemaValidator
 
 DIGEST = "0" * 64

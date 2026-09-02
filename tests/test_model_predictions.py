@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
-from review_key import REVIEWER_PRIVATE_KEY
+from tests.review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.errors import ContractError
@@ -191,7 +191,7 @@ class TestPredictionBuilder:
             subject_generation_id="f" * 64, subject_content_sha256="f" * 64,
         )
         report_path.write_text(json.dumps(wrong_generation, sort_keys=True))
-        with pytest.raises(ContractError, match="prediction quality report rejects read"):
+        with pytest.raises(ContractError, match="prediction quality report rejects read|model quality review signature mismatch"):
             builder.read(manifest["generation_id"], manifest["decision_date"])
 
         data_path = partition / "data.parquet"
@@ -221,7 +221,7 @@ class TestPredictionBuilder:
         report_path.write_text(json.dumps(failed_report, sort_keys=True))
         tampered = {**manifest, "quality_report_checksum_sha256": failed_report["report_checksum_sha256"]}
         tampered["manifest_digest_sha256"] = sha256_json(tampered)
-        with pytest.raises(ContractError, match="prediction quality report rejects read"):
+        with pytest.raises(ContractError, match="prediction quality report rejects read|model quality review signature mismatch"):
             builder.read(tampered["generation_id"], tampered["decision_date"])
 
     def test_prediction_eligibility_policy_and_status_fail_closed(self, tmp_path: Path) -> None:

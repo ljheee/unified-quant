@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from review_key import REVIEWER_PRIVATE_KEY
+from tests.review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.errors import ContractError
