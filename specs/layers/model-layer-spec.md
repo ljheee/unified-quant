@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.1.3; phases 0–5 released; FP trust boundary remediated and exited on fresh local plus ten-cell remote evidence**
+Status: **design v1.1.4; phases 0–5 released; FP exited; §12 expanded into machine-readable M1–M12 acceptance sub-items**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
@@ -417,11 +417,11 @@ recomputed into the same generation.
 
 Minimum gates:
 
-Slash phase notation means every listed phase must eventually provide its own
-sub-item evidence. Before any phase exit, each row must be expanded into sub-IDs
-such as `M1a-factor-manifest-missing`, `M1b-factor-checksum-tamper`, and
-`M1c-wrong-generation-binding`, each with one owning phase, blocked-by list,
-exact test ID, fixture path, evidence path, and status.
+The implementation plan expands every row below into machine-readable sub-IDs.
+The authoritative expansion is `evidence/model-layer/acceptance-matrix.json`;
+it records owning phase, blocked-by list, exact or explicitly planned test ID,
+fixture path, evidence path, and status. Rows with `planned:*` test IDs remain
+blocked.
 
 | ID | Requirement | Owning phase(s) | Test ID placeholder | Status |
 |---|---|---|---|---|

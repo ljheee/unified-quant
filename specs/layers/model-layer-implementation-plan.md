@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.15; phases 0–5 released; FP trust-anchor implementation has fresh local plus ten-cell remote gates and is exited.**
+Status: **gated implementation order v1.16; phases 0–5 released; FP exited; M1–M12 acceptance matrix fully expanded with explicit blocked rows.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -383,56 +383,78 @@ Exit criteria:
 
 ## Acceptance Matrix Expansion
 
-The source-spec §12 matrix is authoritative. Phase 0 sub-items are now expanded;
-later phases must expand their rows before entering implementation.
+The source-spec §12 rows are expanded in the machine-readable matrix below.
+A row may claim `passed` only with an exact existing test node ID or a named
+mechanical gate command. Rows marked `planned:*` remain blocked and cannot
+unlock a new implementation slice. The source of truth is
+`evidence/model-layer/acceptance-matrix.json`.
 
 | Sub-ID | Owning phase | Blocked by | Test ID | Fixture path | Evidence path | Status |
 |---|---|---|---|---|---|---|
-| M1a-factor-manifest-missing | 0 | none | test_cross_manifest_binding_resolver_passes_and_fails | evidence/phase-0/fixtures/model_dataset-negative.json | evidence/phase-0/phase-record.json | passed |
-| M1b-factor-checksum-tamper | 1 | Phase 0 exit | test_checksum_tamper_fails_closed | tests/test_accepted_store_runtime.py | evidence/phase-0/phase-record.json | passed |
-| M1c-wrong-generation-binding | 0 | none | test_cross_manifest_binding_resolver_passes_and_fails | evidence/phase-0/fixtures/prediction_set-negative.json | evidence/phase-0/phase-record.json | passed |
-| M5a-label-generation-change | 0 | none | test_golden_vectors_cover_all_manifest_families | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/phase-0/golden-vectors/identity-golden-vectors.json | passed |
-| M5b-dataset-generation-change | 0 | none | test_golden_vectors_cover_all_manifest_families | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/phase-0/golden-vectors/identity-golden-vectors.json | passed |
-| M8a-provider-uri-mismatch | 2A | Phase 1 exit | test_wrong_provider_uri_rejected_on_receipt | tests/test_model_qlib_export.py | evidence/phase-0/phase-record.json | passed |
-| M3a-split-purge-embargo-write-reject | 1 | Phase 0 exit | TestDatasetWriter::test_split_purge_embargo_violation_fails_closed_on_write | generated governed dataset fixture | local unified gate report | passed |
-| M4a-dataset-byte-rebuild-locked-cell | 1 | Phase 0 exit | TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable | generated governed dataset fixture | local unified gate report | passed |
-| M4b-dataset-generation-stability | 1 | Phase 0 exit | TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable | generated governed dataset fixture | local unified gate report | passed |
-| M8b-calendar-tamper | 2A | Phase 1 exit | test_calendar_tamper_rejected_on_read | tests/test_model_qlib_export.py | evidence/phase-0/phase-record.json | passed |
-| M8c-partial-export-read-reject | 2A | Phase 1 exit | test_partial_export_rejected_on_read | generated Qlib export snapshot | local unified gate report | passed |
-| M8d-feature-order-mutation-reject | 2A | Phase 1 exit | test_feature_order_mutation_rejected_on_read | generated Qlib export snapshot | local unified gate report | passed |
-| M8e-cache-substitution-outside-root | 2A | Phase 1 exit | test_cache_substitution_outside_approved_root_rejected + test_external_cache_writes_are_recorded_in_receipt | synthetic cache diff fixtures | local unified gate report | passed |
-| M8f-real-qlib-provider-training | 3 | Phase 2A exit | TestEndToEndPipeline::test_full_chain_from_factor_to_prediction (Qlib runtime branch) | generated native Qlib provider snapshot | evidence/release/final-head-ci/33523302538/local-gate/gate-report.json | passed |
-| M8g-provider-bin-tamper-reject | 3 | Phase 2A exit | TestQlibRuntimeTrainer::test_tampered_provider_bin_rejects_training | generated native Qlib provider snapshot | evidence/release/final-head-ci/33523302538/local-gate/gate-report.json | passed |
-| M10a-quarantine-path-invisible | 4 | Phase 3 exit | test_quarantine_path_is_not_visible_as_accepted + test_quarantine_manifest_records_input_generations_and_is_not_accepted | tests/test_model_trainer.py | evidence/phase-0/phase-record.json | passed |
-| M12a-reviewed-definition-required | 3 | Phase 2A exit | ModelDefinitionBuilder external `reviewed=True` rejection tests | tests/test_model_definition.py | local unified gate report | passed |
-| M11a-manifest-tamper-reject | 0 | none | test_typed_loader_rejects_absent_malformed_and_tampered_documents | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
-| M11b-path-mismatch-reject | 0 | none | test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root | evidence/phase-0/fixtures/model_definition-valid.json | evidence/phase-0/phase-record.json | passed |
-| M11c-checksum-mismatch-reject | 0 | none | test_quality_report_checksum_and_binding_are_enforced | evidence/phase-0/fixtures/model_artifact-valid.json | evidence/phase-0/phase-record.json | passed |
-| FP1a-cross-section-transform | FP | none | test_cross_sectional_standardization_and_rank_are_date_bounded | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1b-output-mismatch-reject | FP | none | test_manifest_rejects_transform_output_mismatch_and_sparse_group | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1c-identity-stability | FP | none | test_manifest_identity_is_stable_across_run_metadata | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper + test_dataset_read_rejects_stored_input_feature_schema_tamper | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1f-schema-binding-fail-closed | FP | none | test_dataset_write_rejects_wrong_input_feature_schema_binding | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1g-infinity-reject | FP | none | test_build_rejects_infinity_in_input_or_output | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1h-input-frame-mismatch | FP | none | test_dataset_write_rejects_preprocessing_input_frame_mismatch | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1i-invalid-manifest | FP | none | test_dataset_write_rejects_invalid_preprocessing_manifest | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1j-input-schema-identity | FP | FP remediation | test_dataset_read_rejects_semantically_tampered_input_schema | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1k-review-root-containment | FP | FP remediation | test_dataset_read_rejects_external_review_root_symlink | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1l-quality-digest-anchor | FP | FP remediation | test_quality_report_checksum_changes_manifest_digest_but_not_generation | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1m-external-trust-anchor | FP | FP trust-anchor remediation | test_quality_review_requires_separately_held_private_key + test_quality_review_signature_binds_all_decision_fields + test_trust_anchor_rejects_unanchored_review_registry | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
-
-The remaining source-spec rows are covered by the runtime tests named above or by
-their existing phase-specific negative suites; no security/lineage row is deferred.
+| M1a-factor-manifest-missing | 0 contract | none | `tests/test_model_layer_contracts.py::test_cross_manifest_binding_resolver_passes_and_fails` | evidence/phase-0/fixtures/model_dataset-negative.json | evidence/phase-0/phase-record.json | passed |
+| M1b-factor-checksum-tamper | 1 runtime | none | `tests/test_accepted_store_runtime.py::TestAcceptedFactorIndexRuntime::test_checksum_tamper_fails_closed` | runtime-generated factor partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M1c-wrong-generation-binding | 0 contract | none | `tests/test_model_layer_contracts.py::test_cross_manifest_binding_resolver_passes_and_fails` | evidence/phase-0/fixtures/model_dataset-negative.json | evidence/phase-0/phase-record.json | passed |
+| M1d-unverified-generation-read-reject | 1 runtime | none | `tests/test_accepted_store_runtime.py::TestAcceptedFactorIndexRuntime::test_unverified_generation_rejected_on_read` | runtime-generated factor partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M1e-accepted-store-dataset-integration | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_end_to_end_with_accepted_store` | runtime-generated accepted factor partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M1f-lineage-tamper-breaks-read | 1 runtime | none | `tests/test_model_end_to_end.py::TestEndToEndPipeline::test_lineage_tamper_breaks_read` | runtime-generated model lineage chain | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M2a-label-terminal-horizon-null | 0 contract, 1 runtime | none | `tests/test_model_labels_dataset.py::TestLabelBuilder::test_last_n_rows_are_null` | runtime-generated adjusted-price frame | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M2b-cross-section-transform-date-bounded | FP runtime | none | `tests/test_feature_preprocessing.py::test_cross_sectional_standardization_and_rank_are_date_bounded` | evidence/phase-0/fixtures/feature_preprocessing-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M2c-purge-gap-write-reject | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_split_purge_embargo_violation_fails_closed_on_write` | evidence/phase-0/fixtures/model_dataset-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M2d-label-eligibility-exclusions | FP remediation | exact regression test not yet implemented | `planned:test_label_eligibility_rules_exclude_ineligible_rows` | runtime-generated ineligible adjusted-price frame | pending | blocked |
+| M3a-valid-splits-pass | 1 contract | none | `tests/test_model_labels_dataset.py::TestSplitValidator::test_valid_splits_pass` | evidence/phase-0/fixtures/model_dataset-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M3b-split-validator-purge-reject | 1 contract | none | `tests/test_model_labels_dataset.py::TestSplitValidator::test_purge_violation_fails` | runtime-generated invalid split policy | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M3c-writer-purge-embargo-reject | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_split_purge_embargo_violation_fails_closed_on_write` | evidence/phase-0/fixtures/model_dataset-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M3d-overlap-duplicate-split-reject | FP remediation | exact regression test not yet implemented | `planned:test_split_overlap_and_duplicate_names_fail_closed` | runtime-generated invalid split policies | pending | blocked |
+| M4a-dataset-byte-rebuild-locked-cell | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable` | runtime-generated governed dataset | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M4b-dataset-generation-stability | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable` | runtime-generated governed dataset | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M4c-remote-lockfile-environment | 4A certification | none | `UQ_GATE_EXTRAS=qlib scripts/run_gate.sh` | evidence/preprocessing/phase-0/gate-reports/requirements.lock.txt.sha256 | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M4d-remote-ten-cell-matrix | 4A certification | none | `CI run 33586647474; ten-cell scripts/run_gate.sh matrix` | evidence/preprocessing/phase-0/remote-matrix/81ee6f9-33586647474/cells.json | evidence/preprocessing/phase-0/remote-matrix/81ee6f9-33586647474/cells.json | passed |
+| M5a-label-generation-change | 0 identity | none | `tests/test_model_layer_contracts.py::test_golden_vectors_cover_all_manifest_families` | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M5b-dataset-generation-change | 0 identity | none | `tests/test_model_layer_contracts.py::test_golden_vectors_cover_all_manifest_families` | evidence/phase-0/golden-vectors/identity-golden-vectors.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M5c-definition-hyperparameter-change | 3 runtime | none | `tests/test_model_definition.py::TestModelDefinitionBuilder::test_changed_hyperparams_new_generation` | evidence/phase-0/fixtures/model_definition-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M5d-dataset-feature-change | 1 runtime | none | `tests/test_model_labels_dataset.py::TestDatasetBuilder::test_changed_features_create_new_generation` | runtime-generated dataset manifests | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M5e-run-metadata-invariance | 0 identity | none | `tests/test_model_labels_dataset.py::TestLabelBuilder::test_run_metadata_change_stable_generation` | runtime-generated label manifests | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M6a-missing-dataset-report-reject | 4 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_missing_external_quality_decision_rejected` | runtime-generated dataset/report fixture | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M6b-wrong-dataset-report-reject | 4 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_wrong_binding_external_quality_decision_rejected` | runtime-generated dataset/report fixture | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M6c-quality-checksum-and-binding | 0 contract | none | `tests/test_model_layer_contracts.py::test_quality_report_checksum_and_binding_are_enforced` | evidence/phase-0/fixtures/model_quality_report-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M6d-review-signature-mutation-reject | FP trust anchor | none | `tests/test_feature_preprocessing.py::test_quality_review_signature_binds_all_decision_fields` | runtime-generated signed review decision | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M6e-unanchored-review-registry-reject | FP trust anchor | none | `tests/test_feature_preprocessing.py::test_trust_anchor_rejects_unanchored_review_registry` | config/model-quality-trust-anchor.v1.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M6f-artifact-report-fail-closed | 4/5 runtime | exact publication/read regression trio not yet implemented | `planned:test_artifact_report_missing_wrong_generation_and_failed_reject_publication_read` | runtime-generated artifact report fixtures | pending | blocked |
+| M6g-prediction-report-fail-closed | 5 runtime | exact publication/read regression trio not yet implemented | `planned:test_prediction_report_missing_wrong_generation_and_failed_reject_publication_read` | runtime-generated prediction report fixtures | pending | blocked |
+| M7a-deterministic-training-same-seed | 3 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_deterministic_training_same_seed` | runtime-generated model artifact | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M7b-dataset-byte-reproducibility | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_rebuild_is_logically_reproducible_and_generation_stable` | runtime-generated governed dataset | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M7c-remote-environment-certification | 4A certification | none | `CI run 33586647474; ten-cell scripts/run_gate.sh matrix` | evidence/preprocessing/phase-0/remote-matrix/81ee6f9-33586647474/cells.json | evidence/preprocessing/phase-0/remote-matrix/81ee6f9-33586647474/cells.json | passed |
+| M8a-provider-uri-mismatch | 2A runtime | none | `tests/test_model_qlib_export.py::TestQlibDatasetExporter::test_wrong_provider_uri_rejected_on_receipt` | runtime-generated Qlib export/receipt | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M8b-calendar-tamper | 2A runtime | none | `tests/test_model_qlib_export.py::TestQlibDatasetExporter::test_calendar_tamper_rejected_on_read` | runtime-generated Qlib export snapshot | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M8c-partial-export-read-reject | 2A runtime | none | `tests/test_model_qlib_export.py::TestQlibDatasetExporter::test_partial_export_rejected_on_read` | runtime-generated Qlib export snapshot | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M8d-feature-order-mutation-reject | 2A runtime | none | `tests/test_model_qlib_export.py::TestQlibDatasetExporter::test_feature_order_mutation_rejected_on_read` | runtime-generated Qlib export snapshot | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M8e-cache-substitution-outside-root | 2A runtime | none | `tests/test_model_qlib_export.py::TestQlibDatasetExporter::test_cache_substitution_outside_approved_root_rejected` | runtime-generated cache diff fixture | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M8f-real-qlib-provider-training | 3 runtime | none | `tests/test_model_end_to_end.py::TestEndToEndPipeline::test_full_chain_from_factor_to_prediction` | runtime-generated native Qlib provider snapshot | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M8g-provider-bin-tamper-reject | 3 runtime | none | `tests/test_model_end_to_end.py::TestQlibRuntimeTrainer::test_tampered_provider_bin_rejects_training` | runtime-generated native Qlib provider snapshot | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M8h-universe-binding-resolved | 1/3 runtime | none | `tests/test_model_end_to_end.py::TestEndToEndPipeline::test_full_chain_from_factor_to_prediction` | runtime-generated universe snapshot/member artifact | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M9a-prediction-lineage-exact | 5 runtime | none | `tests/test_model_end_to_end.py::TestEndToEndPipeline::test_full_chain_from_factor_to_prediction` | runtime-generated prediction manifest | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M9b-prediction-nonfinite-reject | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_non_finite_score_rejected` | evidence/phase-0/fixtures/prediction_set-negative.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M9c-prediction-overwrite-reject | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_immutable_overwrite_rejected` | runtime-generated prediction partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M9d-prediction-data-tamper-reject | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_tampered_data_rejected_on_read` | runtime-generated prediction partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M9e-prediction-artifact-tamper-reject | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_tampered_artifact_before_build_rejected` | runtime-generated model artifact partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M9f-prediction-eligibility-enforced | FP remediation | exact eligibility policy regression not yet implemented | `planned:test_prediction_eligibility_policy_and_status_fail_closed` | runtime-generated prediction eligibility fixtures | pending | blocked |
+| M10a-quarantine-path-invisible | 4 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_quarantine_path_is_not_visible_as_accepted` | runtime-generated accepted/quarantine partitions | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M10b-quarantine-manifest-inputs | 4 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_quarantine_manifest_records_input_generations_and_is_not_accepted` | runtime-generated quarantine manifest | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M10c-staging-invisible-to-accepted-read | FP remediation | needs store-family parameterized negative test | `planned:test_staging_directories_are_invisible_to_accepted_readers` | runtime-generated staging directories | pending | blocked |
+| M10d-temporary-bin-outside-accepted | 2A runtime | none | `tests/test_model_qlib_export.py::TestQlibDatasetExporter::test_cleanup_policy_keeps_temporary_bin_files_outside_accepted_store` | runtime-generated temporary Qlib files | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M11a-manifest-tamper-reject | 0 identity | none | `tests/test_model_layer_contracts.py::test_typed_loader_rejects_absent_malformed_and_tampered_documents` | evidence/phase-0/fixtures/model_definition-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M11b-path-mismatch-reject | 0 identity | none | `tests/test_model_layer_contracts.py::test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root` | evidence/phase-0/fixtures/model_definition-valid.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M11c-checksum-mismatch-reject | 0 identity | none | `tests/test_model_layer_contracts.py::test_quality_report_checksum_and_binding_are_enforced` | evidence/phase-0/fixtures/model_quality_report-negative.json | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M11d-dataset-data-tamper-reject | 1 runtime | none | `tests/test_model_features_dataset_writer.py::TestDatasetWriter::test_tampered_data_rejected_on_read` | runtime-generated dataset partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M11e-prediction-data-tamper-reject | 5 runtime | none | `tests/test_model_predictions.py::TestPredictionBuilder::test_tampered_data_rejected_on_read` | runtime-generated prediction partition | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M12a-feature-order-change-reject | 3 runtime | none | `tests/test_model_features_dataset_writer.py::TestFeatureSchemaBuilder::test_validate_rejects_column_order_change` | runtime-generated feature schema/frame | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
+| M12b-reviewed-definition-required | FP remediation | current registry assertion is not an exact fail-closed test | `planned:test_unreviewed_model_definition_rejected_before_training` | runtime-generated reviewed/unreviewed definitions | pending | blocked |
+| M12c-feature-schema-change-gated | 3 runtime | none | `tests/test_model_trainer.py::TestArtifactStore::test_reviewed_definition_registry_governs_feature_and_order_changes` | runtime-generated definition registry | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed |
 
 ## Immediate Next Actions
 
-FP enforcement and the Ed25519 external reviewer trust anchor are exited.
-The publisher verification path uses an out-of-band public-key anchor and rejects
-unanchored registries, wrong key IDs, and signature mutations. Fresh local and
-ten-cell remote evidence are preserved under `evidence/preprocessing/phase-0`.
-
-
-All immediate FP gate actions are complete. The next development step is the
-next normative model-layer slice, with its acceptance rows expanded before
-implementation.
+FP gate work is complete. The next model-layer action is to implement the seven
+explicitly blocked acceptance rows in
+`evidence/model-layer/acceptance-matrix.json`. No new implementation slice may
+claim executable status until each planned test ID exists, its negative fixture
+is preserved, and a fresh unified gate plus remote matrix records the result.
