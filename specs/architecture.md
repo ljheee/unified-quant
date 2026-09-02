@@ -400,6 +400,7 @@ model layer's manifest, checksum, and quality-report governance.
 ```text
 Reviewed Research Run Request
   -> Request Resolver / Stage Plan
+  -> External Quality Decision Provider / Trust Root
   -> Factor Layer
   -> Model Layer (dataset -> Qlib export -> run -> prediction)
   -> Portfolio Layer
@@ -411,6 +412,9 @@ Research Chain is a governed orchestrator, not a new computation engine. It
 resolves reviewed templates and immutable inputs, invokes owning-layer stores,
 records stage lineage, and reconciles readback evidence. It never bypasses
 manifests, quality decisions, immutable publication, or accepted reader APIs.
+The external quality decision provider and its trust root are separate inputs;
+the runner can only look up and verify reviewed decisions, never create or sign
+them.
 
 ## 12. Acceptance Criteria for the Stable Contract
 
