@@ -4,6 +4,7 @@ import io
 import fcntl
 import json
 import os
+import re
 import shutil
 import uuid
 from pathlib import Path
@@ -154,9 +155,27 @@ class DatasetWriter:
                 raise
         return partition
 
+    def _governance_report_path(self, checksum: str) -> Path:
+        if not re.fullmatch(r"[0-9a-f]{64}", checksum):
+            raise ContractError("invalid quality report checksum")
+        governance_root = self.root / "external_quality_reviews"
+        governance_root.mkdir(parents=True, exist_ok=True)
+        if governance_root.is_symlink() or not governance_root.is_dir():
+            raise ContractError("external quality review root is not a contained directory")
+        try:
+            resolved_root = governance_root.resolve(strict=True)
+            root_resolved = self.root.resolve(strict=True)
+            contained = resolved_root.is_relative_to(root_resolved)
+        except (OSError, RuntimeError, ValueError):
+            contained = False
+        if not contained:
+            raise ContractError("external quality review root lies outside approved store")
+        return governance_root / f"{checksum}.json"
+
     def _publish_quality_report(self, checksum: str, report: dict[str, Any]) -> None:
-        path = self.root / "external_quality_reviews" / f"{checksum}.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path = self._governance_report_path(checksum)
+        if path.is_symlink():
+            raise ContractError("quality report paths cannot be symbolic links")
         if path.exists():
             existing = json.loads(path.read_text())
             if existing != report:
@@ -241,6 +260,7 @@ class DatasetWriter:
                 if not input_schema_path.is_file():
                     raise ContractError("dataset input feature schema is unavailable")
                 input_feature_schema = json.loads(input_schema_path.read_text())
+                ModelContractLoader.validate("feature_schema", input_feature_schema)
                 self._validate_preprocessing_references(manifest, preprocessing_doc, fs_doc, input_feature_schema)
                 self._validate_preprocessing_quality_report(preprocessing_doc)
             except (json.JSONDecodeError, ContractError) as exc:
@@ -280,7 +300,9 @@ class DatasetWriter:
 
     def _validate_bound_quality_report(self, manifest: dict[str, Any]) -> None:
         checksum = manifest.get("quality_report_checksum_sha256")
-        path = self.root / "external_quality_reviews" / f"{checksum}.json"
+        path = self._governance_report_path(checksum)
+        if path.is_symlink():
+            raise ContractError("dataset quality report cannot be a symbolic link")
         try:
             report = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError) as exc:
@@ -403,7 +425,9 @@ class DatasetWriter:
 
     def _validate_preprocessing_quality_report(self, preprocessing_manifest: dict[str, Any]) -> None:
         checksum = preprocessing_manifest.get("quality_report_checksum_sha256")
-        path = self.root / "external_quality_reviews" / f"{checksum}.json"
+        path = self._governance_report_path(checksum)
+        if path.is_symlink():
+            raise ContractError("preprocessing quality report cannot be a symbolic link")
         try:
             report = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError) as exc:

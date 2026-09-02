@@ -208,11 +208,16 @@ The first governed slice is stateless and cross-sectional:
 input factor set/version/generations, exact input frame fingerprint, exact
 input/output feature-schema generation and manifest digest, ordered features,
 code fingerprint, serialization profile, quality-report checksum, stable
-generation, and manifest digest. `DatasetWriter` must reconcile this manifest
-with both schemas, recompute the declared transform, and persist
-`feature_schemas/input.json`. Readback verifies the dataset manifest, sidecar,
+generation, and manifest digest. The report checksum is excluded from stable
+generation but included in manifest digest. `DatasetWriter` must reconcile this
+manifest with both schemas, recompute both schema identities, recompute the
+declared transform, and persist `feature_schemas/input.json` only for
+preprocessing datasets. Readback verifies the dataset manifest, sidecar,
 input/output feature schemas, preprocessing manifest and bindings, preprocessing
-quality report, row keys, row count, physical checksum, and logical fingerprints.
+quality report, row keys, row count, physical checksum, and logical
+fingerprints. The `external_quality_reviews` governance root must be a real
+directory contained below the store root; report files and the root itself
+cannot be symbolic links.
 
 A learned or rolling preprocessing policy (for example train-fit z-score,
 winsorization bounds, neutralization, or online scaling) requires a new contract

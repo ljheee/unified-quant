@@ -411,28 +411,32 @@ later phases must expand their rows before entering implementation.
 | FP1a-cross-section-transform | FP | none | test_cross_sectional_standardization_and_rank_are_date_bounded | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1b-output-mismatch-reject | FP | none | test_manifest_rejects_transform_output_mismatch_and_sparse_group | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1c-identity-stability | FP | none | test_manifest_identity_is_stable_across_run_metadata | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper + test_dataset_read_rejects_stored_input_feature_schema_tamper | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | blocked-local |
+| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper + test_dataset_read_rejects_stored_input_feature_schema_tamper | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | blocked-local |
 | FP1f-schema-binding-fail-closed | FP | none | test_dataset_write_rejects_wrong_input_feature_schema_binding | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1g-infinity-reject | FP | none | test_build_rejects_infinity_in_input_or_output | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1h-input-frame-mismatch | FP | none | test_dataset_write_rejects_preprocessing_input_frame_mismatch | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1i-invalid-manifest | FP | none | test_dataset_write_rejects_invalid_preprocessing_manifest | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1j-input-schema-identity | FP | FP remediation | test_dataset_read_rejects_semantically_tampered_input_schema | generated frame | TBD-final-head-gate | blocked |
+| FP1k-review-root-containment | FP | FP remediation | test_dataset_read_rejects_external_review_root_symlink | generated frame | TBD-final-head-gate | blocked |
+| FP1l-quality-digest-anchor | FP | FP remediation | test_quality_report_checksum_changes_manifest_digest_but_not_generation | generated frame | TBD-final-head-gate | blocked |
 
 The remaining source-spec rows are covered by the runtime tests named above or by
 their existing phase-specific negative suites; no security/lineage row is deferred.
 
 ## Immediate Next Actions
 
-FP remediation is not gate-exit ready. The active blocker is the external
-reviewer trust boundary: `create_reviewed_quality_decision()` remains a
-publisher-process helper and does not provide a mechanical separation from the
-publisher. FP must therefore remain `in_progress` even though contract, runtime,
-fixture, and local-gate checks are green.
+FP remediation is not gate-exit ready. Schema identity, review-root containment,
+and quality-digest regressions have been added, but their final-head local and
+remote evidence must be regenerated. The separate external reviewer trust
+boundary remains a production blocker: `create_reviewed_quality_decision()`
+remains a publisher-process helper and does not provide mechanical separation
+from the publisher.
 
-After introducing and testing the external reviewer trust anchor:
+After the mechanical regressions are green:
 
 1. rerun the unified gate on the final implementation HEAD;
 2. preserve the local report, locked requirements, and digest;
 3. run and aggregate the declared remote CI matrix at the same HEAD;
 4. update the FP phase record and evidence index; and
-5. only then change FP status from `in_progress` to `exited`.
+5. keep FP blocked until the external reviewer trust anchor is implemented.

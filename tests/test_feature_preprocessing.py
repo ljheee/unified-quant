@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import shutil
 from pathlib import Path
 import uuid
 
@@ -415,3 +416,87 @@ def test_dataset_read_rejects_stored_input_feature_schema_tamper(tmp_path: Path)
     stored_schema_path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n")
     with pytest.raises(ContractError, match="tampered or malformed feature preprocessing"):
         writer.read("preprocessed_slice", "1.0.0", writer.last_published_manifest["generation_id"])
+
+
+def test_dataset_read_rejects_semantically_tampered_input_schema(tmp_path: Path) -> None:
+    frame = _frame()
+    output = _standardized(frame)
+    schema = _output_schema(output)
+    input_schema = _input_schema(frame)
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="basic-standardized-v1", semantic_version="1.0.0",
+        transform="standardize_cross_section",
+    )
+    preprocessing = builder.build(
+        frame, output, input_factor_set="basic", input_factor_version="1.0.0",
+        input_factor_generation_ids=["0" * 64], ordered_features=["volume_ratio_20d"],
+        input_feature_schema=input_schema, output_feature_schema=schema,
+    )
+    writer = DatasetWriter(tmp_path)
+    writer.write(
+        _dataset_manifest(output, preprocessing, input_schema), output, feature_schema=schema,
+        quality_report=_dataset_report(), preprocessing_manifest=preprocessing,
+        preprocessing_input_frame=frame, preprocessing_frame=output,
+        preprocessing_input_feature_schema=input_schema, preprocessing_quality_report=_report(),
+    )
+    generation = writer.last_published_manifest["generation_id"]
+    schema_path = tmp_path / "datasets" / "dataset=preprocessed_slice" / "version=1.0.0" / f"generation={generation}" / "feature_schemas" / "input.json"
+    document = json.loads(schema_path.read_text())
+    document["columns"][0]["source_factor"] = "tampered_source"
+    document["columns"][0]["unit"] = "tampered_unit"
+    schema_path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n")
+    with pytest.raises(ContractError, match="tampered or malformed feature preprocessing"):
+        writer.read("preprocessed_slice", "1.0.0", writer.last_published_manifest["generation_id"])
+
+
+def test_dataset_read_rejects_external_review_root_symlink(tmp_path: Path) -> None:
+    frame = _frame()
+    output = _standardized(frame)
+    schema = _output_schema(output)
+    input_schema = _input_schema(frame)
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="basic-standardized-v1", semantic_version="1.0.0",
+        transform="standardize_cross_section",
+    )
+    preprocessing = builder.build(
+        frame, output, input_factor_set="basic", input_factor_version="1.0.0",
+        input_factor_generation_ids=["0" * 64], ordered_features=["volume_ratio_20d"],
+        input_feature_schema=input_schema, output_feature_schema=schema,
+    )
+    writer = DatasetWriter(tmp_path)
+    writer.write(
+        _dataset_manifest(output, preprocessing, input_schema), output, feature_schema=schema,
+        quality_report=_dataset_report(), preprocessing_manifest=preprocessing,
+        preprocessing_input_frame=frame, preprocessing_frame=output,
+        preprocessing_input_feature_schema=input_schema, preprocessing_quality_report=_report(),
+    )
+    outside = tmp_path / "outside-reviews"
+    outside.mkdir()
+    governance_root = tmp_path / "external_quality_reviews"
+    shutil.rmtree(governance_root)
+    governance_root.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ContractError, match="external quality review root"):
+        writer.read("preprocessed_slice", "1.0.0", writer.last_published_manifest["generation_id"])
+
+
+def test_quality_report_checksum_changes_manifest_digest_but_not_generation() -> None:
+    frame = _frame()
+    output = _standardized(frame)
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="basic-standardized-v1", semantic_version="1.0.0",
+        transform="standardize_cross_section",
+    )
+    first = builder.build(
+        frame, output, input_factor_set="basic", input_factor_version="1.0.0",
+        input_factor_generation_ids=["0" * 64], ordered_features=["volume_ratio_20d"],
+        input_feature_schema=_input_schema(frame), output_feature_schema=_output_schema(output),
+    )
+    second = dict(first)
+    second["quality_report_checksum_sha256"] = "2" * 64
+    second["generation_id"], second["manifest_digest_sha256"] = model_manifest_identities(
+        second, schema_name="feature_preprocessing",
+        exclude_fields={"quality_report_checksum_sha256"},
+    )
+    assert second["generation_id"] == first["generation_id"]
+    assert second["manifest_digest_sha256"] != first["manifest_digest_sha256"]
+    ModelContractLoader.validate("feature_preprocessing", second)
