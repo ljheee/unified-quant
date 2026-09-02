@@ -1,6 +1,6 @@
 # Portfolio and Backtest Layer Implementation Plan
 
-Status: **gated implementation order v1.1; release reconciliation in progress. Phase 0 test IDs normalized; Phase 3 record is now explicit.**
+Status: **gated implementation order v1.2; phases 0–3 exited and released; Phase 0 test IDs normalized. Final local gate evidence binds implementation commit 196de96.**
 
 Source spec: `specs/layers/portfolio-backtest-layer-spec.md`
 

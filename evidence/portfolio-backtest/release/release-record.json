@@ -1,27 +1,36 @@
 {
   "layer": "portfolio_backtest",
   "status": "released",
-  "implementation_commit": "d694110f95ff99ecc07137677e7a2011a9686f1e",
+  "implementation_commit": "196de9692e6e2e0ab76068f24bc64ad65223c4c8",
   "phases_exited": [
     0,
     1,
-    2
+    2,
+    3
   ],
   "phase_records": [
     "evidence/portfolio-backtest/phase-0/phase-record.json",
     "evidence/portfolio-backtest/phase-1/phase-record.json",
-    "evidence/portfolio-backtest/phase-2/phase-record.json"
+    "evidence/portfolio-backtest/phase-2/phase-record.json",
+    "evidence/portfolio-backtest/phase-3/phase-record.json"
   ],
   "final_head_gate": {
     "result": "passed",
     "platform": "macOS-26.3-arm64-arm-64bit",
     "python_version": "3.12.13",
-    "commit_bound": "d694110f95ff99ecc07137677e7a2011a9686f1e",
-    "timestamp": "2026-08-31T14:01:20.930219+00:00"
+    "commit_bound": "196de9692e6e2e0ab76068f24bc64ad65223c4c8",
+    "timestamp": "2026-09-02T06:27:05.845217+00:00"
+  },
+  "evidence_index": {
+    "local_gate": "evidence/portfolio-backtest/release/final-gate-report.json",
+    "requirements_lock": "evidence/portfolio-backtest/release/requirements.lock.txt",
+    "requirements_lock_sha256": "evidence/portfolio-backtest/release/requirements.lock.txt.sha256",
+    "remote_matrix": "evidence/portfolio-backtest/release/remote-matrix/",
+    "release_marker": "evidence/portfolio-backtest/release/MARKER.md"
   },
   "phase_history": {
     "initial_implementation_gate": {
-      "commit": "62bf683cfe65",
+      "commit": "62bf683cfe6501e9926235ff1cbf327b9f0f1f49",
       "note": "Phase 2 initial implementation gate before CR remediation"
     },
     "cr_round1_gate": {
