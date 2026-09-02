@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import numpy as np
 import pandas as pd
+from review_key import REVIEWER_PRIVATE_KEY
 import pytest
 from datetime import date, datetime
 from pathlib import Path
@@ -106,6 +107,7 @@ def dataset_decision() -> dict:
         binding_type="model_dataset_v1", policy="reject_all", status="passed",
         checks=[{"name": "row_count", "threshold": 0, "observed": 60, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 
@@ -114,6 +116,7 @@ def export_decision() -> dict:
         binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
         checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 
@@ -122,6 +125,7 @@ def receipt_decision() -> dict:
         binding_type="qlib_init_receipt_v1", policy="reject_all", status="passed",
         checks=[{"name": "runtime_cache_boundary", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 
@@ -130,6 +134,7 @@ def run_decision() -> dict:
         binding_type="model_run_v1", policy="reject_all", status="passed",
         checks=[{"name": "upstream_lineage_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 
@@ -138,6 +143,7 @@ def prediction_decision() -> dict:
         binding_type="prediction_set_v1", policy="reject_all", status="passed",
         checks=[{"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 
@@ -314,6 +320,7 @@ class TestEndToEndPipeline:
                     binding_type="model_artifact_v1", policy="reject_all", status="passed",
                     checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
                     errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+                    private_key_pem=REVIEWER_PRIVATE_KEY,
                 ),
                 binding_type="model_artifact_v1", subject_generation_id=runtime_generation,
                 subject_content_sha256=runtime_generation,
@@ -348,6 +355,7 @@ class TestEndToEndPipeline:
                 binding_type="model_artifact_v1", policy="reject_all", status="passed",
                 checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
                 errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+                private_key_pem=REVIEWER_PRIVATE_KEY,
             ),
             binding_type="model_artifact_v1", subject_generation_id=artifact_generation,
             subject_content_sha256=artifact_generation,

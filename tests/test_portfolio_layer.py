@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.contracts.model_layer import create_reviewed_quality_decision
@@ -51,6 +52,7 @@ def _make_quality_decision(binding_type="target_weights_v1"):
         checks=checks.get(binding_type, []),
         errors=[], warnings=[],
         producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 
@@ -264,7 +266,7 @@ class TestPB1NegativeTests:
     def test_wrong_reviewer_signature_rejects(self):
         from uq.contracts.model_layer import bind_reviewed_quality_decision
         decision = _make_quality_decision()
-        tampered = {**decision, "review_signature_sha256": "f" * 64}
+        tampered = {**decision, "review_signature_sha256": "f" * 128}
         with pytest.raises(ContractError, match="signature mismatch"):
             bind_reviewed_quality_decision(
                 tampered, binding_type="target_weights_v1",

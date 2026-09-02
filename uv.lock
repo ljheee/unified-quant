@@ -4854,6 +4854,7 @@ name = "unified-quant"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "jsonschema" },
     { name = "pandas" },
     { name = "pyarrow" },
@@ -4877,6 +4878,7 @@ real = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=44" },
     { name = "joblib", marker = "extra == 'dev'", specifier = ">=1.3" },
     { name = "jsonschema", specifier = ">=4,<5" },
     { name = "mootdx", marker = "extra == 'real'", specifier = ">=0.11,<0.12" },

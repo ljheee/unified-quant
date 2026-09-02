@@ -15,6 +15,7 @@
     "warnings",
     "producer_code_fingerprint",
     "report_checksum_sha256",
+    "key_id",
     "reviewer",
     "subject_content_sha256",
     "review_signature_sha256"
@@ -118,7 +119,11 @@
       "$ref": "#/$defs/sha256"
     },
     "review_signature_sha256": {
-      "$ref": "#/$defs/sha256"
+      "pattern": "^[0-9a-f]{128}$"
+    },
+    "key_id": {
+      "type": "string",
+      "pattern": "^model-quality-reviewer-v1-[0-9]{4}-[0-9]{2}$"
     }
   },
   "allOf": [

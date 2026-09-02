@@ -1,6 +1,6 @@
 # Model Layer Implementation Plan
 
-Status: **gated implementation order v1.14; phases 0–5 released; FP enforcement fixes have fresh local plus ten-cell remote gates, but FP gate exit remains blocked by external reviewer trust boundary.**
+Status: **gated implementation order v1.15; phases 0–5 released; FP contracts, runtime, trust anchor, and prior evidence passed; this trust-anchor change requires fresh local and remote gates.**
 
 Source spec: `specs/layers/model-layer-spec.md`
 Runtime decision: **Qlib is the model runtime/engine; UQ manifests and stores
@@ -411,8 +411,8 @@ later phases must expand their rows before entering implementation.
 | FP1a-cross-section-transform | FP | none | test_cross_sectional_standardization_and_rank_are_date_bounded | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1b-output-mismatch-reject | FP | none | test_manifest_rejects_transform_output_mismatch_and_sparse_group | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1c-identity-stability | FP | none | test_manifest_identity_is_stable_across_run_metadata | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
-| FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | blocked-local |
-| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper + test_dataset_read_rejects_stored_input_feature_schema_tamper | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | blocked-local |
+| FP1d-write-read-quality-binding | FP | none | test_dataset_write_and_readback_bind_preprocessing | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1e-preprocessing-tamper-reject | FP | none | test_dataset_read_rejects_preprocessing_manifest_tamper + test_dataset_read_rejects_stored_input_feature_schema_tamper | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1f-schema-binding-fail-closed | FP | none | test_dataset_write_rejects_wrong_input_feature_schema_binding | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1g-infinity-reject | FP | none | test_build_rejects_infinity_in_input_or_output | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1h-input-frame-mismatch | FP | none | test_dataset_write_rejects_preprocessing_input_frame_mismatch | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
@@ -420,23 +420,23 @@ later phases must expand their rows before entering implementation.
 | FP1j-input-schema-identity | FP | FP remediation | test_dataset_read_rejects_semantically_tampered_input_schema | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1k-review-root-containment | FP | FP remediation | test_dataset_read_rejects_external_review_root_symlink | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
 | FP1l-quality-digest-anchor | FP | FP remediation | test_quality_report_checksum_changes_manifest_digest_but_not_generation | tests/test_feature_preprocessing.py | evidence/preprocessing/phase-0/gate-reports/gate-report.json | passed-local |
+| FP1m-external-trust-anchor | FP | FP trust-anchor remediation | test_quality_review_requires_separately_held_private_key + test_quality_review_signature_binds_all_decision_fields + test_trust_anchor_rejects_unanchored_review_registry | tests/test_feature_preprocessing.py | TBD-fresh-gate | blocked |
 
 The remaining source-spec rows are covered by the runtime tests named above or by
 their existing phase-specific negative suites; no security/lineage row is deferred.
 
 ## Immediate Next Actions
 
-FP remediation is not gate-exit ready. Schema identity, review-root containment,
-and quality-digest regressions have been added, but their final-head local and
-remote evidence must be regenerated. The separate external reviewer trust
-boundary remains a production blocker: `create_reviewed_quality_decision()`
-remains a publisher-process helper and does not provide mechanical separation
-from the publisher.
+FP enforcement and the Ed25519 external reviewer trust anchor are implemented.
+The publisher verification path now uses an out-of-band public-key anchor and
+rejects unanchored registries, wrong key IDs, and signature mutations. The
+previous local and remote reports predate this trust-anchor commit, so fresh
+unified and ten-cell evidence must be regenerated before FP gate exit.
 
 After the mechanical regressions are green:
 
-1. rerun the unified gate on the final implementation HEAD;
+1. run the unified gate on this trust-anchor implementation HEAD;
 2. preserve the local report, locked requirements, and digest;
-3. run and aggregate the declared remote CI matrix at the same HEAD;
+3. run and aggregate the declared remote CI matrix at this same HEAD;
 4. update the FP phase record and evidence index; and
-5. keep FP blocked until the external reviewer trust anchor is implemented.
+5. only mark FP exited after both fresh evidence streams and the trust-anchor acceptance rows pass.

@@ -12,6 +12,7 @@ dependencies = [
   "pyarrow>=14",
   "PyYAML>=6.0",
   "jsonschema>=4,<5",
+  "cryptography>=44",
 ]
 
 [project.scripts]

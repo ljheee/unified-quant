@@ -1,6 +1,6 @@
 # Model Layer Specification
 
-Status: **design v1.1.2; phases 0–5 released; FP remediated but blocked by external reviewer trust boundary and fresh gates**
+Status: **design v1.1.3; phases 0–5 released; FP external reviewer trust boundary remediated; fresh gates pending**
 
 Upstream source: `specs/layers/factor-layer-spec.md`
 Related early design: `specs/layers/model-and-upstream-todo-spec.md`
@@ -363,11 +363,12 @@ decision but cannot create, mutate, or re-sign review conclusions. The bound
 report checksum is recorded by the manifest and stored in an immutable
 governance root; cache directories are never quality-report storage.
 
-The first release does not yet provide an out-of-process reviewer service. The
-in-process helper is therefore a test fixture, not a production trust boundary.
-FP publications must remain blocked until a separately held external reviewer
-artifact/trust anchor is introduced and its signature is verified against a
-mechanically separated trust root. Changing a review decision requires
+The first release uses an out-of-band Ed25519 trust anchor. The publisher
+receives only `model-quality-trust-anchor.v1.json` (public key, key ID, and
+review-registry digest); the private reviewer key remains separately held. A
+review signature covers the complete review decision, including key ID, policy,
+status, checks, errors, warnings, reviewer, and producer code fingerprint. Any
+decision mutation invalidates the signature. Changing a review decision requires
 republishing a new artifact generation; existing partitions are immutable and
 cannot be edited.
 

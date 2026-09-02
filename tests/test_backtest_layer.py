@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.backtest.engine import BacktestEngine, BacktestResultStore
@@ -64,6 +65,7 @@ def _make_decision():
     return create_reviewed_quality_decision(
         binding_type="backtest_result_v1", policy="reject_all", status="passed",
         checks=checks, errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 

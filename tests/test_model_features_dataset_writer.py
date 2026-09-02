@@ -6,6 +6,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
+from review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.errors import ContractError
@@ -23,6 +24,7 @@ def _quality_report() -> dict:
         binding_type="model_dataset_v1", policy="reject_all", status="passed",
         checks=[{"name": "row_count", "threshold": 6, "observed": 40, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 

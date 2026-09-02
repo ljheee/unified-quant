@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.errors import ContractError
@@ -31,6 +32,7 @@ def _quality_report(bound_generation_id: str = DIGEST) -> dict:
         binding_type="model_artifact_v1", policy="reject_all", status="passed",
         checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
     report, _ = bind_reviewed_quality_decision(
         decision, binding_type="model_artifact_v1",

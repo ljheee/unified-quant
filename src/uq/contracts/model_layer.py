@@ -7,6 +7,10 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
 from .canonical_v2 import file_sha256_bytes
 from .gate_contracts import adjustment_snapshot_generation, canonical_json, factor_manifest_identities, validate_contract, validate_contract_path
 from ..errors import ContractError
@@ -40,6 +44,7 @@ _QUALITY_BOUND_FIELDS = {
 }
 _MODEL_CONTRACT_FAMILIES = {*_SCHEMA_NAMES, "model_quality_report"}
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_ED25519_SIGNATURE_HEX = re.compile(r"^[0-9a-f]{128}$")
 _ORDERING_FIELDS = ("factor_set", "factor_version", "partition_date", "generation_id")
 
 
@@ -172,6 +177,40 @@ class ModelContractLoader:
             raise ContractError(f"{schema_name} manifest digest mismatch")
 
 
+class ModelQualityReviewTrustAnchor:
+    """Typed view over the out-of-band external reviewer public key."""
+
+    def __init__(self, path: Path | str | None = None) -> None:
+        self.path = Path(path or Path(__file__).resolve().parents[3] / "config/model-quality-trust-anchor.v1.json")
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContractError("model quality trust anchor is unavailable or malformed") from exc
+        if payload.get("trust_anchor_version") != 1 or payload.get("status") != "active":
+            raise ContractError("model quality trust anchor is not active")
+        if payload.get("algorithm") != "Ed25519":
+            raise ContractError("unsupported model quality trust anchor algorithm")
+        public_key_hex = payload.get("public_key_hex")
+        if not isinstance(public_key_hex, str) or not re.fullmatch(r"[0-9a-f]{64}", public_key_hex):
+            raise ContractError("model quality trust anchor has an invalid public key")
+        if payload.get("registry_sha256") != sha256_bytes_file(self.path.parent / "model-quality-reviews.v1.json"):
+            raise ContractError("model quality review registry is not anchored")
+        self.key_id = payload.get("key_id")
+        self.public_key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_key_hex))
+
+    def verify(self, payload: Mapping[str, Any], signature_hex: str) -> None:
+        if not isinstance(signature_hex, str) or not _ED25519_SIGNATURE_HEX.fullmatch(signature_hex):
+            raise ContractError("invalid model quality review signature length")
+        try:
+            self.public_key.verify(bytes.fromhex(signature_hex), canonical_json(dict(payload)))
+        except (ValueError, InvalidSignature) as exc:
+            raise ContractError("model quality review signature mismatch") from exc
+
+
+def sha256_bytes_file(path: Path) -> str:
+    return file_sha256_bytes(path.read_bytes())
+
+
 class ModelQualityReviewRegistry:
     """Typed view over the externally reviewed quality-check registry."""
 
@@ -220,25 +259,25 @@ class ModelQualityReviewRegistry:
 
 
 _MODEL_QUALITY_REVIEW_REGISTRY = ModelQualityReviewRegistry()
+_MODEL_QUALITY_TRUST_ANCHOR = ModelQualityReviewTrustAnchor()
 
 
 def review_signature(
+    payload: dict[str, Any],
     *,
-    reviewer: str,
-    binding_type: str,
-    subject_content_sha256: str,
-    policy: str,
-    status: str,
-    checks: list[dict[str, Any]],
-    errors: list[str],
-    warnings: list[str],
+    private_key_pem: Path | str,
 ) -> str:
-    """Return the deterministic signature used by the external review registry."""
-    return sha256_json({
-        "binding_type": binding_type, "checks": checks, "errors": errors,
-        "policy": policy, "reviewer": reviewer, "status": status,
-        "subject_content_sha256": subject_content_sha256, "warnings": warnings,
-    })
+    """Sign a review payload with the separately held reviewer private key."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    try:
+        key = serialization.load_pem_private_key(Path(private_key_pem).read_bytes(), password=None)
+    except (OSError, ValueError, TypeError) as exc:
+        raise ContractError("reviewer private key is unavailable or malformed") from exc
+    if not isinstance(key, Ed25519PrivateKey):
+        raise ContractError("reviewer private key is not Ed25519")
+    return key.sign(canonical_json(payload)).hex()
 
 
 def create_reviewed_quality_decision(
@@ -250,8 +289,9 @@ def create_reviewed_quality_decision(
     errors: list[str],
     warnings: list[str],
     producer_code_fingerprint: str,
+    private_key_pem: Path | str,
 ) -> dict[str, Any]:
-    """Create an immutable decision. Caller must hold the external reviewer role."""
+    """Create an immutable decision from the separately held reviewer role."""
     registry_binding = _MODEL_QUALITY_REVIEW_REGISTRY.bindings.get(binding_type)
     if registry_binding is None:
         raise ContractError(f"binding type {binding_type} is not registered in reviewer registry")
@@ -263,17 +303,19 @@ def create_reviewed_quality_decision(
     for check in checks:
         if check.get("name") not in allowed_check_names:
             raise ContractError(f"check '{check.get('name')}' not in allowed checks {sorted(allowed_check_names)}")
-    reviewer = _MODEL_QUALITY_REVIEW_REGISTRY.reviewer
-    signature = sha256_json({
+    unsigned_payload = {
         "binding_type": binding_type, "checks": checks, "errors": errors,
-        "policy": policy, "reviewer": reviewer, "status": status,
+        "key_id": _MODEL_QUALITY_TRUST_ANCHOR.key_id, "policy": policy,
+        "producer_code_fingerprint": producer_code_fingerprint,
+        "reviewer": _MODEL_QUALITY_REVIEW_REGISTRY.reviewer, "status": status,
         "warnings": warnings,
-    })
+    }
     return {
-        "report_version": 2, "binding_type": binding_type, "policy": policy,
-        "status": status, "checks": checks, "errors": errors,
-        "warnings": warnings, "producer_code_fingerprint": producer_code_fingerprint,
-        "reviewer": reviewer, "review_signature_sha256": signature,
+        **unsigned_payload,
+        "report_version": 2,
+        "review_signature_sha256": review_signature(
+            {**unsigned_payload, "report_version": 2}, private_key_pem=private_key_pem
+        ),
     }
 
 
@@ -289,7 +331,7 @@ def bind_reviewed_quality_decision(
         raise ContractError("external quality decision must be an object")
     required = {
         "report_version", "binding_type", "policy", "status", "checks",
-        "errors", "warnings", "producer_code_fingerprint", "reviewer",
+        "errors", "warnings", "key_id", "producer_code_fingerprint", "reviewer",
         "review_signature_sha256",
     }
     if set(decision) != required:
@@ -297,14 +339,15 @@ def bind_reviewed_quality_decision(
     if decision.get("report_version") != 2 or decision.get("binding_type") != binding_type:
         raise ContractError(f"quality decision does not match {binding_type}")
     _MODEL_QUALITY_REVIEW_REGISTRY.validate_report({**decision, "bound_generation_id": subject_generation_id})
-    expected_signature = sha256_json({
-        "binding_type": binding_type, "checks": decision["checks"],
-        "errors": decision["errors"], "policy": decision["policy"],
-        "reviewer": decision["reviewer"], "status": decision["status"],
-        "warnings": decision["warnings"],
-    })
-    if decision.get("review_signature_sha256") != expected_signature:
-        raise ContractError("external quality decision signature mismatch")
+    if decision.get("key_id") != _MODEL_QUALITY_TRUST_ANCHOR.key_id:
+        raise ContractError("external quality decision is bound to another trust anchor")
+    unsigned_payload = {
+        key: value for key, value in decision.items()
+        if key != "review_signature_sha256"
+    }
+    _MODEL_QUALITY_TRUST_ANCHOR.verify(
+        unsigned_payload, signature_hex=decision.get("review_signature_sha256")
+    )
     subject_digest = subject_content_sha256 or subject_generation_id
     unsigned_report = {
         **decision, "bound_generation_id": subject_generation_id,

@@ -7,10 +7,13 @@ from pathlib import Path
 import uuid
 
 import pandas as pd
+from review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.contracts.model_layer import (
     ModelContractLoader,
+    ModelQualityReviewTrustAnchor,
+    bind_reviewed_quality_decision,
     create_reviewed_quality_decision,
     model_manifest_identities,
     sha256_json,
@@ -52,6 +55,7 @@ def _report() -> dict:
         errors=[],
         warnings=[],
         producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 
@@ -64,6 +68,7 @@ def _dataset_report() -> dict:
         errors=[],
         warnings=[],
         producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 
@@ -477,6 +482,51 @@ def test_dataset_read_rejects_external_review_root_symlink(tmp_path: Path) -> No
     governance_root.symlink_to(outside, target_is_directory=True)
     with pytest.raises(ContractError, match="external quality review root"):
         writer.read("preprocessed_slice", "1.0.0", writer.last_published_manifest["generation_id"])
+
+
+def test_quality_review_requires_separately_held_private_key() -> None:
+    with pytest.raises(ContractError, match="private key"):
+        create_reviewed_quality_decision(
+            binding_type="feature_preprocessing_v1",
+            policy="cross_sectional_stateless_v1",
+            status="passed",
+            checks=CHECKS["feature_preprocessing_v1"],
+            errors=[],
+            warnings=[],
+            producer_code_fingerprint="0" * 64,
+            private_key_pem=Path("/definitely/missing/reviewer-key.pem"),
+        )
+
+
+def test_quality_review_signature_binds_all_decision_fields() -> None:
+    subject = "a" * 64
+    decision = _report()
+    bind_reviewed_quality_decision(
+        decision, binding_type="feature_preprocessing_v1", subject_generation_id=subject
+    )
+    for key, value in [
+        ("key_id", "model-quality-reviewer-v1-9999-01"),
+        ("policy", "reject_all"),
+        ("status", "warning"),
+        ("review_signature_sha256", "f" * 128),
+    ]:
+        tampered = {**decision, key: value}
+        with pytest.raises(ContractError, match="trust anchor|policy|status|signature"):
+            bind_reviewed_quality_decision(
+                tampered, binding_type="feature_preprocessing_v1", subject_generation_id=subject
+            )
+
+
+def test_trust_anchor_rejects_unanchored_review_registry(tmp_path: Path) -> None:
+    anchor = json.loads((Path(__file__).resolve().parents[1] / "config/model-quality-trust-anchor.v1.json").read_text())
+    anchor["registry_sha256"] = "0" * 64
+    root = tmp_path / "config"
+    root.mkdir()
+    shutil.copy(Path(__file__).resolve().parents[1] / "config/model-quality-reviews.v1.json", root / "model-quality-reviews.v1.json")
+    anchor_path = root / "model-quality-trust-anchor.v1.json"
+    anchor_path.write_text(json.dumps(anchor))
+    with pytest.raises(ContractError, match="registry is not anchored"):
+        ModelQualityReviewTrustAnchor(anchor_path)
 
 
 def test_quality_report_checksum_changes_manifest_digest_but_not_generation() -> None:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pandas as pd
+from review_key import REVIEWER_PRIVATE_KEY
 import pytest
 
 from uq.errors import ContractError
@@ -19,6 +21,7 @@ def prediction_decision() -> dict:
         binding_type="prediction_set_v1", policy="reject_all", status="passed",
         checks=[{"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
     )
 
 
@@ -59,6 +62,7 @@ class TestPredictionBuilder:
             binding_type="model_artifact_v1", policy="reject_all", status="passed",
             checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
             errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
         )
         report, _ = bind_reviewed_quality_decision(
             decision, binding_type="model_artifact_v1",
