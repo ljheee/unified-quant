@@ -16,7 +16,6 @@ from ..quality.gate import CrossSourceGate
 from ..market.lifecycle import AkShareLifecycleProvider
 from ..routing.router import SourceRouter
 from ..store.pit_store import CanonicalStore
-from ..market.lifecycle import AkShareLifecycleProvider
 from ..sources.fetch import FetchResult, FetchStatus
 
 

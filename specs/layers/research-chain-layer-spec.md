@@ -1,6 +1,6 @@
 # Research Chain Integration Layer Specification
 
-Status: **draft v0.1; contract-first; all runtime stages paused until Phase 0 exits**
+Status: **draft v0.2; contract-first; all runtime stages paused until Phase 0 exits**
 
 Source specs:
 
@@ -96,8 +96,14 @@ Required logical fields:
 - factor set, factor version, universe snapshot binding;
 - adjusted-price dataset binding for labels;
 - label name, semantic version, horizon, split policy binding;
-- seed model definition binding;
-- portfolio definition binding;
+- seed model definition template: reviewed algorithm, hyperparameters, seed
+  policy, compatible dataset versions, metrics, selection rule, quality policy,
+  serializer version, and code fingerprint. It must not require the later
+  `feature_schema_generation_id` or `model_run_content_generation_id`;
+- portfolio definition template: reviewed portfolio name, weight scheme,
+  scheme parameters, score policy, constraints, rebalance schedule, universe
+  snapshot binding, and industry-source policy. It must not require the later
+  `prediction_set_generation_id`;
 - backtest config binding;
 - deterministic environment binding: code fingerprint, environment lock digest,
   serialization profile, thread count, and seed;
@@ -109,9 +115,16 @@ Normative rules:
 
 - Stable `generation_id` excludes run-local fields and stage timestamps.
 - `manifest_digest_sha256` covers the complete request document.
+- `stage_plan_sha256` is the reviewed digest of the fixed ordered stage names,
+  owning-layer contract versions, and request input families. The resolver must
+  reject a value that does not match the normative Phase 0 stage plan.
+- `resolved_execution_plan_sha256` is a separate resolver output, not a request
+  input.
 - Every generation/checksum reference must be a 64-character lowercase SHA-256.
 - The request must not contain model, prediction, weight, or backtest result
-  output IDs. Those are produced by the run.
+  output IDs. Runtime binding fields required by owning manifests are
+  synthesized from the reviewed templates and exact stage outputs; they are not
+  request inputs.
 - The request must not embed arbitrary DataFrames or file contents.
 - No path field may contain `..`, `/`, `\`, or a leading `.`.
 - `full_research_run` means all normative stages execute or bind an exact
@@ -132,6 +145,11 @@ Required logical fields:
   taxonomy;
 - final status: `running`, `passed`, `warning`, `blocked`, or `failed`;
 - run-local metadata and identities.
+
+The durable state layout is keyed by the stable request generation, with the
+run-local attempt nested beneath it:
+
+`research_runs/states/request=<request_generation>/run=<run_id>/stage=<NN>/manifest.json`
 
 Normative rules:
 
@@ -199,6 +217,9 @@ Normative rules:
   a parallel accepted layout.
 - The only Research Chain-owned durable artifacts are request, state, result,
   and their fixtures/golden vectors.
+- Phase 0 must define typed request, state, and result store interfaces. The
+  result store must provide atomic, overwrite-safe publish and verified read;
+  its publisher is implemented in Phase 5.
 
 ## 8. Quality and External Review
 
@@ -209,6 +230,20 @@ artifact, the provider must return an externally reviewed decision accepted by
 the owning store. The provider must be independent from publication code at
 runtime; an in-process test helper may exist only for contract tests and must
 not be used as production evidence.
+
+The Phase 0 provider contract is:
+
+- input: owning-layer `binding_type`, subject `generation_id`, subject
+  `manifest_digest_sha256` when applicable, requested output family, and
+  provider configuration reference;
+- output: the owning layer's typed quality decision document, including its
+  canonical checksum, binding type, subject identity, reviewer/registry anchor,
+  status, policy, and checks;
+- behavior: pure lookup and verification. It must not construct, sign, approve,
+  cache a substitute decision, or accept a decision whose binding or checksum
+  does not match the exact subject;
+- configuration: the provider implementation and trust anchor are supplied by
+  the CLI/store wiring, not inferred from the request or current process.
 
 The runner must persist:
 
