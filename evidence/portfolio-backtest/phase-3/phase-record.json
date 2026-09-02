@@ -10,7 +10,8 @@
   "evidence_paths": [
     "evidence/portfolio-backtest/release/final-gate-report.json",
     "evidence/portfolio-backtest/release/remote-matrix/",
-    "evidence/portfolio-backtest/release/release-record.json"
+    "evidence/portfolio-backtest/release/release-record.json",
+    "evidence/portfolio-backtest/release/remote-matrix/5b083e5-33598990701/cells.json"
   ],
   "blocked_by": [],
   "gate_evidence": "evidence/portfolio-backtest/release/final-gate-report.json"

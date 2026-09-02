@@ -37,5 +37,16 @@
       "commit": "1267223f36af",
       "note": "First CR remediation round"
     }
+  },
+  "remote_gate": {
+    "result": "passed",
+    "run_id": 33598990701,
+    "commit_bound": "5b083e5b630ba4eef1c39905f09832001da3e510",
+    "cells_path": "evidence/portfolio-backtest/release/remote-matrix/5b083e5-33598990701/cells.json",
+    "summary": {
+      "failed": 0,
+      "passed": 10,
+      "total": 10
+    }
   }
 }
