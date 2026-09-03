@@ -1,6 +1,6 @@
 # Research Chain Integration Layer Specification
 
-Status: **draft v0.4; contract-first; all runtime stages paused until Phase 0 exits**
+Status: **draft v0.5; contract-first; all runtime stages paused until Phase 0 exits**
 
 Source specs:
 
@@ -157,11 +157,12 @@ Required logical fields:
 
 - `request_content_generation_id` and complete request manifest digest;
 - runner identity: code fingerprint, environment profile, lock digest;
-- ordered stage results;
-- for each stage: one closed `stage_output_binding` object with exact keys
-  `stage`, `output_family`, `generation_id`, `manifest_digest_sha256`,
-  `physical_path`, `quality_decision_checksum_sha256`, and `failure_reason`
-  (`null` unless failed);
+- ordered stage records, each with exact keys `stage`, `status`,
+  `output_bindings`, and `failure_reason` (`null` unless failed);
+- each stage has zero or more closed `stage_output_binding` objects with exact
+  keys `output_family`, `generation_id`, `manifest_digest_sha256`,
+  `data_checksum_sha256`, `physical_path`,
+  `quality_decision_checksum_sha256`, and `failure_reason`;
 - final status: `running`, `passed`, `warning`, `blocked`, or `failed`;
 - run-local metadata and identities.
 
@@ -193,8 +194,8 @@ Required logical fields:
 - `request_content_generation_id`, request attempt manifest digest, and run
   metadata;
 - runner code/environment fingerprints;
-- ordered `stage_output_binding` objects using the same closed schema as
-  state;
+- ordered stage records and `stage_output_binding` objects using the same
+  closed schema as state;
 - final readback status for every output;
 - overall logical fingerprint;
 - optional `result_artifact_digest_sha256`, defined as the Parquet/file-byte
@@ -205,10 +206,12 @@ Required logical fields:
 
 Normative rules:
 - `result_content_generation_id` is invariant under key reorder. Its excluded
-  canonical field set is exactly `run_id`, `created_at`,
+  canonical field set is exactly `result_content_generation_id`,
+  `manifest_digest_sha256`, `run_id`, `created_at`,
   `request_manifest_digest_sha256`, state document timestamps, state attempt
-  digest, and `manifest_digest_sha256`. It changes with bound output identities,
-  semantic request fields, runner identity, and semantic stage status.
+  digest, and each binding's `physical_path`. It changes with bound output
+  identities, checksums, semantic request fields, runner identity, semantic
+  stage status, and quality decision checksums.
 
 - A successful result may only exist after every listed manifest has been read
   back through its owning store.
@@ -251,7 +254,8 @@ Normative rules:
   `publish_request(manifest, path_policy) -> PublishedRequest`,
   `read_request(request_content_generation_id, manifest_digest_sha256) -> Request`,
   `publish_state(manifest, stage) -> PublishedState`,
-  `read_state(request_content_generation_id, run_id, stage) -> State`,
+  `read_state(request_content_generation_id, run_id, stage, manifest_digest_sha256) -> State`,
+  `list_state_snapshots(request_content_generation_id, run_id) -> list[StateSummary]`,
   `publish_result(manifest, path_policy) -> PublishedResult`, and
   `read_result(result_generation_id, manifest_digest_sha256) -> Result`. All
   publishers are atomic and overwrite-safe; the result publisher is implemented
@@ -284,20 +288,21 @@ The Phase 0 provider contract is:
 - frozen interface:
   `resolve(binding_type, subject_generation_id, subject_manifest_digest_or_none, output_family, provider_config_ref) -> QualityDecision`;
 - Research Chain does not introduce a second governance format. The Phase 0
-  `quality_decision.v1` envelope is a strict input wrapper around the existing
-  `model_quality_report.v2`; it normalizes the signed review into the owning
-  store's required report and never replaces or re-signs it. The wrapper carries
-  the report's canonical `report_checksum_sha256`, binding type, subject
-  generation, subject manifest digest when applicable, provider identity, and
-  registry anchor. The canonical wrapper checksum is
-  `sha256_json(wrapper_with_report_checksum)`;
-- the Phase 0 binding enum is the closed union of the existing
-  `model_quality_report.v2` enum plus `factor_partition_v1`; chain stages must
-  use the exact owning binding names: label set, feature preprocessing, model
-  dataset, Qlib export/receipt, model definition/run/artifact, prediction,
-  portfolio definition, target weights, backtest config, backtest result, and
-  factor partition. If an owning report family is missing, its Phase 0 slice
-  remains blocked until that owning contract is added;
+  `quality_decision.v1` envelope is a strict lookup wrapper around an existing
+  owning report: `model_quality_report.v2` for model/portfolio/backtest-facing
+  families and factor-layer `quality_report.v1` for `factor_v1`. The wrapper
+  fields are exactly `schema_version`, `binding_type`,
+  `subject_generation_id`, `subject_manifest_digest_sha256`, `owning_report`,
+  `decision_checksum_sha256`, `provider_id`, and `trust_anchor_id`. It returns
+  the accepted owning report unchanged and never replaces or re-signs it;
+  `decision_checksum_sha256` is the owning report's canonical checksum.
+- The Phase 0 binding enum is the closed union of the existing
+  `model_quality_report.v2` enum plus `factor_v1`. Chain stages must use the
+  exact owning binding names: label set, feature preprocessing, model dataset,
+  Qlib export/receipt, model definition/run/artifact, prediction, portfolio
+  definition, target weights, backtest config, backtest result, and factor
+  report. If an owning report family is missing, its Phase 0 slice remains
+  blocked until that owning contract is added;
 - canonical decision checksum is `sha256_json(decision_document)`; a byte digest
   is stored separately when a physical decision file exists. Signature
   verification must reject unregistered trust anchors, malformed signatures,
@@ -327,6 +332,8 @@ They are additive owning-layer APIs, not runner-side fallbacks:
 - `FactorStore.read_manifest(generation_id)` and
   `FactorStore.read_partition(generation_id)`, both manifest-first and
   checksum/identity verified;
+- `PortfolioDefinitionBinding.bind(...) -> (portfolio_definition, quality_report)`
+  as the only owning template-to-runtime definition boundary;
 - typed `FeatureSchemaStore.read_manifest/read_schema(generation_id)`;
 - typed `LabelStore.read_manifest/read_frame(generation_id)`;
 - typed `UniverseSnapshotStore.read_manifest/read_members(generation_id)`;

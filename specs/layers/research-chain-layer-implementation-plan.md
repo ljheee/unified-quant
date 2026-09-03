@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.4; Phase 0 not started; all runtime phases paused**
+Status: **gated implementation order v0.5; Phase 0 not started; all runtime phases paused**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -60,10 +60,11 @@ Deliverables:
     config path safety.
 11. Owning-layer additive read/binding API contracts: factor manifest and
     partition readers, feature-schema/label/universe manifest and data readers,
-    and explicit reuse/readback boundaries for existing model, prediction,
-    target-weight, and backtest result APIs. These are contracts only; owning
-    runtime implementations remain in their later phase slices.
-11. Physical layout contract:
+    `PortfolioDefinitionBinding.bind`, and explicit reuse/readback boundaries
+    for existing model, prediction, target-weight, and backtest result APIs.
+    These are contracts only; owning runtime implementations remain in their
+    later phase slices.
+12. Physical layout contract:
    - `research_runs/requests/request=<request_content_generation_id>/run=<run_id>/manifest.json`;
    - `research_runs/states/request=<request_content_generation_id>/run=<run_id>/stage=<NN>/manifest.json`;
    - `research_runs/results/request=<request_content_generation_id>/run=<run_id>/result=<result_content_generation_id>/manifest.json`;
@@ -101,11 +102,12 @@ Deliverables:
 1. `ResearchChainRequestResolver` validating the request and all upstream
    manifest references.
 2. Typed error mapping for all spec §10 failure reasons.
-3. Ordered execution-plan digest derived only from request and resolved
-   manifests. This is `resolved_execution_plan_sha256`, distinct from the
-   reviewed request-level `stage_plan_sha256`. State/result bindings record the
-   request manifest digest for audit, but result identity excludes it as
-   specified in the source spec.
+3. Ordered execution-plan digest with this exact canonical payload:
+   `{"schema_version":"v1","request_content_generation_id":...,"stage_plan_sha256":...,"stage_bindings":[{"stage":...,"output_family":...,"generation_id":...,"manifest_digest_sha256":...,"data_checksum_sha256":...}]}`
+   for resolved upstream/produced bindings, in stage order. This is
+   `resolved_execution_plan_sha256`, distinct from the reviewed request-level
+   `stage_plan_sha256`. State/result bindings record the request manifest digest
+   for audit, but result identity excludes it as specified in the source spec.
 4. Dry-run state snapshot with `intent=dry_run`.
 5. No factor, dataset, model, prediction, portfolio, or backtest mutation.
 6. Negative tests for missing, tampered, malformed, duplicate, unordered,
