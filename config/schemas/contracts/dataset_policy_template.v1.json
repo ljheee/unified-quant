@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/dataset_policy_template.v1.json",
+  "title": "Reviewed dataset policy template v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "template_version",
+    "status",
+    "dataset_name",
+    "semantic_version",
+    "missing_policy",
+    "split_policy",
+    "code_fingerprint",
+    "template_generation_id",
+    "template_manifest_digest_sha256"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "template_version": {
+      "const": "1.0.0"
+    },
+    "status": {
+      "const": "reviewed"
+    },
+    "dataset_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "semantic_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "missing_policy": {
+      "enum": [
+        "fail_closed",
+        "declared_fill"
+      ]
+    },
+    "split_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purge_trading_days",
+        "embargo_trading_days",
+        "splits"
+      ],
+      "properties": {
+        "purge_trading_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "embargo_trading_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "splits": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "start_date",
+              "end_date"
+            ],
+            "properties": {
+              "name": {
+                "enum": [
+                  "train",
+                  "validation",
+                  "test"
+                ]
+              },
+              "start_date": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "format": "date"
+              },
+              "end_date": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "format": "date"
+              }
+            }
+          }
+        }
+      }
+    },
+    "code_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "template_generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "template_manifest_digest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

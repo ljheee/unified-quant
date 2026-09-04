@@ -121,6 +121,19 @@ class LabelStore:
         return manifest, frame
 
 
+class FeaturePreprocessingStore:
+    """Manifest-first read boundary for durable feature-preprocessing contracts."""
+
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root)
+
+    def read_manifest(self, generation_id: str) -> dict[str, Any]:
+        manifest = _read_manifest(self.root / "feature_preprocessing", generation_id, "feature_preprocessing")
+        if manifest.get("quality_report_checksum_sha256") in (None, "0" * 64):
+            raise ContractError("feature preprocessing is missing a quality report binding")
+        return manifest
+
+
 class BacktestConfigStore:
     """Read a governed backtest-config manifest without accepting runtime input."""
 

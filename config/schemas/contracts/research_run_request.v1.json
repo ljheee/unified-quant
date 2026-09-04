@@ -18,6 +18,7 @@
     "label_binding",
     "feature_preprocessing_binding",
     "model_definition_template",
+    "dataset_policy_template",
     "portfolio_definition_template",
     "backtest_config_binding",
     "environment",
@@ -260,6 +261,9 @@
     "manifest_digest_sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "dataset_policy_template": {
+      "$ref": "dataset_policy_template.v1.json"
     }
   },
   "$defs": {

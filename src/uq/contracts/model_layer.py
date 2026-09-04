@@ -49,6 +49,7 @@ _RESEARCH_SCHEMA_NAMES = {
     "research_run_result",
     "model_definition_template",
     "portfolio_definition_template",
+    "dataset_policy_template",
     "quality_decision",
 }
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -59,6 +60,7 @@ _RESEARCH_IDENTITY_EXCLUDED_FIELDS = {
     "research_run_state": {"state_content_generation_id", "manifest_digest_sha256"},
     "research_run_result": {"result_content_generation_id", "manifest_digest_sha256", "request_manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
     "model_definition_template": {"template_generation_id", "template_manifest_digest_sha256"},
+    "dataset_policy_template": {"template_generation_id", "template_manifest_digest_sha256"},
     "portfolio_definition_template": {"template_generation_id", "template_manifest_digest_sha256"},
     "quality_decision": {"decision_checksum_sha256"},
 }
@@ -185,6 +187,8 @@ def research_contract_identities(
     """Derive research-chain content identity and complete manifest digest."""
     document = dict(payload)
     if schema_name == "model_definition_template":
+        content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
+    elif schema_name == "dataset_policy_template":
         content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
     elif schema_name == "portfolio_definition_template":
         content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
@@ -341,6 +345,7 @@ class ModelContractLoader:
                 _validate_stage_record_order(payload["stage_records"], require_complete=False, payload=payload)
             content_field = {
                 "model_definition_template": "template_generation_id",
+                "dataset_policy_template": "template_generation_id",
                 "portfolio_definition_template": "template_generation_id",
                 "research_run_request": "request_content_generation_id",
                 "research_run_state": "state_content_generation_id",
@@ -374,6 +379,7 @@ class ModelContractLoader:
                 raise ContractError(f"{schema_name} stable content identity mismatch")
             digest_field = {
                 "model_definition_template": "template_manifest_digest_sha256",
+                "dataset_policy_template": "template_manifest_digest_sha256",
                 "portfolio_definition_template": "template_manifest_digest_sha256",
                 "research_run_request": "manifest_digest_sha256",
                 "research_run_state": "manifest_digest_sha256",

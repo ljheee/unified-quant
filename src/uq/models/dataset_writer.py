@@ -285,7 +285,8 @@ class DatasetWriter:
         if frame_logical_fingerprint(frame) != manifest.get("logical_fingerprint"):
             raise ContractError("dataset logical fingerprint mismatch")
         if preprocessing_doc is not None:
-            if frame_logical_fingerprint(frame) != preprocessing_doc["output_frame_sha256"]:
+            preprocessing_frame = frame[["instrument", "datetime", *preprocessing_doc["ordered_features"]]]
+            if frame_logical_fingerprint(preprocessing_frame) != preprocessing_doc["output_frame_sha256"]:
                 raise ContractError("preprocessing output fingerprint mismatch")
         policy = manifest["split_policy"]
         trading_dates = sorted({timestamp.strftime("%Y-%m-%d") for timestamp in frame["datetime"]})

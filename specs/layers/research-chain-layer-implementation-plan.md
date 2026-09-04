@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0 and Phase 1 exited; Phase 2 started with the owning-read factor adapter slice; dataset stage implementation remains blocked pending a reviewed dataset policy contract**
+Status: **gated implementation order v0.6; Phase 0 and Phase 1 exited; Phase 2 factor and dataset adapters implemented; Phase 2 exit awaits final gate/remote evidence**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
