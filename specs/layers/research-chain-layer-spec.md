@@ -1,6 +1,6 @@
 # Research Chain Integration Layer Specification
 
-Status: **draft v0.5; contract-first; all runtime stages paused until Phase 0 exits**
+Status: **draft v0.6; contract-first; Phase 0 remediation round 3 in progress**
 
 Source specs:
 

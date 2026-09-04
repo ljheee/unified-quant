@@ -54,6 +54,27 @@ _RESEARCH_SCHEMA_NAMES = {
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _ED25519_SIGNATURE_HEX = re.compile(r"^[0-9a-f]{128}$")
 _ORDERING_FIELDS = ("factor_set", "factor_version", "partition_date", "generation_id")
+_RESEARCH_IDENTITY_EXCLUDED_FIELDS = {
+    "research_run_request": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
+    "research_run_state": {"state_content_generation_id", "manifest_digest_sha256"},
+    "research_run_result": {"result_content_generation_id", "manifest_digest_sha256", "request_manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
+    "model_definition_template": {"template_generation_id", "template_manifest_digest_sha256"},
+    "portfolio_definition_template": {"template_generation_id", "template_manifest_digest_sha256"},
+    "quality_decision": {"decision_checksum_sha256"},
+}
+_RESEARCH_FAILURE_REASONS = {
+    "request_invalid", "input_unresolved", "input_tampered", "lineage_mismatch",
+    "quality_decision_missing", "quality_decision_rejected", "stage_failed",
+    "store_read_failed", "overwrite_conflict", "reproducibility_failed",
+    "result_reconciliation_failed",
+}
+_RESEARCH_STATUS_REASONS = {
+    "passed": None,
+    "warning": None,
+    "blocked": _RESEARCH_FAILURE_REASONS,
+    "failed": _RESEARCH_FAILURE_REASONS,
+}
+_FACTOR_TRUST_ANCHOR_IDS = {"factor-review-key-v1"}
 
 
 def _reject_non_finite(value: Any) -> None:
@@ -96,21 +117,25 @@ def model_manifest_identities(
 def validate_quality_decision_owning_report(report: Mapping[str, Any]) -> str:
     """Validate factor or signed model owning reports without re-signing them."""
     if report.get("binding_type") == "factor_v1":
-        from .gate_contracts import sha256_bytes
-
         validate_contract("quality_report.v1.json", dict(report))
-        factor_checksum = sha256_bytes(canonical_json(report))
+        factor_checksum = sha256_bytes(canonical_json(dict(report)))
         failed_error_checks = [
             check for check in report.get("checks", [])
             if check.get("result") == "failed" and check.get("level", "error") == "error"
         ]
         if report.get("status") == "passed" and failed_error_checks:
             raise ContractError("passed factor quality report contains failed checks")
+        if not _FACTOR_TRUST_ANCHOR_IDS:
+            raise ContractError("factor quality trust anchor registry is unavailable")
         return factor_checksum
+    _reject_non_finite(report)
+    validate_model_contract("model_quality_report", dict(report))
+    checksum_payload = {key: value for key, value in report.items() if key != "report_checksum_sha256"}
+    checksum = sha256_json(checksum_payload)
+    if report.get("report_checksum_sha256") != checksum:
+        raise ContractError("model quality report canonical checksum mismatch")
+    _MODEL_QUALITY_REVIEW_REGISTRY.validate_report(dict(report))
     verify_reviewed_quality_report_signature(report)
-    checksum = report.get("report_checksum_sha256")
-    if not isinstance(checksum, str):
-        raise ContractError("model quality report has no canonical checksum")
     return checksum
 
 
@@ -178,12 +203,9 @@ def research_contract_identities(
             raise ContractError(f"{schema_name} missing valid {key}")
         del document[key]
 
-    excluded_fields = {content_field, digest_field}
-    if schema_name == "research_run_request":
-        excluded_fields.update(_RUN_LOCAL_FIELDS)
-    elif schema_name == "research_run_result":
-        excluded_fields.update(_RUN_LOCAL_FIELDS)
-        excluded_fields.update({"request_manifest_digest_sha256", "state_created_at", "state_attempt_digest_sha256"})
+    excluded_fields = _RESEARCH_IDENTITY_EXCLUDED_FIELDS.get(schema_name, set()).copy()
+    excluded_fields.add(content_field)
+    excluded_fields.add(digest_field)
 
     generation_document = _without_physical_path(document) if schema_name == "research_run_result" else document
     generation = sha256_json({
@@ -194,20 +216,67 @@ def research_contract_identities(
     return generation, sha256_json(digest_document)
 
 
-def _validate_stage_record_order(stages: list[dict[str, Any]], *, require_complete: bool) -> None:
+def _validate_stage_record_order(
+    stages: list[dict[str, Any]], *, require_complete: bool, payload: dict[str, Any] | None = None
+) -> None:
     stage_order = [
         "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
         "model_training", "prediction_publication", "portfolio_construction",
         "backtest_execution", "result_reconciliation",
     ]
-    stages_seen = [item["stage"] for item in stages]
+    stages_seen: list[str] = []
+    for record in stages:
+        stage = record.get("stage")
+        if not isinstance(stage, str) or stage not in stage_order:
+            raise ContractError("invalid stage in stage records")
+        stages_seen.append(stage)
+        status = record.get("status")
+        failure_reason = record.get("failure_reason")
+        if status not in _RESEARCH_STATUS_REASONS:
+            raise ContractError("invalid stage status")
+        allowed_reasons = _RESEARCH_STATUS_REASONS[status]
+        if status in {"blocked", "failed"} and failure_reason not in allowed_reasons:
+            raise ContractError("stage failure reason is missing or invalid")
+        if status in {"running", "passed", "warning"} and failure_reason is not None:
+            raise ContractError("successful stage has a failure reason")
+        for binding in record.get("output_bindings", []):
+            binding_reason = binding.get("failure_reason")
+            if binding_reason is not None and binding_reason not in _RESEARCH_FAILURE_REASONS:
+                raise ContractError("stage output binding has invalid failure reason")
+            if status in {"passed", "warning"} and binding_reason is not None:
+                raise ContractError("successful stage has a failed output binding")
+            if status in {"blocked", "failed"} and binding_reason is not None and failure_reason != binding_reason:
+                raise ContractError("stage and output failure reasons conflict")
     if len(stages_seen) != len(set(stages_seen)):
         raise ContractError("stage records contain duplicates")
     indexes = [stage_order.index(stage) for stage in stages_seen]
     if indexes != sorted(indexes):
         raise ContractError("stage records are not in normative order")
-    if require_complete and stages_seen != stage_order:
-        raise ContractError("result must contain the complete normative stage order")
+    if indexes != list(range(len(stages_seen))):
+        raise ContractError("stage records contain gaps")
+    terminal_statuses = {"failed", "blocked"}
+    seen_terminal = False
+    for stage, record in zip(stages_seen, stages):
+        if record["status"] in terminal_statuses:
+            seen_terminal = True
+        elif seen_terminal:
+            raise ContractError("stage records contain later progress after terminal status")
+    if not require_complete and stages:
+        latest_status = stages[-1]["status"]
+        final_status = payload.get("final_status") if payload else None
+        if final_status != latest_status:
+            raise ContractError("state final status does not match latest stage status")
+    if require_complete:
+        if stages_seen != stage_order:
+            raise ContractError("result must contain the complete normative stage order")
+        if any(item["status"] not in {"passed", "warning"} for item in stages):
+            raise ContractError("complete result contains non-successful stage")
+        readback = payload.get("readback_status") if payload else None
+        if not isinstance(readback, dict) or not readback or any(value != "passed" for value in readback.values()):
+            raise ContractError("complete result readback is not passed")
+    elif payload is not None and stages:
+        if payload.get("final_status") != stages[-1]["status"]:
+            raise ContractError("state final status does not match latest stage status")
 
 
 class ModelContractLoader:
@@ -267,9 +336,9 @@ class ModelContractLoader:
             _reject_non_finite(payload)
             validate_contract(f"{schema_name}.v1.json", payload)
             if schema_name == "research_run_result":
-                _validate_stage_record_order(payload["stage_records"], require_complete=True)
+                _validate_stage_record_order(payload["stage_records"], require_complete=True, payload=payload)
             if schema_name == "research_run_state":
-                _validate_stage_record_order(payload["stage_records"], require_complete=False)
+                _validate_stage_record_order(payload["stage_records"], require_complete=False, payload=payload)
             content_field = {
                 "model_definition_template": "template_generation_id",
                 "portfolio_definition_template": "template_generation_id",
@@ -293,7 +362,7 @@ class ModelContractLoader:
                 if payload.get("subject_manifest_digest_sha256") != (None if subject_digest is None else subject_digest):
                     raise ContractError("quality decision subject digest mismatch")
                 if report.get("binding_type") == "factor_v1":
-                    if not isinstance(payload.get("trust_anchor_id"), str) or not payload["trust_anchor_id"]:
+                    if payload.get("trust_anchor_id") not in _FACTOR_TRUST_ANCHOR_IDS:
                         raise ContractError("quality decision trust anchor mismatch")
                 elif payload.get("trust_anchor_id") != report.get("key_id"):
                     raise ContractError("quality decision trust anchor mismatch")

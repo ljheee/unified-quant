@@ -21,6 +21,7 @@ from ..contracts.model_layer import (
     bind_reviewed_quality_decision,
     model_manifest_identities,
     sha256_json,
+    validate_quality_decision_owning_report,
 )
 from ..errors import ContractError
 
@@ -189,6 +190,32 @@ class PortfolioBuilder:
             "manifest_digest_sha256": "0" * 64,
         }
         return manifest, frame
+
+
+
+class PortfolioDefinitionBinding:
+    """Bind a reviewed portfolio definition to its immutable owning quality report."""
+
+    @staticmethod
+    def bind(
+        definition: dict[str, Any],
+        *,
+        quality_decision: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        ModelContractLoader.validate("portfolio_definition", definition)
+        report = quality_decision.get("owning_report")
+        if not isinstance(report, dict):
+            raise ContractError("portfolio quality decision missing owning report")
+        checksum = validate_quality_decision_owning_report(report)
+        if quality_decision.get("binding_type") != "portfolio_definition_v1":
+            raise ContractError("portfolio quality decision binding mismatch")
+        if checksum != quality_decision.get("decision_checksum_sha256"):
+            raise ContractError("portfolio quality decision checksum mismatch")
+        if report.get("bound_generation_id") != definition["generation_id"]:
+            raise ContractError("portfolio quality decision is bound to another definition")
+        if quality_decision.get("trust_anchor_id") != report.get("key_id"):
+            raise ContractError("portfolio quality decision trust anchor mismatch")
+        return definition, report
 
 
 class TargetWeightStore:

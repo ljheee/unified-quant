@@ -5,16 +5,29 @@ import hashlib
 import json
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from uq.contracts.gate_contracts import canonical_json, sha256_bytes
 from uq.contracts.model_layer import (
     ModelContractLoader,
+    sha256_json,
     research_contract_identities,
     research_stage_plan_sha256,
 )
 from uq.errors import ContractError
 from uq.research_chain.contracts import validate_provider_config_ref, validate_research_layout
+from uq.research_chain.owning_contracts import FeatureSchemaStore, LabelStore
+from uq.models.features import FeatureSchemaBuilder
+from uq.models.labels import LabelBuilder
+from uq.portfolio.builder import PortfolioDefinitionBinding
+from uq.contracts.artifacts import UniverseSnapshotStore
+from uq.contracts.factor_governance import FactorRegistry
+from uq.contracts.gate_contracts import factor_manifest_identities
+from uq.contracts.canonical_v2 import file_sha256_bytes
+from uq.factors.store import FactorStore
+from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision, model_manifest_identities
+from tests.review_key import REVIEWER_PRIVATE_KEY
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = ROOT / "evidence/research-chain/phase-0/fixtures"
@@ -199,7 +212,7 @@ def test_quality_decision_supports_factor_wrapper() -> None:
 def test_quality_decision_rejects_malformed_signature() -> None:
     decision = copy.deepcopy(valid_documents()["quality_decision"])
     decision["owning_report"]["review_signature_sha256"] = "0" * 128
-    with pytest.raises(ContractError, match="signature mismatch"):
+    with pytest.raises(ContractError, match="model quality report canonical checksum mismatch"):
         ModelContractLoader.validate("quality_decision", decision)
 
 
@@ -372,3 +385,209 @@ def test_provider_config_rejects_symlink_escape(tmp_path: Path) -> None:
             registered_names={"providers/escape.json"},
             allowed_trust_anchor_ids={"review-key-v1"},
         )
+
+
+def test_stage_ledger_rejects_gaps_and_terminal_regression() -> None:
+    state = copy.deepcopy(valid_documents()["research_run_state"])
+    state["stage_records"].append({
+        "stage": "model_training", "status": "passed", "output_bindings": [],
+        "failure_reason": None,
+    })
+    state["state_content_generation_id"] = "0" * 64
+    state["manifest_digest_sha256"] = "0" * 64
+    state["state_content_generation_id"], state["manifest_digest_sha256"] = research_contract_identities(
+        state, schema_name="research_run_state"
+    )
+    with pytest.raises(ContractError, match="contain gaps"):
+        ModelContractLoader.validate("research_run_state", state)
+
+    failed = copy.deepcopy(valid_documents()["research_run_state"])
+    failed["stage_records"][0]["status"] = "failed"
+    failed["stage_records"][0]["failure_reason"] = None
+    failed["final_status"] = "failed"
+    failed["state_content_generation_id"], failed["manifest_digest_sha256"] = research_contract_identities(
+        failed, schema_name="research_run_state"
+    )
+    with pytest.raises(ContractError, match="failure reason"):
+        ModelContractLoader.validate("research_run_state", failed)
+
+
+def test_stage_ledger_rejects_failed_without_reason_and_later_progress() -> None:
+    result = copy.deepcopy(valid_documents()["research_run_result"])
+    failed = copy.deepcopy(result)
+    failed["stage_records"][0]["status"] = "failed"
+    failed["stage_records"][0]["failure_reason"] = None
+    with pytest.raises(ContractError, match="failure reason"):
+        ModelContractLoader.validate("research_run_result", failed)
+
+    later = copy.deepcopy(result)
+    later["stage_records"][0]["status"] = "blocked"
+    later["stage_records"][0]["failure_reason"] = "input_tampered"
+    with pytest.raises(ContractError, match="later progress"):
+        ModelContractLoader.validate("research_run_result", later)
+
+
+def test_provider_config_rejects_unregistered_reference_and_binding(tmp_path: Path) -> None:
+    root = tmp_path / "trust"
+    root.mkdir()
+    path = root / "provider.json"
+    path.write_text(json.dumps({
+        "provider_id": "external-reviewer", "trust_anchor_id": "review-key-v1",
+        "supported_binding_types": ["model_dataset_v1"],
+    }))
+    with pytest.raises(ContractError, match="not registered"):
+        validate_provider_config_ref(
+            "provider.json", trust_root=root, registered_names=set(),
+            allowed_trust_anchor_ids={"review-key-v1"},
+        )
+    path.write_text(json.dumps({
+        "provider_id": "external-reviewer", "trust_anchor_id": "review-key-v1",
+        "supported_binding_types": ["not_a_binding"],
+    }))
+    with pytest.raises(ContractError, match="unsupported quality binding"):
+        validate_provider_config_ref(
+            "provider.json", trust_root=root, registered_names={"provider.json"},
+            allowed_trust_anchor_ids={"review-key-v1"},
+        )
+
+
+def test_research_layout_resolves_relative_paths_under_data_root(tmp_path: Path) -> None:
+    path = tmp_path / "research_runs/requests" / f"request={REQUEST_GENERATION}" / f"run={RUN_ID}" / "manifest.json"
+    path.parent.mkdir(parents=True)
+    resolved = validate_research_layout(
+        path.relative_to(tmp_path), data_root=tmp_path, kind="request",
+        request_generation_id=REQUEST_GENERATION, run_id=RUN_ID,
+    )
+    assert resolved == path
+    with pytest.raises(ContractError, match="does not match request layout"):
+        validate_research_layout(
+            "other/manifest.json", data_root=tmp_path, kind="request",
+            request_generation_id=REQUEST_GENERATION, run_id=RUN_ID,
+        )
+
+
+def test_owning_layer_read_boundaries(tmp_path: Path) -> None:
+    frame = _adjusted_frame()
+    label_manifest = LabelBuilder(name="return_5d", semantic_version="1.0.0").build(
+        frame, upstream_bindings=[_binding(frame)]
+    )
+    directory = tmp_path / "label_sets" / f"generation={label_manifest['generation_id']}"
+    directory.mkdir(parents=True)
+    frame[["instrument", "datetime"]].rename(columns={"datetime": "decision_date"}).assign(label=pd.Series([None] * len(_adjusted_frame()), dtype="float64")).to_parquet(directory / "data.parquet", index=False)
+    (directory / "manifest.json").write_text(json.dumps(label_manifest))
+    manifest, stored = LabelStore(tmp_path).read_frame(label_manifest["generation_id"])
+    assert manifest["generation_id"] == label_manifest["generation_id"]
+    assert len(stored) == len(frame)
+
+    schema = FeatureSchemaBuilder().build(frame, source_factor_set="basic", source_factor_version="1.0.0")
+    schema_directory = tmp_path / "feature_schemas" / f"generation={schema['generation_id']}"
+    schema_directory.mkdir(parents=True)
+    (schema_directory / "manifest.json").write_text(json.dumps(schema))
+    assert FeatureSchemaStore(tmp_path).read_schema(schema["generation_id"])["generation_id"] == schema["generation_id"]
+
+
+def test_factor_store_read_manifest_boundary(tmp_path: Path) -> None:
+    manifest = json.loads((ROOT / "config/schemas/fixtures/factor-manifest-v1-valid.json").read_text())
+    manifest["factor_version"] = "1.0.0"
+    manifest["factor_definitions"][0]["version"] = "1.0.0"
+    manifest["data_checksum_sha256"] = file_sha256_bytes(b"partition-bytes")
+    generation, digest = factor_manifest_identities({
+        key: value for key, value in manifest.items()
+        if key not in {"generation_id", "manifest_digest_sha256"}
+    })
+    manifest["generation_id"] = generation
+    manifest["manifest_digest_sha256"] = digest
+    partition = (
+        tmp_path / "factors" / "dataset=bars_daily" / "schema_version=research-v1" /
+        "factor_set=basic" / "factor_version=1.0.0" / "date=2026-08-21"
+    )
+    partition.mkdir(parents=True)
+    (partition / "manifest.json").write_text(json.dumps(manifest))
+    (partition / "data.parquet").write_bytes(b"partition-bytes")
+    store = FactorStore(tmp_path, FactorRegistry(ROOT))
+    assert store.read_manifest(generation)["generation_id"] == generation
+    with pytest.raises(ContractError):
+        store.read_partition(generation)
+
+
+def _adjusted_frame() -> pd.DataFrame:
+    dates = pd.bdate_range("2026-01-05", periods=10)
+    rows = []
+    for instrument_index in range(2):
+        for day in dates:
+            rows.append({
+                "instrument": f"INST{instrument_index:04d}", "datetime": day,
+                "close": 10.0 + instrument_index, "adj_factor": 1.0 + 0.01 * instrument_index,
+                "limit_up": False, "limit_down": False, "delisted": False, "suspended": False,
+                "listing_date": pd.Timestamp("2020-01-01", tz="UTC"),
+            })
+    return pd.DataFrame(rows)
+
+
+def _binding(frame: pd.DataFrame) -> dict:
+    ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort")
+    checksum = sha256_json({"rows": [
+        [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
+        for row in ordered[["instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"]].itertuples(index=False)
+    ]})
+    return {
+        "binding": "adjusted_price", "dataset": "bars_adjusted", "schema_version": "adjusted-v1",
+        "partition_date": "2026-01-15", "generation_id": "0" * 64,
+        "data_checksum_sha256": checksum, "visible_cutoff": "2026-01-15T15:00:00+08:00",
+    }
+
+
+
+def test_portfolio_definition_binding() -> None:
+    fixture = json.loads((ROOT / "evidence/portfolio-backtest/phase-0/fixtures/valid_portfolio_definition.json").read_text())
+    fixture["quality_report_checksum_sha256"] = "0" * 64
+    fixture["generation_id"], fixture["manifest_digest_sha256"] = model_manifest_identities(
+        {**fixture, "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
+        schema_name="portfolio_definition",
+    )
+    checks = [
+        {"name": "weight_scheme_valid", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+        {"name": "constraints_within_bounds", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+        {"name": "universe_binding_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+    ]
+    decision = create_reviewed_quality_decision(
+        binding_type="portfolio_definition_v1", policy="reject_all", status="passed",
+        checks=checks, errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
+    )
+    report, _ = bind_reviewed_quality_decision(
+        decision, binding_type="portfolio_definition_v1",
+        subject_generation_id=fixture["generation_id"],
+    )
+    wrapped = {
+        "contract_version": 1, "schema_version": "1.0.0",
+        "binding_type": "portfolio_definition_v1",
+        "subject_generation_id": fixture["generation_id"],
+        "subject_manifest_digest_sha256": None,
+        "owning_report": report,
+        "decision_checksum_sha256": report["report_checksum_sha256"],
+        "provider_id": "external-model-quality-reviewer-v1",
+        "trust_anchor_id": report["key_id"],
+    }
+    definition, bound_report = PortfolioDefinitionBinding.bind(
+        definition=fixture, quality_decision=wrapped
+    )
+    assert report["bound_generation_id"] == definition["generation_id"]
+
+
+def test_universe_snapshot_store_read_boundaries(tmp_path: Path) -> None:
+    base = {
+        "universe_version": 1, "universe_id": "research-core",
+        "source": "config/universe/research-whitelist.txt",
+        "snapshot_time": "2026-01-05T00:00:00Z", "visibility_time": "2026-01-05T00:00:00Z",
+        "valid_from": "2026-01-05", "valid_to": None,
+        "members_artifact": {"path": "members.csv", "checksum_sha256": "0" * 64},
+        "membership_evidence": "static research whitelist; not PIT index membership",
+    }
+    members = pd.DataFrame({"instrument": ["A", "B"]})
+    UniverseSnapshotStore(tmp_path).save(tmp_path, base, members)
+    manifest = json.loads(next((tmp_path / "universes").rglob("manifest.json")).read_text())
+    store = UniverseSnapshotStore(tmp_path)
+    assert store.read_manifest(manifest["generation_id"])["universe_id"] == "research-core"
+    stored = store.read_members(manifest["generation_id"], universe_id="research-core")
+    assert stored["instrument"].tolist() == ["A", "B"]

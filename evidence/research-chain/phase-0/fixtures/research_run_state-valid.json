@@ -1,9 +1,9 @@
 {
   "contract_version": 1,
   "created_at": "2026-01-30T07:00:00+00:00",
-  "final_status": "running",
+  "final_status": "passed",
   "intent": "dry_run",
-  "manifest_digest_sha256": "e43493fe1aaf1a0e351497928c5971946ca95e875e38ca38eaac0b0c4fc93c3f",
+  "manifest_digest_sha256": "eefed7acd6458994d7f6456fd4f95a091bde64b2d07d7814c8856c3112d60ac4",
   "request_content_generation_id": "44704900b4f0f88e34bc0324d74d72c84e1a2086be60b1b97e31f014efb23261",
   "request_manifest_digest_sha256": "68bf1158c4ee0d20d872763838776ed4d9f422d17e6cf90f9d69cd137c45abd1",
   "run_id": "00000000-0000-4000-8000-000000000001",
@@ -31,5 +31,5 @@
       "status": "passed"
     }
   ],
-  "state_content_generation_id": "8547943205eb13c51c8c37b37187ad4c70c2cbddbcdee5db8e77e93d93722190"
+  "state_content_generation_id": "394f8c7261aae5d9e65b6a4b266afaf05a586b291ba140cb8575430187259391"
 }

@@ -10,6 +10,15 @@ from typing import Any, Mapping, Protocol
 from ..errors import ContractError
 
 
+_QUALITY_BINDING_TYPES = {
+    "label_set_v1", "model_dataset_v1", "model_definition_v1", "model_run_v1",
+    "model_artifact_v1", "feature_preprocessing_v1", "qlib_dataset_export_v1",
+    "qlib_init_receipt_v1", "prediction_set_v1", "portfolio_definition_v1",
+    "target_weights_v1", "backtest_config_v1", "backtest_result_v1", "factor_v1",
+    "research_run_request_v1", "research_run_state_v1", "research_run_result_v1",
+}
+
+
 @dataclass(frozen=True)
 class ProviderConfig:
     provider_id: str
@@ -138,10 +147,14 @@ def validate_research_layout(
     else:
         raise ContractError("unknown research layout kind")
     candidate = Path(path)
-    try:
-        relative = candidate.relative_to(data_root.resolve()) if candidate.is_absolute() else candidate
-    except ValueError as exc:
-        raise ContractError("research path escapes data root") from exc
+    relative = candidate
+    if candidate.is_absolute():
+        try:
+            relative = candidate.relative_to(data_root.resolve())
+        except ValueError as exc:
+            raise ContractError("research path escapes data root") from exc
+    else:
+        candidate = data_root / candidate
     relative = _validate_layout_common(relative)
     if relative != expected:
         raise ContractError(f"research path does not match {kind} layout")
@@ -177,6 +190,8 @@ def validate_provider_config_ref(
         raise ContractError("provider configuration path must not traverse")
     if any(part.startswith(".") for part in candidate.parts):
         raise ContractError("provider configuration path must not contain hidden segments")
+    if config_ref not in registered_names:
+        raise ContractError("provider configuration is not registered")
     resolved = (trust_root / candidate).resolve(strict=True)
     trust_resolved = trust_root.resolve(strict=True)
     try:
@@ -185,8 +200,6 @@ def validate_provider_config_ref(
         contained = False
     if not contained or not resolved.is_file():
         raise ContractError("provider configuration is missing or escapes trust root")
-    if config_ref not in registered_names:
-        raise ContractError("provider configuration is not registered")
     try:
         config = json.loads(resolved.read_text(encoding="utf-8"), parse_constant=lambda value: (
             (_ for _ in ()).throw(ContractError("provider configuration contains non-finite JSON"))
@@ -209,4 +222,6 @@ def validate_provider_config_ref(
         raise ContractError("provider configuration must support at least one binding type")
     if not all(isinstance(value, str) and identity_pattern.fullmatch(value) for value in supported_binding_types):
         raise ContractError("provider configuration has invalid supported binding types")
+    if not set(supported_binding_types).issubset(_QUALITY_BINDING_TYPES):
+        raise ContractError("provider configuration has unsupported quality binding types")
     return ProviderConfig(provider_id=provider_id, trust_anchor_id=trust_anchor_id, config_path=str(resolved))

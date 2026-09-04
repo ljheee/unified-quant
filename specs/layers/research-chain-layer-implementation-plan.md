@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.5; Phase 0 exited after second CR at commit 77d03ff; runtime phases remain gated**
+Status: **gated implementation order v0.6; Phase 0 remediation round 3 in progress; runtime phases remain gated**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -297,7 +297,15 @@ test node IDs before their owning phase exits.
 | RC0b | 0 | `tests/test_research_chain_phase0.py::test_valid_and_negative_fixtures_are_persisted` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
 | RC0c | 0 | `tests/test_research_chain_phase0.py::test_normative_stage_order_is_enforced` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
 | RC0d | 0 | `tests/test_research_chain_phase0.py::test_result_identity_is_sensitive_to_governed_content` | `evidence/research-chain/phase-0/golden-vectors/identity-golden-vectors.json` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
-| RC0e | 0 | `tests/test_research_chain_phase0.py::test_research_layout_rejects_traversal_missing_parent_and_overwrite` | `src/uq/research_chain/contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
+| RC0e | 0 | `tests/test_research_chain_phase0.py::test_research_layout_rejects_traversal_missing_parent_and_overwrite` | `src/uq/research_chain/contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-final-gate |
+| RC0f | 0 | `tests/test_research_chain_phase0.py::test_owning_layer_read_boundaries` | `src/uq/research_chain/owning_contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-final-gate |
+| RC0g | 0 | `tests/test_research_chain_phase0.py::test_factor_store_read_manifest_boundary` | `src/uq/factors/store.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-final-gate |
+| RC0h | 0 | `tests/test_research_chain_phase0.py::test_universe_snapshot_store_read_boundaries` | `src/uq/contracts/artifacts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-final-gate |
+| RC0i | 0 | `tests/test_research_chain_phase0.py::test_portfolio_definition_binding` | `src/uq/portfolio/builder.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-final-gate |
+| RC0j | 0 | `tests/test_research_chain_phase0.py::test_stage_ledger_rejects_gaps_and_terminal_regression` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-final-gate |
+| RC0k | 0 | `tests/test_research_chain_phase0.py::test_stage_ledger_rejects_failed_without_reason_and_later_progress` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-final-gate |
+| RC0l | 0 | `tests/test_research_chain_phase0.py::test_provider_config_rejects_unregistered_reference_and_binding` | `src/uq/research_chain/contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-final-gate |
+| RC0m | 0 | `tests/test_research_chain_phase0.py::test_research_layout_resolves_relative_paths_under_data_root` | `src/uq/research_chain/contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-final-gate |
 | RC1a | 1 | `planned:test_request_resolver_resolves_all_reviewed_inputs` | `planned:phase-1/fixtures/valid-request.json` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
 | RC1b | 1 | `planned:test_dry_run_does_not_mutate_downstream_stores` | `planned:phase-1/fixtures/` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
 | RC1c | 1 | `planned:test_resolver_failure_taxonomy_is_typed` | `planned:phase-1/fixtures/` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
@@ -329,8 +337,9 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Implement the Phase 1 read-only resolver and dry-run state using the
+1. Run `UQ_GATE_EXTRAS=qlib scripts/run_gate.sh` on the final implementation
+   HEAD and preserve its report, lockfile, and digest.
+2. Commit the final-head gate evidence and mark Phase 0 exited only after the
+   evidence reconciliation rule is satisfied.
+3. Then implement the Phase 1 read-only resolver and dry-run state using the
    frozen Phase 0 store/provider/path contracts.
-2. Expand RC1 acceptance rows to concrete test IDs before resolver runtime
-   is enabled.
-3. Preserve local and CI evidence for the Phase 1 exit review.

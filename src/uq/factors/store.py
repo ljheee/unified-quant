@@ -3,6 +3,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
 import shutil
 import uuid
 from datetime import date, datetime, time, timezone
@@ -176,6 +177,41 @@ class FactorStore:
                 shutil.rmtree(staging, ignore_errors=True)
                 raise
         return partition
+
+    def read_manifest(self, generation_id: str) -> dict[str, Any]:
+        """Read and verify a factor manifest by its stable generation id."""
+        if not isinstance(generation_id, str) or not re.fullmatch(r"[0-9a-f]{64}", generation_id):
+            raise ContractError("invalid factor generation id")
+        base = self.root / "factors"
+        matches: list[Path] = []
+        if base.exists():
+            for path in base.rglob("manifest.json"):
+                partition = path.parent
+                if any(item.startswith(".") for item in partition.relative_to(base).parts):
+                    continue
+                try:
+                    document = json.loads(path.read_text())
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if document.get("generation_id") == generation_id:
+                    matches.append(partition)
+        if not matches:
+            raise ContractError(f"unpublished factor manifest: {generation_id}")
+        if len(matches) > 1:
+            raise ContractError(f"ambiguous factor manifest generation: {generation_id}")
+        return _read_verified_factor_manifest(matches[0])
+
+    def read_partition(self, generation_id: str) -> tuple[dict[str, Any], pd.DataFrame]:
+        """Read a manifest-first, checksum-verified factor partition."""
+        manifest = self.read_manifest(generation_id)
+        partition = self._partition(
+            input_dataset=manifest["input_dataset"],
+            input_schema_version=manifest["input_schema_version"],
+            factor_set=manifest["factor_set"],
+            factor_version=manifest["factor_version"],
+            partition_date=date.fromisoformat(manifest["partition_date"]),
+        )
+        return manifest, read_factor_partition(partition)
 
 
 def factor_generation(
@@ -415,7 +451,7 @@ def _reconcile_output(expected: pd.DataFrame, actual: pd.DataFrame, fingerprint:
         raise ContractError("factor logical fingerprint readback mismatch")
 
 
-def read_factor_partition(partition: Path) -> pd.DataFrame:
+def _read_verified_factor_manifest(partition: Path) -> dict[str, Any]:
     manifest_path = partition / "manifest.json"
     data_path = partition / "data.parquet"
     if not manifest_path.is_file() or not data_path.is_file():
@@ -458,6 +494,13 @@ def read_factor_partition(partition: Path) -> pd.DataFrame:
         raise ContractError("tampered factor manifest identity")
     if manifest.get("data_checksum_sha256") != file_sha256_bytes(data_path.read_bytes()):
         raise ContractError("tampered factor data prevents factor read")
+
+    return manifest
+
+
+def read_factor_partition(partition: Path) -> pd.DataFrame:
+    manifest = _read_verified_factor_manifest(partition)
+    data_path = partition / "data.parquet"
 
     registry = FactorRegistry(Path(__file__).resolve().parents[3])
     definition = registry.get(

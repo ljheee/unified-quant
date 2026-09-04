@@ -22,6 +22,9 @@ _MEMBERS_COLUMNS = ["instrument"]
 
 
 class UniverseSnapshotStore:
+    def __init__(self, root: Path | str | None = None) -> None:
+        self.root = None if root is None else Path(root)
+
     def save(self, root: Path, document_without_generation: dict[str, Any], members: pd.DataFrame) -> Path:
         candidate = {**document_without_generation, "generation_id": "0" * 64}
         validate_contract("universe_snapshot.v1.json", candidate)
@@ -59,6 +62,53 @@ class UniverseSnapshotStore:
             shutil.rmtree(staging, ignore_errors=True)
             raise
         return directory
+
+    def read_manifest(self, generation_id: str, *, universe_id: str | None = None) -> dict[str, Any]:
+        if self.root is None:
+            raise ContractError("universe snapshot store root is required")
+        if not re.fullmatch(r"[0-9a-f]{64}", generation_id):
+            raise ContractError("invalid universe generation id")
+        roots = [self.root / "universes" / universe_id] if universe_id else [self.root / "universes"]
+        candidates: list[Path] = []
+        for base in roots:
+            if not base.exists():
+                continue
+            pattern = f"{generation_id}/manifest.json" if universe_id else f"*/{generation_id}/manifest.json"
+            candidates.extend(base.glob(pattern))
+        if not candidates:
+            raise ContractError(f"unpublished universe snapshot: {generation_id}")
+        if len(candidates) > 1:
+            raise ContractError(f"ambiguous universe snapshot generation: {generation_id}")
+        try:
+            document = json.loads(candidates[0].read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContractError("malformed universe snapshot manifest") from exc
+        validate_contract("universe_snapshot.v1.json", document)
+        expected = adjustment_snapshot_generation({
+            key: value for key, value in document.items() if key != "generation_id"
+        })
+        if document["generation_id"] != expected:
+            raise ContractError("universe snapshot generation mismatch")
+        return document
+
+    def read_members(
+        self,
+        generation_id: str,
+        *,
+        universe_id: str,
+        requested_valid_from: date | None = None,
+        requested_valid_to: date | None = None,
+    ) -> pd.DataFrame:
+        if self.root is None:
+            raise ContractError("universe snapshot store root is required")
+        manifest = self.read_manifest(generation_id, universe_id=universe_id)
+        requested_valid_from = requested_valid_from or date.fromisoformat(manifest["valid_from"])
+        return UniverseSnapshotReader(self.root).read(
+            universe_id,
+            generation_id,
+            requested_valid_from=requested_valid_from,
+            requested_valid_to=requested_valid_to,
+        )
 
 
 class QualityReportStore:

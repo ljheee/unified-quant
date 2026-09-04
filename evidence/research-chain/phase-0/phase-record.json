@@ -2,7 +2,7 @@
   "phase": 0,
   "layer": "research_chain",
   "record_version": 1,
-  "status": "exited",
+  "status": "pending_final_head_evidence_reconciliation",
   "entry_criteria": "none (first phase)",
   "exit_criteria": [
     {
@@ -33,7 +33,10 @@
       "status": "passed",
       "test_ids": [
         "tests/test_research_chain_phase0.py::test_normative_stage_order_is_enforced",
-        "tests/test_research_chain_phase0.py::test_quality_decision_binds_owning_report_checksum"
+        "tests/test_research_chain_phase0.py::test_quality_decision_binds_owning_report_checksum",
+        "tests/test_research_chain_phase0.py::test_stage_ledger_rejects_gaps_and_terminal_regression",
+        "tests/test_research_chain_phase0.py::test_stage_ledger_rejects_failed_without_reason_and_later_progress",
+        "tests/test_research_chain_phase0.py::test_quality_decision_rejects_malformed_signature"
       ],
       "evidence_paths": [
         "evidence/research-chain/phase-0/fixtures/"
@@ -47,6 +50,24 @@
       ],
       "evidence_paths": [
         "evidence/research-chain/phase-0/golden-vectors/identity-golden-vectors.json"
+      ]
+    },
+    {
+      "id": "RC0-owning-layer-apis",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase0.py::test_owning_layer_read_boundaries",
+        "tests/test_research_chain_phase0.py::test_factor_store_read_manifest_boundary",
+        "tests/test_research_chain_phase0.py::test_universe_snapshot_store_read_boundaries",
+        "tests/test_research_chain_phase0.py::test_portfolio_definition_binding",
+        "tests/test_research_chain_phase0.py::test_provider_config_rejects_unregistered_reference_and_binding",
+        "tests/test_research_chain_phase0.py::test_research_layout_resolves_relative_paths_under_data_root"
+      ],
+      "evidence_paths": [
+        "src/uq/factors/store.py",
+        "src/uq/research_chain/owning_contracts.py",
+        "src/uq/contracts/artifacts.py",
+        "src/uq/portfolio/builder.py"
       ]
     },
     {
@@ -66,20 +87,14 @@
     },
     {
       "id": "RC0-unified-gate",
-      "status": "passed",
+      "status": "passed-local-head",
       "test_ids": [
         "scripts/run_gate.sh"
       ],
       "evidence_paths": [
-        "evidence/research-chain/phase-0/gate-reports/gate-report.json",
-        "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt",
-        "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt.sha256",
-        "evidence/research-chain/phase-0/remote-ci/33829571842/ci-summary.json",
-        "evidence/research-chain/phase-0/remote-ci/33872921129/ci-summary.json",
-        "evidence/research-chain/phase-0/remote-ci/33874148465/ci-summary.json"
+        "evidence/research-chain/phase-0/gate-reports/gate-report.json"
       ],
-      "bound_commit": "77d03ffb96b494af7a68749ead25b470877d019a",
-      "remote_ci": "33874148465"
+      "bound_commit": "77be6bb09585718ddd9bab692d32804da8ffd522"
     }
   ],
   "evidence_paths": [
@@ -91,17 +106,25 @@
     "config/schemas/contracts/quality_decision.v1.json",
     "evidence/research-chain/phase-0/fixtures/",
     "evidence/research-chain/phase-0/golden-vectors/",
-    "tests/test_research_chain_phase0.py"
+    "tests/test_research_chain_phase0.py",
+    "src/uq/factors/store.py",
+    "src/uq/research_chain/owning_contracts.py",
+    "src/uq/contracts/artifacts.py",
+    "src/uq/portfolio/builder.py"
   ],
-  "blocked_by": [],
-  "exited_at_commit": "77d03ffb96b494af7a68749ead25b470877d019a",
+  "blocked_by": [
+    "commit implementation, rerun gate on committed HEAD, then reconcile evidence"
+  ],
   "remediation": {
     "started_from_commit": "d7f0248d0b044b19341b4dc1fe06025d87442989",
     "items": [
-      "result manifest digest covers physical paths",
-      "provider config validates trust anchor and supported bindings",
-      "quality decision validates owning report checksum/signature",
-      "factor_v1 quality wrapper byte checksum validation"
-    ]
+      "owning-layer read/binding APIs implemented",
+      "model quality decision checksum and registry validation enforced",
+      "stage ledger gaps, terminal regressions, and failure reasons enforced",
+      "provider registration and quality binding enum validation tightened",
+      "relative research layout paths resolved under data root",
+      "final HEAD unified gate evidence pending"
+    ],
+    "round": 3
   }
 }

@@ -2,12 +2,12 @@
   "record_version": 1,
   "layer": "research_chain",
   "phase": 0,
-  "status": "exited",
+  "status": "remediation_in_progress",
   "entries": [
     {
       "type": "phase_record",
       "path": "evidence/research-chain/phase-0/phase-record.json",
-      "status": "exited"
+      "status": "remediation_in_progress"
     },
     {
       "type": "fixtures",
@@ -31,6 +31,14 @@
       "path_policy": "validate_provider_config_ref"
     },
     {
+      "type": "owning_contracts",
+      "path": "src/uq/research_chain/owning_contracts.py",
+      "interfaces": [
+        "FeatureSchemaStore",
+        "LabelStore"
+      ]
+    },
+    {
       "type": "golden_vectors",
       "path": "evidence/research-chain/phase-0/golden-vectors/identity-golden-vectors.json"
     },
@@ -41,16 +49,11 @@
     {
       "type": "gate_report",
       "path": "evidence/research-chain/phase-0/gate-reports/gate-report.json",
-      "bound_commit": "225abb7d16e877991a222f6c5af3a2d1da552da0",
+      "bound_commit": "77be6bb09585718ddd9bab692d32804da8ffd522",
       "requirements_path": "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt",
       "requirements_digest_path": "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt.sha256",
       "status": "passed",
-      "note": "historical pre-remediation local report"
-    },
-    {
-      "type": "phase_record",
-      "path": "evidence/research-chain/phase-0/phase-record.json",
-      "status": "exited"
+      "note": "local remediation-round-3 report bound to pre-commit working state"
     },
     {
       "type": "remote_ci_matrix",
@@ -76,8 +79,8 @@
       "run_id": "33874148465",
       "head_sha": "77d03ffb96b494af7a68749ead25b470877d019a",
       "conclusion": "success",
-      "cells": 10
+      "cells": 10,
+      "superseded_by": "pending-final-implementation-head"
     }
-  ],
-  "exited_at_commit": "77d03ffb96b494af7a68749ead25b470877d019a"
+  ]
 }
