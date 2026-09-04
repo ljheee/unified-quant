@@ -1,5 +1,6 @@
 """Research Chain orchestration contracts."""
 
+from .adapters import FactorStageAdapter
 from .resolver import FileResearchRunStore
 from .resolver import (
     ResearchChainRequestResolver,
@@ -9,6 +10,7 @@ from .resolver import (
 )
 
 __all__ = [
+    "FactorStageAdapter",
     "FileResearchRunStore",
     "ResearchChainRequestResolver",
     "ResearchResolutionError",

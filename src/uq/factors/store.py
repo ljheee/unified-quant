@@ -201,6 +201,21 @@ class FactorStore:
             raise ContractError(f"ambiguous factor manifest generation: {generation_id}")
         return _read_verified_factor_manifest(matches[0])
 
+    def manifest_path(self, generation_id: str) -> Path:
+        """Return the verified factor manifest path inside the owning store."""
+        manifest = self.read_manifest(generation_id)
+        path = self._partition(
+            input_dataset=manifest["input_dataset"],
+            input_schema_version=manifest["input_schema_version"],
+            factor_set=manifest["factor_set"],
+            factor_version=manifest["factor_version"],
+            partition_date=date.fromisoformat(manifest["partition_date"]),
+        ) / "manifest.json"
+        try:
+            return path.relative_to(self.root)
+        except ValueError as exc:
+            raise ContractError("factor manifest lies outside approved store") from exc
+
     def read_partition(self, generation_id: str) -> tuple[dict[str, Any], pd.DataFrame]:
         """Read a manifest-first, checksum-verified factor partition."""
         manifest = self.read_manifest(generation_id)
