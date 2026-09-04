@@ -2,7 +2,7 @@
   "record_version": 1,
   "layer": "research_chain",
   "phase": 0,
-  "status": "remediation_in_progress",
+  "status": "exited",
   "entries": [
     {
       "type": "phase_record",
@@ -62,7 +62,7 @@
       "head_sha": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
       "conclusion": "success",
       "cells": 10,
-      "superseded_by": "33872921129"
+      "superseded_by": "33882143774"
     },
     {
       "type": "remote_ci_matrix",
@@ -71,7 +71,7 @@
       "head_sha": "a3e06031a47d8462cf24139b15ed21b4481fa165",
       "conclusion": "success",
       "cells": 10,
-      "superseded_by": "33872921129"
+      "superseded_by": "33882143774"
     },
     {
       "type": "remote_ci_matrix",
@@ -80,7 +80,9 @@
       "head_sha": "77d03ffb96b494af7a68749ead25b470877d019a",
       "conclusion": "success",
       "cells": 10,
-      "superseded_by": "pending-final-implementation-head"
+      "superseded_by": "33882143774"
     }
-  ]
+  ],
+  "implementation_commit": "6384ec71869b149f2170fd337b5567723ecd537a",
+  "evidence_commit_policy": "evidence-only commit; no implementation changes after gate and remote CI"
 }

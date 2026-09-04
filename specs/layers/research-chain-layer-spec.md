@@ -1,6 +1,6 @@
 # Research Chain Integration Layer Specification
 
-Status: **draft v0.6; contract-first; Phase 0 remediation round 3 in progress**
+Status: **draft v0.6; contract-first; Phase 0 exited; Phase 1 not started**
 
 Source specs:
 

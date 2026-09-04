@@ -2,7 +2,7 @@
   "phase": 0,
   "layer": "research_chain",
   "record_version": 1,
-  "status": "pending_final_head_evidence_reconciliation",
+  "status": "exited",
   "entry_criteria": "none (first phase)",
   "exit_criteria": [
     {
@@ -112,19 +112,20 @@
     "src/uq/contracts/artifacts.py",
     "src/uq/portfolio/builder.py"
   ],
-  "blocked_by": [
-    "commit implementation, rerun gate on committed HEAD, then reconcile evidence"
-  ],
+  "blocked_by": [],
   "remediation": {
     "started_from_commit": "d7f0248d0b044b19341b4dc1fe06025d87442989",
     "items": [
-      "owning-layer read/binding APIs implemented",
+      "owning-layer read/binding APIs implemented and tested",
       "model quality decision checksum and registry validation enforced",
       "stage ledger gaps, terminal regressions, and failure reasons enforced",
       "provider registration and quality binding enum validation tightened",
       "relative research layout paths resolved under data root",
-      "final HEAD unified gate evidence pending"
+      "remote 10-cell CI passed on implementation commit"
     ],
     "round": 3
-  }
+  },
+  "implementation_commit": "6384ec71869b149f2170fd337b5567723ecd537a",
+  "exited_at_implementation_commit": "6384ec71869b149f2170fd337b5567723ecd537a",
+  "evidence_commit_policy": "evidence-only commit; no implementation changes after gate and remote CI"
 }
