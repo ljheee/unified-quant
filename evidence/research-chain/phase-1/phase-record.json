@@ -1,0 +1,102 @@
+{
+  "blocked_by": [
+    "remote 10-cell unified gate evidence"
+  ],
+  "entry_criteria": {
+    "phase_0_commit": "6384ec7",
+    "phase_0_exited": true,
+    "status": "passed"
+  },
+  "evidence_paths": [
+    "src/uq/research_chain/resolver.py",
+    "src/uq/research_chain/owning_contracts.py",
+    "tests/test_research_chain_phase1.py",
+    "evidence/research-chain/phase-1/gate-reports/"
+  ],
+  "exit_criteria": [
+    {
+      "evidence_paths": [
+        "tests/test_research_chain_phase1.py",
+        "evidence/research-chain/phase-1/gate-reports/gate-report.json"
+      ],
+      "id": "RC1-valid-resolution",
+      "status": "passed-local",
+      "test_ids": [
+        "tests/test_research_chain_phase1.py::test_request_resolves_all_upstreams_and_is_deterministic"
+      ]
+    },
+    {
+      "evidence_paths": [
+        "tests/test_research_chain_phase1.py",
+        "evidence/research-chain/phase-1/gate-reports/gate-report.json"
+      ],
+      "id": "RC1-negative-paths",
+      "status": "passed-local",
+      "test_ids": [
+        "tests/test_research_chain_phase1.py::test_provider_failures_are_typed",
+        "tests/test_research_chain_phase1.py::test_request_failures_are_typed",
+        "tests/test_research_chain_phase1.py::test_missing_store_and_overwrite_are_fail_closed"
+      ]
+    },
+    {
+      "evidence_paths": [
+        "tests/test_research_chain_phase1.py",
+        "evidence/research-chain/phase-1/gate-reports/gate-report.json"
+      ],
+      "id": "RC1-dry-run-isolation",
+      "status": "passed-local",
+      "test_ids": [
+        "tests/test_research_chain_phase1.py::test_dry_run_state_contains_no_downstream_outputs"
+      ]
+    },
+    {
+      "evidence_paths": [
+        "evidence/research-chain/phase-1/gate-reports/gate-report.json"
+      ],
+      "id": "RC1-plan-determinism",
+      "status": "passed-local",
+      "test_ids": [
+        "tests/test_research_chain_phase1.py::test_request_resolves_all_upstreams_and_is_deterministic"
+      ]
+    },
+    {
+      "bound_commit": "3071999e02a6f50071137d20b5dc333c6e13df91",
+      "evidence_paths": [
+        "evidence/research-chain/phase-1/gate-reports/gate-report.json"
+      ],
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "id": "RC1-unified-gate-local",
+      "status": "passed-local-head",
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ],
+      "test_summary": "406 passed"
+    },
+    {
+      "blocked_by": [
+        "remote 10-cell unified gate completion"
+      ],
+      "evidence_paths": [
+        "evidence/research-chain/phase-1/remote-ci/"
+      ],
+      "id": "RC1-unified-gate-remote",
+      "status": "pending",
+      "test_ids": [
+        "github-actions:10-cell unified gate"
+      ]
+    }
+  ],
+  "implementation_commit": "3071999e02a6f50071137d20b5dc333c6e13df91",
+  "layer": "research_chain",
+  "notes": [
+    "Dry-run mutation is limited to the research-run ledger; owning stores are read-only.",
+    "Result publication and readback remain Phase 5 capabilities and fail closed."
+  ],
+  "phase": 1,
+  "record_version": 1,
+  "status": "implemented_draft_awaiting_remote_gate"
+}

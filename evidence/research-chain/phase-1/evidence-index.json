@@ -1,0 +1,19 @@
+{
+  "entries": [
+    {
+      "bound_commit": "3071999e02a6f50071137d20b5dc333c6e13df91",
+      "kind": "local-gate",
+      "path": "gate-reports/gate-report.json",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "status": "passed"
+    },
+    {
+      "kind": "phase-record",
+      "path": "phase-record.json",
+      "status": "implemented_draft_awaiting_remote_gate"
+    }
+  ],
+  "implementation_commit": "3071999e02a6f50071137d20b5dc333c6e13df91",
+  "phase": 1,
+  "record_version": 1
+}
