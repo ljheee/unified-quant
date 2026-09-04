@@ -9,7 +9,7 @@
   "research_run_request.manifest_digest_sha256": "68bf1158c4ee0d20d872763838776ed4d9f422d17e6cf90f9d69cd137c45abd1",
   "research_run_request.stable_under_run_metadata": "44704900b4f0f88e34bc0324d74d72c84e1a2086be60b1b97e31f014efb23261",
   "research_run_result.generation_id": "7550aa76d38f86a6719cd423f3296cabbf69474c02fa48b917d26a3a22210e33",
-  "research_run_result.manifest_digest_sha256": "7a1033105464a47fd01d1eff4ae690174b021fcecfcb937229429169d6a2835e",
+  "research_run_result.manifest_digest_sha256": "519d008107b4ea77885d3a5c7e837b62523db0da89634b6e7153d04146d982ab",
   "research_run_state.generation_id": "8547943205eb13c51c8c37b37187ad4c70c2cbddbcdee5db8e77e93d93722190",
   "research_run_state.manifest_digest_sha256": "e43493fe1aaf1a0e351497928c5971946ca95e875e38ca38eaac0b0c4fc93c3f",
   "stage_plan_sha256": "bb797d79afe118148ea5545a49ec82dca6d891ea52e82fdae2bc16432b14c316"

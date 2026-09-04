@@ -184,10 +184,10 @@ def research_contract_identities(
     elif schema_name == "research_run_result":
         excluded_fields.update(_RUN_LOCAL_FIELDS)
         excluded_fields.update({"request_manifest_digest_sha256", "state_created_at", "state_attempt_digest_sha256"})
-        document = _without_physical_path(document)
 
+    generation_document = _without_physical_path(document) if schema_name == "research_run_result" else document
     generation = sha256_json({
-        key: value for key, value in document.items() if key not in excluded_fields
+        key: value for key, value in generation_document.items() if key not in excluded_fields
     })
     digest_document = {key: value for key, value in document.items() if key != digest_field}
     digest_document[content_field] = generation
