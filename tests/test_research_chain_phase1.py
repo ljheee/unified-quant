@@ -341,6 +341,38 @@ def test_request_failures_are_typed(
     assert exc_info.value.reason == reason
 
 
+def test_adjusted_price_store_rejects_report_directory_symlink(tmp_path: Path) -> None:
+    schema = load_schema("config/schemas/bars_daily.research-v1.yaml")
+    frame = pd.DataFrame({
+        "instrument": ["600000.XSHG"],
+        "datetime": pd.to_datetime(["2026-08-21"]),
+        "open": [10.0], "high": [10.2], "low": [9.8], "close": [10.0],
+        "volume": [10000.0], "amount": [100000.0],
+    })
+    store = CanonicalV2Store(tmp_path)
+    generation = store.prepare_generation(schema, date(2026, 8, 21), frame, {}, {})
+    report_directory = QualityReportStore().save(tmp_path, {
+        "report_version": 1,
+        "binding_type": "canonical_v2",
+        "bound_generation_id": generation,
+        "policy": "reject_all",
+        "status": "passed",
+        "checks": [
+            {"name": "coverage", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}
+        ],
+        "errors": [],
+        "warnings": [],
+    })
+    checksum = file_sha256_bytes((report_directory / "report.json").read_bytes())
+    store.publish(schema, date(2026, 8, 21), frame, {}, {}, quality_checksum=checksum)
+    report_path = tmp_path / "reports" / "canonical_v2" / generation
+    report_path.rename(tmp_path / "reports" / "canonical_v2" / "moved")
+    report_path.symlink_to(tmp_path / "reports" / "canonical_v2" / "moved", target_is_directory=True)
+
+    with pytest.raises(ContractError, match="unsafe quality report directory"):
+        AdjustedPriceDatasetStore(tmp_path).read_manifest(generation)
+
+
 def test_adjusted_price_store_reads_published_manifest(tmp_path: Path) -> None:
     schema = load_schema("config/schemas/bars_daily.research-v1.yaml")
     frame = pd.DataFrame({

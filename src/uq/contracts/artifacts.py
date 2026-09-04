@@ -143,9 +143,16 @@ class QualityReportStore:
         return directory
 
     def read(self, root: Path, bound_generation_id: str, *, binding_type: str) -> dict[str, Any]:
-        if "/" in bound_generation_id or ".." in bound_generation_id:
+        if not re.fullmatch(r"[0-9a-f]{64}", bound_generation_id):
             raise ContractError("unsafe quality report binding identity")
+        root = root.resolve()
+        if root.is_symlink() or any(parent.is_symlink() for parent in root.parents):
+            raise ContractError("unsafe quality report root")
+        if binding_type not in {"factor_v1", "canonical_v2"}:
+            raise ContractError("unsupported quality report binding type")
         directory = root / "reports" / binding_type / bound_generation_id
+        if directory.is_symlink():
+            raise ContractError("unsafe quality report directory")
         try:
             content = (directory / "report.json").read_bytes()
         except FileNotFoundError as exc:

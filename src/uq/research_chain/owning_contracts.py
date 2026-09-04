@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -71,9 +72,15 @@ class AdjustedPriceDatasetStore:
         if not manifest.get("quality_report_checksum"):
             raise ContractError("adjusted price dataset is missing quality report binding")
         try:
-            report_root = next(parent.parent for parent in directory.parents if parent.name == "canonical")
+            canonical_root = next(parent for parent in directory.parents if parent.name == "canonical")
         except StopIteration as exc:
             raise ContractError("invalid adjusted price dataset store layout") from exc
+        canonical_root = canonical_root.resolve()
+        if not canonical_root.is_relative_to(self.root.resolve()):
+            raise ContractError("unsafe adjusted price dataset store layout")
+        if canonical_root.is_symlink() or any(parent.is_symlink() for parent in canonical_root.parents):
+            raise ContractError("unsafe adjusted price dataset root")
+        report_root = canonical_root.parent
         report_path = report_root / "reports" / "canonical_v2" / manifest["generation_id"] / "report.json"
         if not report_path.is_file():
             raise ContractError("adjusted price quality report is missing")
@@ -140,7 +147,7 @@ class BacktestConfigStore:
 
 
 def _validate_generation_id(generation_id: str, family: str) -> None:
-    if not isinstance(generation_id, str) or len(generation_id) != 64:
+    if not isinstance(generation_id, str) or not re.fullmatch(r"[0-9a-f]{64}", generation_id):
         raise ContractError(f"invalid {family} generation id")
 
 
