@@ -19,16 +19,16 @@
       "status": "passed"
     },
     {
-      "bound_commit": "90e747fbd6847280c9c9f9d33644b3a4b47f2754",
+      "bound_commit": "08c7a57a30a71c34fac1b98331a081de13397fa9",
       "kind": "local-gate-after-final-cr",
       "path": "final-gate-reports/gate-report.json",
       "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
       "status": "passed"
     },
     {
-      "head_sha": "90e747fbd6847280c9c9f9d33644b3a4b47f2754",
+      "head_sha": "08c7a57a30a71c34fac1b98331a081de13397fa9",
       "kind": "remote-ci",
-      "path": "remote-ci/33890185198/",
+      "path": "remote-ci/33892389571/",
       "status": "passed"
     }
   ],
@@ -36,10 +36,10 @@
   "phase": 1,
   "record_version": 1,
   "remote_gate": {
-    "head_sha": "90e747fbd6847280c9c9f9d33644b3a4b47f2754",
-    "run_id": "33890185198",
+    "head_sha": "08c7a57a30a71c34fac1b98331a081de13397fa9",
+    "run_id": "33892389571",
     "status": "passed",
-    "summary_path": "remote-ci/33890185198/ci-summary.json"
+    "summary_path": "remote-ci/33892389571/ci-summary.json"
   },
   "status": "exited_after_cr_remediation"
 }

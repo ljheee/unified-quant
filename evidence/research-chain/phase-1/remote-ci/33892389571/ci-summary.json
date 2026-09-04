@@ -1,0 +1,38 @@
+{
+  "conclusion": "success",
+  "covered_cells": {
+    "certified": [
+      "macos-latest:3.11",
+      "macos-latest:3.12",
+      "macos-latest:3.13",
+      "ubuntu-latest:3.11",
+      "ubuntu-latest:3.12",
+      "ubuntu-latest:3.13"
+    ],
+    "qlib": [
+      "macos-latest:3.11",
+      "macos-latest:3.12",
+      "ubuntu-latest:3.11",
+      "ubuntu-latest:3.12"
+    ]
+  },
+  "expected_cells": {
+    "certified": [
+      "macos-latest:3.11",
+      "macos-latest:3.12",
+      "macos-latest:3.13",
+      "ubuntu-latest:3.11",
+      "ubuntu-latest:3.12",
+      "ubuntu-latest:3.13"
+    ],
+    "qlib": [
+      "macos-latest:3.11",
+      "macos-latest:3.12",
+      "ubuntu-latest:3.11",
+      "ubuntu-latest:3.12"
+    ]
+  },
+  "head_sha": "08c7a57a30a71c34fac1b98331a081de13397fa9",
+  "run_id": "33892389571",
+  "workflow_name": "ci"
+}

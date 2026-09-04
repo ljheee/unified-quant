@@ -11,7 +11,8 @@
     "tests/test_research_chain_phase1.py",
     "evidence/research-chain/phase-1/gate-reports/",
     "evidence/research-chain/phase-1/final-gate-reports/",
-    "evidence/research-chain/phase-1/remote-ci/33890185198/"
+    "evidence/research-chain/phase-1/remote-ci/33890185198/",
+    "evidence/research-chain/phase-1/remote-ci/33892389571/"
   ],
   "exit_criteria": [
     {
@@ -78,11 +79,11 @@
     },
     {
       "evidence_paths": [
-        "evidence/research-chain/phase-1/remote-ci/33890185198/"
+        "evidence/research-chain/phase-1/remote-ci/33892389571/"
       ],
-      "head_sha": "90e747fbd6847280c9c9f9d33644b3a4b47f2754",
+      "head_sha": "08c7a57a30a71c34fac1b98331a081de13397fa9",
       "id": "RC1-unified-gate-remote",
-      "run_id": "33890185198",
+      "run_id": "33892389571",
       "status": "passed-remote-head",
       "test_ids": [
         "github-actions:10-cell unified gate"
@@ -101,7 +102,7 @@
       "test_summary": "409 passed"
     },
     {
-      "bound_commit": "90e747fbd6847280c9c9f9d33644b3a4b47f2754",
+      "bound_commit": "08c7a57a30a71c34fac1b98331a081de13397fa9",
       "evidence_paths": [
         "evidence/research-chain/phase-1/final-gate-reports/gate-report.json"
       ],
@@ -115,7 +116,7 @@
       "test_ids": [
         "scripts/run_gate.sh"
       ],
-      "test_summary": "411 passed"
+      "test_summary": "412 passed"
     }
   ],
   "implementation_commit": "3071999e02a6f50071137d20b5dc333c6e13df91",
@@ -128,7 +129,8 @@
   "record_version": 1,
   "remediation_commits": [
     "be9eb8de7765f119556f6a7a2f4fd7072061ee53",
-    "90e747fbd6847280c9c9f9d33644b3a4b47f2754"
+    "90e747fbd6847280c9c9f9d33644b3a4b47f2754",
+    "08c7a57a30a71c34fac1b98331a081de13397fa9"
   ],
   "status": "exited_after_cr_remediation"
 }
