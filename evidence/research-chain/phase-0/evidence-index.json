@@ -2,12 +2,12 @@
   "record_version": 1,
   "layer": "research_chain",
   "phase": 0,
-  "status": "exited",
+  "status": "remediation_in_progress",
   "entries": [
     {
       "type": "phase_record",
       "path": "evidence/research-chain/phase-0/phase-record.json",
-      "status": "in_progress"
+      "status": "exited"
     },
     {
       "type": "fixtures",
@@ -49,7 +49,7 @@
     {
       "type": "phase_record",
       "path": "evidence/research-chain/phase-0/phase-record.json",
-      "status": "executable_pending_review"
+      "status": "exited"
     },
     {
       "type": "remote_ci_matrix",
@@ -60,5 +60,8 @@
       "cells": 10
     }
   ],
-  "exited_at_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2"
+  "exited_at_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+  "blocked_by": [
+    "fresh HEAD CI after result identity and provider trust CR fixes"
+  ]
 }

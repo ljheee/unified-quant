@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -159,7 +160,13 @@ def validate_research_layout(
     return candidate
 
 
-def validate_provider_config_ref(config_ref: str, *, trust_root: Path, registered_names: set[str]) -> ProviderConfig:
+def validate_provider_config_ref(
+    config_ref: str,
+    *,
+    trust_root: Path,
+    registered_names: set[str],
+    allowed_trust_anchor_ids: set[str],
+) -> ProviderConfig:
     """Validate a registered relative provider config path against the CLI trust root."""
     if "\\" in config_ref:
         raise ContractError("provider configuration path must not contain backslashes")
@@ -180,4 +187,26 @@ def validate_provider_config_ref(config_ref: str, *, trust_root: Path, registere
         raise ContractError("provider configuration is missing or escapes trust root")
     if config_ref not in registered_names:
         raise ContractError("provider configuration is not registered")
-    return ProviderConfig(provider_id=config_ref, trust_anchor_id=config_ref, config_path=str(resolved))
+    try:
+        config = json.loads(resolved.read_text(encoding="utf-8"), parse_constant=lambda value: (
+            (_ for _ in ()).throw(ContractError("provider configuration contains non-finite JSON"))
+        ))
+    except (UnicodeDecodeError, json.JSONDecodeError, OSError) as exc:
+        raise ContractError("provider configuration is unavailable or malformed") from exc
+    if not isinstance(config, dict) or set(config) != {
+        "provider_id", "trust_anchor_id", "supported_binding_types"
+    }:
+        raise ContractError("provider configuration has unexpected or missing fields")
+    provider_id = config.get("provider_id")
+    trust_anchor_id = config.get("trust_anchor_id")
+    supported_binding_types = config.get("supported_binding_types")
+    identity_pattern = re.compile(r"^[a-z][a-z0-9_.-]{2,127}$")
+    if not isinstance(provider_id, str) or not identity_pattern.fullmatch(provider_id):
+        raise ContractError("provider configuration has invalid provider id")
+    if not isinstance(trust_anchor_id, str) or trust_anchor_id not in allowed_trust_anchor_ids:
+        raise ContractError("provider configuration uses an unregistered trust anchor")
+    if not isinstance(supported_binding_types, list) or not supported_binding_types:
+        raise ContractError("provider configuration must support at least one binding type")
+    if not all(isinstance(value, str) and identity_pattern.fullmatch(value) for value in supported_binding_types):
+        raise ContractError("provider configuration has invalid supported binding types")
+    return ProviderConfig(provider_id=provider_id, trust_anchor_id=trust_anchor_id, config_path=str(resolved))

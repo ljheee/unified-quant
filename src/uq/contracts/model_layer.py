@@ -93,6 +93,27 @@ def model_manifest_identities(
     return generation_id, manifest_digest
 
 
+def validate_quality_decision_owning_report(report: Mapping[str, Any]) -> str:
+    """Validate factor or signed model owning reports without re-signing them."""
+    if report.get("binding_type") == "factor_v1":
+        from .gate_contracts import sha256_bytes
+
+        validate_contract("quality_report.v1.json", dict(report))
+        factor_checksum = sha256_bytes(canonical_json(report))
+        failed_error_checks = [
+            check for check in report.get("checks", [])
+            if check.get("result") == "failed" and check.get("level", "error") == "error"
+        ]
+        if report.get("status") == "passed" and failed_error_checks:
+            raise ContractError("passed factor quality report contains failed checks")
+        return factor_checksum
+    verify_reviewed_quality_report_signature(report)
+    checksum = report.get("report_checksum_sha256")
+    if not isinstance(checksum, str):
+        raise ContractError("model quality report has no canonical checksum")
+    return checksum
+
+
 def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
     if schema_name == "model_dataset":
         validate_contract("model_dataset.v1.json", payload)
@@ -170,8 +191,6 @@ def research_contract_identities(
     })
     digest_document = {key: value for key, value in document.items() if key != digest_field}
     digest_document[content_field] = generation
-    if schema_name == "research_run_result":
-        digest_document = _without_physical_path(digest_document)
     return generation, sha256_json(digest_document)
 
 
@@ -263,7 +282,7 @@ class ModelContractLoader:
                 report = payload.get("owning_report")
                 if not isinstance(report, dict):
                     raise ContractError("quality decision missing owning report")
-                expected_checksum = report.get("report_checksum_sha256")
+                expected_checksum = validate_quality_decision_owning_report(report)
                 if payload[content_field] != expected_checksum:
                     raise ContractError("quality decision checksum mismatch")
                 if payload.get("binding_type") != report.get("binding_type"):
@@ -275,8 +294,6 @@ class ModelContractLoader:
                     raise ContractError("quality decision subject digest mismatch")
                 if payload.get("trust_anchor_id") != report.get("key_id"):
                     raise ContractError("quality decision trust anchor mismatch")
-                if report.get("binding_type") != "factor_v1":
-                    verify_reviewed_quality_report_signature(report)
                 return
             expected_generation, expected_digest = research_contract_identities(
                 payload, schema_name=schema_name

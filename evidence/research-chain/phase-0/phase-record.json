@@ -2,7 +2,7 @@
   "phase": 0,
   "layer": "research_chain",
   "record_version": 1,
-  "status": "exited",
+  "status": "remediation_in_progress",
   "entry_criteria": "none (first phase)",
   "exit_criteria": [
     {
@@ -91,6 +91,16 @@
     "evidence/research-chain/phase-0/golden-vectors/",
     "tests/test_research_chain_phase0.py"
   ],
-  "blocked_by": [],
-  "exited_at_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2"
+  "blocked_by": [
+    "fresh HEAD CI after result identity and provider trust CR fixes"
+  ],
+  "exited_at_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+  "remediation": {
+    "started_from_commit": "d7f0248d0b044b19341b4dc1fe06025d87442989",
+    "items": [
+      "result manifest digest covers physical paths",
+      "provider config validates trust anchor and supported bindings",
+      "quality decision validates owning report checksum/signature"
+    ]
+  }
 }

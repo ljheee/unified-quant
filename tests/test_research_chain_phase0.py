@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from uq.contracts.gate_contracts import canonical_json
 from uq.contracts.model_layer import (
     ModelContractLoader,
     research_contract_identities,
@@ -241,6 +240,30 @@ def test_research_layout_rejects_symlink_escape(tmp_path: Path) -> None:
         )
 
 
+
+
+
+def test_provider_config_rejects_malformed_or_untrusted_content(tmp_path: Path) -> None:
+    root = tmp_path / "trust"
+    path = root / "provider.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{not-json")
+    with pytest.raises(ContractError, match="unavailable or malformed"):
+        validate_provider_config_ref(
+            "provider.json", trust_root=root, registered_names={"provider.json"},
+            allowed_trust_anchor_ids={"review-key-v1"},
+        )
+    path.write_text(json.dumps({
+        "provider_id": "external-reviewer",
+        "trust_anchor_id": "unknown-key",
+        "supported_binding_types": ["model_dataset_v1"],
+    }))
+    with pytest.raises(ContractError, match="unregistered trust anchor"):
+        validate_provider_config_ref(
+            "provider.json", trust_root=root, registered_names={"provider.json"},
+            allowed_trust_anchor_ids={"review-key-v1"},
+        )
+
 def golden_vectors() -> dict:
     return json.loads((GOLDEN_DIR / "identity-golden-vectors.json").read_text())
 
@@ -257,7 +280,12 @@ def golden_vectors() -> dict:
 )
 def test_provider_config_rejects_unsafe_references(config_ref: str, message: str) -> None:
     with pytest.raises(ContractError, match=message):
-        validate_provider_config_ref(config_ref, trust_root=ROOT / "config", registered_names=set())
+        validate_provider_config_ref(
+            config_ref,
+            trust_root=ROOT / "config",
+            registered_names=set(),
+            allowed_trust_anchor_ids=set(),
+        )
 
 
 def test_provider_config_accepts_registered_relative_path(tmp_path: Path) -> None:
@@ -265,10 +293,18 @@ def test_provider_config_accepts_registered_relative_path(tmp_path: Path) -> Non
     (root / "providers").mkdir(parents=True)
     path = root / "providers/default.json"
     path.write_text("{}")
+    path.write_text(json.dumps({
+        "provider_id": "external-reviewer",
+        "trust_anchor_id": "review-key-v1",
+        "supported_binding_types": ["model_dataset_v1"],
+    }))
     result = validate_provider_config_ref(
-        "providers/default.json", trust_root=root, registered_names={"providers/default.json"}
+        "providers/default.json",
+        trust_root=root,
+        registered_names={"providers/default.json"},
+        allowed_trust_anchor_ids={"review-key-v1"},
     )
-    assert result.provider_id == "providers/default.json"
+    assert result.provider_id == "external-reviewer"
     assert result.config_path == str(path.resolve())
 
 
@@ -280,5 +316,8 @@ def test_provider_config_rejects_symlink_escape(tmp_path: Path) -> None:
     (root / "providers/escape.json").symlink_to(outside)
     with pytest.raises(ContractError, match="escapes trust root"):
         validate_provider_config_ref(
-            "providers/escape.json", trust_root=root, registered_names={"providers/escape.json"}
+            "providers/escape.json",
+            trust_root=root,
+            registered_names={"providers/escape.json"},
+            allowed_trust_anchor_ids={"review-key-v1"},
         )
