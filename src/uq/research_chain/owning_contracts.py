@@ -6,6 +6,8 @@ from typing import Any
 
 import pandas as pd
 
+from ..contracts.canonical_v2 import canonical_v2_identities
+from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import ModelContractLoader
 from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
@@ -22,6 +24,48 @@ class FeatureSchemaStore:
 
     def read_schema(self, generation_id: str) -> dict[str, Any]:
         return self.read_manifest(generation_id)
+
+
+class AdjustedPriceDatasetStore:
+    """Read an immutable canonical-v2 adjusted-price manifest by generation."""
+
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root)
+
+    def read_manifest(self, generation_id: str) -> dict[str, Any]:
+        _validate_generation_id(generation_id, "adjusted price")
+        candidates = _manifests_under(self.root / "canonical")
+        matches: list[Path] = []
+        for path in candidates:
+            try:
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+                validate_contract("canonical_manifest.v2.json", manifest)
+            except (OSError, json.JSONDecodeError, ContractError):
+                continue
+            if manifest.get("generation_id") == generation_id:
+                matches.append(path.parent)
+        if not matches:
+            raise ContractError(f"unpublished adjusted price dataset: {generation_id}")
+        if len(matches) > 1:
+            raise ContractError(f"ambiguous adjusted price dataset generation: {generation_id}")
+        return self._read_verified_manifest(matches[0])
+
+    def _read_verified_manifest(self, directory: Path) -> dict[str, Any]:
+        manifest = _read_json(directory / "manifest.json")
+        unsigned = {
+            key: value for key, value in manifest.items()
+            if key not in {"generation_id", "manifest_digest_sha256", "trust_anchor_sha256"}
+        }
+        expected_generation, expected_digest = canonical_v2_identities(unsigned)
+        if (
+            manifest["generation_id"] != expected_generation
+            or manifest["manifest_digest_sha256"] != expected_digest
+        ):
+            raise ContractError("tampered adjusted price manifest identity")
+        data_path = directory / "data.parquet"
+        if not data_path.is_file():
+            raise ContractError("incomplete adjusted price dataset")
+        return manifest
 
 
 class LabelStore:
@@ -49,6 +93,45 @@ class LabelStore:
         if actual_dtypes != expected_dtypes:
             raise ContractError("label artifact dtype mismatch")
         return manifest, frame
+
+
+class BacktestConfigStore:
+    """Read a governed backtest-config manifest without accepting runtime input."""
+
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root)
+
+    def read_manifest(self, generation_id: str) -> dict[str, Any]:
+        _validate_generation_id(generation_id, "backtest config")
+        candidates = _manifests_under(self.root / "backtest_configs")
+        matches: list[Path] = []
+        for path in candidates:
+            try:
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+                ModelContractLoader.validate("backtest_config", manifest)
+            except (OSError, json.JSONDecodeError, ContractError):
+                continue
+            if manifest.get("generation_id") == generation_id:
+                matches.append(path.parent)
+        if not matches:
+            raise ContractError(f"unpublished backtest config: {generation_id}")
+        if len(matches) > 1:
+            raise ContractError(f"ambiguous backtest config generation: {generation_id}")
+        return json.loads((matches[0] / "manifest.json").read_text(encoding="utf-8"))
+
+
+def _validate_generation_id(generation_id: str, family: str) -> None:
+    if not isinstance(generation_id, str) or len(generation_id) != 64:
+        raise ContractError(f"invalid {family} generation id")
+
+
+def _manifests_under(root: Path) -> list[Path]:
+    if not root.exists():
+        return []
+    return [
+        path for path in root.rglob("manifest.json")
+        if not any(part.startswith(".") for part in path.parent.relative_to(root).parts)
+    ]
 
 
 def _match_directory(root: Path, generation_id: str) -> Path:

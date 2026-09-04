@@ -1,166 +1,178 @@
 {
-  "registry_version": 1,
-  "status": "reviewed",
-  "reviewer": "external-model-quality-reviewer-v1",
   "bindings": {
-    "model_dataset_v1": {
-      "policy": "reject_all",
+    "backtest_config_v1": {
+      "allowed_checks": [
+        "calendar_period_valid",
+        "cost_parameters_non_negative",
+        "price_source_bound"
+      ],
       "allowed_statuses": [
         "passed",
         "warning"
       ],
-      "allowed_checks": [
-        "row_count",
-        "schema_reconciliation",
-        "readback_reconciliation",
-        "null_rate"
-      ]
+      "policy": "reject_all"
     },
-    "qlib_dataset_export_v1": {
-      "policy": "reject_all",
+    "backtest_result_v1": {
+      "allowed_checks": [
+        "equity_curve_finite_positive",
+        "turnover_non_negative",
+        "lineage_generations_resolved"
+      ],
       "allowed_statuses": [
         "passed",
         "warning"
       ],
-      "allowed_checks": [
-        "export_files_verified"
-      ]
+      "policy": "reject_all"
     },
     "feature_preprocessing_v1": {
-      "policy": "cross_sectional_stateless_v1",
-      "allowed_statuses": [
-        "passed",
-        "warning"
-      ],
       "allowed_checks": [
         "key_reconciliation",
         "row_count_reconciliation",
         "output_readback",
         "null_rate"
-      ]
-    },
-    "model_artifact_v1": {
-      "policy": "reject_all",
+      ],
       "allowed_statuses": [
         "passed",
         "warning"
       ],
+      "policy": "cross_sectional_stateless_v1"
+    },
+    "label_set_v1": {
+      "allowed_checks": [
+        "key_uniqueness",
+        "null_rate",
+        "horizon_coverage"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "model_artifact_v1": {
       "allowed_checks": [
         "artifact_checksum",
         "artifact_readback"
-      ]
-    },
-    "qlib_init_receipt_v1": {
-      "policy": "reject_all",
+      ],
       "allowed_statuses": [
         "passed",
         "warning"
       ],
+      "policy": "reject_all"
+    },
+    "model_dataset_v1": {
       "allowed_checks": [
-        "runtime_cache_boundary"
-      ]
+        "row_count",
+        "schema_reconciliation",
+        "readback_reconciliation",
+        "null_rate"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
     },
     "model_run_v1": {
-      "policy": "reject_all",
-      "allowed_statuses": [
-        "passed",
-        "warning"
-      ],
       "allowed_checks": [
         "upstream_lineage_resolved"
-      ]
-    },
-    "prediction_set_v1": {
-      "policy": "reject_all",
+      ],
       "allowed_statuses": [
         "passed",
         "warning"
       ],
-      "allowed_checks": [
-        "finite_scores",
-        "eligibility_coverage"
-      ]
+      "policy": "reject_all"
     },
     "portfolio_definition_v1": {
-      "policy": "reject_all",
-      "allowed_statuses": [
-        "passed",
-        "warning"
-      ],
       "allowed_checks": [
         "weight_scheme_valid",
         "constraints_within_bounds",
         "universe_binding_resolved"
-      ]
-    },
-    "target_weights_v1": {
-      "policy": "reject_all",
+      ],
       "allowed_statuses": [
         "passed",
         "warning"
       ],
+      "policy": "reject_all"
+    },
+    "prediction_set_v1": {
+      "allowed_checks": [
+        "finite_scores",
+        "eligibility_coverage"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "qlib_dataset_export_v1": {
+      "allowed_checks": [
+        "export_files_verified"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "qlib_init_receipt_v1": {
+      "allowed_checks": [
+        "runtime_cache_boundary"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "research_run_request_v1": {
+      "allowed_checks": [
+        "research_request_schema_valid",
+        "research_stage_plan_valid"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "research_run_result_v1": {
+      "allowed_checks": [
+        "result_stage_completeness_valid",
+        "readback_status_valid"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "research_run_state_v1": {
+      "allowed_checks": [
+        "state_stage_order_valid",
+        "output_binding_checksums_valid"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "target_weights_v1": {
       "allowed_checks": [
         "weight_sum_within_reserve",
         "no_nan_inf_weights",
         "instruments_in_universe"
-      ]
-    },
-    "backtest_config_v1": {
-      "policy": "reject_all",
+      ],
       "allowed_statuses": [
         "passed",
         "warning"
       ],
-      "allowed_checks": [
-        "calendar_period_valid",
-        "cost_parameters_non_negative",
-        "price_source_bound"
-      ]
-    },
-    "backtest_result_v1": {
-      "policy": "reject_all",
-      "allowed_statuses": [
-        "passed",
-        "warning"
-      ],
-      "allowed_checks": [
-        "equity_curve_finite_positive",
-        "turnover_non_negative",
-        "lineage_generations_resolved"
-      ]
-    },
-    "research_run_request_v1": {
-      "policy": "reject_all",
-      "allowed_statuses": [
-        "passed",
-        "warning"
-      ],
-      "allowed_checks": [
-        "research_request_schema_valid",
-        "research_stage_plan_valid"
-      ]
-    },
-    "research_run_state_v1": {
-      "policy": "reject_all",
-      "allowed_statuses": [
-        "passed",
-        "warning"
-      ],
-      "allowed_checks": [
-        "state_stage_order_valid",
-        "output_binding_checksums_valid"
-      ]
-    },
-    "research_run_result_v1": {
-      "policy": "reject_all",
-      "allowed_statuses": [
-        "passed",
-        "warning"
-      ],
-      "allowed_checks": [
-        "result_stage_completeness_valid",
-        "readback_status_valid"
-      ]
+      "policy": "reject_all"
     }
-  }
+  },
+  "registry_version": 1,
+  "reviewer": "external-model-quality-reviewer-v1",
+  "status": "reviewed"
 }
