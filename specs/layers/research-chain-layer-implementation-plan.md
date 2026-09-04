@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0 and Phase 1 exited; Phase 2 factor and dataset adapters implemented; Phase 2 exit awaits final gate/remote evidence**
+Status: **gated implementation order v0.6; Phase 0–2 exited; Phase 3 is the next runtime phase**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 

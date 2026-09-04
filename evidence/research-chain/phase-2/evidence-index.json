@@ -11,10 +11,30 @@
       "kind": "phase-record",
       "path": "phase-record.json",
       "status": "in_progress_final_evidence"
+    },
+    {
+      "bound_commit": "e631740c51abd6f10390fd9bfefd1c6540e5f2c5",
+      "kind": "local-gate-final-head",
+      "path": "final-gate-reports/gate-report.json",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "status": "passed"
+    },
+    {
+      "head_sha": "e631740c51abd6f10390fd9bfefd1c6540e5f2c5",
+      "kind": "remote-ci",
+      "path": "remote-ci/33903807546/",
+      "run_id": "33903807546",
+      "status": "passed"
     }
   ],
   "implementation_commit": "8d318a29ed7c76fe3d1f1d401df8d614a81568f3",
   "phase": 2,
   "record_version": 1,
-  "status": "in_progress_final_evidence"
+  "status": "exited_after_cr_remediation",
+  "remote_gate": {
+    "head_sha": "e631740c51abd6f10390fd9bfefd1c6540e5f2c5",
+    "run_id": "33903807546",
+    "status": "passed",
+    "summary_path": "remote-ci/33903807546/run.json"
+  }
 }

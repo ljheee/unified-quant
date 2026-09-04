@@ -1,8 +1,5 @@
 {
-  "blocked_by": [
-    "final head gate evidence after evidence-only commit",
-    "remote CI evidence"
-  ],
+  "blocked_by": [],
   "entry_criteria": {
     "phase_1_exited": true,
     "phase_1_head": "08c7a57a30a71c34fac1b98331a081de13397fa9",
@@ -12,11 +9,15 @@
     "src/uq/research_chain/adapters.py",
     "src/uq/research_chain/owning_contracts.py",
     "tests/test_research_chain_phase2.py",
-    "evidence/research-chain/phase-2/implementation-gate-reports/gate-report.json"
+    "evidence/research-chain/phase-2/implementation-gate-reports/gate-report.json",
+    "evidence/research-chain/phase-2/remote-ci/33903807546/",
+    "evidence/research-chain/phase-2/final-gate-reports/gate-report.json"
   ],
   "exit_criteria": [
     {
-      "evidence_paths": ["tests/test_research_chain_phase2.py"],
+      "evidence_paths": [
+        "tests/test_research_chain_phase2.py"
+      ],
       "id": "RC2-factor-stage",
       "status": "passed-local",
       "test_ids": [
@@ -26,7 +27,9 @@
       ]
     },
     {
-      "evidence_paths": ["tests/test_research_chain_phase2.py"],
+      "evidence_paths": [
+        "tests/test_research_chain_phase2.py"
+      ],
       "id": "RC2-dataset-stage",
       "status": "passed-local",
       "test_ids": [
@@ -34,7 +37,9 @@
       ]
     },
     {
-      "evidence_paths": ["tests/test_research_chain_phase2.py"],
+      "evidence_paths": [
+        "tests/test_research_chain_phase2.py"
+      ],
       "id": "RC2-dataset-governed-rejections",
       "status": "passed-local",
       "test_ids": [
@@ -44,22 +49,60 @@
     },
     {
       "bound_commit": "8d318a29ed7c76fe3d1f1d401df8d614a81568f3",
-      "evidence_paths": ["evidence/research-chain/phase-2/implementation-gate-reports/gate-report.json"],
-      "extras": ["dev", "real", "qlib"],
+      "evidence_paths": [
+        "evidence/research-chain/phase-2/implementation-gate-reports/gate-report.json"
+      ],
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
       "id": "RC2-unified-gate-implementation-head",
       "status": "passed-local-implementation-head",
-      "test_ids": ["scripts/run_gate.sh"],
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ],
       "test_summary": "418 passed"
+    },
+    {
+      "bound_commit": "e631740c51abd6f10390fd9bfefd1c6540e5f2c5",
+      "evidence_paths": [
+        "evidence/research-chain/phase-2/final-gate-reports/gate-report.json"
+      ],
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "id": "RC2-unified-gate-final-head",
+      "status": "passed-local-head",
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ],
+      "test_summary": "418 passed"
+    },
+    {
+      "evidence_paths": [
+        "evidence/research-chain/phase-2/remote-ci/33903807546/"
+      ],
+      "head_sha": "e631740c51abd6f10390fd9bfefd1c6540e5f2c5",
+      "id": "RC2-unified-gate-remote",
+      "run_id": "33903807546",
+      "status": "passed-remote-head",
+      "test_ids": [
+        "github-actions:10-cell unified gate"
+      ]
     }
   ],
   "implementation_commit": "8d318a29ed7c76fe3d1f1d401df8d614a81568f3",
   "layer": "research_chain",
   "notes": [
     "Dataset policy is carried as a reviewed research-run contract.",
-    "Dataset adapter validates upstream identities, universe membership, preprocessing recomputation, and external quality decisions before DatasetWriter publication."
+    "Dataset adapter validates upstream identities, universe membership, preprocessing recomputation, and external quality decisions before DatasetWriter publication.",
+    "Final local gate and remote CI both bind evidence commit e631740."
   ],
   "phase": 2,
   "record_version": 1,
   "remediation_commits": [],
-  "status": "in_progress_final_evidence"
+  "status": "exited_after_cr_remediation"
 }
