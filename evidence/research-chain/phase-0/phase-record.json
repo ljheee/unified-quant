@@ -2,7 +2,7 @@
   "phase": 0,
   "layer": "research_chain",
   "record_version": 1,
-  "status": "remediation_in_progress",
+  "status": "exited",
   "entry_criteria": "none (first phase)",
   "exit_criteria": [
     {
@@ -75,10 +75,11 @@
         "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt",
         "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt.sha256",
         "evidence/research-chain/phase-0/remote-ci/33829571842/ci-summary.json",
-        "evidence/research-chain/phase-0/remote-ci/33872921129/ci-summary.json"
+        "evidence/research-chain/phase-0/remote-ci/33872921129/ci-summary.json",
+        "evidence/research-chain/phase-0/remote-ci/33874148465/ci-summary.json"
       ],
-      "bound_commit": "a3e06031a47d8462cf24139b15ed21b4481fa165",
-      "remote_ci": "33872921129"
+      "bound_commit": "77d03ffb96b494af7a68749ead25b470877d019a",
+      "remote_ci": "33874148465"
     }
   ],
   "evidence_paths": [
@@ -92,10 +93,8 @@
     "evidence/research-chain/phase-0/golden-vectors/",
     "tests/test_research_chain_phase0.py"
   ],
-  "blocked_by": [
-    "fresh HEAD CI after factor quality wrapper CR fix"
-  ],
-  "exited_at_commit": "a3e06031a47d8462cf24139b15ed21b4481fa165",
+  "blocked_by": [],
+  "exited_at_commit": "77d03ffb96b494af7a68749ead25b470877d019a",
   "remediation": {
     "started_from_commit": "d7f0248d0b044b19341b4dc1fe06025d87442989",
     "items": [

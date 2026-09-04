@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.5; Phase 0 CR remediation in progress; runtime phases remain gated**
+Status: **gated implementation order v0.5; Phase 0 exited after second CR at commit 77d03ff; runtime phases remain gated**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 

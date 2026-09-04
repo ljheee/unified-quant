@@ -2,7 +2,7 @@
   "record_version": 1,
   "layer": "research_chain",
   "phase": 0,
-  "status": "remediation_in_progress",
+  "status": "exited",
   "entries": [
     {
       "type": "phase_record",
@@ -69,10 +69,15 @@
       "conclusion": "success",
       "cells": 10,
       "superseded_by": "33872921129"
+    },
+    {
+      "type": "remote_ci_matrix",
+      "path": "evidence/research-chain/phase-0/remote-ci/33874148465/",
+      "run_id": "33874148465",
+      "head_sha": "77d03ffb96b494af7a68749ead25b470877d019a",
+      "conclusion": "success",
+      "cells": 10
     }
   ],
-  "exited_at_commit": "a3e06031a47d8462cf24139b15ed21b4481fa165",
-  "blocked_by": [
-    "fresh HEAD CI after factor quality wrapper CR fix"
-  ]
+  "exited_at_commit": "77d03ffb96b494af7a68749ead25b470877d019a"
 }
