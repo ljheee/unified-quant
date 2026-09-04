@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from uq.contracts.gate_contracts import canonical_json, sha256_bytes
 from uq.contracts.model_layer import (
     ModelContractLoader,
     research_contract_identities,
@@ -96,6 +97,21 @@ def test_result_identity_is_sensitive_to_governed_content() -> None:
         lambda doc: doc.__setitem__("request_manifest_digest_sha256", "1" * 64)
     )
     assert stable == baseline_generation
+    assert changed_generation(
+        lambda doc: doc.__setitem__("request_content_generation_id", "2" * 64)
+    ) != baseline_generation
+    assert changed_generation(
+        lambda doc: doc["stage_records"][0]["output_bindings"][0].__setitem__(
+            "quality_decision_checksum_sha256", "3" * 64
+        )
+    ) != baseline_generation
+    metadata_changed = copy.deepcopy(result)
+    metadata_changed["request_manifest_digest_sha256"] = "1" * 64
+    _, metadata_digest = research_contract_identities(
+        metadata_changed, schema_name="research_run_result"
+    )
+    _, baseline_digest = research_contract_identities(result, schema_name="research_run_result")
+    assert metadata_digest != baseline_digest
 
 
 def test_result_identity_is_stable_under_run_metadata_and_physical_paths() -> None:
@@ -150,6 +166,41 @@ def test_quality_decision_binds_owning_report_checksum() -> None:
     wrong["decision_checksum_sha256"] = "0" * 64
     with pytest.raises(ContractError, match="quality decision checksum mismatch"):
         ModelContractLoader.validate("quality_decision", wrong)
+
+
+def test_quality_decision_supports_factor_wrapper() -> None:
+    owning_report = {
+        "report_version": 1,
+        "binding_type": "factor_v1",
+        "bound_generation_id": "a" * 64,
+        "policy": "reject_all",
+        "status": "passed",
+        "checks": [
+            {"name": "null_rate", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}
+        ],
+        "errors": [],
+        "warnings": [],
+    }
+    decision = {
+        "contract_version": 1,
+        "schema_version": "1.0.0",
+        "binding_type": "factor_v1",
+        "subject_generation_id": "a" * 64,
+        "subject_manifest_digest_sha256": None,
+        "owning_report": owning_report,
+        "decision_checksum_sha256": sha256_bytes(canonical_json(owning_report)),
+        "provider_id": "external-model-quality-reviewer-v1",
+        "trust_anchor_id": "factor-review-key-v1",
+    }
+    ModelContractLoader.validate("quality_decision", decision)
+    assert decision["decision_checksum_sha256"] == sha256_bytes(canonical_json(owning_report))
+
+
+def test_quality_decision_rejects_malformed_signature() -> None:
+    decision = copy.deepcopy(valid_documents()["quality_decision"])
+    decision["owning_report"]["review_signature_sha256"] = "0" * 128
+    with pytest.raises(ContractError, match="signature mismatch"):
+        ModelContractLoader.validate("quality_decision", decision)
 
 
 def test_golden_vectors_are_persisted_and_fail_closed() -> None:

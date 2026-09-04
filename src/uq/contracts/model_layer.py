@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .canonical_v2 import file_sha256_bytes
-from .gate_contracts import adjustment_snapshot_generation, canonical_json, factor_manifest_identities, validate_contract, validate_contract_path
+from .gate_contracts import adjustment_snapshot_generation, canonical_json, factor_manifest_identities, sha256_bytes, validate_contract, validate_contract_path
 from ..errors import ContractError
 
 _SCHEMA_NAMES = {
@@ -292,7 +292,10 @@ class ModelContractLoader:
                 subject_digest = report.get("subject_content_sha256")
                 if payload.get("subject_manifest_digest_sha256") != (None if subject_digest is None else subject_digest):
                     raise ContractError("quality decision subject digest mismatch")
-                if payload.get("trust_anchor_id") != report.get("key_id"):
+                if report.get("binding_type") == "factor_v1":
+                    if not isinstance(payload.get("trust_anchor_id"), str) or not payload["trust_anchor_id"]:
+                        raise ContractError("quality decision trust anchor mismatch")
+                elif payload.get("trust_anchor_id") != report.get("key_id"):
                     raise ContractError("quality decision trust anchor mismatch")
                 return
             expected_generation, expected_digest = research_contract_identities(

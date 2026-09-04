@@ -2,7 +2,7 @@
   "record_version": 1,
   "layer": "research_chain",
   "phase": 0,
-  "status": "exited",
+  "status": "remediation_in_progress",
   "entries": [
     {
       "type": "phase_record",
@@ -44,7 +44,8 @@
       "bound_commit": "225abb7d16e877991a222f6c5af3a2d1da552da0",
       "requirements_path": "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt",
       "requirements_digest_path": "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt.sha256",
-      "status": "passed"
+      "status": "passed",
+      "note": "historical pre-remediation local report"
     },
     {
       "type": "phase_record",
@@ -57,7 +58,8 @@
       "run_id": "33829571842",
       "head_sha": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
       "conclusion": "success",
-      "cells": 10
+      "cells": 10,
+      "superseded_by": "33872921129"
     },
     {
       "type": "remote_ci_matrix",
@@ -65,8 +67,12 @@
       "run_id": "33872921129",
       "head_sha": "a3e06031a47d8462cf24139b15ed21b4481fa165",
       "conclusion": "success",
-      "cells": 10
+      "cells": 10,
+      "superseded_by": "33872921129"
     }
   ],
-  "exited_at_commit": "a3e06031a47d8462cf24139b15ed21b4481fa165"
+  "exited_at_commit": "a3e06031a47d8462cf24139b15ed21b4481fa165",
+  "blocked_by": [
+    "fresh HEAD CI after factor quality wrapper CR fix"
+  ]
 }
