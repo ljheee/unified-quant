@@ -120,6 +120,7 @@ def validate_research_layout(
     run_id: str,
     stage: str | None = None,
     result_generation_id: str | None = None,
+    require_parent: bool = True,
 ) -> Path:
     """Validate the frozen physical path without creating or accepting it."""
     stage_order = [
@@ -160,10 +161,13 @@ def validate_research_layout(
         raise ContractError(f"research path does not match {kind} layout")
     if candidate.exists() or candidate.is_symlink():
         raise ContractError("research path overwrite is rejected")
-    if not candidate.parent.exists() or candidate.parent.is_symlink():
-        raise ContractError("research path parent is missing or symlinked")
-    parent_resolved = candidate.parent.resolve(strict=True)
     root_resolved = data_root.resolve(strict=True)
+    if require_parent:
+        if not candidate.parent.exists() or candidate.parent.is_symlink():
+            raise ContractError("research path parent is missing or symlinked")
+        parent_resolved = candidate.parent.resolve(strict=True)
+    else:
+        parent_resolved = root_resolved / relative.parent
     try:
         contained = parent_resolved.is_relative_to(root_resolved)
     except ValueError:

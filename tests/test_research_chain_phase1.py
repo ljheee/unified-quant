@@ -2,18 +2,24 @@ from __future__ import annotations
 
 import copy
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
 
+import pandas as pd
 import pytest
 
+from uq.contracts.artifacts import QualityReportStore
+from uq.contracts.canonical_v2 import CanonicalV2Store, file_sha256_bytes
 from uq.contracts.gate_contracts import canonical_json, sha256_bytes
+from uq.contracts.schema import load_schema
 from uq.contracts.model_layer import (
     bind_reviewed_quality_decision,
     create_reviewed_quality_decision,
     research_contract_identities,
 )
 from uq.errors import ContractError
+from uq.research_chain.owning_contracts import AdjustedPriceDatasetStore
 from uq.research_chain.resolver import (
     FileResearchRunStore,
     ResearchChainRequestResolver,
@@ -333,6 +339,66 @@ def test_request_failures_are_typed(
             request, quality_provider=RecordingProvider(), provider_config_ref="provider.json"
         )
     assert exc_info.value.reason == reason
+
+
+def test_adjusted_price_store_rejects_tampered_data(tmp_path: Path) -> None:
+    schema = load_schema("config/schemas/bars_daily.research-v1.yaml")
+    frame = pd.DataFrame({
+        "instrument": ["600000.XSHG"],
+        "datetime": pd.to_datetime(["2026-08-21"]),
+        "open": [10.0], "high": [10.2], "low": [9.8], "close": [10.0],
+        "volume": [10000.0], "amount": [100000.0],
+    })
+    store = CanonicalV2Store(tmp_path)
+    generation = store.prepare_generation(schema, date(2026, 8, 21), frame, {}, {})
+    report_directory = QualityReportStore().save(tmp_path, {
+        "report_version": 1,
+        "binding_type": "canonical_v2",
+        "bound_generation_id": generation,
+        "policy": "reject_all",
+        "status": "passed",
+        "checks": [
+            {"name": "coverage", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}
+        ],
+        "errors": [],
+        "warnings": [],
+    })
+    checksum = file_sha256_bytes((report_directory / "report.json").read_bytes())
+    partition = store.publish(
+        schema, date(2026, 8, 21), frame, {}, {}, quality_checksum=checksum
+    )
+    partition.write_bytes(b"tampered")
+    with pytest.raises(ContractError, match="tampered adjusted price data checksum"):
+        AdjustedPriceDatasetStore(tmp_path).read_manifest(generation)
+
+
+def test_failed_layout_validation_does_not_create_directories(tmp_path: Path) -> None:
+    manifests = _upstream_manifests()
+    request = _request(manifests)
+    store = FileResearchRunStore(tmp_path)
+    wrong_path = (
+        Path("research_runs") / "requests"
+        / f"request={request['request_content_generation_id']}"
+        / "run=00000000-0000-4000-8000-000000000002" / "manifest.json"
+    )
+    with pytest.raises(ContractError, match="does not match request layout"):
+        store._atomic_write(wrong_path, request)
+    assert not (tmp_path / "research_runs").exists()
+
+
+def test_request_readback_rejects_tampered_manifest(tmp_path: Path) -> None:
+    manifests = _upstream_manifests()
+    request = _request(manifests)
+    store = FileResearchRunStore(tmp_path)
+    store.publish_request(request, path_policy="strict_v1")
+    manifest_path = next((tmp_path / "research_runs" / "requests").rglob("manifest.json"))
+    document = json.loads(manifest_path.read_text())
+    document["research_name"] = "tampered"
+    manifest_path.write_text(json.dumps(document))
+    with pytest.raises(ContractError, match="stable content identity mismatch"):
+        store.read_request(
+            request["request_content_generation_id"], request["manifest_digest_sha256"]
+        )
 
 
 def test_missing_store_and_overwrite_are_fail_closed(tmp_path: Path) -> None:

@@ -230,6 +230,13 @@ class FileResearchRunStore:
             raise ContractError("unsupported research path policy")
         request = dict(manifest)
         ModelContractLoader.validate("research_run_request", request)
+        expected_generation, expected_digest = research_contract_identities(
+            request, schema_name="research_run_request"
+        )
+        if request["request_content_generation_id"] != expected_generation:
+            raise ContractError("research request stable content identity mismatch")
+        if request["manifest_digest_sha256"] != expected_digest:
+            raise ContractError("research request manifest digest mismatch")
         request_generation = request["request_content_generation_id"]
         relative_path = _request_relative_path(request_generation, request["run_id"])
         path = self._atomic_write(relative_path, request)
@@ -253,8 +260,17 @@ class FileResearchRunStore:
             raise ContractError(f"ambiguous research request: {request_content_generation_id}")
         request = _read_json(matches[0] / "manifest.json")
         ModelContractLoader.validate("research_run_request", request)
+        expected_generation, expected_digest = research_contract_identities(
+            request, schema_name="research_run_request"
+        )
         if request["request_content_generation_id"] != request_content_generation_id:
             raise ContractError("research request generation mismatch")
+        if request["request_content_generation_id"] != expected_generation:
+            raise ContractError("research request stable content identity mismatch")
+        if request["manifest_digest_sha256"] != manifest_digest_sha256:
+            raise ContractError("research request manifest digest mismatch")
+        if request["manifest_digest_sha256"] != expected_digest:
+            raise ContractError("research request manifest digest mismatch")
         if request["manifest_digest_sha256"] != manifest_digest_sha256:
             raise ContractError("research request manifest digest mismatch")
         return request
@@ -322,7 +338,6 @@ class FileResearchRunStore:
             raise ContractError("research ledger parent is symlinked")
         if absolute_path.exists() or absolute_path.is_symlink():
             raise ContractError(f"immutable research manifest already exists: {relative_path}")
-        absolute_path.parent.mkdir(parents=True, exist_ok=False)
         stage = document.get("stage_records", [{}])[-1].get("stage") if "stage_records" in document else None
         validate_research_layout(
             absolute_path,
@@ -331,7 +346,9 @@ class FileResearchRunStore:
             request_generation_id=document["request_content_generation_id"],
             run_id=document["run_id"],
             stage=stage,
+            require_parent=False,
         )
+        absolute_path.parent.mkdir(parents=True, exist_ok=False)
         staging = absolute_path.parent / f".{absolute_path.name}.staging.{uuid.uuid4().hex}"
         try:
             staging.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n", encoding="utf-8")

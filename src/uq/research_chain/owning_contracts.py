@@ -6,7 +6,7 @@ from typing import Any
 
 import pandas as pd
 
-from ..contracts.canonical_v2 import canonical_v2_identities
+from ..contracts.canonical_v2 import canonical_v2_identities, file_sha256_bytes
 from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import ModelContractLoader
 from ..errors import ContractError
@@ -65,6 +65,21 @@ class AdjustedPriceDatasetStore:
         data_path = directory / "data.parquet"
         if not data_path.is_file():
             raise ContractError("incomplete adjusted price dataset")
+        if manifest["data_checksum_sha256"] != file_sha256_bytes(data_path.read_bytes()):
+            raise ContractError("tampered adjusted price data checksum")
+        if not manifest.get("quality_report_checksum"):
+            raise ContractError("adjusted price dataset is missing quality report binding")
+        report_root = directory.parents[1]
+        report_path = report_root / "reports" / "canonical_v2" / manifest["generation_id"] / "report.json"
+        if not report_path.is_file():
+            raise ContractError("adjusted price quality report is missing")
+        QualityReportStore().read(
+            report_root,
+            manifest["generation_id"],
+            binding_type="canonical_v2",
+        )
+        if file_sha256_bytes(report_path.read_bytes()) != manifest["quality_report_checksum"]:
+            raise ContractError("adjusted price quality report checksum mismatch")
         return manifest
 
 
