@@ -11,9 +11,26 @@
       "kind": "phase-record",
       "path": "phase-record.json",
       "status": "implemented_draft_awaiting_remote_gate"
+    },
+    {
+      "kind": "remote-ci",
+      "path": "remote-ci/33885931245/",
+      "status": "passed"
+    },
+    {
+      "kind": "remote-ci",
+      "path": "remote-ci/33885931245/",
+      "status": "passed"
     }
   ],
   "implementation_commit": "3071999e02a6f50071137d20b5dc333c6e13df91",
   "phase": 1,
-  "record_version": 1
+  "record_version": 1,
+  "remote_gate": {
+    "head_sha": "c2f923b7e20fa875779348f03f3f3d0b9073b026",
+    "run_id": "33885931245",
+    "status": "passed",
+    "summary_path": "remote-ci/33885931245/ci-summary.json"
+  },
+  "status": "exited"
 }

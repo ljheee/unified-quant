@@ -1,7 +1,5 @@
 {
-  "blocked_by": [
-    "remote 10-cell unified gate evidence"
-  ],
+  "blocked_by": [],
   "entry_criteria": {
     "phase_0_commit": "6384ec7",
     "phase_0_exited": true,
@@ -77,14 +75,13 @@
       "test_summary": "406 passed"
     },
     {
-      "blocked_by": [
-        "remote 10-cell unified gate completion"
-      ],
       "evidence_paths": [
         "evidence/research-chain/phase-1/remote-ci/"
       ],
+      "head_sha": "c2f923b7e20fa875779348f03f3f3d0b9073b026",
       "id": "RC1-unified-gate-remote",
-      "status": "pending",
+      "run_id": "33885931245",
+      "status": "passed-remote-head",
       "test_ids": [
         "github-actions:10-cell unified gate"
       ]
@@ -98,5 +95,5 @@
   ],
   "phase": 1,
   "record_version": 1,
-  "status": "implemented_draft_awaiting_remote_gate"
+  "status": "exited"
 }

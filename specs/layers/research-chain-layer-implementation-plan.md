@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0 exited; Phase 1 implemented draft pending final unified-gate evidence**
+Status: **gated implementation order v0.6; Phase 0 and Phase 1 exited via implementation commit 3071999 plus evidence-only commit; Phase 2 not started**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -306,9 +306,9 @@ test node IDs before their owning phase exits.
 | RC0k | 0 | `tests/test_research_chain_phase0.py::test_stage_ledger_rejects_failed_without_reason_and_later_progress` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
 | RC0l | 0 | `tests/test_research_chain_phase0.py::test_provider_config_rejects_unregistered_reference_and_binding` | `src/uq/research_chain/contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
 | RC0m | 0 | `tests/test_research_chain_phase0.py::test_research_layout_resolves_relative_paths_under_data_root` | `src/uq/research_chain/contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
-| RC1a | 1 | `tests/test_research_chain_phase1.py::test_request_resolves_all_upstreams_and_is_deterministic` | `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed-local |
-| RC1b | 1 | `tests/test_research_chain_phase1.py::test_dry_run_state_contains_no_downstream_outputs` | `evidence/research-chain/phase-1/phase-record.json` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed-local |
-| RC1c | 1 | `tests/test_research_chain_phase1.py::test_provider_failures_are_typed` + `tests/test_research_chain_phase1.py::test_request_failures_are_typed` | `tests/test_research_chain_phase1.py` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed-local |
+| RC1a | 1 | `tests/test_research_chain_phase1.py::test_request_resolves_all_upstreams_and_is_deterministic` | `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed |
+| RC1b | 1 | `tests/test_research_chain_phase1.py::test_dry_run_state_contains_no_downstream_outputs` | `evidence/research-chain/phase-1/phase-record.json` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed |
+| RC1c | 1 | `tests/test_research_chain_phase1.py::test_provider_failures_are_typed` + `tests/test_research_chain_phase1.py::test_request_failures_are_typed` | `tests/test_research_chain_phase1.py` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed |
 | RC2a | 2 | `planned:test_factor_stage_publishes_and_reads_back` | `planned:phase-2/fixtures/` | `planned:phase-2/gate-reports/gate-report.json` | blocked |
 | RC2b | 2 | `planned:test_dataset_stage_binds_factor_label_schema_and_universe` | `planned:phase-2/fixtures/` | `planned:phase-2/gate-reports/gate-report.json` | blocked |
 | RC2c | 2 | `planned:test_stage_failure_does_not_enter_accepted_state` | `planned:phase-2/fixtures/` | `planned:phase-2/gate-reports/gate-report.json` | blocked |
