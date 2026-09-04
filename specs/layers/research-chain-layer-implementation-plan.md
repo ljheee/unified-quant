@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.5; Phase 0 in progress; runtime phases paused**
+Status: **gated implementation order v0.5; Phase 0 exited at commit 9db45dc; runtime phases remain gated**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -293,11 +293,11 @@ test node IDs before their owning phase exits.
 
 | ID | Phase | Test ID | Fixture path | Evidence path | Status |
 |---|---|---|---|---|---|
-| RC0a | 0 | `tests/test_research_chain_phase0.py::test_valid_and_negative_fixtures_are_persisted` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
-| RC0b | 0 | `tests/test_research_chain_phase0.py::test_valid_and_negative_fixtures_are_persisted` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
-| RC0c | 0 | `tests/test_research_chain_phase0.py::test_normative_stage_order_is_enforced` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
-| RC0d | 0 | `tests/test_research_chain_phase0.py::test_result_identity_is_sensitive_to_governed_content` | `evidence/research-chain/phase-0/golden-vectors/identity-golden-vectors.json` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
-| RC0e | 0 | `tests/test_research_chain_phase0.py::test_research_layout_rejects_traversal_missing_parent_and_overwrite` | `src/uq/research_chain/contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
+| RC0a | 0 | `tests/test_research_chain_phase0.py::test_valid_and_negative_fixtures_are_persisted` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
+| RC0b | 0 | `tests/test_research_chain_phase0.py::test_valid_and_negative_fixtures_are_persisted` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
+| RC0c | 0 | `tests/test_research_chain_phase0.py::test_normative_stage_order_is_enforced` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
+| RC0d | 0 | `tests/test_research_chain_phase0.py::test_result_identity_is_sensitive_to_governed_content` | `evidence/research-chain/phase-0/golden-vectors/identity-golden-vectors.json` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
+| RC0e | 0 | `tests/test_research_chain_phase0.py::test_research_layout_rejects_traversal_missing_parent_and_overwrite` | `src/uq/research_chain/contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | passed |
 | RC1a | 1 | `planned:test_request_resolver_resolves_all_reviewed_inputs` | `planned:phase-1/fixtures/valid-request.json` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
 | RC1b | 1 | `planned:test_dry_run_does_not_mutate_downstream_stores` | `planned:phase-1/fixtures/` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
 | RC1c | 1 | `planned:test_resolver_failure_taxonomy_is_typed` | `planned:phase-1/fixtures/` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
@@ -329,8 +329,8 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Implement Phase 0 schemas, fixtures, golden vectors, typed loader helpers,
-   owning-layer API contracts, and machine-readable phase record.
-2. Run unified gate and preserve Phase 0 evidence.
-3. Only after Phase 0 exits, implement the Phase 1 read-only resolver and
-   dry-run state.
+1. Implement the Phase 1 read-only resolver and dry-run state using the
+   frozen Phase 0 store/provider/path contracts.
+2. Expand RC1 acceptance rows to concrete test IDs before resolver runtime
+   is enabled.
+3. Preserve local and CI evidence for the Phase 1 exit review.

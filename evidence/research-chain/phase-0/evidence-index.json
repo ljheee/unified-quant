@@ -2,7 +2,7 @@
   "record_version": 1,
   "layer": "research_chain",
   "phase": 0,
-  "status": "executable_pending_review",
+  "status": "exited",
   "entries": [
     {
       "type": "phase_record",
@@ -50,6 +50,15 @@
       "type": "phase_record",
       "path": "evidence/research-chain/phase-0/phase-record.json",
       "status": "executable_pending_review"
+    },
+    {
+      "type": "remote_ci_matrix",
+      "path": "evidence/research-chain/phase-0/remote-ci/33829571842/",
+      "run_id": "33829571842",
+      "head_sha": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "conclusion": "success",
+      "cells": 10
     }
-  ]
+  ],
+  "exited_at_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2"
 }

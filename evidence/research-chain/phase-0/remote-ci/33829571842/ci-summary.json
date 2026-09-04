@@ -1,0 +1,87 @@
+{
+  "run_id": "33829571842",
+  "head_sha": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+  "conclusion": "success",
+  "cells": [
+    {
+      "path": "remote-ci/33829571842/gate-report-macos-latest-3.11/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.11.9",
+      "result": "passed"
+    },
+    {
+      "path": "remote-ci/33829571842/gate-report-macos-latest-3.12/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.12.10",
+      "result": "passed"
+    },
+    {
+      "path": "remote-ci/33829571842/gate-report-macos-latest-3.13/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "python_version": "3.13.14",
+      "result": "passed"
+    },
+    {
+      "path": "remote-ci/33829571842/gate-report-ubuntu-latest-3.11/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.16",
+      "result": "passed"
+    },
+    {
+      "path": "remote-ci/33829571842/gate-report-ubuntu-latest-3.12/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.14",
+      "result": "passed"
+    },
+    {
+      "path": "remote-ci/33829571842/gate-report-ubuntu-latest-3.13/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.13.15",
+      "result": "passed"
+    },
+    {
+      "path": "remote-ci/33829571842/qlib-gate-report-macos-latest-3.11/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "python_version": "3.11.9",
+      "result": "passed"
+    },
+    {
+      "path": "remote-ci/33829571842/qlib-gate-report-macos-latest-3.12/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "python_version": "3.12.10",
+      "result": "passed"
+    },
+    {
+      "path": "remote-ci/33829571842/qlib-gate-report-ubuntu-latest-3.11/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.16",
+      "result": "passed"
+    },
+    {
+      "path": "remote-ci/33829571842/qlib-gate-report-ubuntu-latest-3.12/gate-report.json",
+      "command": "uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest",
+      "git_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.14",
+      "result": "passed"
+    }
+  ]
+}
