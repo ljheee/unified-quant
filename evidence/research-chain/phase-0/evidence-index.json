@@ -2,7 +2,7 @@
   "record_version": 1,
   "layer": "research_chain",
   "phase": 0,
-  "status": "remediation_in_progress",
+  "status": "exited",
   "entries": [
     {
       "type": "phase_record",
@@ -58,10 +58,15 @@
       "head_sha": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
       "conclusion": "success",
       "cells": 10
+    },
+    {
+      "type": "remote_ci_matrix",
+      "path": "evidence/research-chain/phase-0/remote-ci/33872921129/",
+      "run_id": "33872921129",
+      "head_sha": "a3e06031a47d8462cf24139b15ed21b4481fa165",
+      "conclusion": "success",
+      "cells": 10
     }
   ],
-  "exited_at_commit": "9db45dccb3dc8deb9a0a48ec8f72a71f9aaf64d2",
-  "blocked_by": [
-    "fresh HEAD CI after result identity and provider trust CR fixes"
-  ]
+  "exited_at_commit": "a3e06031a47d8462cf24139b15ed21b4481fa165"
 }
