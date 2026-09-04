@@ -85,6 +85,18 @@
       "test_ids": [
         "github-actions:10-cell unified gate"
       ]
+    },
+    {
+      "bound_commit": "be9eb8de7765f119556f6a7a2f4fd7072061ee53",
+      "evidence_paths": [
+        "evidence/research-chain/phase-1/remediation-gate-reports/gate-report.json"
+      ],
+      "id": "RC1-unified-gate-local-after-cr",
+      "status": "passed-local-head",
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ],
+      "test_summary": "409 passed"
     }
   ],
   "implementation_commit": "3071999e02a6f50071137d20b5dc333c6e13df91",
@@ -95,5 +107,8 @@
   ],
   "phase": 1,
   "record_version": 1,
-  "status": "exited"
+  "remediation_commits": [
+    "be9eb8de7765f119556f6a7a2f4fd7072061ee53"
+  ],
+  "status": "exited_after_cr_remediation"
 }

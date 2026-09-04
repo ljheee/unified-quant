@@ -21,6 +21,12 @@
       "kind": "remote-ci",
       "path": "remote-ci/33885931245/",
       "status": "passed"
+    },
+    {
+      "bound_commit": "be9eb8de7765f119556f6a7a2f4fd7072061ee53",
+      "kind": "local-gate-after-cr",
+      "path": "remediation-gate-reports/gate-report.json",
+      "status": "passed"
     }
   ],
   "implementation_commit": "3071999e02a6f50071137d20b5dc333c6e13df91",
@@ -32,5 +38,5 @@
     "status": "passed",
     "summary_path": "remote-ci/33885931245/ci-summary.json"
   },
-  "status": "exited"
+  "status": "exited_after_cr_remediation"
 }
