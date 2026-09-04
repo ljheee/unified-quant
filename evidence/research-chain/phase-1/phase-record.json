@@ -9,7 +9,9 @@
     "src/uq/research_chain/resolver.py",
     "src/uq/research_chain/owning_contracts.py",
     "tests/test_research_chain_phase1.py",
-    "evidence/research-chain/phase-1/gate-reports/"
+    "evidence/research-chain/phase-1/gate-reports/",
+    "evidence/research-chain/phase-1/final-gate-reports/",
+    "evidence/research-chain/phase-1/remote-ci/33890185198/"
   ],
   "exit_criteria": [
     {
@@ -76,11 +78,11 @@
     },
     {
       "evidence_paths": [
-        "evidence/research-chain/phase-1/remote-ci/"
+        "evidence/research-chain/phase-1/remote-ci/33890185198/"
       ],
-      "head_sha": "c2f923b7e20fa875779348f03f3f3d0b9073b026",
+      "head_sha": "90e747fbd6847280c9c9f9d33644b3a4b47f2754",
       "id": "RC1-unified-gate-remote",
-      "run_id": "33885931245",
+      "run_id": "33890185198",
       "status": "passed-remote-head",
       "test_ids": [
         "github-actions:10-cell unified gate"
@@ -97,6 +99,23 @@
         "scripts/run_gate.sh"
       ],
       "test_summary": "409 passed"
+    },
+    {
+      "bound_commit": "90e747fbd6847280c9c9f9d33644b3a4b47f2754",
+      "evidence_paths": [
+        "evidence/research-chain/phase-1/final-gate-reports/gate-report.json"
+      ],
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "id": "RC1-unified-gate-local-after-final-cr",
+      "status": "passed-local-head",
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ],
+      "test_summary": "411 passed"
     }
   ],
   "implementation_commit": "3071999e02a6f50071137d20b5dc333c6e13df91",
@@ -108,7 +127,8 @@
   "phase": 1,
   "record_version": 1,
   "remediation_commits": [
-    "be9eb8de7765f119556f6a7a2f4fd7072061ee53"
+    "be9eb8de7765f119556f6a7a2f4fd7072061ee53",
+    "90e747fbd6847280c9c9f9d33644b3a4b47f2754"
   ],
   "status": "exited_after_cr_remediation"
 }
