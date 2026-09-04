@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Quality decision lookup wrapper v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "schema_version",
+    "binding_type",
+    "subject_generation_id",
+    "subject_manifest_digest_sha256",
+    "owning_report",
+    "decision_checksum_sha256",
+    "provider_id",
+    "trust_anchor_id"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "binding_type": {
+      "enum": [
+        "label_set_v1",
+        "model_dataset_v1",
+        "model_definition_v1",
+        "model_run_v1",
+        "model_artifact_v1",
+        "feature_preprocessing_v1",
+        "qlib_dataset_export_v1",
+        "qlib_init_receipt_v1",
+        "prediction_set_v1",
+        "portfolio_definition_v1",
+        "target_weights_v1",
+        "backtest_config_v1",
+        "backtest_result_v1",
+        "factor_v1",
+        "research_run_request_v1",
+        "research_run_state_v1",
+        "research_run_result_v1"
+      ]
+    },
+    "subject_generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "subject_manifest_digest_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^(|[0-9a-f]{64})$"
+    },
+    "owning_report": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "decision_checksum_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "provider_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trust_anchor_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

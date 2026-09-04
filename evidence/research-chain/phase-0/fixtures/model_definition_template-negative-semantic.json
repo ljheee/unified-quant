@@ -1,0 +1,30 @@
+{
+  "algorithm": "qlib_linear",
+  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "compatible_dataset_versions": [
+    "1.0.0"
+  ],
+  "contract_version": 1,
+  "hyperparameters": {
+    "alpha": 0.5
+  },
+  "metrics": [
+    {
+      "direction": "maximize",
+      "name": "ic"
+    }
+  ],
+  "model_set": "baseline",
+  "model_version": "1.0.0",
+  "quality_policy": "reject_all",
+  "seed_policy": {
+    "base_seed": 7,
+    "derivation": "fixed"
+  },
+  "selection_rule": "maximum validation ic",
+  "serializer_version": "json-numpy-v1",
+  "status": "self-approved",
+  "template_generation_id": "1ebc548c2702a1cf941a4d5673ed582e7d94a5c2be6fd76e4d4cebec17c9233d",
+  "template_manifest_digest_sha256": "0231f1c3fc612e38eeb9eeaede55e70ad34bfafadcf168dfa973277f5380484c",
+  "template_version": "1.0.0"
+}

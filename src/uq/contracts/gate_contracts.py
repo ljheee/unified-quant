@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
+from referencing import Registry, Resource
+from referencing.jsonschema import DRAFT202012
 
 _ROOT = Path(__file__).resolve().parents[3]
 _CONTRACT_DIR = _ROOT / "config" / "schemas" / "contracts"
@@ -31,8 +33,17 @@ def validate_contract(schema_name: str, payload: dict[str, Any]) -> None:
 
     if schema_name not in _CACHE:
         schema = json.loads((_CONTRACT_DIR / schema_name).read_text(encoding="utf-8"))
+        registry = Registry()
+        for schema_path in _CONTRACT_DIR.glob("*.json"):
+            resource = Resource.from_contents(
+                json.loads(schema_path.read_text(encoding="utf-8")),
+                default_specification=DRAFT202012,
+            )
+            registry = registry.with_resource(schema_path.name, resource)
         _CACHE[schema_name] = jsonschema.Draft202012Validator(
-            schema, format_checker=jsonschema.FormatChecker()
+            schema,
+            format_checker=jsonschema.FormatChecker(),
+            registry=registry,
         )
     errors = sorted(_CACHE[schema_name].iter_errors(payload), key=lambda error: list(error.path))
     if errors:

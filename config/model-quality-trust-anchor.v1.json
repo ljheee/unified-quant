@@ -4,5 +4,5 @@
   "algorithm": "Ed25519",
   "key_id": "model-quality-reviewer-v1-2026-09",
   "public_key_hex": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
-  "registry_sha256": "79cd3d70e31a0d5736ce098c53f91d610edf9be1808151cfbfbfefa97e80ff26"
+  "registry_sha256": "c26441a9a33e64eca22bd0fdb83c01d732dfc3aac449420dc462241610e439ab"
 }

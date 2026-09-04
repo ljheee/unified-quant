@@ -43,6 +43,14 @@ _QUALITY_BOUND_FIELDS = {
     "prediction_set": {"quality_report_checksum_sha256"},
 }
 _MODEL_CONTRACT_FAMILIES = {*_SCHEMA_NAMES, "model_quality_report"}
+_RESEARCH_SCHEMA_NAMES = {
+    "research_run_request",
+    "research_run_state",
+    "research_run_result",
+    "model_definition_template",
+    "portfolio_definition_template",
+    "quality_decision",
+}
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _ED25519_SIGNATURE_HEX = re.compile(r"^[0-9a-f]{128}$")
 _ORDERING_FIELDS = ("factor_set", "factor_version", "partition_date", "generation_id")
@@ -97,6 +105,92 @@ def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
         raise ContractError(f"unknown model contract family: {schema_name}")
 
 
+def research_stage_plan_sha256() -> str:
+    """Return the normative Research Chain stage-plan digest."""
+    return sha256_json({
+        "schema_version": "v1",
+        "stage_plan": [
+            "resolve_request",
+            "factor_computation",
+            "dataset_preparation",
+            "qlib_export",
+            "model_training",
+            "prediction_publication",
+            "portfolio_construction",
+            "backtest_execution",
+            "result_reconciliation",
+        ],
+    })
+
+
+def _without_physical_path(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_without_physical_path(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _without_physical_path(item) for key, item in value.items() if key != "physical_path"}
+    return value
+
+
+def research_contract_identities(
+    payload: Mapping[str, Any],
+    *,
+    schema_name: str,
+) -> tuple[str, str]:
+    """Derive research-chain content identity and complete manifest digest."""
+    document = dict(payload)
+    if schema_name == "model_definition_template":
+        content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
+    elif schema_name == "portfolio_definition_template":
+        content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
+    elif schema_name == "research_run_request":
+        content_field, digest_field = "request_content_generation_id", "manifest_digest_sha256"
+    elif schema_name == "research_run_state":
+        content_field, digest_field = "state_content_generation_id", "manifest_digest_sha256"
+    elif schema_name == "research_run_result":
+        content_field, digest_field = "result_content_generation_id", "manifest_digest_sha256"
+    else:
+        raise ContractError(f"unknown research contract family: {schema_name}")
+
+    for key in (content_field, digest_field):
+        value = document.get(key)
+        if not isinstance(value, str) or not _SHA256.fullmatch(value):
+            raise ContractError(f"{schema_name} missing valid {key}")
+        del document[key]
+
+    excluded_fields = {content_field, digest_field}
+    if schema_name == "research_run_request":
+        excluded_fields.update(_RUN_LOCAL_FIELDS)
+    elif schema_name == "research_run_result":
+        excluded_fields.update(_RUN_LOCAL_FIELDS)
+        excluded_fields.update({"request_manifest_digest_sha256", "state_created_at", "state_attempt_digest_sha256"})
+        document = _without_physical_path(document)
+
+    generation = sha256_json({
+        key: value for key, value in document.items() if key not in excluded_fields
+    })
+    digest_document = {key: value for key, value in document.items() if key != digest_field}
+    digest_document[content_field] = generation
+    if schema_name == "research_run_result":
+        digest_document = _without_physical_path(digest_document)
+    return generation, sha256_json(digest_document)
+
+
+def _validate_stage_record_order(stages: list[dict[str, Any]], *, require_complete: bool) -> None:
+    stage_order = [
+        "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
+        "model_training", "prediction_publication", "portfolio_construction",
+        "backtest_execution", "result_reconciliation",
+    ]
+    stages_seen = [item["stage"] for item in stages]
+    if len(stages_seen) != len(set(stages_seen)):
+        raise ContractError("stage records contain duplicates")
+    indexes = [stage_order.index(stage) for stage in stages_seen]
+    if indexes != sorted(indexes):
+        raise ContractError("stage records are not in normative order")
+    if require_complete and stages_seen != stage_order:
+        raise ContractError("result must contain the complete normative stage order")
+
+
 class ModelContractLoader:
     """Load and verify a durable model-layer contract document."""
 
@@ -149,6 +243,55 @@ class ModelContractLoader:
             checksum_payload = {key: value for key, value in payload.items() if key != "report_checksum_sha256"}
             if payload["report_checksum_sha256"] != sha256_json(checksum_payload):
                 raise ContractError("model quality report checksum mismatch")
+            return
+        if schema_name in _RESEARCH_SCHEMA_NAMES:
+            _reject_non_finite(payload)
+            validate_contract(f"{schema_name}.v1.json", payload)
+            if schema_name == "research_run_result":
+                _validate_stage_record_order(payload["stage_records"], require_complete=True)
+            if schema_name == "research_run_state":
+                _validate_stage_record_order(payload["stage_records"], require_complete=False)
+            content_field = {
+                "model_definition_template": "template_generation_id",
+                "portfolio_definition_template": "template_generation_id",
+                "research_run_request": "request_content_generation_id",
+                "research_run_state": "state_content_generation_id",
+                "research_run_result": "result_content_generation_id",
+                "quality_decision": "decision_checksum_sha256",
+            }[schema_name]
+            if schema_name == "quality_decision":
+                report = payload.get("owning_report")
+                if not isinstance(report, dict):
+                    raise ContractError("quality decision missing owning report")
+                expected_checksum = report.get("report_checksum_sha256")
+                if payload[content_field] != expected_checksum:
+                    raise ContractError("quality decision checksum mismatch")
+                if payload.get("binding_type") != report.get("binding_type"):
+                    raise ContractError("quality decision binding mismatch")
+                if payload.get("subject_generation_id") != report.get("bound_generation_id"):
+                    raise ContractError("quality decision subject generation mismatch")
+                subject_digest = report.get("subject_content_sha256")
+                if payload.get("subject_manifest_digest_sha256") != (None if subject_digest is None else subject_digest):
+                    raise ContractError("quality decision subject digest mismatch")
+                if payload.get("trust_anchor_id") != report.get("key_id"):
+                    raise ContractError("quality decision trust anchor mismatch")
+                if report.get("binding_type") != "factor_v1":
+                    verify_reviewed_quality_report_signature(report)
+                return
+            expected_generation, expected_digest = research_contract_identities(
+                payload, schema_name=schema_name
+            )
+            if payload[content_field] != expected_generation:
+                raise ContractError(f"{schema_name} stable content identity mismatch")
+            digest_field = {
+                "model_definition_template": "template_manifest_digest_sha256",
+                "portfolio_definition_template": "template_manifest_digest_sha256",
+                "research_run_request": "manifest_digest_sha256",
+                "research_run_state": "manifest_digest_sha256",
+                "research_run_result": "manifest_digest_sha256",
+            }[schema_name]
+            if payload[digest_field] != expected_digest:
+                raise ContractError(f"{schema_name} manifest digest mismatch")
             return
         if schema_name not in _MODEL_CONTRACT_FAMILIES:
             raise ContractError(f"unknown model contract family: {schema_name}")

@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Research run result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "schema_version",
+    "request_content_generation_id",
+    "request_manifest_digest_sha256",
+    "run_id",
+    "created_at",
+    "runner_identity",
+    "stage_records",
+    "readback_status",
+    "overall_logical_fingerprint",
+    "result_content_generation_id",
+    "manifest_digest_sha256"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "request_content_generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_manifest_digest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "runner_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code_fingerprint",
+        "environment_profile",
+        "lock_digest_sha256"
+      ],
+      "properties": {
+        "code_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "environment_profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lock_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "stage_records": {
+      "type": "array",
+      "minItems": 9,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stage",
+          "status",
+          "output_bindings",
+          "failure_reason"
+        ],
+        "properties": {
+          "stage": {
+            "enum": [
+              "resolve_request",
+              "factor_computation",
+              "dataset_preparation",
+              "qlib_export",
+              "model_training",
+              "prediction_publication",
+              "portfolio_construction",
+              "backtest_execution",
+              "result_reconciliation"
+            ]
+          },
+          "status": {
+            "enum": [
+              "running",
+              "passed",
+              "warning",
+              "blocked",
+              "failed"
+            ]
+          },
+          "output_bindings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "output_family",
+                "generation_id",
+                "manifest_digest_sha256",
+                "data_checksum_sha256",
+                "physical_path",
+                "quality_decision_checksum_sha256",
+                "failure_reason"
+              ],
+              "properties": {
+                "output_family": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9_]{2,63}$"
+                },
+                "generation_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "manifest_digest_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "data_checksum_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "physical_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "not": {
+                    "pattern": "(^|/)(\\.\\.?)(/|$)|(^|/)\\.\\.?"
+                  },
+                  "allOf": [
+                    {
+                      "not": {
+                        "pattern": "\\\\"
+                      }
+                    },
+                    {
+                      "not": {
+                        "pattern": "(^|/)\\."
+                      }
+                    }
+                  ]
+                },
+                "quality_decision_checksum_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "failure_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    null,
+                    "request_invalid",
+                    "input_unresolved",
+                    "input_tampered",
+                    "lineage_mismatch",
+                    "quality_decision_missing",
+                    "quality_decision_rejected",
+                    "stage_failed",
+                    "store_read_failed",
+                    "overwrite_conflict",
+                    "reproducibility_failed",
+                    "result_reconciliation_failed"
+                  ]
+                }
+              }
+            }
+          },
+          "failure_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "request_invalid",
+              "input_unresolved",
+              "input_tampered",
+              "lineage_mismatch",
+              "quality_decision_missing",
+              "quality_decision_rejected",
+              "stage_failed",
+              "store_read_failed",
+              "overwrite_conflict",
+              "reproducibility_failed",
+              "result_reconciliation_failed"
+            ]
+          }
+        }
+      }
+    },
+    "readback_status": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": [
+          "passed",
+          "failed"
+        ]
+      },
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{2,63}$"
+      }
+    },
+    "overall_logical_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "result_content_generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "manifest_digest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "result_artifact_digest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "stage_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_family",
+        "generation_id",
+        "manifest_digest_sha256",
+        "data_checksum_sha256",
+        "physical_path",
+        "quality_decision_checksum_sha256",
+        "failure_reason"
+      ],
+      "properties": {
+        "output_family": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "data_checksum_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "physical_path": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "(^|/)(\\.\\.?)(/|$)|(^|/)\\.\\.?"
+          },
+          "allOf": [
+            {
+              "not": {
+                "pattern": "\\\\"
+              }
+            },
+            {
+              "not": {
+                "pattern": "(^|/)\\."
+              }
+            }
+          ]
+        },
+        "quality_decision_checksum_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "failure_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            null,
+            "request_invalid",
+            "input_unresolved",
+            "input_tampered",
+            "lineage_mismatch",
+            "quality_decision_missing",
+            "quality_decision_rejected",
+            "stage_failed",
+            "store_read_failed",
+            "overwrite_conflict",
+            "reproducibility_failed",
+            "result_reconciliation_failed"
+          ]
+        }
+      }
+    }
+  }
+}

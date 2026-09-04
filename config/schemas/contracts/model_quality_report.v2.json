@@ -38,7 +38,10 @@
         "portfolio_definition_v1",
         "target_weights_v1",
         "backtest_config_v1",
-        "backtest_result_v1"
+        "backtest_result_v1",
+        "research_run_request_v1",
+        "research_run_state_v1",
+        "research_run_result_v1"
       ]
     },
     "bound_generation_id": {

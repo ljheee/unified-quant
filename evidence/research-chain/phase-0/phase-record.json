@@ -1,0 +1,93 @@
+{
+  "phase": 0,
+  "layer": "research_chain",
+  "record_version": 1,
+  "status": "executable_pending_review",
+  "entry_criteria": "none (first phase)",
+  "exit_criteria": [
+    {
+      "id": "RC0-schemas-fixtures",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase0.py::test_valid_and_negative_fixtures_are_persisted"
+      ],
+      "evidence_paths": [
+        "config/schemas/contracts/",
+        "evidence/research-chain/phase-0/fixtures/"
+      ]
+    },
+    {
+      "id": "RC0-identities",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase0.py::test_request_identity_is_stable_under_run_metadata_and_key_reorder",
+        "tests/test_research_chain_phase0.py::test_result_identity_is_sensitive_to_governed_content",
+        "tests/test_research_chain_phase0.py::test_result_identity_is_stable_under_run_metadata_and_physical_paths"
+      ],
+      "evidence_paths": [
+        "evidence/research-chain/phase-0/golden-vectors/identity-golden-vectors.json"
+      ]
+    },
+    {
+      "id": "RC0-stage-order-quality",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase0.py::test_normative_stage_order_is_enforced",
+        "tests/test_research_chain_phase0.py::test_quality_decision_binds_owning_report_checksum"
+      ],
+      "evidence_paths": [
+        "evidence/research-chain/phase-0/fixtures/"
+      ]
+    },
+    {
+      "id": "RC0-golden-vectors",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase0.py::test_golden_vectors_are_persisted_and_fail_closed"
+      ],
+      "evidence_paths": [
+        "evidence/research-chain/phase-0/golden-vectors/identity-golden-vectors.json"
+      ]
+    },
+    {
+      "id": "RC0-path-store-provider",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase0.py::test_provider_config_rejects_unsafe_references",
+        "tests/test_research_chain_phase0.py::test_provider_config_accepts_registered_relative_path",
+        "tests/test_research_chain_phase0.py::test_provider_config_rejects_symlink_escape",
+        "tests/test_research_chain_phase0.py::test_research_layout_accepts_frozen_paths",
+        "tests/test_research_chain_phase0.py::test_research_layout_rejects_traversal_missing_parent_and_overwrite",
+        "tests/test_research_chain_phase0.py::test_research_layout_rejects_symlink_escape"
+      ],
+      "evidence_paths": [
+        "src/uq/research_chain/contracts.py"
+      ]
+    },
+    {
+      "id": "RC0-unified-gate",
+      "status": "passed",
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ],
+      "evidence_paths": [
+        "evidence/research-chain/phase-0/gate-reports/gate-report.json",
+        "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt",
+        "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt.sha256"
+      ],
+      "bound_commit": "225abb7d16e877991a222f6c5af3a2d1da552da0"
+    }
+  ],
+  "evidence_paths": [
+    "config/schemas/contracts/research_run_request.v1.json",
+    "config/schemas/contracts/research_run_state.v1.json",
+    "config/schemas/contracts/research_run_result.v1.json",
+    "config/schemas/contracts/model_definition_template.v1.json",
+    "config/schemas/contracts/portfolio_definition_template.v1.json",
+    "config/schemas/contracts/quality_decision.v1.json",
+    "evidence/research-chain/phase-0/fixtures/",
+    "evidence/research-chain/phase-0/golden-vectors/",
+    "tests/test_research_chain_phase0.py"
+  ],
+  "blocked_by": []
+}

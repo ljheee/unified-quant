@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.5; Phase 0 not started; all runtime phases paused**
+Status: **gated implementation order v0.5; Phase 0 in progress; runtime phases paused**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -293,11 +293,11 @@ test node IDs before their owning phase exits.
 
 | ID | Phase | Test ID | Fixture path | Evidence path | Status |
 |---|---|---|---|---|---|
-| RC0a | 0 | `planned:test_research_run_request_schema_and_identities` | `planned:phase-0/fixtures/research_run_request-valid.json` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
-| RC0b | 0 | `planned:test_research_run_request_negative_fixtures` | `planned:phase-0/fixtures/` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
-| RC0c | 0 | `planned:test_research_run_state_schema_and_append_forward_semantics` | `planned:phase-0/fixtures/` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
-| RC0d | 0 | `planned:test_research_run_result_identity_sensitivity` | `planned:phase-0/golden-vectors/identity-golden-vectors.json` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
-| RC0e | 0 | `planned:test_research_run_path_safety_and_overwrite_rejection` | `planned:phase-0/fixtures/` | `planned:phase-0/gate-reports/gate-report.json` | blocked |
+| RC0a | 0 | `tests/test_research_chain_phase0.py::test_valid_and_negative_fixtures_are_persisted` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
+| RC0b | 0 | `tests/test_research_chain_phase0.py::test_valid_and_negative_fixtures_are_persisted` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
+| RC0c | 0 | `tests/test_research_chain_phase0.py::test_normative_stage_order_is_enforced` | `evidence/research-chain/phase-0/fixtures/` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
+| RC0d | 0 | `tests/test_research_chain_phase0.py::test_result_identity_is_sensitive_to_governed_content` | `evidence/research-chain/phase-0/golden-vectors/identity-golden-vectors.json` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
+| RC0e | 0 | `tests/test_research_chain_phase0.py::test_research_layout_rejects_traversal_missing_parent_and_overwrite` | `src/uq/research_chain/contracts.py` | `evidence/research-chain/phase-0/gate-reports/gate-report.json` | pending-review |
 | RC1a | 1 | `planned:test_request_resolver_resolves_all_reviewed_inputs` | `planned:phase-1/fixtures/valid-request.json` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
 | RC1b | 1 | `planned:test_dry_run_does_not_mutate_downstream_stores` | `planned:phase-1/fixtures/` | `planned:phase-1/gate-reports/gate-report.json` | blocked |
 | RC1c | 1 | `planned:test_resolver_failure_taxonomy_is_typed` | `planned:phase-1/fixtures/` | `planned:phase-1/gate-reports/gate-report.json` | blocked |

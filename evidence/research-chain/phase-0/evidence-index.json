@@ -1,0 +1,55 @@
+{
+  "record_version": 1,
+  "layer": "research_chain",
+  "phase": 0,
+  "status": "executable_pending_review",
+  "entries": [
+    {
+      "type": "phase_record",
+      "path": "evidence/research-chain/phase-0/phase-record.json",
+      "status": "in_progress"
+    },
+    {
+      "type": "fixtures",
+      "path": "evidence/research-chain/phase-0/fixtures/",
+      "families": [
+        "model_definition_template",
+        "portfolio_definition_template",
+        "research_run_request",
+        "research_run_state",
+        "research_run_result",
+        "quality_decision"
+      ]
+    },
+    {
+      "type": "contracts",
+      "path": "src/uq/research_chain/contracts.py",
+      "interfaces": [
+        "ResearchRunStore",
+        "QualityDecisionProvider"
+      ],
+      "path_policy": "validate_provider_config_ref"
+    },
+    {
+      "type": "golden_vectors",
+      "path": "evidence/research-chain/phase-0/golden-vectors/identity-golden-vectors.json"
+    },
+    {
+      "type": "tests",
+      "path": "tests/test_research_chain_phase0.py"
+    },
+    {
+      "type": "gate_report",
+      "path": "evidence/research-chain/phase-0/gate-reports/gate-report.json",
+      "bound_commit": "225abb7d16e877991a222f6c5af3a2d1da552da0",
+      "requirements_path": "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt",
+      "requirements_digest_path": "evidence/research-chain/phase-0/gate-reports/requirements.lock.txt.sha256",
+      "status": "passed"
+    },
+    {
+      "type": "phase_record",
+      "path": "evidence/research-chain/phase-0/phase-record.json",
+      "status": "executable_pending_review"
+    }
+  ]
+}

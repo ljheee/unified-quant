@@ -1,0 +1,26 @@
+{
+  "constraints": {
+    "cash_reserve": 0.05,
+    "max_industry_weight": null,
+    "max_single_weight": 0.1,
+    "max_turnover": null
+  },
+  "contract_version": 1,
+  "industry_source_binding": null,
+  "portfolio_name": "top20",
+  "rebalance_schedule": "daily",
+  "scheme_parameters": {
+    "n": 20
+  },
+  "score_policy": {
+    "direction": "descending",
+    "nan_policy": "exclude",
+    "tie_policy": "first_by_instrument_id"
+  },
+  "status": "reviewed",
+  "template_generation_id": "6d72056d696c3d1c51c6303a65814027a046c4f5be32ea8216c6ec4b73512519",
+  "template_manifest_digest_sha256": "71c354dfa1dc8424800de5b25ee491d686e85984cb16014a86978b83a1d847fa",
+  "template_version": "1.0.0",
+  "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "weight_scheme": "not_a_scheme"
+}

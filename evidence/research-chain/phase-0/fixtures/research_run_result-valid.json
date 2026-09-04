@@ -1,0 +1,173 @@
+{
+  "contract_version": 1,
+  "created_at": "2026-01-30T07:00:00+00:00",
+  "manifest_digest_sha256": "7a1033105464a47fd01d1eff4ae690174b021fcecfcb937229429169d6a2835e",
+  "overall_logical_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "readback_status": {
+    "backtest_result": "passed",
+    "factor_partition": "passed",
+    "model_dataset": "passed",
+    "model_run": "passed",
+    "prediction_set": "passed",
+    "qlib_dataset_export": "passed",
+    "research_run_request": "passed",
+    "research_run_result": "passed",
+    "target_weights": "passed"
+  },
+  "request_content_generation_id": "44704900b4f0f88e34bc0324d74d72c84e1a2086be60b1b97e31f014efb23261",
+  "request_manifest_digest_sha256": "68bf1158c4ee0d20d872763838776ed4d9f422d17e6cf90f9d69cd137c45abd1",
+  "result_content_generation_id": "7550aa76d38f86a6719cd423f3296cabbf69474c02fa48b917d26a3a22210e33",
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "runner_identity": {
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "environment_profile": "macos-arm64",
+    "lock_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "schema_version": "1.0.0",
+  "stage_records": [
+    {
+      "failure_reason": null,
+      "output_bindings": [
+        {
+          "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "failure_reason": null,
+          "generation_id": "44704900b4f0f88e34bc0324d74d72c84e1a2086be60b1b97e31f014efb23261",
+          "manifest_digest_sha256": "68bf1158c4ee0d20d872763838776ed4d9f422d17e6cf90f9d69cd137c45abd1",
+          "output_family": "research_run_request",
+          "physical_path": "research_runs/requests/request=44704900b4f0f88e34bc0324d74d72c84e1a2086be60b1b97e31f014efb23261/run=00000000-0000-4000-8000-000000000001/manifest.json",
+          "quality_decision_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "stage": "resolve_request",
+      "status": "passed"
+    },
+    {
+      "failure_reason": null,
+      "output_bindings": [
+        {
+          "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "failure_reason": null,
+          "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "output_family": "factor_partition",
+          "physical_path": "factors/dataset=bars_daily/schema_version=research-v1/factor_set=basic/factor_version=1.0.0/date=2026-01-29/manifest.json",
+          "quality_decision_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "stage": "factor_computation",
+      "status": "passed"
+    },
+    {
+      "failure_reason": null,
+      "output_bindings": [
+        {
+          "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "failure_reason": null,
+          "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "output_family": "model_dataset",
+          "physical_path": "datasets/dataset_name=research_slice/schema_version=1.0.0/generation=0000000000000000000000000000000000000000000000000000000000000000/manifest.json",
+          "quality_decision_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "stage": "dataset_preparation",
+      "status": "passed"
+    },
+    {
+      "failure_reason": null,
+      "output_bindings": [
+        {
+          "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "failure_reason": null,
+          "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "output_family": "qlib_dataset_export",
+          "physical_path": "qlib_exports/export_name=research_slice/generation=0000000000000000000000000000000000000000000000000000000000000000/manifest.json",
+          "quality_decision_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "stage": "qlib_export",
+      "status": "passed"
+    },
+    {
+      "failure_reason": null,
+      "output_bindings": [
+        {
+          "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "failure_reason": null,
+          "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "output_family": "model_run",
+          "physical_path": "model_runs/run_generation=0000000000000000000000000000000000000000000000000000000000000000/manifest.json",
+          "quality_decision_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "stage": "model_training",
+      "status": "passed"
+    },
+    {
+      "failure_reason": null,
+      "output_bindings": [
+        {
+          "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "failure_reason": null,
+          "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "output_family": "prediction_set",
+          "physical_path": "predictions/prediction_set_name=research_slice/generation=0000000000000000000000000000000000000000000000000000000000000000/manifest.json",
+          "quality_decision_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "stage": "prediction_publication",
+      "status": "passed"
+    },
+    {
+      "failure_reason": null,
+      "output_bindings": [
+        {
+          "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "failure_reason": null,
+          "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "output_family": "target_weights",
+          "physical_path": "target_weights/portfolio_name=top20/date=2026-01-29/generation=0000000000000000000000000000000000000000000000000000000000000000/manifest.json",
+          "quality_decision_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "stage": "portfolio_construction",
+      "status": "passed"
+    },
+    {
+      "failure_reason": null,
+      "output_bindings": [
+        {
+          "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "failure_reason": null,
+          "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "output_family": "backtest_result",
+          "physical_path": "backtests/backtest_name=research_slice/result=0000000000000000000000000000000000000000000000000000000000000000/manifest.json",
+          "quality_decision_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "stage": "backtest_execution",
+      "status": "passed"
+    },
+    {
+      "failure_reason": null,
+      "output_bindings": [
+        {
+          "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "failure_reason": null,
+          "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "output_family": "research_run_result",
+          "physical_path": "research_runs/results/request=44704900b4f0f88e34bc0324d74d72c84e1a2086be60b1b97e31f014efb23261/run=00000000-0000-4000-8000-000000000001/result=0000000000000000000000000000000000000000000000000000000000000000/manifest.json",
+          "quality_decision_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "stage": "result_reconciliation",
+      "status": "passed"
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "adjusted_price_binding": {
+    "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "backtest_config_binding": {
+    "family": "backtest_config",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "created_at": "2026-01-30T07:00:00+00:00",
+  "decision_timezone": "Asia/Shanghai",
+  "environment": {
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "environment_lock_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "seed": 7,
+    "serialization_profile_id": "uq-parquet-v1",
+    "thread_count": 1
+  },
+  "execution_mode": "full_research_run",
+  "factor_binding": {
+    "family": "factor_partition",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "feature_preprocessing_binding": {
+    "family": "feature_preprocessing",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "label_binding": {
+    "family": "label_set",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "manifest_digest_sha256": "68bf1158c4ee0d20d872763838776ed4d9f422d17e6cf90f9d69cd137c45abd1",
+  "model_definition_template": {
+    "algorithm": "qlib_linear",
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "compatible_dataset_versions": [
+      "1.0.0"
+    ],
+    "contract_version": 1,
+    "hyperparameters": {
+      "alpha": 0.5
+    },
+    "metrics": [
+      {
+        "direction": "maximize",
+        "name": "ic"
+      }
+    ],
+    "model_set": "baseline",
+    "model_version": "1.0.0",
+    "quality_policy": "reject_all",
+    "seed_policy": {
+      "base_seed": 7,
+      "derivation": "fixed"
+    },
+    "selection_rule": "maximum validation ic",
+    "serializer_version": "json-numpy-v1",
+    "status": "reviewed",
+    "template_generation_id": "1ebc548c2702a1cf941a4d5673ed582e7d94a5c2be6fd76e4d4cebec17c9233d",
+    "template_manifest_digest_sha256": "0231f1c3fc612e38eeb9eeaede55e70ad34bfafadcf168dfa973277f5380484c",
+    "template_version": "1.0.0"
+  },
+  "portfolio_definition_template": {
+    "constraints": {
+      "cash_reserve": 0.05,
+      "max_industry_weight": null,
+      "max_single_weight": 0.1,
+      "max_turnover": null
+    },
+    "contract_version": 1,
+    "industry_source_binding": null,
+    "portfolio_name": "top20",
+    "rebalance_schedule": "daily",
+    "scheme_parameters": {
+      "n": 20
+    },
+    "score_policy": {
+      "direction": "descending",
+      "nan_policy": "exclude",
+      "tie_policy": "first_by_instrument_id"
+    },
+    "status": "reviewed",
+    "template_generation_id": "6d72056d696c3d1c51c6303a65814027a046c4f5be32ea8216c6ec4b73512519",
+    "template_manifest_digest_sha256": "71c354dfa1dc8424800de5b25ee491d686e85984cb16014a86978b83a1d847fa",
+    "template_version": "1.0.0",
+    "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "weight_scheme": "top_n_equal_weight"
+  },
+  "request_content_generation_id": "44704900b4f0f88e34bc0324d74d72c84e1a2086be60b1b97e31f014efb23261",
+  "research_name": "adjusted_return_baseline",
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "run_visible_cutoff": "2026-01-30T15:00:00+08:00",
+  "schema_version": "1.0.0",
+  "stage_plan_sha256": "bb797d79afe118148ea5545a49ec82dca6d891ea52e82fdae2bc16432b14c316",
+  "universe_snapshot_binding": {
+    "family": "universe_snapshot",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "window_end_date": "2026-01-29",
+  "window_start_date": "2025-12-01"
+}

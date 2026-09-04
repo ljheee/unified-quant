@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Reviewed model definition template v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "template_version",
+    "status",
+    "model_set",
+    "model_version",
+    "algorithm",
+    "hyperparameters",
+    "seed_policy",
+    "compatible_dataset_versions",
+    "metrics",
+    "selection_rule",
+    "quality_policy",
+    "serializer_version",
+    "code_fingerprint",
+    "template_generation_id",
+    "template_manifest_digest_sha256"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "template_version": {
+      "const": "1.0.0"
+    },
+    "status": {
+      "const": "reviewed"
+    },
+    "model_set": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "model_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "algorithm": {
+      "enum": [
+        "regularized_linear",
+        "qlib_linear"
+      ]
+    },
+    "hyperparameters": {
+      "type": "object"
+    },
+    "seed_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "base_seed",
+        "derivation"
+      ],
+      "properties": {
+        "base_seed": {
+          "type": "integer"
+        },
+        "derivation": {
+          "type": "string"
+        }
+      }
+    },
+    "compatible_dataset_versions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "direction"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "maximize",
+              "minimize"
+            ]
+          }
+        }
+      }
+    },
+    "selection_rule": {
+      "type": "string",
+      "minLength": 1
+    },
+    "quality_policy": {
+      "enum": [
+        "reject_all",
+        "accept_with_warnings"
+      ]
+    },
+    "serializer_version": {
+      "enum": [
+        "json-numpy-v1",
+        "joblib-v1"
+      ]
+    },
+    "code_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "template_generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "template_manifest_digest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}
