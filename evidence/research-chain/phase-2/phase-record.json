@@ -1,0 +1,65 @@
+{
+  "blocked_by": [
+    "final head gate evidence after evidence-only commit",
+    "remote CI evidence"
+  ],
+  "entry_criteria": {
+    "phase_1_exited": true,
+    "phase_1_head": "08c7a57a30a71c34fac1b98331a081de13397fa9",
+    "status": "passed"
+  },
+  "evidence_paths": [
+    "src/uq/research_chain/adapters.py",
+    "src/uq/research_chain/owning_contracts.py",
+    "tests/test_research_chain_phase2.py",
+    "evidence/research-chain/phase-2/implementation-gate-reports/gate-report.json"
+  ],
+  "exit_criteria": [
+    {
+      "evidence_paths": ["tests/test_research_chain_phase2.py"],
+      "id": "RC2-factor-stage",
+      "status": "passed-local",
+      "test_ids": [
+        "tests/test_research_chain_phase2.py::test_factor_stage_binds_verified_partition",
+        "tests/test_research_chain_phase2.py::test_factor_stage_rejects_tampered_partition",
+        "tests/test_research_chain_phase2.py::test_factor_stage_rejects_binding_mismatch"
+      ]
+    },
+    {
+      "evidence_paths": ["tests/test_research_chain_phase2.py"],
+      "id": "RC2-dataset-stage",
+      "status": "passed-local",
+      "test_ids": [
+        "tests/test_research_chain_phase2.py::test_dataset_stage_binds_reviewed_policy_and_verified_inputs"
+      ]
+    },
+    {
+      "evidence_paths": ["tests/test_research_chain_phase2.py"],
+      "id": "RC2-dataset-governed-rejections",
+      "status": "passed-local",
+      "test_ids": [
+        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_wrong_reviewed_quality_decision",
+        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_preprocessing_input_mismatch"
+      ]
+    },
+    {
+      "bound_commit": "8d318a29ed7c76fe3d1f1d401df8d614a81568f3",
+      "evidence_paths": ["evidence/research-chain/phase-2/implementation-gate-reports/gate-report.json"],
+      "extras": ["dev", "real", "qlib"],
+      "id": "RC2-unified-gate-implementation-head",
+      "status": "passed-local-implementation-head",
+      "test_ids": ["scripts/run_gate.sh"],
+      "test_summary": "418 passed"
+    }
+  ],
+  "implementation_commit": "8d318a29ed7c76fe3d1f1d401df8d614a81568f3",
+  "layer": "research_chain",
+  "notes": [
+    "Dataset policy is carried as a reviewed research-run contract.",
+    "Dataset adapter validates upstream identities, universe membership, preprocessing recomputation, and external quality decisions before DatasetWriter publication."
+  ],
+  "phase": 2,
+  "record_version": 1,
+  "remediation_commits": [],
+  "status": "in_progress_final_evidence"
+}
