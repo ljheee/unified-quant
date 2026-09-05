@@ -1,50 +1,50 @@
 {
-  "contract_version": 1,
-  "run_id": "00000000-0000-4000-8000-000000000001",
-  "created_at": "2026-01-30T07:00:00+00:00",
-  "manifest_digest_sha256": "79d4527d45b4fb72ca49562659ffb13f099024b075af56f97efab2af1450d098",
-  "generation_id": "37c98e4d96208eb286664025c0b8e3f4f95944b6dc6fb2c1abcfed165b914d20",
-  "name": "return_5d",
-  "semantic_version": "1.0.0",
-  "primary_key": [
-    "instrument",
-    "decision_date"
-  ],
-  "decision_time_convention": "trading_close_asia_shanghai",
-  "horizon_trading_days": 5,
-  "formula_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "adjustment_basis": "governed_adjusted_close",
-  "upstream_adjusted_price_bindings": [
-    {
-      "binding": "adjusted_price",
-      "dataset": "bars_adjusted",
-      "schema_version": "adjusted-v1",
-      "partition_date": "2026-01-29",
-      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
-      "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "visible_cutoff": "2026-01-29T15:00:00+08:00"
-    }
-  ],
-  "eligibility": {
-    "rules": {}
-  },
-  "terminal_return_policy": null,
-  "null_policy": {
-    "insufficient_future": "null"
-  },
-  "row_count": 2,
+  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
   "columns": [
     "instrument",
     "decision_date",
     "label"
   ],
+  "contract_version": 1,
+  "created_at": "2026-01-30T07:00:00+00:00",
+  "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "decision_time_convention": "trading_close_asia_shanghai",
   "dtypes": {
-    "instrument": "string",
     "decision_date": "date32-backed datetime",
+    "instrument": "string",
     "label": "float64"
   },
-  "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "eligibility": {
+    "rules": {}
+  },
+  "formula_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "generation_id": "37c98e4d96208eb286664025c0b8e3f4f95944b6dc6fb2c1abcfed165b914d20",
+  "horizon_trading_days": 5,
   "logical_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
-  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
-  "serialization_profile_id": "uq-parquet-v1"
+  "manifest_digest_sha256": "79d4527d45b4fb72ca49562659ffb13f099024b075af56f97efab2af1450d098",
+  "name": "return_5d",
+  "null_policy": {
+    "insufficient_future": "null"
+  },
+  "primary_key": [
+    "instrument",
+    "decision_date"
+  ],
+  "row_count": 2,
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "semantic_version": "1.0.0",
+  "serialization_profile_id": "uq-parquet-v1",
+  "terminal_return_policy": null,
+  "upstream_adjusted_price_bindings": [
+    {
+      "binding": "adjusted_price",
+      "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "dataset": "bars_adjusted",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "partition_date": "2026-01-29",
+      "schema_version": "adjusted-v1",
+      "visible_cutoff": "2026-01-29T15:00:00+08:00"
+    }
+  ]
 }

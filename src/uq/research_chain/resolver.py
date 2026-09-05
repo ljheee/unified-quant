@@ -75,6 +75,8 @@ class ResolvedStageBinding:
     generation_id: str
     manifest_digest_sha256: str
     data_checksum_sha256: str
+    physical_path: str | None = None
+    quality_decision_checksum_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -365,10 +367,62 @@ class FileResearchRunStore:
         return sorted(summaries, key=lambda item: order[item.stage])
 
     def publish_result(self, manifest: Mapping[str, Any], *, path_policy: str) -> PublishedResult:
-        raise ContractError("research result publication is not enabled until Phase 5")
+        if path_policy != "strict_v1":
+            raise ContractError("unsupported research path policy")
+        result = dict(manifest)
+        ModelContractLoader.validate("research_run_result", result)
+        expected_generation, expected_digest = research_contract_identities(
+            result, schema_name="research_run_result"
+        )
+        if result["result_content_generation_id"] != expected_generation:
+            raise ContractError("research result stable content identity mismatch")
+        if result["manifest_digest_sha256"] != expected_digest:
+            raise ContractError("research result manifest digest mismatch")
+        relative_path = _result_relative_path(
+            result["request_content_generation_id"],
+            result["run_id"],
+            result["result_content_generation_id"],
+        )
+        path = self._atomic_write(relative_path, result)
+        return PublishedResult(
+            manifest_path=path,
+            manifest_digest_sha256=result["manifest_digest_sha256"],
+        )
 
     def read_result(self, result_generation_id: str, manifest_digest_sha256: str) -> Mapping[str, Any]:
-        raise ContractError("research result read is not enabled until Phase 5")
+        base = self.root / "research_runs" / "results"
+        matches = [
+            path.parent
+            for path in base.glob(f"request=*/run=*/result={result_generation_id}/manifest.json")
+            if base.exists()
+        ]
+        if not matches:
+            raise ContractError(f"unpublished research result: {result_generation_id}")
+        if len(matches) > 1:
+            raise ContractError(f"ambiguous research result: {result_generation_id}")
+        result = _read_json(matches[0] / "manifest.json")
+        ModelContractLoader.validate("research_run_result", result)
+        expected_generation, expected_digest = research_contract_identities(
+            result, schema_name="research_run_result"
+        )
+        if result["result_content_generation_id"] != result_generation_id:
+            raise ContractError("research result generation mismatch")
+        if result["result_content_generation_id"] != expected_generation:
+            raise ContractError("research result stable content identity mismatch")
+        if result["manifest_digest_sha256"] != manifest_digest_sha256:
+            raise ContractError("research result manifest digest mismatch")
+        if result["manifest_digest_sha256"] != expected_digest:
+            raise ContractError("research result manifest digest mismatch")
+        result_binding = result["stage_records"][-1]["output_bindings"][-1]
+        if result_binding["output_family"] != "research_run_result":
+            raise ContractError("research result reconciliation binding is missing")
+        if result_binding["generation_id"] != result_generation_id:
+            raise ContractError("research result reconciliation generation mismatch")
+        if result_binding["manifest_digest_sha256"] != manifest_digest_sha256:
+            raise ContractError("research result reconciliation digest mismatch")
+        if not any(value == "passed" for value in result["readback_status"].values()):
+            raise ContractError("research result has no passed readback evidence")
+        return result
 
     def _atomic_write(self, relative_path: Path, document: Mapping[str, Any]) -> Path:
         absolute_path = self.root / relative_path
@@ -380,10 +434,15 @@ class FileResearchRunStore:
         validate_research_layout(
             absolute_path,
             data_root=self.root,
-            kind="request" if relative_path.parts[1] == "requests" else "state",
+            kind=(
+                "request" if relative_path.parts[1] == "requests"
+                else "result" if relative_path.parts[1] == "results"
+                else "state"
+            ),
             request_generation_id=document["request_content_generation_id"],
             run_id=document["run_id"],
             stage=stage,
+            result_generation_id=document.get("result_content_generation_id"),
             require_parent=False,
         )
         absolute_path.parent.mkdir(parents=True, exist_ok=False)
@@ -530,6 +589,15 @@ def _state_relative_path(request_generation_id: str, run_id: str, stage: str) ->
     return (
         Path("research_runs") / "states" / f"request={request_generation_id}"
         / f"run={run_id}" / f"stage={stage_number}" / "manifest.json"
+    )
+
+
+def _result_relative_path(
+    request_generation_id: str, run_id: str, result_generation_id: str
+) -> Path:
+    return (
+        Path("research_runs") / "results" / f"request={request_generation_id}"
+        / f"run={run_id}" / f"result={result_generation_id}" / "manifest.json"
     )
 
 

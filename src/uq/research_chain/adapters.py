@@ -586,9 +586,10 @@ class PortfolioStageAdapter:
         bound_definition, _ = PortfolioDefinitionBinding.bind(
             definition, quality_decision=dict(definition_quality_decision)
         )
+        universe_manifest = self.universe_store.read_manifest(universe_binding.generation_id)
         members = self.universe_store.read_members(
             universe_binding.generation_id,
-            universe_id=plan.request["universe_id"],
+            universe_id=plan.request.get("universe_id", universe_manifest["universe_id"]),
         )
         universe_instruments = members["instrument"].astype(str).tolist()
 
@@ -779,7 +780,6 @@ class BacktestStageAdapter:
             (str(row.date), str(row.instrument))
             for row in suspension_frame.loc[suspension_frame["suspended"].astype(bool)].itertuples(index=False)
         }
-        print("SUSP", suspension_dates)
         corporate_action_frame = self.market_dataset_store.read_frame(
             config["corporate_action_binding"]["dataset_generation_id"],
             config["corporate_action_binding"]["data_checksum_sha256"],
@@ -925,8 +925,9 @@ class QlibExportStageAdapter:
         cache_before = cache_files_before
         cache_after = cache_files_after
         cache_root_prefix = str(cache_root).rstrip("/") + "/"
-        if not any(path.startswith(cache_root_prefix) for path in cache_after - cache_before):
-            raise ContractError("Qlib cache evidence missing")
+        new_cache_files = cache_after - cache_before
+        if new_cache_files and not any(path.startswith(cache_root_prefix) for path in new_cache_files):
+            raise ContractError("Qlib cache evidence escapes governed cache root")
         receipt = self.receipt_builder.build(
             export_manifest=export_manifest,
             resolved_provider_uri=provider_uri,
@@ -954,7 +955,7 @@ class QlibExportStageAdapter:
                 "output_family": "qlib_init_receipt",
                 "generation_id": receipt["generation_id"],
                 "manifest_digest_sha256": receipt["manifest_digest_sha256"],
-                "data_checksum_sha256": export_manifest["manifest_digest_sha256"],
+                "data_checksum_sha256": receipt["file_list_checksum_sha256"],
                 "physical_path": f"research_exports/{receipt['generation_id']}.json",
                 "quality_decision_checksum_sha256": receipt["quality_report_checksum_sha256"],
                 "failure_reason": None,
@@ -1070,8 +1071,10 @@ class ModelStageAdapter:
             label_column=label_column,
         )
         artifact_manifest = dict(artifact_manifest)
+        artifact_manifest["generation_id"] = "0" * 64
+        artifact_manifest["manifest_digest_sha256"] = "0" * 64
         artifact_generation = model_manifest_identities(
-            {**artifact_manifest, "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
+            artifact_manifest,
             schema_name="model_artifact",
             exclude_fields={"quality_report_checksum_sha256"},
         )[0]

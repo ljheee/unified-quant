@@ -127,15 +127,15 @@ class DatasetBuilder:
             "code_fingerprint": self.code_fingerprint,
             "serialization_profile_id": "parquet-v1",
             "quality_report_checksum_sha256": "0" * 64,
-            "run_id": str(uuid.uuid4()),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "run_id": "00000000-0000-4000-8000-000000000000",
+            "created_at": "1970-01-01T00:00:00+00:00",
         }
         manifest["generation_id"] = "0" * 64
         manifest["manifest_digest_sha256"] = "0" * 64
         generation_id, manifest_digest = model_manifest_identities(
             manifest,
             schema_name="model_dataset",
-            exclude_fields={"logical_fingerprint", "quality_report_checksum_sha256"},
+            exclude_fields={"input_feature_schema_manifest_digest_sha256", "logical_fingerprint", "quality_report_checksum_sha256"},
         )
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest

@@ -188,7 +188,7 @@ def _dataset_plan(factor_manifest: dict, universe_manifest: dict, adjusted_manif
         stage_plan_sha256="0" * 64,
         stage_bindings=(
             ResolvedStageBinding(stage="factor_computation", output_family="factor_partition", generation_id=factor_manifest["generation_id"], manifest_digest_sha256=factor_manifest["manifest_digest_sha256"], data_checksum_sha256=factor_manifest["data_checksum_sha256"]),
-            ResolvedStageBinding(stage="factor_computation", output_family="universe_snapshot", generation_id=universe_manifest["generation_id"], manifest_digest_sha256=universe_manifest["manifest_digest_sha256"], data_checksum_sha256=universe_manifest["members_artifact"]["checksum_sha256"]),
+            ResolvedStageBinding(stage="factor_computation", output_family="universe_snapshot", generation_id=universe_manifest["generation_id"], manifest_digest_sha256=universe_manifest["generation_id"], data_checksum_sha256=universe_manifest["members_artifact"]["checksum_sha256"]),
             ResolvedStageBinding(stage="dataset_preparation", output_family="adjusted_price_dataset", generation_id=adjusted_manifest["generation_id"], manifest_digest_sha256=adjusted_manifest["manifest_digest_sha256"], data_checksum_sha256=adjusted_manifest["data_checksum_sha256"]),
             ResolvedStageBinding(stage="dataset_preparation", output_family="label_set", generation_id=label_manifest["generation_id"], manifest_digest_sha256=label_manifest["manifest_digest_sha256"], data_checksum_sha256=label_manifest["data_checksum_sha256"]),
             ResolvedStageBinding(stage="dataset_preparation", output_family="feature_preprocessing", generation_id=preprocessing["generation_id"], manifest_digest_sha256=preprocessing["manifest_digest_sha256"], data_checksum_sha256=preprocessing["output_frame_sha256"]),
@@ -323,7 +323,7 @@ def _prepare_dataset_store(tmp_path: Path) -> tuple[DatasetStageAdapter, Resolve
     preprocessing = {**preprocessing, "quality_report_checksum_sha256": bound_preprocessing["report_checksum_sha256"]}
     from uq.contracts.model_layer import model_manifest_identities
     preprocessing["generation_id"], preprocessing["manifest_digest_sha256"] = model_manifest_identities(
-        preprocessing, schema_name="feature_preprocessing", exclude_fields={"quality_report_checksum_sha256"}
+        preprocessing, schema_name="feature_preprocessing", exclude_fields={"quality_report_checksum_sha256", "input_feature_schema_manifest_digest_sha256"}
     )
     preprocessing_directory = feature_store_root / "feature_preprocessing" / f"generation={preprocessing['generation_id']}"
     preprocessing_directory.mkdir(parents=True)

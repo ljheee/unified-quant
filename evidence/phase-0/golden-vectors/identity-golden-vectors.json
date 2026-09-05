@@ -1,9 +1,15 @@
 {
+  "feature_preprocessing": {
+    "changed_run_generation_matches": true,
+    "generation_id": "df2b12fb19b6407b1caf188f8442e4a05721c8f3e1c496cceab6dec77a4c8316",
+    "manifest_digest_sha256": "aac3e067b07f70eabe8ad5be921f241d04412126f25be372eeef9ef97cf71dfa",
+    "run_metadata_change_stable": true,
+    "valid_fixture": "evidence/phase-0/fixtures/feature_preprocessing-valid.json"
+  },
   "label_set": {
     "changed_run_generation_matches": true,
     "generation_id": "37c98e4d96208eb286664025c0b8e3f4f95944b6dc6fb2c1abcfed165b914d20",
     "manifest_digest_sha256": "79d4527d45b4fb72ca49562659ffb13f099024b075af56f97efab2af1450d098",
-    "negative_fixture": "evidence/phase-0/fixtures/label_set-negative.json",
     "run_metadata_change_stable": true,
     "valid_fixture": "evidence/phase-0/fixtures/label_set-valid.json"
   },
@@ -11,23 +17,20 @@
     "changed_run_generation_matches": true,
     "generation_id": "8e72c709c75e748fea2df9642ca47fb8d2b0d92f21d9db5ef2f168ab0ae1db73",
     "manifest_digest_sha256": "ff279506436f2671b62af3acc4052faa49d272ce1029ee20023f0ac8a02136c9",
-    "negative_fixture": "evidence/phase-0/fixtures/model_artifact-negative.json",
     "run_metadata_change_stable": true,
     "valid_fixture": "evidence/phase-0/fixtures/model_artifact-valid.json"
   },
   "model_dataset": {
     "changed_run_generation_matches": true,
-    "generation_id": "0488a2d857756ce5692a9c53ad7eb02fd08c71b3507becdd513a18ed93e98987",
-    "manifest_digest_sha256": "97cb0d8e76566fb64d382027aaba66b05ccb7e2d4cd9fa63622def3f8f81ac71",
-    "negative_fixture": "evidence/phase-0/fixtures/model_dataset-negative.json",
+    "generation_id": "971f5cb0f8cb505888fdab43469eb1b081bd5b86ad10e0f5dc416bae3f011a00",
+    "manifest_digest_sha256": "9f551ec3256ce68c5769e0406c736ac5cd1b0f70de2c5d640307cb99fdf4a50b",
     "run_metadata_change_stable": true,
     "valid_fixture": "evidence/phase-0/fixtures/model_dataset-valid.json"
   },
   "model_definition": {
     "changed_run_generation_matches": true,
-    "generation_id": "433f75b95b43e0005c719e8ca1364328b470891a2b148877fbe030baaae14089",
-    "manifest_digest_sha256": "9bbd3af258aecea186489d17734097005dc5b3c3eb0433bfd3720b0670b851b3",
-    "negative_fixture": "evidence/phase-0/fixtures/model_definition-negative.json",
+    "generation_id": "1d69ea4d0948a9646cbbaca9b023a205d5d78b9691407f518feba8818cf0b8d0",
+    "manifest_digest_sha256": "ffe555ef3dcf6c77d4b1d39587b6defca120dc8ce1e55166a364ff743755d586",
     "run_metadata_change_stable": true,
     "valid_fixture": "evidence/phase-0/fixtures/model_definition-valid.json"
   },
@@ -35,7 +38,6 @@
     "changed_run_generation_matches": true,
     "generation_id": "ba11188228efee00dfd065c4919ce03ef267e51255aae2340f1a2b4c9ce648ac",
     "manifest_digest_sha256": "8196b9932477edbf98c14554b2339c2968fc594e851a7087f17a275be3feda2e",
-    "negative_fixture": "evidence/phase-0/fixtures/model_run-negative.json",
     "run_metadata_change_stable": true,
     "valid_fixture": "evidence/phase-0/fixtures/model_run-valid.json"
   },
@@ -43,32 +45,21 @@
     "changed_run_generation_matches": true,
     "generation_id": "4630b50fc640d9c2bbdc6befa728be6c4f4486ffcd1d5dfa39c2ad4d497b6727",
     "manifest_digest_sha256": "721eaee6f5af0392c5ae5018527e95c9d283ab647ce284057bd5dc58bcd94cb7",
-    "negative_fixture": "evidence/phase-0/fixtures/prediction_set-negative.json",
     "run_metadata_change_stable": true,
     "valid_fixture": "evidence/phase-0/fixtures/prediction_set-valid.json"
   },
   "qlib_dataset_export": {
     "changed_run_generation_matches": true,
-    "generation_id": "319b184585a6744f03c7dde7d59fa80739972e17e1d8a64edfe3aabed3197e86",
-    "manifest_digest_sha256": "8c242472fafd6bbaefb0f0a592add87cef07f73dac35d75d951ce98ae870cd58",
-    "negative_fixture": "evidence/phase-0/fixtures/qlib_dataset_export-negative.json",
+    "generation_id": "1045f18be64353305e1757e7421e642126c4695b5da41cdaf355d0e270309558",
+    "manifest_digest_sha256": "b8952d144becaf6f72d89890431886e28a3e4ca5e09c0f360adc1f5acc1e2965",
     "run_metadata_change_stable": true,
     "valid_fixture": "evidence/phase-0/fixtures/qlib_dataset_export-valid.json"
   },
   "qlib_init_receipt": {
     "changed_run_generation_matches": true,
-    "generation_id": "bb2ab76cd8621be53902f5f3b7c055bf041b99eb4fb961c200214f08775bb665",
-    "manifest_digest_sha256": "ab7591b90d77a94b4b66aa45ba01141edeb9529b312df877b326c90fc86e39ec",
-    "negative_fixture": "evidence/phase-0/fixtures/qlib_init_receipt-negative.json",
+    "generation_id": "83c64488f64e8d8ede3489d3db4ac2f3888d766ea55e701c307fbe08822454cd",
+    "manifest_digest_sha256": "1a418a734e5892175661d92402e70f5cf41186f942858a531947d5c50f897f76",
     "run_metadata_change_stable": true,
     "valid_fixture": "evidence/phase-0/fixtures/qlib_init_receipt-valid.json"
-  },
-  "feature_preprocessing": {
-    "changed_run_generation_matches": true,
-    "generation_id": "e3c4f9ec45ad18956c911b089b80984cce6dddf6644bc51f559ab02f61b19781",
-    "manifest_digest_sha256": "a5a6e9cb88a6517c12f286c248df556c0e9a0ce2c0f6e9dfc04053678fdf3be1",
-    "negative_fixture": "evidence/phase-0/fixtures/feature_preprocessing-negative.json",
-    "run_metadata_change_stable": true,
-    "valid_fixture": "evidence/phase-0/fixtures/feature_preprocessing-valid.json"
   }
 }

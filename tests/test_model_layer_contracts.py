@@ -216,7 +216,11 @@ def _extended_document(schema_name: str) -> dict:
 @pytest.mark.parametrize("schema_name", ["model_run", "qlib_dataset_export", "qlib_init_receipt", "prediction_set"])
 def test_remaining_manifest_families_have_representative_and_negative_coverage(schema_name: str) -> None:
     document = _extended_document(schema_name)
-    validate_contract(f"{schema_name}.v1.json", document)
+    if schema_name in {"qlib_dataset_export", "qlib_init_receipt"}:
+        document["contract_version"] = 2
+        document.pop("run_id", None)
+        document.pop("created_at", None)
+    validate_contract(f"{schema_name}.v2.json" if schema_name in {"qlib_dataset_export", "qlib_init_receipt"} else f"{schema_name}.v1.json", document)
     generation, digest = model_manifest_identities(document, schema_name=schema_name)
     assert generation != digest
     invalid = copy.deepcopy(document)
@@ -229,14 +233,18 @@ def test_remaining_manifest_families_have_representative_and_negative_coverage(s
     else:
         invalid["determinism_controls"]["threads"] = 0
     with pytest.raises(ContractError):
-        validate_contract(f"{schema_name}.v1.json", invalid)
+        validate_contract(f"{schema_name}.v2.json" if schema_name in {"qlib_dataset_export", "qlib_init_receipt"} else f"{schema_name}.v1.json", invalid)
 
 
 def test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root(tmp_path: Path) -> None:
     loader = ModelContractLoader(accepted_root=tmp_path / "accepted")
     accepted = tmp_path / "accepted"; accepted.mkdir()
     document = base_document("model_definition")
-    generation, digest = model_manifest_identities(document, schema_name="model_definition")
+    generation, digest = model_manifest_identities(
+        document,
+        schema_name="model_definition",
+        exclude_fields=_QUALITY_BOUND_FIELDS["model_definition"],
+    )
     document["generation_id"] = generation; document["manifest_digest_sha256"] = digest
     path = accepted / "definition.json"; path.write_text(json.dumps(document))
     assert loader.load("model_definition", path)["generation_id"] == generation
@@ -304,8 +312,14 @@ def test_golden_vectors_cover_all_manifest_families() -> None:
             exclude_fields.add("logical_fingerprint")
         elif family in {"feature_schema", "accepted_factor_index_query", "accepted_factor_index_response"}:
             exclude_fields = set()
+        digest_exclude_fields = set()
+        if family == "qlib_dataset_export":
+            digest_exclude_fields = {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"}
+        elif family == "qlib_init_receipt":
+            digest_exclude_fields = {"export_manifest_digest_sha256", "resolved_provider_uri_sha256", "cache_root"}
         expected_generation, expected_digest = model_manifest_identities(
-            fixture, schema_name=family, exclude_fields=exclude_fields
+            fixture, schema_name=family, exclude_fields=exclude_fields,
+            digest_exclude_fields=digest_exclude_fields,
         )
         assert fixture["generation_id"] == entry["generation_id"] == expected_generation
         assert fixture["manifest_digest_sha256"] == entry["manifest_digest_sha256"] == expected_digest
@@ -369,7 +383,7 @@ def test_feature_preprocessing_manifest_digest_anchors_quality_report_checksum()
     changed["quality_report_checksum_sha256"] = "2" * 64
     generation, digest = model_manifest_identities(
         changed, schema_name="feature_preprocessing",
-        exclude_fields={"quality_report_checksum_sha256"},
+        exclude_fields={"input_feature_schema_manifest_digest_sha256", "quality_report_checksum_sha256"},
     )
     changed["generation_id"] = generation
     changed["manifest_digest_sha256"] = digest

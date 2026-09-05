@@ -513,5 +513,5 @@ def test_missing_store_and_overwrite_are_fail_closed(tmp_path: Path) -> None:
     store.publish_request(request, path_policy="strict_v1")
     with pytest.raises(ContractError, match="immutable research manifest already exists"):
         store.publish_request(request, path_policy="strict_v1")
-    with pytest.raises(ContractError, match="Phase 5"):
+    with pytest.raises(ContractError, match="required property"):
         store.publish_result({}, path_policy="strict_v1")

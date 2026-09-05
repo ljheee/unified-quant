@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from datetime import date, datetime
 from typing import Any
 
 import jsonschema
@@ -15,8 +16,16 @@ _CACHE: dict[str, jsonschema.Draft202012Validator] = {}
 
 
 def canonical_json(value: Any) -> bytes:
+    def normalize(item: Any) -> Any:
+        if isinstance(item, dict):
+            return {key: normalize(child) for key, child in item.items()}
+        if isinstance(item, list):
+            return [normalize(child) for child in item]
+        if isinstance(item, (date, datetime)):
+            return item.isoformat()
+        return item
     return json.dumps(
-        value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        normalize(value), sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False
     ).encode("utf-8")
 
 

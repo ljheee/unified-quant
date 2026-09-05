@@ -210,7 +210,7 @@ def test_manifest_identity_is_stable_across_run_metadata() -> None:
     second["generation_id"] = "0" * 64
     second["manifest_digest_sha256"] = "0" * 64
     second["generation_id"], second["manifest_digest_sha256"] = model_manifest_identities(
-        second, schema_name="feature_preprocessing", exclude_fields={"quality_report_checksum_sha256"}
+        second, schema_name="feature_preprocessing", exclude_fields={"input_feature_schema_manifest_digest_sha256", "quality_report_checksum_sha256"}
     )
     assert second["generation_id"] == first["generation_id"]
     ModelContractLoader.validate("feature_preprocessing", second)
@@ -545,7 +545,7 @@ def test_quality_report_checksum_changes_manifest_digest_but_not_generation() ->
     second["quality_report_checksum_sha256"] = "2" * 64
     second["generation_id"], second["manifest_digest_sha256"] = model_manifest_identities(
         second, schema_name="feature_preprocessing",
-        exclude_fields={"quality_report_checksum_sha256"},
+        exclude_fields={"input_feature_schema_manifest_digest_sha256", "quality_report_checksum_sha256"},
     )
     assert second["generation_id"] == first["generation_id"]
     assert second["manifest_digest_sha256"] != first["manifest_digest_sha256"]

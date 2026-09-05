@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0–4 exited after local and remote gate evidence; Phase 5 is the next runtime phase**
+Status: **gated implementation order v0.6; Phase 0–4 exited; Phase 5 implementation is local-gate green and pending remote evidence**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -324,10 +324,10 @@ test node IDs before their owning phase exits.
 | RC4a | 4 | `tests/test_research_chain_phase4.py::test_portfolio_stage_binds_prediction_and_universe` + `tests/test_research_chain_phase4.py::test_portfolio_chain_links_previous_target_generation` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/implementation-gate-reports/gate-report.json` | passed |
 | RC4b | 4 | `tests/test_research_chain_phase4.py::test_backtest_stage_publishes_ordered_weight_lineage` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/implementation-gate-reports/gate-report.json` | passed |
 | RC4c | 4 | `tests/test_research_chain_phase4.py::test_portfolio_prediction_binding_mismatch_fails` + `tests/test_research_chain_phase4.py::test_portfolio_weight_overwrite_fails` + `tests/test_research_chain_phase4.py::test_wrong_portfolio_quality_decision_fails` + `tests/test_research_chain_phase4.py::test_backtest_rejects_corporate_action_overlap` + `tests/test_research_chain_phase4.py::test_backtest_rejects_tampered_price_panel` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/final-head-ci/33951272818/aggregated-gates.json` | passed |
-| RC5a | 5 | `planned:test_full_research_chain_end_to_end` | `planned:phase-5/fixtures/full-run.json` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
-| RC5b | 5 | `planned:test_every_stage_failure_stops_later_stages` | `planned:phase-5/fixtures/` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
-| RC5c | 5 | `planned:test_cli_dry_run_and_execute_modes` | `planned:phase-5/fixtures/` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
-| RC5d | 5 | `planned:test_locked_environment_rebuild_is_reproducible` | `planned:phase-5/fixtures/` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
+| RC5a | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed-local; remote pending |
+| RC5b | 5 | `tests/test_research_chain_phase5.py::test_failed_stage_stops_run_and_publishes_failure` + `tests/test_research_chain_phase5.py::test_every_stage_failure_stops_later_stages` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed-local; remote pending |
+| RC5c | 5 | `tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state` + `tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed-local; remote pending |
+| RC5d | 5 | `tests/test_research_chain_phase5.py::test_locked_environment_rebuild_is_reproducible` | `evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed-local; remote pending |
 | RC6a | 6 | `scripts/run_gate.sh` | `evidence/research-chain/release/final-gate-report.json` | `evidence/research-chain/release/final-gate-report.json` | blocked |
 | RC6b | 6 | `github-actions:10-cell unified gate` | `evidence/research-chain/release/remote-matrix/` | `evidence/research-chain/release/remote-matrix/` | blocked |
 
@@ -343,6 +343,6 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Implement the Phase 5 runner, result reconciliation, CLI, and end-to-end gate in dependency order.
-2. Expand RC5a/b/c/d into concrete test IDs and fixture paths before runtime.
+1. Push the Phase 5 local-gate green implementation.
+2. Collect the remote 10-cell unified-gate evidence on that implementation HEAD.
 3. Require governed market/calendar/suspension/corporate-action bindings before any backtest execution.

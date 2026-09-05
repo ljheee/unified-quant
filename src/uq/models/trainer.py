@@ -67,8 +67,8 @@ class ModelTrainer:
             "runtime_import_path": "uq.models.trainer",
             "model_run_content_generation_id": run_content_generation_id,
             "serialization_profile_id": "json-numpy-v1",
-            "run_id": str(uuid.uuid4()),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "run_id": "00000000-0000-4000-8000-000000000000",
+            "created_at": "1970-01-01T00:00:00+00:00",
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
@@ -308,7 +308,9 @@ class ModelRunBuilder:
         bound_definition["generation_id"] = "0" * 64
         bound_definition["manifest_digest_sha256"] = "0" * 64
         definition_generation_id, definition_manifest_digest = model_manifest_identities(
-            bound_definition, schema_name="model_definition"
+            bound_definition,
+            schema_name="model_definition",
+            exclude_fields={"quality_report_checksum_sha256", "model_run_content_generation_id"},
         )
         bound_definition["generation_id"] = definition_generation_id
         bound_definition["manifest_digest_sha256"] = definition_manifest_digest
@@ -326,8 +328,8 @@ class ModelRunBuilder:
             "reproducibility_mode": reproducibility_mode,
             "quality_report_checksum_sha256": "0" * 64,
             **({"logical_tolerance": 1e-12} if reproducibility_mode == "logical_fingerprint" else {}),
-            "run_id": str(uuid.uuid4()),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "run_id": "00000000-0000-4000-8000-000000000000",
+            "created_at": "1970-01-01T00:00:00+00:00",
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }

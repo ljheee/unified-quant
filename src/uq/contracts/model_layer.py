@@ -35,11 +35,12 @@ _SCHEMA_NAMES = {
 }
 _RUN_LOCAL_FIELDS = {"run_id", "created_at"}
 _QUALITY_BOUND_FIELDS = {
-    "model_dataset": {"quality_report_checksum_sha256", "logical_fingerprint"},
-    "feature_preprocessing": {"quality_report_checksum_sha256"},
+    "model_dataset": {"quality_report_checksum_sha256", "logical_fingerprint", "input_feature_schema_manifest_digest_sha256"},
+    "feature_preprocessing": {"quality_report_checksum_sha256", "input_feature_schema_manifest_digest_sha256"},
+    "model_definition": {"quality_report_checksum_sha256", "model_run_content_generation_id"},
     "model_run": {"quality_report_checksum_sha256"},
-    "qlib_dataset_export": {"export_layout", "quality_report_checksum_sha256"},
-    "qlib_init_receipt": {"quality_report_checksum_sha256"},
+    "qlib_dataset_export": {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
+    "qlib_init_receipt": {"quality_report_checksum_sha256", "resolved_provider_uri_sha256", "cache_root"},
     "prediction_set": {"quality_report_checksum_sha256"},
 }
 _MODEL_CONTRACT_FAMILIES = {*_SCHEMA_NAMES, "model_quality_report"}
@@ -58,7 +59,10 @@ _ORDERING_FIELDS = ("factor_set", "factor_version", "partition_date", "generatio
 _RESEARCH_IDENTITY_EXCLUDED_FIELDS = {
     "research_run_request": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
     "research_run_state": {"state_content_generation_id", "manifest_digest_sha256"},
-    "research_run_result": {"result_content_generation_id", "manifest_digest_sha256", "request_manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
+    "research_run_result": {
+        "result_content_generation_id", "manifest_digest_sha256",
+        "request_manifest_digest_sha256", *_RUN_LOCAL_FIELDS,
+    },
     "model_definition_template": {"template_generation_id", "template_manifest_digest_sha256"},
     "dataset_policy_template": {"template_generation_id", "template_manifest_digest_sha256"},
     "portfolio_definition_template": {"template_generation_id", "template_manifest_digest_sha256"},
@@ -99,8 +103,9 @@ def model_manifest_identities(
     *,
     schema_name: str,
     exclude_fields: set[str] | None = None,
+    digest_exclude_fields: set[str] | None = None,
 ) -> tuple[str, str]:
-    """Return stable content generation and complete manifest digest."""
+    """Return stable content generation and manifest digest."""
     if schema_name not in _SCHEMA_NAMES:
         raise ContractError(f"unknown model contract family: {schema_name}")
     document = dict(payload)
@@ -112,7 +117,12 @@ def model_manifest_identities(
     excluded_fields = _RUN_LOCAL_FIELDS | (exclude_fields or set())
     generation_payload = {key: value for key, value in document.items() if key not in excluded_fields}
     generation_id = sha256_json(generation_payload)
-    manifest_digest = sha256_json({**document, "generation_id": generation_id})
+    digest_document = {**document, "generation_id": generation_id}
+    digest_document = {
+        key: value for key, value in digest_document.items()
+        if key not in (digest_exclude_fields or set())
+    }
+    manifest_digest = sha256_json(digest_document)
     return generation_id, manifest_digest
 
 
@@ -144,6 +154,9 @@ def validate_quality_decision_owning_report(report: Mapping[str, Any]) -> str:
 def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
     if schema_name == "model_dataset":
         validate_contract("model_dataset.v1.json", payload)
+        return
+    if schema_name in {"qlib_dataset_export", "qlib_init_receipt"} and payload.get("contract_version") == 2:
+        validate_contract(f"{schema_name}.v2.json", payload)
         return
     if schema_name == "model_quality_report":
         validate_contract("model_quality_report.v2.json", payload)
@@ -179,6 +192,29 @@ def _without_physical_path(value: Any) -> Any:
     return value
 
 
+def _without_result_self_identity(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_without_result_self_identity(item) for item in value]
+    if isinstance(value, dict):
+        output = {}
+        for key, item in value.items():
+            if (
+                key in {"generation_id", "manifest_digest_sha256"}
+                and isinstance(item, dict)
+                and item.get("output_family") == "research_run_result"
+            ):
+                continue
+            if (
+                key == "quality_decision_checksum_sha256"
+                and isinstance(item, str)
+                and value.get("output_family") == "research_run_result"
+            ):
+                continue
+            output[key] = _without_result_self_identity(item)
+        return output
+    return value
+
+
 def research_contract_identities(
     payload: Mapping[str, Any],
     *,
@@ -211,12 +247,27 @@ def research_contract_identities(
     excluded_fields.add(content_field)
     excluded_fields.add(digest_field)
 
-    generation_document = _without_physical_path(document) if schema_name == "research_run_result" else document
+    generation_document = document
+    if schema_name == "research_run_result":
+        generation_document = _without_result_self_identity(_without_physical_path(document))
+        for stage_record in generation_document.get("stage_records", []):
+            if stage_record.get("stage") == "result_reconciliation":
+                stage_record["output_bindings"] = []
+                continue
+            for binding in stage_record.get("output_bindings", []):
+                if binding.get("output_family") == "research_run_result":
+                    binding["manifest_digest_sha256"] = ""
+                    binding["quality_decision_checksum_sha256"] = ""
     generation = sha256_json({
         key: value for key, value in generation_document.items() if key not in excluded_fields
     })
     digest_document = {key: value for key, value in document.items() if key != digest_field}
     digest_document[content_field] = generation
+    if schema_name == "research_run_result":
+        digest_document = _without_result_self_identity(_without_physical_path(digest_document))
+        for stage_record in digest_document.get("stage_records", []):
+            if stage_record.get("stage") == "result_reconciliation":
+                stage_record["output_bindings"] = []
     return generation, sha256_json(digest_document)
 
 
@@ -341,6 +392,9 @@ class ModelContractLoader:
             validate_contract(f"{schema_name}.v1.json", payload)
             if schema_name == "research_run_result":
                 _validate_stage_record_order(payload["stage_records"], require_complete=True, payload=payload)
+                expected_final_status = payload["stage_records"][-1]["status"]
+                if payload["final_status"] != expected_final_status:
+                    raise ContractError("research result final status mismatch")
             if schema_name == "research_run_state":
                 _validate_stage_record_order(payload["stage_records"], require_complete=False, payload=payload)
             content_field = {
@@ -386,7 +440,7 @@ class ModelContractLoader:
                 "research_run_result": "manifest_digest_sha256",
             }[schema_name]
             if payload[digest_field] != expected_digest:
-                raise ContractError(f"{schema_name} manifest digest mismatch")
+                raise ContractError(f"{schema_name} manifest digest mismatch expected={expected_digest} actual={payload['manifest_digest_sha256']}")
             return
         if schema_name not in _MODEL_CONTRACT_FAMILIES:
             raise ContractError(f"unknown model contract family: {schema_name}")
@@ -403,17 +457,27 @@ class ModelContractLoader:
             exclude_fields = set()
         else:
             exclude_fields = _QUALITY_BOUND_FIELDS.get(schema_name, {"quality_report_checksum_sha256"}).copy()
+        digest_exclude_fields: set[str] = set()
+        if schema_name == "qlib_dataset_export":
+            digest_exclude_fields = {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"}
+        elif schema_name == "qlib_init_receipt":
+            digest_exclude_fields = {"export_manifest_digest_sha256", "resolved_provider_uri_sha256", "cache_root"}
         if schema_name == "model_dataset":
             exclude_fields.add("logical_fingerprint")
         elif schema_name in {"accepted_factor_index_query", "accepted_factor_index_response", "feature_schema"}:
             exclude_fields = set()
         expected_generation, expected_digest = model_manifest_identities(
-            payload, schema_name=schema_name, exclude_fields=exclude_fields
+            payload, schema_name=schema_name, exclude_fields=exclude_fields,
+            digest_exclude_fields=digest_exclude_fields,
         )
         if payload["generation_id"] != expected_generation:
-            raise ContractError(f"{schema_name} stable generation mismatch")
+            raise ContractError(
+                f"{schema_name} stable generation mismatch expected={expected_generation} actual={payload['generation_id']}"
+            )
         if payload["manifest_digest_sha256"] != expected_digest:
-            raise ContractError(f"{schema_name} manifest digest mismatch")
+            raise ContractError(
+                f"{schema_name} manifest digest mismatch expected={expected_digest} actual={payload['manifest_digest_sha256']}"
+            )
 
 
 class ModelQualityReviewTrustAnchor:

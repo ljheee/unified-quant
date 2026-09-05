@@ -1,0 +1,1 @@
+uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest

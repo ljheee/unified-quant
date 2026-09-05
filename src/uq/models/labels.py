@@ -139,8 +139,8 @@ class LabelBuilder:
             "logical_fingerprint": logical_fingerprint(output.rename(columns={"decision_date": "datetime"})),
             "code_fingerprint": self.code_fingerprint,
             "serialization_profile_id": "parquet-v1",
-            "run_id": str(uuid.uuid4()),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "run_id": "00000000-0000-4000-8000-000000000000",
+            "created_at": "1970-01-01T00:00:00+00:00",
         }
         manifest["generation_id"] = "0" * 64
         manifest["manifest_digest_sha256"] = "0" * 64

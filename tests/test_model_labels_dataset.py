@@ -85,8 +85,8 @@ class TestLabelBuilder:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
         m1 = builder.build(_adjusted_frame(), upstream_bindings=[_binding()])
         m2 = builder.build(_adjusted_frame(), upstream_bindings=[_binding()])
-        # run_id/created_at differ but generation should be same if content is same
-        assert m1["run_id"] != m2["run_id"]
+        assert m1["run_id"] == m2["run_id"]
+        assert m1["generation_id"] == m2["generation_id"]
 
     @pytest.mark.parametrize(
         "field",

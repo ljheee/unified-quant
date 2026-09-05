@@ -1,7 +1,8 @@
 {
   "contract_version": 1,
   "created_at": "2026-01-30T07:00:00+00:00",
-  "manifest_digest_sha256": "519d008107b4ea77885d3a5c7e837b62523db0da89634b6e7153d04146d982ab",
+  "final_status": "passed",
+  "manifest_digest_sha256": "66f9c0c69126c60226de9e03e095613a398e5036be6ea78ab7a1a942adfd24a3",
   "overall_logical_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
   "readback_status": {
     "backtest_result": "passed",
@@ -16,7 +17,7 @@
   },
   "request_content_generation_id": "44704900b4f0f88e34bc0324d74d72c84e1a2086be60b1b97e31f014efb23261",
   "request_manifest_digest_sha256": "68bf1158c4ee0d20d872763838776ed4d9f422d17e6cf90f9d69cd137c45abd1",
-  "result_content_generation_id": "7550aa76d38f86a6719cd423f3296cabbf69474c02fa48b917d26a3a22210e33",
+  "result_content_generation_id": "fa7201712c55398c9ad5ca8c31901227b36e8601c0e400ba4d6a224d89193678",
   "run_id": "00000000-0000-4000-8000-000000000001",
   "runner_identity": {
     "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",

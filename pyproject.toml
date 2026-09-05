@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 uq-ingest = "uq.cli:uq_ingest"
+uq-research-run = "uq.research_chain.cli:uq_research_run"
 
 [project.optional-dependencies]
 real = [

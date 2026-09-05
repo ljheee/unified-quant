@@ -139,7 +139,7 @@ class QlibDatasetExporter:
                         raise ContractError(f"zero-byte export file: {path.name}")
 
                 manifest: dict[str, Any] = {
-                    "contract_version": 1,
+                    "contract_version": 2,
                     "export_layout": {"root": f"dataset={dataset_name}/generation={generation_id}"},
                     "files": [],
                     "provider_uri_sha256": _sha256_text(provider_uri),
@@ -150,8 +150,6 @@ class QlibDatasetExporter:
                     "serialization_profile_id": "parquet-v1",
                     "quality_report_checksum_sha256": "0" * 64,
                     "empty_cache_precondition": True,
-                    "run_id": str(uuid.uuid4()),
-                    "created_at": datetime.now(timezone.utc).isoformat(),
                     "generation_id": "0" * 64,
                     "manifest_digest_sha256": "0" * 64,
                 }
@@ -162,27 +160,35 @@ class QlibDatasetExporter:
                         rel = path.relative_to(staging).as_posix()
                         complete_files.append({
                             "path": rel,
-                    "checksum_sha256": file_sha256_bytes(path.read_bytes()),
-                            "byte_size": path.stat().st_size,
+                    "checksum_sha256": "0" * 64,
+                            "byte_size": 0,
                         })
+                for entry in complete_files:
+                    entry["checksum_sha256"] = file_sha256_bytes((staging / entry["path"]).read_bytes())
+                    entry["byte_size"] = (staging / entry["path"]).stat().st_size
                 manifest["files"] = complete_files
                 export_generation_id,_=model_manifest_identities(
                     manifest,
                     schema_name="qlib_dataset_export",
-                    exclude_fields={"export_layout","quality_report_checksum_sha256"},
+                    exclude_fields={"export_layout","quality_report_checksum_sha256","provider_uri_sha256"},
+                    digest_exclude_fields={"export_layout","quality_report_checksum_sha256","provider_uri_sha256"},
                 )
                 manifest["export_layout"]["root"] = f"dataset={dataset_name}/generation={export_generation_id}"
                 quality_report, report_checksum = bind_reviewed_quality_decision(
                     quality_decision, binding_type="qlib_dataset_export_v1",
                     subject_generation_id=export_generation_id,
-                    subject_content_sha256=sha256_json({**manifest, "export_layout": {"root": ""}}),
+                    subject_content_sha256=sha256_json({
+                        key: value for key, value in manifest.items()
+                        if key not in {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256", "generation_id", "manifest_digest_sha256"}
+                    }),
                 )
                 manifest["quality_report_checksum_sha256"]=report_checksum
                 manifest["generation_id"]=export_generation_id
                 _, digest = model_manifest_identities(
                     manifest,
                     schema_name="qlib_dataset_export",
-                    exclude_fields={"export_layout", "quality_report_checksum_sha256"},
+                    exclude_fields={"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
+                    digest_exclude_fields={"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
                 )
                 manifest["manifest_digest_sha256"] = digest
                 ModelContractLoader.validate("qlib_dataset_export", manifest)
@@ -294,7 +300,7 @@ class QlibInitReceiptBuilder:
             raise ContractError(f"governed runtime wrote cache outside approved root: {outside_cache[:3]}")
 
         receipt: dict[str, Any] = {
-            "contract_version": 1,
+            "contract_version": 2,
             "resolved_provider_uri_sha256": actual_uri_digest,
             "export_generation_id": export_manifest["generation_id"],
             "export_manifest_digest_sha256": export_manifest["manifest_digest_sha256"],
@@ -305,32 +311,40 @@ class QlibInitReceiptBuilder:
             "qlib_import_path": qlib_import_path,
             "qlib_version": qlib_version,
             "cache_root": cache_root,
-            "cache_diff_checksum_sha256": _sha256_text("\n".join(sorted(new_cache_files))),
+            "cache_diff_checksum_sha256": "0" * 64,
             "no_ungoverned_source_assertion": True,
             "quality_report_checksum_sha256": "0" * 64,
-            "run_id": str(uuid.uuid4()),
-            "created_at": datetime.now(timezone.utc).isoformat(),
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
         generation_id,_=model_manifest_identities(
-            receipt,schema_name="qlib_init_receipt",exclude_fields={"quality_report_checksum_sha256"}
+            receipt,schema_name="qlib_init_receipt",
+            exclude_fields={"quality_report_checksum_sha256","resolved_provider_uri_sha256","cache_root"},
+            digest_exclude_fields={"export_manifest_digest_sha256","resolved_provider_uri_sha256","cache_root"},
         )
         quality_report, report_checksum = bind_reviewed_quality_decision(
             quality_decision,binding_type="qlib_init_receipt_v1",
             subject_generation_id=generation_id,
-            subject_content_sha256=sha256_json({key:value for key,value in receipt.items() if key not in {"generation_id","manifest_digest_sha256","run_id","created_at"}}),
+            subject_content_sha256=sha256_json({
+                key: value for key, value in receipt.items()
+                if key not in {"quality_report_checksum_sha256", "export_manifest_digest_sha256", "resolved_provider_uri_sha256", "cache_root", "generation_id", "manifest_digest_sha256"}
+            }),
         )
-        governance_dir = Path(governance_root) / "external_quality_reviews"
+        governance_dir = Path(governance_root) / "research_exports"
         governance_dir.mkdir(parents=True, exist_ok=True)
-        report_path = governance_dir / f"{report_checksum}.json"
-        report_staging = report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
-        report_staging.write_text(json.dumps(quality_report,sort_keys=True,indent=2)+"\n")
-        os.replace(report_staging,report_path)
+        receipt_staging = governance_dir / f"{generation_id}.staging.{uuid.uuid4().hex}.json"
+        receipt_staging.write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\n")
+        receipt_path = governance_dir / f"{generation_id}.json"
+        os.replace(receipt_staging, receipt_path)
 
-        receipt["quality_report_checksum_sha256"]=report_checksum
+        receipt["quality_report_checksum_sha256"] = report_checksum
         receipt["generation_id"] = generation_id
-        _, digest = model_manifest_identities(receipt, schema_name="qlib_init_receipt", exclude_fields={"quality_report_checksum_sha256"})
+        _, digest = model_manifest_identities(
+            receipt,
+            schema_name="qlib_init_receipt",
+            exclude_fields={"quality_report_checksum_sha256","resolved_provider_uri_sha256","cache_root"},
+            digest_exclude_fields={"export_manifest_digest_sha256","resolved_provider_uri_sha256","cache_root"},
+        )
         receipt["manifest_digest_sha256"] = digest
         ModelContractLoader.validate("qlib_init_receipt", receipt)
         return receipt

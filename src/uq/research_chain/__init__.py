@@ -10,6 +10,7 @@ from .adapters import (
     QlibExportStageAdapter,
 )
 from .resolver import FileResearchRunStore
+from .runner import ResearchChainRunner
 from .resolver import (
     ResearchChainRequestResolver,
     ResearchResolutionError,
@@ -26,6 +27,7 @@ __all__ = [
     "PredictionStageAdapter",
     "QlibExportStageAdapter",
     "FileResearchRunStore",
+    "ResearchChainRunner",
     "ResearchChainRequestResolver",
     "ResearchResolutionError",
     "ResolvedExecutionPlan",

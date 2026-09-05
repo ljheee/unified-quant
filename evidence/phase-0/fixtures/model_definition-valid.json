@@ -7,11 +7,11 @@
   "contract_version": 1,
   "created_at": "2026-01-30T07:00:00+00:00",
   "feature_schema_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
-  "generation_id": "433f75b95b43e0005c719e8ca1364328b470891a2b148877fbe030baaae14089",
+  "generation_id": "1d69ea4d0948a9646cbbaca9b023a205d5d78b9691407f518feba8818cf0b8d0",
   "hyperparameters": {
     "alpha": 1.0
   },
-  "manifest_digest_sha256": "9bbd3af258aecea186489d17734097005dc5b3c3eb0433bfd3720b0670b851b3",
+  "manifest_digest_sha256": "ffe555ef3dcf6c77d4b1d39587b6defca120dc8ce1e55166a364ff743755d586",
   "metrics": [
     {
       "direction": "maximize",

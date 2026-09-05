@@ -68,12 +68,16 @@ class ModelDefinitionBuilder:
             "serializer_version": serializer_version,
             "model_run_content_generation_id": self.run_content_generation_id,
             "code_fingerprint": self.code_fingerprint,
-            "run_id": str(uuid.uuid4()),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "run_id": "00000000-0000-4000-8000-000000000000",
+            "created_at": "1970-01-01T00:00:00+00:00",
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
-        generation_id, manifest_digest = model_manifest_identities(manifest, schema_name="model_definition")
+        generation_id, manifest_digest = model_manifest_identities(
+            manifest,
+            schema_name="model_definition",
+            exclude_fields={"quality_report_checksum_sha256", "model_run_content_generation_id"},
+        )
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest
         ModelContractLoader.validate("model_definition", manifest)

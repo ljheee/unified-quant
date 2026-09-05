@@ -15,7 +15,8 @@
     "readback_status",
     "overall_logical_fingerprint",
     "result_content_generation_id",
-    "manifest_digest_sha256"
+    "manifest_digest_sha256",
+    "final_status"
   ],
   "properties": {
     "contract_version": {
@@ -226,6 +227,13 @@
     "result_artifact_digest_sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "final_status": {
+      "enum": [
+        "passed",
+        "warning",
+        "failed"
+      ]
     }
   },
   "$defs": {

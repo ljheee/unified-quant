@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unified-quant.local/schemas/contracts/qlib_dataset_export.v1.json",
-  "title": "Qlib governed dataset export manifest v1",
+  "$id": "https://unified-quant.local/schemas/contracts/qlib_dataset_export.v2.json",
+  "title": "Qlib governed dataset export manifest v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -21,7 +21,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": 1
+      "const": 2
     },
     "export_layout": {
       "type": "object",

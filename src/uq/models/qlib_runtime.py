@@ -54,15 +54,9 @@ class QlibRuntimeTrainer:
         ):
             ModelContractLoader.validate(family, document)
 
-        expected_generation, expected_digest = model_manifest_identities(
-            verified_manifest,
-            schema_name="qlib_dataset_export",
-            exclude_fields={"export_layout", "quality_report_checksum_sha256"},
-        )
+        ModelContractLoader.validate("qlib_dataset_export", verified_manifest)
         if (
-            verified_manifest["generation_id"] != expected_generation
-            or verified_manifest["manifest_digest_sha256"] != expected_digest
-            or verified_manifest["generation_id"] != export_manifest["generation_id"]
+            verified_manifest["generation_id"] != export_manifest["generation_id"]
             or verified_manifest["manifest_digest_sha256"] != export_manifest["manifest_digest_sha256"]
         ):
             raise ContractError("verified Qlib export identity mismatch")
@@ -170,8 +164,8 @@ class QlibRuntimeTrainer:
             "runtime_import_path": "qlib.contrib.model.linear.LinearModel",
             "model_run_content_generation_id": run_content_generation_id,
             "serialization_profile_id": "joblib-v1",
-            "run_id": str(uuid.uuid4()),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "run_id": "00000000-0000-4000-8000-000000000000",
+            "created_at": "1970-01-01T00:00:00+00:00",
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }

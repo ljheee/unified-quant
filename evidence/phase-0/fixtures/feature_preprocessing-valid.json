@@ -1,43 +1,43 @@
 {
+  "code_fingerprint": "752c5f5a645c9bd07f29166891bc9f7453885733e8790d4fabe9c90e1b92672f",
   "contract_version": 1,
-  "preprocess_name": "basic-standardized-v1",
-  "semantic_version": "1.0.0",
-  "input_factor_set": "basic",
-  "input_factor_version": "1.0.0",
+  "created_at": "2026-09-01T16:20:02.636623+00:00",
+  "generation_id": "df2b12fb19b6407b1caf188f8442e4a05721c8f3e1c496cceab6dec77a4c8316",
+  "group_columns": [
+    "datetime"
+  ],
   "input_factor_generation_ids": [
     "0000000000000000000000000000000000000000000000000000000000000000"
   ],
-  "input_frame_sha256": "17fca46e0213e21166e1dc230df10f18c7b15840f8fb241a9584964f6b036264",
+  "input_factor_set": "basic",
+  "input_factor_version": "1.0.0",
   "input_feature_schema_generation_id": "3c5d53241a47d8c8bc4b55e8775d3c72b5b92df4548283ea51d5ac72349504ac",
   "input_feature_schema_manifest_digest_sha256": "5fdbff2a7ccab62cd7c893bd0be3fbce95922106b7a613163dc7305fe63b4eaf",
-  "output_feature_schema_generation_id": "c5827983f0141f77b4fee3de22d8b88d37b4d4c2866276e1d29a04a8e1bd1133",
-  "output_feature_schema_manifest_digest_sha256": "ede0834c4cd156df12050c70051d1b2721fb9e5905999c9b875640cdf9d7d9f1",
-  "ordered_features": [
-    "volume_ratio_20d"
-  ],
+  "input_frame_sha256": "17fca46e0213e21166e1dc230df10f18c7b15840f8fb241a9584964f6b036264",
   "key_columns": [
     "instrument",
     "datetime"
   ],
-  "transform": "standardize_cross_section",
-  "policy": {
-    "type": "cross_sectional_stateless_v1",
-    "null_result": "preserve_null",
-    "min_group_observations": 2,
-    "standardization_ddof": 0,
-    "rank_method": "average",
-    "rank_ascending": true
-  },
-  "group_columns": [
-    "datetime"
+  "manifest_digest_sha256": "aac3e067b07f70eabe8ad5be921f241d04412126f25be372eeef9ef97cf71dfa",
+  "ordered_features": [
+    "volume_ratio_20d"
   ],
+  "output_feature_schema_generation_id": "c5827983f0141f77b4fee3de22d8b88d37b4d4c2866276e1d29a04a8e1bd1133",
+  "output_feature_schema_manifest_digest_sha256": "ede0834c4cd156df12050c70051d1b2721fb9e5905999c9b875640cdf9d7d9f1",
   "output_frame_row_count": 16,
   "output_frame_sha256": "e59d8f2d6cd3428061c313d73ea9a20bf43a728e7f29cf848365cbc8a3a81c2e",
-  "code_fingerprint": "752c5f5a645c9bd07f29166891bc9f7453885733e8790d4fabe9c90e1b92672f",
-  "serialization_profile_id": "parquet-snappy-v1",
+  "policy": {
+    "min_group_observations": 2,
+    "null_result": "preserve_null",
+    "rank_ascending": true,
+    "rank_method": "average",
+    "standardization_ddof": 0,
+    "type": "cross_sectional_stateless_v1"
+  },
+  "preprocess_name": "basic-standardized-v1",
   "quality_report_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "run_id": "e4a32e35-e08b-477c-85fc-a8a77ca5d397",
-  "created_at": "2026-09-01T16:20:02.636623+00:00",
-  "generation_id": "e3c4f9ec45ad18956c911b089b80984cce6dddf6644bc51f559ab02f61b19781",
-  "manifest_digest_sha256": "a5a6e9cb88a6517c12f286c248df556c0e9a0ce2c0f6e9dfc04053678fdf3be1"
+  "semantic_version": "1.0.0",
+  "serialization_profile_id": "parquet-snappy-v1",
+  "transform": "standardize_cross_section"
 }

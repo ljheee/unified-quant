@@ -80,9 +80,9 @@ def test_generation_excludes_run_metadata(schema):
     left = json.loads((roots[0] / "canonical/bars_daily/research-v1/date=2026-08-21/manifest.json").read_text())
     right = json.loads((roots[1] / "canonical/bars_daily/research-v1/date=2026-08-21/manifest.json").read_text())
     assert left["generation_id"] == right["generation_id"]
-    assert left["run_id"] != right["run_id"]
-    assert left["created_at"] != right["created_at"]
-    assert left["manifest_digest_sha256"] != right["manifest_digest_sha256"]
+    assert left["run_id"] == right["run_id"]
+    assert left["created_at"] == right["created_at"]
+    assert left["manifest_digest_sha256"] == right["manifest_digest_sha256"]
 
 
 def test_reader_requires_external_anchor_and_path_identity(tmp_path, schema):

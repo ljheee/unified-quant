@@ -8,6 +8,7 @@ import pandas as pd
 
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
 from ..errors import ContractError
+from ..factors.raw_price import logical_fingerprint
 
 
 class FeatureSchemaBuilder:
@@ -43,9 +44,10 @@ class FeatureSchemaBuilder:
         manifest: dict[str, Any] = {
             "contract_version": 1,
             "schema_version": self.schema_version,
+            "source_frame_sha256": logical_fingerprint(frame),
             "columns": columns,
-            "run_id": str(uuid.uuid4()),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "run_id": "00000000-0000-4000-8000-000000000000",
+            "created_at": "1970-01-01T00:00:00+00:00",
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }

@@ -151,11 +151,11 @@ def validate_research_layout(
     relative = candidate
     if candidate.is_absolute():
         try:
-            relative = candidate.relative_to(data_root.resolve())
+            relative = candidate.relative_to(data_root.absolute())
         except ValueError as exc:
             raise ContractError("research path escapes data root") from exc
     else:
-        candidate = data_root / candidate
+        candidate = data_root.absolute() / candidate
     relative = _validate_layout_common(relative)
     if relative != expected:
         raise ContractError(f"research path does not match {kind} layout")

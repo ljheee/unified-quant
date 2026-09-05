@@ -73,7 +73,7 @@ class DatasetWriter:
         generation_id, _ = model_manifest_identities(
             published_manifest,
             schema_name="model_dataset",
-            exclude_fields={"logical_fingerprint", "quality_report_checksum_sha256"},
+            exclude_fields={"input_feature_schema_manifest_digest_sha256", "logical_fingerprint", "quality_report_checksum_sha256"},
         )
         bound_report, report_checksum = bind_reviewed_quality_decision(
             quality_report, binding_type="model_dataset_v1",
@@ -92,7 +92,7 @@ class DatasetWriter:
             _, preprocessing_manifest["manifest_digest_sha256"] = model_manifest_identities(
                 preprocessing_manifest,
                 schema_name="feature_preprocessing",
-                exclude_fields={"quality_report_checksum_sha256"},
+                exclude_fields={"input_feature_schema_manifest_digest_sha256", "quality_report_checksum_sha256"},
             )
             ModelContractLoader.validate("feature_preprocessing", preprocessing_manifest)
         published_manifest["generation_id"] = generation_id
@@ -100,7 +100,7 @@ class DatasetWriter:
         _, manifest_digest = model_manifest_identities(
             published_manifest,
             schema_name="model_dataset",
-            exclude_fields={"logical_fingerprint", "quality_report_checksum_sha256"},
+            exclude_fields={"input_feature_schema_manifest_digest_sha256", "logical_fingerprint", "quality_report_checksum_sha256"},
         )
         published_manifest["manifest_digest_sha256"] = manifest_digest
         validate_contract("model_dataset.v1.json", published_manifest)
@@ -232,7 +232,7 @@ class DatasetWriter:
         expected_generation, expected_digest = model_manifest_identities(
             manifest,
             schema_name="model_dataset",
-            exclude_fields={"logical_fingerprint", "quality_report_checksum_sha256"},
+            exclude_fields={"input_feature_schema_manifest_digest_sha256", "logical_fingerprint", "quality_report_checksum_sha256"},
         )
         if manifest.get("manifest_digest_sha256") != expected_digest:
             raise ContractError("dataset manifest digest mismatch")

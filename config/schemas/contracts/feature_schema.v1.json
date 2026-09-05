@@ -8,6 +8,7 @@
   "properties": {
     "contract_version": {"const": 1},
     "schema_version": {"$ref":"#/$defs/semver"},
+    "source_frame_sha256": {"$ref":"#/$defs/sha256"},
     "columns": {
       "type":"array","minItems":1,"uniqueItems":true,
       "items":{

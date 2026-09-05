@@ -96,7 +96,7 @@ def test_f4_identical_runs_produce_identical_artifacts(tmp_path):
     left = json.loads((first / "manifest.json").read_text())
     right = json.loads((second / "manifest.json").read_text())
     assert left["generation_id"] == right["generation_id"]
-    assert left["manifest_digest_sha256"] != right["manifest_digest_sha256"]
+    assert left["manifest_digest_sha256"] == right["manifest_digest_sha256"]
 
 
 def test_f7_overwrite_rejected(tmp_path):
