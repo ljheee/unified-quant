@@ -1,8 +1,5 @@
 {
-  "blocked_by": [
-    "preserve fresh local gate report at CLI wiring HEAD",
-    "trigger remote CI on CLI wiring HEAD and mechanically verify ten cells"
-  ],
+  "blocked_by": [],
   "entries": [
     {
       "command": "UQ_GATE_EXTRAS=qlib bash scripts/run_gate.sh",
@@ -70,11 +67,33 @@
       "test_ids": [
         "tests/test_research_chain_phase5.py::test_cli_execute_provider_wiring_is_complete"
       ]
+    },
+    {
+      "command": "UQ_GATE_EXTRAS=qlib bash scripts/run_gate.sh",
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "id": "cli-wiring-local-gate",
+      "path": "cli-wiring-gate-reports/gate-report.json",
+      "status": "passed"
+    },
+    {
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "id": "cli-wiring-remote-run",
+      "path": "final-head-ci/33966824497/run.json",
+      "run_id": 33966824497,
+      "status": "passed"
+    },
+    {
+      "cell_count": 10,
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "id": "cli-wiring-remote-aggregated-gates",
+      "path": "final-head-ci/33966824497/aggregated-gates.json",
+      "status": "passed",
+      "verifier": "scripts/verify_research_evidence.py"
     }
   ],
   "evidence_index_version": 1,
-  "implementation_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
+  "implementation_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
   "layer": "research_chain",
   "phase": 5,
-  "status": "cli_wiring_remediation_complete_pending_final_evidence"
+  "status": "exited_after_remote_gate"
 }

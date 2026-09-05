@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.7; Phase 5 final CR remediation in progress; Phase 6 remains paused until fresh local and remote evidence passes**
+Status: **gated implementation order v0.8; Phase 0–5 exited after final CR and CLI wiring evidence; Phase 6 release reconciliation is next**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -328,8 +328,8 @@ test node IDs before their owning phase exits.
 | RC5b | 5 | `tests/test_research_chain_phase5.py::test_failed_stage_stops_run_and_publishes_failure` + `tests/test_research_chain_phase5.py::test_every_stage_failure_stops_later_stages` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
 | RC5c | 5 | `tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state` + `tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions` + `tests/test_research_chain_phase5.py::test_cli_execute_provider_wiring_is_complete` | `src/uq/research_chain/cli.py` | pending CLI wiring gate | passed-local |
 | RC5d | 5 | `tests/test_research_chain_phase5.py::test_locked_environment_rebuild_is_reproducible` | `evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
-| RC5e | 5 | `scripts/run_gate.sh` | `evidence/research-chain/phase-5/remediation-gate-reports/gate-report.json` | remediation HEAD report | passed |
-| RC5f | 5 | `github-actions:10-cell unified gate` + `scripts/verify_research_evidence.py` | `evidence/research-chain/phase-5/final-head-ci/33965499400/aggregated-gates.json` | `evidence/research-chain/phase-5/final-head-ci/33965499400/run.json` | passed |
+| RC5e | 5 | `scripts/run_gate.sh` | `evidence/research-chain/phase-5/cli-wiring-gate-reports/gate-report.json` | CLI wiring HEAD report | passed |
+| RC5f | 5 | `github-actions:10-cell unified gate` + `scripts/verify_research_evidence.py` | `evidence/research-chain/phase-5/final-head-ci/33966824497/aggregated-gates.json` | `evidence/research-chain/phase-5/final-head-ci/33966824497/run.json` | passed |
 | RC5g | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `src/uq/research_chain/runner.py` | final gate | passed |
 | RC5h | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `src/uq/models/qlib_export.py` | final gate | passed |
 | RC5i | 5 | `scripts/verify_research_evidence.py` + `tests/test_research_chain_phase5.py::test_remote_evidence_aggregation_is_mechanically_verified` | `scripts/verify_research_evidence.py` | `evidence/research-chain/phase-5/final-head-ci/33960583993/` | passed |
@@ -348,7 +348,6 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Preserve local gate evidence at the CLI wiring HEAD.
-2. Rerun remote CI and the mechanical ten-cell verifier.
-3. Mark Phase 5 re-exit only after both fresh evidence paths pass.
-4. Then perform Phase 6 release reconciliation.
+1. Complete Phase 6 release reconciliation.
+2. Preserve release-record and final evidence at the release HEAD.
+3. Rerun the unified gate and remote ten-cell verifier before release declaration.

@@ -6,6 +6,7 @@
     "status": "passed"
   },
   "evidence_paths": [
+    "config/schemas/contracts/research_scores.v1.json",
     "evidence/research-chain/phase-5/cli-wiring-gate-reports/command.txt",
     "evidence/research-chain/phase-5/cli-wiring-gate-reports/gate-report.json",
     "evidence/research-chain/phase-5/cli-wiring-gate-reports/requirements.lock.txt",
@@ -16,6 +17,8 @@
     "evidence/research-chain/phase-5/final-head-ci/33965499400/run.json",
     "evidence/research-chain/phase-5/final-head-ci/33965761414/aggregated-gates.json",
     "evidence/research-chain/phase-5/final-head-ci/33965761414/run.json",
+    "evidence/research-chain/phase-5/final-head-ci/33966824497/aggregated-gates.json",
+    "evidence/research-chain/phase-5/final-head-ci/33966824497/run.json",
     "evidence/research-chain/phase-5/implementation-gate-reports/command.txt",
     "evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json",
     "evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt",
@@ -107,18 +110,20 @@
       ]
     }
   ],
-  "implementation_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
+  "implementation_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
   "layer": "research_chain",
   "notes": [
     "Final CR remediation fixes Qlib cache snapshot timing, cache diff identity, disk-backed model-run readback, and complete result stage closure.",
     "CLI execute is wired through owning stores, ResearchChainRequestResolver, governed scores validation, and an external decision-provider subprocess boundary.",
-    "Local and remote ten-cell gate evidence are preserved and mechanically verified at evidence commit f248a61bf06f1c146bfb45f33724ce5e7a831687.",
-    "Phase 5 is pending final re-exit confirmation after fresh local and remote gates for the CLI wiring commit."
+    "Local Qlib gate and remote ten-cell CI both passed at CLI wiring commit 133fa83db7c4477bd32f8146ccab668e6fba60b9.",
+    "Remote aggregation run 33966824497 was verified by scripts/verify_research_evidence.py."
   ],
   "phase": 5,
   "record_version": 1,
   "remediation_commits": [
+    "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+    "316a5c0108fd07a3c1529550039d4f40629d11ee",
     "7ee7a8f60a5da61b686cb34550597df149a50f69"
   ],
-  "status": "cli_wiring_remediation_complete_pending_final_evidence"
+  "status": "exited_after_remote_gate"
 }

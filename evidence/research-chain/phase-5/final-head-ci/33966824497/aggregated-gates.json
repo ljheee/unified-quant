@@ -1,0 +1,196 @@
+{
+  "aggregate_result": "passed",
+  "cell_count": 10,
+  "cells": [
+    {
+      "artifact": "gate-report-macos-latest-3.11",
+      "certified_cell": "macos-latest/3.11",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.11.9",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:43:33.734945+00:00"
+    },
+    {
+      "artifact": "qlib-gate-report-macos-latest-3.11",
+      "certified_cell": "macos-latest/3.11/qlib",
+      "command": "uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "python_version": "3.11.9",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:44:43.358278+00:00"
+    },
+    {
+      "artifact": "gate-report-macos-latest-3.12",
+      "certified_cell": "macos-latest/3.12",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "python_version": "3.12.10",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:43:30.588018+00:00"
+    },
+    {
+      "artifact": "qlib-gate-report-macos-latest-3.12",
+      "certified_cell": "macos-latest/3.12/qlib",
+      "command": "uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.12.10",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:44:12.449988+00:00"
+    },
+    {
+      "artifact": "gate-report-macos-latest-3.13",
+      "certified_cell": "macos-latest/3.13",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.13.15",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:43:30.539442+00:00"
+    },
+    {
+      "artifact": "gate-report-ubuntu-latest-3.11",
+      "certified_cell": "ubuntu-latest/3.11",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.16",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:43:28.880314+00:00"
+    },
+    {
+      "artifact": "qlib-gate-report-ubuntu-latest-3.11",
+      "certified_cell": "ubuntu-latest/3.11/qlib",
+      "command": "uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.16",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:44:21.490066+00:00"
+    },
+    {
+      "artifact": "gate-report-ubuntu-latest-3.12",
+      "certified_cell": "ubuntu-latest/3.12",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.14",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:43:29.179218+00:00"
+    },
+    {
+      "artifact": "qlib-gate-report-ubuntu-latest-3.12",
+      "certified_cell": "ubuntu-latest/3.12/qlib",
+      "command": "uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.14",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:44:35.288457+00:00"
+    },
+    {
+      "artifact": "gate-report-ubuntu-latest-3.13",
+      "certified_cell": "ubuntu-latest/3.13",
+      "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+      "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.13.15",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "runner": "uv",
+      "test_result": "passed",
+      "utc_timestamp": "2026-09-05T12:43:30.433356+00:00"
+    }
+  ],
+  "covered_cells": [
+    "macos-latest/3.11",
+    "macos-latest/3.11/qlib",
+    "macos-latest/3.12",
+    "macos-latest/3.12/qlib",
+    "macos-latest/3.13",
+    "ubuntu-latest/3.11",
+    "ubuntu-latest/3.11/qlib",
+    "ubuntu-latest/3.12",
+    "ubuntu-latest/3.12/qlib",
+    "ubuntu-latest/3.13"
+  ],
+  "generated_at": "2026-09-05T12:44:52Z",
+  "git_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+  "run_id": "33966824497",
+  "workflow": "ci"
+}
