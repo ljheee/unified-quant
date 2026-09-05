@@ -14,7 +14,6 @@ import pandas as pd
 from tests.review_key import REVIEWER_PRIVATE_KEY
 from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision, research_contract_identities
 from uq.models.qlib_export import QlibDatasetExporter
-from uq.models.qlib_runtime import QlibRuntimeTrainer
 from uq.models.predictions import PredictionBuilder
 from uq.models.trainer import ArtifactStore
 from uq.models.dataset_writer import DatasetWriter
@@ -37,6 +36,10 @@ from uq.contracts.factor_governance import FactorRegistry
 from uq.research_chain.owning_contracts import BacktestConfigStore, BacktestMarketDatasetStore
 
 ROOT = Path(__file__).resolve().parents[1]
+requires_qlib = pytest.mark.skipif(
+    __import__("importlib.util", fromlist=["find_spec"]).find_spec("qlib") is None,
+    reason="Qlib runtime extras are unavailable",
+)
 REQUEST = ROOT / "evidence/research-chain/phase-0/fixtures/research_run_request-valid.json"
 DIGEST = "0" * 64
 RUNNER = {"code_fingerprint": DIGEST, "environment_profile": "locked-test", "lock_digest_sha256": DIGEST}
@@ -233,6 +236,7 @@ def _research_result_decision(generation_id: str) -> dict:
 
 
 def _build_runner(tmp_path: Path, dataset_adapter, factor_store, run_store: FileResearchRunStore):
+    from uq.models.qlib_runtime import QlibRuntimeTrainer
     writer = DatasetWriter(tmp_path)
     exporter = QlibDatasetExporter(tmp_path / "qlib_exports")
     portfolio = PortfolioStageAdapter(
@@ -269,7 +273,6 @@ def _build_runner(tmp_path: Path, dataset_adapter, factor_store, run_store: File
     )
 
 
-@pytest.mark.skipif(__import__("importlib.util", fromlist=["find_spec"]).find_spec("qlib") is None, reason="Qlib extras are unavailable")
 def _run_full_chain(tmp_path: Path):
     from tests.test_research_chain_phase4 import _extended_plan
     from tests.test_research_chain_phase2 import (
@@ -361,6 +364,7 @@ def _run_full_chain(tmp_path: Path):
     return outcome, run_store, plan
 
 
+@requires_qlib
 def test_full_research_chain_end_to_end(tmp_path: Path) -> None:
     outcome, _, _ = _run_full_chain(tmp_path)
     assert outcome.result_manifest["final_status"] == "passed"
@@ -424,6 +428,7 @@ STAGE_METHODS = {
     "portfolio_construction",
     "backtest_execution",
 ])
+@requires_qlib
 def test_every_stage_failure_stops_later_stages(tmp_path: Path, stage: str, monkeypatch: pytest.MonkeyPatch) -> None:
     def fail(*args, **kwargs):
         raise ContractError(f"{stage} forced failure")
@@ -445,6 +450,7 @@ def test_every_stage_failure_stops_later_stages(tmp_path: Path, stage: str, monk
 
 
 
+@requires_qlib
 def test_locked_environment_rebuild_is_reproducible(tmp_path: Path) -> None:
     first, first_store, _ = _run_full_chain(tmp_path / "first")
     second, second_store, _ = _run_full_chain(tmp_path / "second")
