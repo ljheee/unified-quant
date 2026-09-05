@@ -12,6 +12,8 @@
     "evidence/research-chain/phase-5/final-head-ci/33960583993/run.json",
     "evidence/research-chain/phase-5/final-head-ci/33965499400/aggregated-gates.json",
     "evidence/research-chain/phase-5/final-head-ci/33965499400/run.json",
+    "evidence/research-chain/phase-5/final-head-ci/33965761414/aggregated-gates.json",
+    "evidence/research-chain/phase-5/final-head-ci/33965761414/run.json",
     "evidence/research-chain/phase-5/implementation-gate-reports/command.txt",
     "evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json",
     "evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt",
@@ -106,7 +108,7 @@
   "layer": "research_chain",
   "notes": [
     "Final CR remediation fixes Qlib cache snapshot timing, cache diff identity, disk-backed model-run readback, and complete result stage closure.",
-    "Fresh local gate and remote CI run 33965499400 both passed on remediation commit 316a5c0108fd07a3c1529550039d4f40629d11ee.",
+    "Local and remote ten-cell gate evidence are preserved and mechanically verified at evidence commit f248a61bf06f1c146bfb45f33724ce5e7a831687.",
     "Phase 5 remains blocked solely by the CLI execute provider wiring stub; do not declare Phase 5 exited yet."
   ],
   "phase": 5,

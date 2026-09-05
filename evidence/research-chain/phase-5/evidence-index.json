@@ -46,6 +46,21 @@
       "path": "final-head-ci/33965499400/aggregated-gates.json",
       "status": "passed",
       "verifier": "scripts/verify_research_evidence.py"
+    },
+    {
+      "git_commit": "f248a61bf06f1c146bfb45f33724ce5e7a831687",
+      "id": "remote-run-final-evidence",
+      "path": "final-head-ci/33965761414/run.json",
+      "run_id": 33965761414,
+      "status": "passed"
+    },
+    {
+      "cell_count": 10,
+      "git_commit": "f248a61bf06f1c146bfb45f33724ce5e7a831687",
+      "id": "remote-aggregated-gates-final-evidence",
+      "path": "final-head-ci/33965761414/aggregated-gates.json",
+      "status": "passed",
+      "verifier": "scripts/verify_research_evidence.py"
     }
   ],
   "evidence_index_version": 1,
