@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0–1 exited; Phase 2 final CR remediation in progress; Phase 3 is the next runtime phase**
+Status: **gated implementation order v0.6; Phase 0–2 exited after final CR remediation; Phase 3 is the next runtime phase**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -342,9 +342,7 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Run and preserve the final local unified gate for the Phase 2 final CR
-   remediation commit.
-2. Push the remediation commit and archive the remote 10-cell gate result.
-3. Finalize the Phase 2 phase record and evidence index before Phase 3 entry.
-4. Start Phase 3 with the typed factor quality-decision contract slice, then
-   implement export/receipt, training, artifact, and prediction adapters.
+1. Start Phase 3 with the typed factor quality-decision contract slice.
+2. Expand RC3a/b/c into concrete test IDs and fixture paths before runtime.
+3. Implement export/receipt, training, artifact, and prediction adapters in
+   that dependency order after the Phase 3 contract slice passes.

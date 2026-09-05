@@ -88,12 +88,12 @@
     },
     {
       "evidence_paths": [
-        "evidence/research-chain/phase-2/remote-ci/33939323932/"
+        "evidence/research-chain/phase-2/remote-ci/33942360751/"
       ],
-      "head_sha": "98f4811bd45ff3c639647efe37668cee55fdc540",
+      "head_sha": "7da9abea74295f0ba9d8beafefaa21a6d3061ae4",
       "id": "RC2-unified-gate-remote",
-      "run_id": "33939323932",
-      "status": "pending-final-head",
+      "run_id": "33942360751",
+      "status": "passed-remote-head",
       "test_ids": [
         "github-actions:10-cell unified gate"
       ]
@@ -104,9 +104,8 @@
   "notes": [
     "Dataset policy is carried as a reviewed research-run contract.",
     "Dataset adapter validates upstream identities, universe membership, preprocessing recomputation, and external quality decisions before DatasetWriter publication.",
-    "CR remediation strengthened adjusted/label manifest binding, universe generation checking, and missing/tampered upstream rejection coverage.",
-    "Final local gate and refreshed remote CI both bind remediation implementation commit c5eeca5 via evidence commit 98f4811.",
-    "Final CR remediation added canonical universe manifest digest validation, synchronized RC2 acceptance mapping, and froze the FactorEngine execution boundary for Phase 3."
+    "Final CR remediation validates canonical universe manifest digest, synchronizes RC2 acceptance mapping, and freezes the FactorEngine execution boundary.",
+    "Final local gate binds implementation commit 7d10661; refreshed remote CI binds evidence commit 7da9abe."
   ],
   "phase": 2,
   "record_version": 1,
@@ -114,5 +113,5 @@
     "c5eeca5d65f0d39c344b3eb0798c619789a77d3e",
     "7d106611792fa5c2ef8515da676b3662b7f354ba"
   ],
-  "status": "in_progress_final_evidence"
+  "status": "exited_after_final_cr"
 }
