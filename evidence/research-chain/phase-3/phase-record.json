@@ -82,20 +82,32 @@
       ],
       "test_summary": "428 passed",
       "evidence_paths": [
-        "evidence/research-chain/phase-3/final-gate-reports/gate-report.json"
+        "evidence/research-chain/phase-3/final-gate-reports/gate-report.json",
+        "evidence/research-chain/phase-3/final-gate-reports/requirements.lock.txt",
+        "evidence/research-chain/phase-3/final-gate-reports/requirements.lock.txt.sha256"
       ]
     },
     {
       "id": "RC3-unified-gate-remote",
       "status": "passed-remote-head",
       "evidence_paths": [
-        "evidence/research-chain/phase-3/final-head-ci/33945900595/"
+        "evidence/research-chain/phase-3/final-head-ci/33945900595/run.json",
+        "evidence/research-chain/phase-3/final-head-ci/33945900595/artifacts/qlib-gate-report-macos-latest-3.11",
+        "evidence/research-chain/phase-3/final-head-ci/33945900595/artifacts/qlib-gate-report-macos-latest-3.12",
+        "evidence/research-chain/phase-3/final-head-ci/33945900595/artifacts/qlib-gate-report-ubuntu-latest-3.11",
+        "evidence/research-chain/phase-3/final-head-ci/33945900595/artifacts/qlib-gate-report-ubuntu-latest-3.12"
       ],
       "test_ids": [
         "github-actions:10-cell unified gate"
       ],
       "head_sha": "72b35ce1d39a332ea67eda645e7378e8cb7d3d24",
-      "run_id": "33945900595"
+      "run_id": "33945900595",
+      "matrix_jobs": [
+        "qlib-runtime (macos-latest, 3.11)",
+        "qlib-runtime (macos-latest, 3.12)",
+        "qlib-runtime (ubuntu-latest, 3.11)",
+        "qlib-runtime (ubuntu-latest, 3.12)"
+      ]
     }
   ],
   "notes": [
@@ -104,6 +116,7 @@
     "Stage bindings are resolved from ResolvedExecutionPlan; request documents are not mutated by adapters.",
     "Definition feature_schema_generation_id binds preprocessing output_feature_schema_generation_id.",
     "Repeated locked-environment Qlib runtime training is asserted byte-reproducible.",
-    "Remote 10-cell gate passed at final remediation commit 72b35ce."
+    "Remote 10-cell gate passed at final remediation commit 72b35ce.",
+    "Final CR added the four remote Qlib runtime cells and durable local requirements evidence to the Phase 3 record."
   ]
 }
