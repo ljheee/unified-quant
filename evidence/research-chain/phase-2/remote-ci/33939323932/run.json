@@ -1,0 +1,65 @@
+{
+  "head_sha": "98f4811bd45ff3c639647efe37668cee55fdc540",
+  "status": "completed",
+  "conclusion": "success",
+  "display_title": "docs(research-chain): record phase 2 CR remediation",
+  "created_at": "2026-09-05T02:31:42Z",
+  "updated_at": "2026-09-05T02:33:39Z",
+  "jobs": [
+    {
+      "name": "qlib-runtime (macos-latest, 3.12)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "test (macos-latest, 3.13)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "test (macos-latest, 3.11)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "qlib-runtime (ubuntu-latest, 3.11)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.11)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "qlib-runtime (ubuntu-latest, 3.12)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "qlib-runtime (macos-latest, 3.11)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.13)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "test (macos-latest, 3.12)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.12)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "f4-certification",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ]
+}

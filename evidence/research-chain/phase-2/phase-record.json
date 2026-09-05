@@ -87,11 +87,11 @@
     },
     {
       "evidence_paths": [
-        "evidence/research-chain/phase-2/remote-ci/33903807546/"
+        "evidence/research-chain/phase-2/remote-ci/33939323932/"
       ],
-      "head_sha": "e631740c51abd6f10390fd9bfefd1c6540e5f2c5",
+      "head_sha": "98f4811bd45ff3c639647efe37668cee55fdc540",
       "id": "RC2-unified-gate-remote",
-      "run_id": "33903807546",
+      "run_id": "33939323932",
       "status": "passed-remote-head",
       "test_ids": [
         "github-actions:10-cell unified gate"
@@ -103,7 +103,8 @@
   "notes": [
     "Dataset policy is carried as a reviewed research-run contract.",
     "Dataset adapter validates upstream identities, universe membership, preprocessing recomputation, and external quality decisions before DatasetWriter publication.",
-    "Final local gate binds CR remediation commit c5eeca5; prior remote CI remains recorded at implementation evidence commit e631740 and must be refreshed before Phase 3 release."
+    "CR remediation strengthened adjusted/label manifest binding, universe generation checking, and missing/tampered upstream rejection coverage.",
+    "Final local gate and refreshed remote CI both bind remediation implementation commit c5eeca5 via evidence commit 98f4811."
   ],
   "phase": 2,
   "record_version": 1,
