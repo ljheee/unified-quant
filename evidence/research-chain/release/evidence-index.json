@@ -1,0 +1,42 @@
+{
+  "blocked_by": [
+    "preserve final local gate at release HEAD",
+    "preserve and mechanically verify final remote ten-cell matrix at release HEAD",
+    "bind Phase 0-6 records into release record"
+  ],
+  "entries": [
+    {
+      "id": "phase-records",
+      "paths": [
+        "evidence/research-chain/phase-0/phase-record.json",
+        "evidence/research-chain/phase-1/phase-record.json",
+        "evidence/research-chain/phase-2/phase-record.json",
+        "evidence/research-chain/phase-3/phase-record.json",
+        "evidence/research-chain/phase-4/phase-record.json",
+        "evidence/research-chain/phase-5/phase-record.json"
+      ],
+      "status": "passed"
+    },
+    {
+      "id": "local-gate",
+      "path": "final-gate-report.json",
+      "status": "pending"
+    },
+    {
+      "id": "remote-run",
+      "path": "remote-matrix/run.json",
+      "status": "pending"
+    },
+    {
+      "id": "remote-aggregated-gates",
+      "path": "remote-matrix/aggregated-gates.json",
+      "status": "pending",
+      "verifier": "scripts/verify_research_evidence.py"
+    }
+  ],
+  "evidence_index_version": 1,
+  "implementation_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+  "layer": "research_chain",
+  "phase": 6,
+  "status": "release_reconciliation_in_progress"
+}
