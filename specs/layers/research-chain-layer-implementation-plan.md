@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0–3 exited; Phase 4 is the next runtime phase**
+Status: **gated implementation order v0.6; Phase 0–3 exited after final CR remediation; Phase 4 is the next runtime phase**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 

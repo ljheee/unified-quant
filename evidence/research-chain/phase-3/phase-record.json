@@ -2,7 +2,7 @@
   "layer": "research_chain",
   "phase": 3,
   "record_version": 1,
-  "status": "exited_after_remote_gate",
+  "status": "exited_after_final_cr",
   "blocked_by": [],
   "entry_criteria": {
     "phase_2_exited": true,
@@ -10,8 +10,17 @@
     "phase_2_head": "da421c8",
     "status": "passed"
   },
-  "implementation_commit": "4fdd7dfbbfafa65003e41589acf9175a13b8f344",
-  "remediation_commits": [],
+  "implementation_commit": "e38af1b419f19a912a0afb9953ede1c79556e763",
+  "remediation_commits": [
+    {
+      "commit": "e38af1b419f19a912a0afb9953ede1c79556e763",
+      "summary": "Close Phase 3 adapter-boundary and reproducibility findings"
+    },
+    {
+      "commit": "72b35ce1d39a332ea67eda645e7378e8cb7d3d24",
+      "summary": "Gate the Qlib runtime acceptance independently"
+    }
+  ],
   "evidence_paths": [
     "src/uq/research_chain/adapters.py",
     "src/uq/research_chain/resolver.py",
@@ -23,12 +32,17 @@
   "exit_criteria": [
     {
       "id": "RC3-owned-runtime-chain",
-      "status": "passed-local",
+      "status": "passed",
       "evidence_paths": [
         "tests/test_research_chain_phase3.py"
       ],
       "test_ids": [
         "tests/test_research_chain_phase3.py::test_model_chain_exports_trains_and_predicts"
+      ],
+      "requirements": [
+        "QlibRuntimeTrainer consumes verified export and receipt",
+        "definition binds preprocessing output feature schema",
+        "repeated locked-environment training is byte-reproducible"
       ]
     },
     {
@@ -57,7 +71,7 @@
     {
       "id": "RC3-unified-gate-final-head",
       "status": "passed-local-final-head",
-      "bound_commit": "4fdd7dfbbfafa65003e41589acf9175a13b8f344",
+      "bound_commit": "72b35ce1d39a332ea67eda645e7378e8cb7d3d24",
       "extras": [
         "dev",
         "real",
@@ -75,19 +89,21 @@
       "id": "RC3-unified-gate-remote",
       "status": "passed-remote-head",
       "evidence_paths": [
-        "evidence/research-chain/phase-3/remote-ci/33943688601/"
+        "evidence/research-chain/phase-3/final-head-ci/33945900595/"
       ],
       "test_ids": [
         "github-actions:10-cell unified gate"
       ],
-      "head_sha": "f4cfbdc83129e2f1e8641008b0a0b55d81e73a39",
-      "run_id": "33943688601"
+      "head_sha": "72b35ce1d39a332ea67eda645e7378e8cb7d3d24",
+      "run_id": "33945900595"
     }
   ],
   "notes": [
     "Phase 3 adapters use only owning Qlib export/receipt, run/artifact, and prediction APIs.",
-    "Factor stage now requires a typed reviewed quality_decision envelope with checksum, trust anchor, and exact subject generation.",
-    "Artifact quality decisions are supplied as a subject-generation callback so the reviewed report binds the final artifact identity.",
-    "Remote 10-cell gate passed at evidence commit f4cfbdc, covering implementation commit 4fdd7df."
+    "ModelStageAdapter now re-reads the verified Qlib export and invokes QlibRuntimeTrainer.",
+    "Stage bindings are resolved from ResolvedExecutionPlan; request documents are not mutated by adapters.",
+    "Definition feature_schema_generation_id binds preprocessing output_feature_schema_generation_id.",
+    "Repeated locked-environment Qlib runtime training is asserted byte-reproducible.",
+    "Remote 10-cell gate passed at final remediation commit 72b35ce."
   ]
 }
