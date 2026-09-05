@@ -27,12 +27,7 @@ from uq.research_chain import ResolvedStageBinding
 from uq.models.dataset_writer import DatasetWriter
 from uq.models.definition import ModelDefinitionBuilder
 from uq.models.predictions import PredictionBuilder
-from io import BytesIO
-
-import joblib
-from uq.models.qlib_runtime import QlibRuntimeTrainer
-from uq.models.trainer import ModelRunBuilder
-from uq.models.trainer import ArtifactStore
+from uq.models.trainer import ArtifactStore, ModelRunBuilder
 from tests.test_research_chain_phase2 import (
     RUN_ID,
     _dataset_quality_decision,
@@ -121,6 +116,12 @@ def _prepare_model_stage(tmp_path: Path):
 
 
 def test_model_chain_exports_trains_and_predicts(tmp_path: Path):
+    pytest.importorskip("qlib")
+    from io import BytesIO
+
+    import joblib
+    from uq.models.qlib_runtime import QlibRuntimeTrainer
+
     plan, dataset_result, dataset_generation_id, factor_frame, dataset_adapter = _prepare_model_stage(tmp_path)
     writer = DatasetWriter(tmp_path)
     _, dataset_frame = writer.read(
