@@ -13,8 +13,8 @@ from uq.contracts.artifacts import QualityReportStore, UniverseSnapshotStore
 from uq.contracts.factor_governance import FactorRegistry
 from uq.contracts.canonical_v2 import file_sha256_bytes, CanonicalV2Store
 from uq.contracts.schema import load_schema
-from uq.contracts.gate_contracts import sha256_json
-from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision, model_manifest_identities
+from uq.contracts.gate_contracts import sha256_json, sha256_bytes
+from uq.contracts.model_layer import bind_reviewed_quality_decision, canonical_json, create_reviewed_quality_decision, model_manifest_identities
 from uq.models.dataset_writer import DatasetWriter
 from uq.models.feature_preprocessing import FeaturePreprocessorBuilder
 from uq.models.features import FeatureSchemaBuilder
@@ -75,7 +75,7 @@ def test_factor_stage_binds_verified_partition(tmp_path: Path) -> None:
             "environment_profile": "locked-test",
             "lock_digest_sha256": "0" * 64,
         },
-        quality_decision_checksum_sha256="a" * 64,
+        quality_decision=_factor_quality_decision(manifest),
         created_at="2026-01-30T07:00:00+00:00",
     )
 
@@ -107,7 +107,7 @@ def test_factor_stage_rejects_tampered_partition(tmp_path: Path) -> None:
                 "environment_profile": "locked-test",
                 "lock_digest_sha256": "0" * 64,
             },
-            quality_decision_checksum_sha256="a" * 64,
+            quality_decision=_factor_quality_decision(manifest),
         )
 
 
@@ -118,6 +118,30 @@ def test_factor_stage_rejects_binding_mismatch(tmp_path: Path) -> None:
     plan = _plan(manifest)
     assert plan.stage_bindings[0].manifest_digest_sha256 == manifest["manifest_digest_sha256"]
     assert plan.stage_bindings[0].data_checksum_sha256 == manifest["data_checksum_sha256"]
+
+
+def _factor_quality_decision(manifest: dict) -> dict:
+    owning_report = {
+        "report_version": 1,
+        "binding_type": "factor_v1",
+        "bound_generation_id": manifest["generation_id"],
+        "policy": "reject_all",
+        "status": "passed",
+        "checks": [{"name": "null_rate", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        "errors": [],
+        "warnings": [],
+    }
+    return {
+        "contract_version": 1,
+        "schema_version": "1.0.0",
+        "binding_type": "factor_v1",
+        "subject_generation_id": manifest["generation_id"],
+        "subject_manifest_digest_sha256": None,
+        "owning_report": owning_report,
+        "decision_checksum_sha256": sha256_bytes(canonical_json(owning_report)),
+        "provider_id": "external-model-quality-reviewer-v1",
+        "trust_anchor_id": "factor-review-key-v1",
+    }
 
 
 def _dataset_plan(factor_manifest: dict, universe_manifest: dict, adjusted_manifest: dict, label_manifest: dict, preprocessing: dict) -> ResolvedExecutionPlan:
@@ -374,6 +398,19 @@ def test_dataset_stage_rejects_wrong_reviewed_quality_decision(tmp_path: Path) -
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=wrong_decision,
             preprocessing_quality_decision=_preprocessing_quality_decision(),
+        )
+
+
+def test_factor_stage_rejects_wrong_reviewed_decision(tmp_path: Path) -> None:
+    store = _publish_factor(tmp_path)
+    manifest = store.read_manifest(__import__("json").loads(next((tmp_path / "factors").rglob("manifest.json")).read_text())["generation_id"])
+    decision = _factor_quality_decision(manifest)
+    decision["owning_report"]["bound_generation_id"] = "f" * 64
+    with pytest.raises(ContractError, match="quality decision checksum mismatch"):
+        FactorStageAdapter(store, FileResearchRunStore(tmp_path)).run(
+            _plan(manifest),
+            runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+            quality_decision=decision,
         )
 
 

@@ -290,6 +290,32 @@ class FileResearchRunStore:
             manifest_digest_sha256=state["manifest_digest_sha256"],
         )
 
+    def read_published_document(self, output_family: str, generation_id: str) -> dict[str, Any]:
+        """Read an owning manifest by its Research Chain output family."""
+        import json as _json
+
+        family_roots = {
+            "factor_partition": self.root / "factors",
+            "label_set": self.root / "label_sets",
+        }
+        base = family_roots.get(output_family)
+        if base is None:
+            raise ContractError(f"unsupported published document family: {output_family}")
+        matches: list[Path] = []
+        if base.exists():
+            for path in base.rglob("manifest.json"):
+                try:
+                    manifest = _json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, _json.JSONDecodeError):
+                    continue
+                if manifest.get("generation_id") == generation_id:
+                    matches.append(manifest)
+        if not matches:
+            raise ContractError(f"unpublished {output_family}: {generation_id}")
+        if len(matches) != 1:
+            raise ContractError(f"ambiguous {output_family}: {generation_id}")
+        return matches[0]
+
     def read_state(
         self,
         request_content_generation_id: str,
