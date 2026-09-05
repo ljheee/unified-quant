@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "bound_commit": "c5eeca5d65f0d39c344b3eb0798c619789a77d3e",
+      "bound_commit": "7d106611792fa5c2ef8515da676b3662b7f354ba",
       "kind": "local-gate-implementation-head",
       "path": "implementation-gate-reports/gate-report.json",
       "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
@@ -10,10 +10,10 @@
     {
       "kind": "phase-record",
       "path": "phase-record.json",
-      "status": "exited_after_cr_remediation"
+      "status": "in_progress_final_evidence"
     },
     {
-      "bound_commit": "c5eeca5d65f0d39c344b3eb0798c619789a77d3e",
+      "bound_commit": "7d106611792fa5c2ef8515da676b3662b7f354ba",
       "kind": "local-gate-final-head",
       "path": "final-gate-reports/gate-report.json",
       "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
@@ -24,13 +24,13 @@
       "kind": "remote-ci",
       "path": "remote-ci/33939323932/",
       "run_id": "33939323932",
-      "status": "passed"
+      "status": "pending-final-head"
     }
   ],
-  "implementation_commit": "c5eeca5d65f0d39c344b3eb0798c619789a77d3e",
+  "implementation_commit": "7d106611792fa5c2ef8515da676b3662b7f354ba",
   "phase": 2,
   "record_version": 1,
-  "status": "exited_after_cr_remediation",
+  "status": "in_progress_final_evidence",
   "remote_gate": {
     "head_sha": "98f4811bd45ff3c639647efe37668cee55fdc540",
     "run_id": "33939323932",
@@ -39,6 +39,7 @@
   },
   "notes": [
     "CR remediation removed oversized raw CI log and strengthened binding/rejection coverage.",
-    "Final local gate and refreshed remote CI bind remediation implementation commit c5eeca5."
+    "Final local gate and refreshed remote CI bind remediation implementation commit c5eeca5.",
+    "Final CR remediation adds universe manifest digest validation and explicit FactorEngine boundary; refresh remote CI at 7d10661."
   ]
 }

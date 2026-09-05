@@ -48,11 +48,12 @@
         "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_adjusted_price_manifest_mismatch",
         "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_label_manifest_mismatch",
         "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_tampered_universe_membership",
-        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_missing_upstream_binding"
+        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_missing_upstream_binding",
+        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_universe_manifest_mismatch"
       ]
     },
     {
-      "bound_commit": "c5eeca5d65f0d39c344b3eb0798c619789a77d3e",
+      "bound_commit": "7d106611792fa5c2ef8515da676b3662b7f354ba",
       "evidence_paths": [
         "evidence/research-chain/phase-2/implementation-gate-reports/gate-report.json"
       ],
@@ -66,10 +67,10 @@
       "test_ids": [
         "scripts/run_gate.sh"
       ],
-      "test_summary": "422 passed"
+      "test_summary": "423 passed"
     },
     {
-      "bound_commit": "c5eeca5d65f0d39c344b3eb0798c619789a77d3e",
+      "bound_commit": "7d106611792fa5c2ef8515da676b3662b7f354ba",
       "evidence_paths": [
         "evidence/research-chain/phase-2/final-gate-reports/gate-report.json"
       ],
@@ -83,7 +84,7 @@
       "test_ids": [
         "scripts/run_gate.sh"
       ],
-      "test_summary": "422 passed"
+      "test_summary": "423 passed"
     },
     {
       "evidence_paths": [
@@ -92,7 +93,7 @@
       "head_sha": "98f4811bd45ff3c639647efe37668cee55fdc540",
       "id": "RC2-unified-gate-remote",
       "run_id": "33939323932",
-      "status": "passed-remote-head",
+      "status": "pending-final-head",
       "test_ids": [
         "github-actions:10-cell unified gate"
       ]
@@ -104,12 +105,14 @@
     "Dataset policy is carried as a reviewed research-run contract.",
     "Dataset adapter validates upstream identities, universe membership, preprocessing recomputation, and external quality decisions before DatasetWriter publication.",
     "CR remediation strengthened adjusted/label manifest binding, universe generation checking, and missing/tampered upstream rejection coverage.",
-    "Final local gate and refreshed remote CI both bind remediation implementation commit c5eeca5 via evidence commit 98f4811."
+    "Final local gate and refreshed remote CI both bind remediation implementation commit c5eeca5 via evidence commit 98f4811.",
+    "Final CR remediation added canonical universe manifest digest validation, synchronized RC2 acceptance mapping, and froze the FactorEngine execution boundary for Phase 3."
   ],
   "phase": 2,
   "record_version": 1,
   "remediation_commits": [
-    "c5eeca5d65f0d39c344b3eb0798c619789a77d3e"
+    "c5eeca5d65f0d39c344b3eb0798c619789a77d3e",
+    "7d106611792fa5c2ef8515da676b3662b7f354ba"
   ],
-  "status": "exited_after_cr_remediation"
+  "status": "in_progress_final_evidence"
 }
