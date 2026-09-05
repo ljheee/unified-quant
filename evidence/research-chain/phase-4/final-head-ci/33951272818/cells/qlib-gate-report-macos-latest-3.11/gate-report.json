@@ -5,12 +5,12 @@
     "real",
     "qlib"
   ],
-  "git_commit": "537f2698e169614a62e9861ee8bbf2ef99f9beac",
+  "git_commit": "fe628fb7a74d031e8d149590bf659cb80024d6da",
   "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
-  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
-  "python_version": "3.12.14",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python_version": "3.11.9",
   "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
   "runner": "uv",
   "test_result": "passed",
-  "utc_timestamp": "2026-09-05T05:46:44.230384+00:00"
+  "utc_timestamp": "2026-09-05T06:59:48.526438+00:00"
 }

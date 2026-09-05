@@ -1,7 +1,5 @@
 {
-  "blocked_by": [
-    "Phase 4 CR remediation pending gate and evidence"
-  ],
+  "blocked_by": [],
   "entry_criteria": {
     "phase_3_exited": true,
     "phase_3_final_cr_status": "exited_after_final_cr",
@@ -10,12 +8,14 @@
   },
   "evidence_paths": [
     "src/uq/research_chain/adapters.py",
+    "src/uq/research_chain/owning_contracts.py",
+    "src/uq/backtest/engine.py",
     "tests/test_research_chain_phase4.py",
     "evidence/research-chain/phase-4/implementation-gate-reports/gate-report.json",
-    "evidence/research-chain/phase-4/final-gate-reports/gate-report.json",
-    "evidence/research-chain/phase-4/final-gate-reports/requirements.lock.txt",
-    "evidence/research-chain/phase-4/final-gate-reports/requirements.lock.txt.sha256",
-    "evidence/research-chain/phase-4/final-head-ci/33948029954/run.json"
+    "evidence/research-chain/phase-4/implementation-gate-reports/requirements.lock.txt",
+    "evidence/research-chain/phase-4/implementation-gate-reports/requirements.lock.txt.sha256",
+    "evidence/research-chain/phase-4/final-head-ci/33951272818/run.json",
+    "evidence/research-chain/phase-4/final-head-ci/33951272818/aggregated-gates.json"
   ],
   "exit_criteria": [
     {
@@ -50,24 +50,33 @@
     {
       "description": "Local unified gate passes on final implementation HEAD",
       "id": "RC4d",
-      "status": "planned",
-      "test_ids": []
+      "status": "passed",
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ],
+      "evidence_path": "evidence/research-chain/phase-4/implementation-gate-reports/gate-report.json"
     },
     {
       "description": "Remote ten-cell unified gate passes on final implementation HEAD",
       "id": "RC4e",
-      "status": "planned",
-      "test_ids": []
+      "status": "passed",
+      "test_ids": [
+        "github-actions:10-cell unified gate"
+      ],
+      "evidence_path": "evidence/research-chain/phase-4/final-head-ci/33951272818/aggregated-gates.json"
     }
   ],
-  "implementation_commit": "537f2698e169614a62e9861ee8bbf2ef99f9beac",
+  "implementation_commit": "fe628fb7a74d031e8d149590bf659cb80024d6da",
   "layer": "research_chain",
   "notes": [
-    "Phase 4 remediation is in progress after final CR findings.",
-    "Gate and remote evidence must be regenerated on the final remediation HEAD before exit."
+    "Phase 4 CR remediation commit fe628fb passed local locked gate and remote CI run 33951272818.",
+    "Remote evidence contains distinct macOS/Linux and Python 3.11-3.13 cells, plus four Qlib runtime cells.",
+    "Portfolio prediction readback and backtest governed market inputs were remediated before Phase 4 exit."
   ],
   "phase": 4,
   "record_version": 1,
-  "remediation_commits": [],
-  "status": "in_progress"
+  "remediation_commits": [
+    "fe628fb7a74d031e8d149590bf659cb80024d6da"
+  ],
+  "status": "exited_after_remote_gate"
 }
