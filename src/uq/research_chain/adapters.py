@@ -7,6 +7,7 @@ from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
+from ..contracts.gate_contracts import adjustment_snapshot_generation
 from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, research_contract_identities
 from ..contracts.artifacts import UniverseSnapshotStore
 from ..errors import ContractError
@@ -225,6 +226,9 @@ class DatasetStageAdapter:
         universe_manifest = self.universe_store.read_manifest(universe_binding.generation_id)
         if universe_manifest["generation_id"] != universe_binding.generation_id:
             raise ContractError("universe binding generation mismatch")
+        universe_manifest_digest = adjustment_snapshot_generation(universe_manifest)
+        if universe_manifest_digest != universe_binding.manifest_digest_sha256:
+            raise ContractError("universe binding manifest digest mismatch")
         members = self.universe_store.read_members(
             universe_manifest["generation_id"],
             universe_id=universe_manifest["universe_id"],

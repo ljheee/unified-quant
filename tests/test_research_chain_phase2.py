@@ -164,7 +164,7 @@ def _dataset_plan(factor_manifest: dict, universe_manifest: dict, adjusted_manif
         stage_plan_sha256="0" * 64,
         stage_bindings=(
             ResolvedStageBinding(stage="factor_computation", output_family="factor_partition", generation_id=factor_manifest["generation_id"], manifest_digest_sha256=factor_manifest["manifest_digest_sha256"], data_checksum_sha256=factor_manifest["data_checksum_sha256"]),
-            ResolvedStageBinding(stage="factor_computation", output_family="universe_snapshot", generation_id=universe_manifest["generation_id"], manifest_digest_sha256=universe_manifest.get("manifest_digest_sha256", "0" * 64), data_checksum_sha256=universe_manifest["members_artifact"]["checksum_sha256"]),
+            ResolvedStageBinding(stage="factor_computation", output_family="universe_snapshot", generation_id=universe_manifest["generation_id"], manifest_digest_sha256=universe_manifest["manifest_digest_sha256"], data_checksum_sha256=universe_manifest["members_artifact"]["checksum_sha256"]),
             ResolvedStageBinding(stage="dataset_preparation", output_family="adjusted_price_dataset", generation_id=adjusted_manifest["generation_id"], manifest_digest_sha256=adjusted_manifest["manifest_digest_sha256"], data_checksum_sha256=adjusted_manifest["data_checksum_sha256"]),
             ResolvedStageBinding(stage="dataset_preparation", output_family="label_set", generation_id=label_manifest["generation_id"], manifest_digest_sha256=label_manifest["manifest_digest_sha256"], data_checksum_sha256=label_manifest["data_checksum_sha256"]),
             ResolvedStageBinding(stage="dataset_preparation", output_family="feature_preprocessing", generation_id=preprocessing["generation_id"], manifest_digest_sha256=preprocessing["manifest_digest_sha256"], data_checksum_sha256=preprocessing["output_frame_sha256"]),
@@ -215,7 +215,10 @@ def _publish_universe(root: Path, instruments: list[str]) -> dict:
         "members_artifact": {"path": "members.csv", "checksum_sha256": "0" * 64},
         "membership_evidence": "deterministic research chain test fixture",
     }
-    return json.loads((UniverseSnapshotStore(root).save(root, document, members) / "manifest.json").read_text())
+    manifest = json.loads((UniverseSnapshotStore(root).save(root, document, members) / "manifest.json").read_text())
+    from uq.contracts.gate_contracts import adjustment_snapshot_generation
+    manifest = {**manifest, "manifest_digest_sha256": adjustment_snapshot_generation(manifest)}
+    return manifest
 
 
 def _preprocessing_quality_decision() -> dict:
@@ -389,6 +392,29 @@ def test_dataset_stage_rejects_adjusted_price_manifest_mismatch(tmp_path: Path) 
         *plan.stage_bindings[3:],
     ))
     with pytest.raises(ContractError, match="adjusted price binding manifest digest mismatch"):
+        adapter.run(
+            plan,
+            runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+            quality_decision=_dataset_quality_decision(),
+            preprocessing_quality_decision=_preprocessing_quality_decision(),
+        )
+
+
+def test_dataset_stage_rejects_universe_manifest_mismatch(tmp_path: Path) -> None:
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    binding = plan.stage_bindings[1]
+    plan = dataclasses.replace(plan, stage_bindings=(
+        *plan.stage_bindings[:1],
+        ResolvedStageBinding(
+            stage=binding.stage,
+            output_family=binding.output_family,
+            generation_id=binding.generation_id,
+            manifest_digest_sha256="f" * 64,
+            data_checksum_sha256=binding.data_checksum_sha256,
+        ),
+        *plan.stage_bindings[2:],
+    ))
+    with pytest.raises(ContractError, match="universe binding manifest digest mismatch"):
         adapter.run(
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},

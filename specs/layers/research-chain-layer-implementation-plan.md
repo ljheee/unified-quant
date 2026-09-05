@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0–2 exited; Phase 3 is the next runtime phase**
+Status: **gated implementation order v0.6; Phase 0–1 exited; Phase 2 final CR remediation in progress; Phase 3 is the next runtime phase**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -135,8 +135,10 @@ Goal: connect the existing governed factor and model dataset APIs.
 
 Deliverables:
 
-1. Factor adapter invoking `FactorEngine` and the owning
-   `FactorStore.read_manifest/read_partition` contracts only.
+1. Factor adapter binding a governed already-published factor partition through
+   the owning `FactorStore.read_manifest/read_partition` contracts only.
+   `FactorEngine` execution remains outside this adapter; a dedicated engine
+   adapter is a separate later slice and must not be added as a bypass.
 2. Dataset adapter invoking `LabelBuilder`, `FeatureSchemaBuilder`, owning
    feature-schema/label/universe reader contracts, `DatasetBuilder`, and
    `DatasetWriter` only.
@@ -169,15 +171,18 @@ Goal: train and predict without bypassing the model-layer boundary.
 
 Deliverables:
 
-1. Qlib export and receipt adapter invoking `QlibDatasetExporter`,
+1. Before model-stage runtime, replace the factor stage's checksum-only
+   quality-decision input with typed reviewed-decision validation covering
+   schema, signature, binding type, subject generation, and checksum.
+2. Qlib export and receipt adapter invoking `QlibDatasetExporter`,
    `QlibDatasetExporter.read`, and `QlibInitReceiptBuilder`.
-2. Model run/artifact adapter invoking `ModelRunBuilder`,
+3. Model run/artifact adapter invoking `ModelRunBuilder`,
    `QlibRuntimeTrainer`, and `ArtifactStore`.
-3. Prediction adapter invoking `PredictionBuilder.build` and
+4. Prediction adapter invoking `PredictionBuilder.build` and
    `PredictionBuilder.read`.
-4. Stage state bindings for dataset, export, receipt, run content, definition,
+5. Stage state bindings for dataset, export, receipt, run content, definition,
    artifact, and prediction generations.
-5. Tests for export tampering, receipt mismatch, unverified export,
+6. Tests for export tampering, receipt mismatch, unverified export,
    artifact tampering, prediction key/score/eligibility failure, and quality
    report rejection.
 
@@ -309,9 +314,9 @@ test node IDs before their owning phase exits.
 | RC1a | 1 | `tests/test_research_chain_phase1.py::test_request_resolves_all_upstreams_and_is_deterministic` | `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed |
 | RC1b | 1 | `tests/test_research_chain_phase1.py::test_dry_run_state_contains_no_downstream_outputs` | `evidence/research-chain/phase-1/phase-record.json` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed |
 | RC1c | 1 | `tests/test_research_chain_phase1.py::test_provider_failures_are_typed` + `tests/test_research_chain_phase1.py::test_request_failures_are_typed` | `tests/test_research_chain_phase1.py` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed |
-| RC2a | 2 | `planned:test_factor_stage_publishes_and_reads_back` | `planned:phase-2/fixtures/` | `planned:phase-2/gate-reports/gate-report.json` | blocked |
-| RC2b | 2 | `planned:test_dataset_stage_binds_factor_label_schema_and_universe` | `planned:phase-2/fixtures/` | `planned:phase-2/gate-reports/gate-report.json` | blocked |
-| RC2c | 2 | `planned:test_stage_failure_does_not_enter_accepted_state` | `planned:phase-2/fixtures/` | `planned:phase-2/gate-reports/gate-report.json` | blocked |
+| RC2a | 2 | `tests/test_research_chain_phase2.py::test_factor_stage_binds_verified_partition` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed |
+| RC2b | 2 | `tests/test_research_chain_phase2.py::test_dataset_stage_binds_reviewed_policy_and_verified_inputs` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed |
+| RC2c | 2 | `tests/test_research_chain_phase2.py::test_dataset_stage_rejects_wrong_reviewed_quality_decision` + `tests/test_research_chain_phase2.py::test_dataset_stage_rejects_preprocessing_input_mismatch` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed-local; full-chain guard deferred to RC5b |
 | RC3a | 3 | `planned:test_qlib_export_receipt_and_training_chain` | `planned:phase-3/fixtures/` | `planned:phase-3/gate-reports/gate-report.json` | blocked |
 | RC3b | 3 | `planned:test_prediction_stage_requires_verified_artifact` | `planned:phase-3/fixtures/` | `planned:phase-3/gate-reports/gate-report.json` | blocked |
 | RC3c | 3 | `planned:test_model_stage_quality_and_tamper_failures_stop_run` | `planned:phase-3/fixtures/` | `planned:phase-3/gate-reports/gate-report.json` | blocked |
@@ -337,7 +342,9 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Run and preserve the final local unified gate for the Phase 1
-   implementation commit.
-2. Push the implementation commit and archive the remote 10-cell gate result.
-3. Finalize the Phase 1 phase record and evidence index before Phase 2 entry.
+1. Run and preserve the final local unified gate for the Phase 2 final CR
+   remediation commit.
+2. Push the remediation commit and archive the remote 10-cell gate result.
+3. Finalize the Phase 2 phase record and evidence index before Phase 3 entry.
+4. Start Phase 3 with the typed factor quality-decision contract slice, then
+   implement export/receipt, training, artifact, and prediction adapters.
