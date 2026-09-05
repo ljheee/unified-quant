@@ -1,0 +1,27 @@
+{
+  "layer": "research_chain",
+  "phase": 3,
+  "record_version": 1,
+  "implementation_commit": "4fdd7dfbbfafa65003e41589acf9175a13b8f344",
+  "status": "implemented_pending_remote_gate",
+  "entries": [
+    {
+      "kind": "local-gate-implementation-head",
+      "path": "implementation-gate-reports/gate-report.json",
+      "status": "passed"
+    },
+    {
+      "kind": "phase-record",
+      "path": "phase-record.json",
+      "status": "implemented_pending_remote_gate"
+    },
+    {
+      "kind": "local-gate-final-head",
+      "path": "final-gate-reports/gate-report.json",
+      "bound_commit": "4fdd7dfbbfafa65003e41589acf9175a13b8f344",
+      "status": "passed",
+      "test_summary": "428 passed"
+    }
+  ],
+  "notes": ["Remote 10-cell gate pending after implementation commit 4fdd7df."]
+}

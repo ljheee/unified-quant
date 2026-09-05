@@ -1,0 +1,74 @@
+{
+  "layer": "research_chain",
+  "phase": 3,
+  "record_version": 1,
+  "status": "implemented_pending_remote_gate",
+  "blocked_by": ["remote 10-cell unified gate at final implementation HEAD"],
+  "entry_criteria": {
+    "phase_2_exited": true,
+    "phase_2_final_cr_status": "exited_after_final_cr",
+    "phase_2_head": "da421c8",
+    "status": "passed"
+  },
+  "implementation_commit": "4fdd7dfbbfafa65003e41589acf9175a13b8f344",
+  "remediation_commits": [],
+  "evidence_paths": [
+    "src/uq/research_chain/adapters.py",
+    "src/uq/research_chain/resolver.py",
+    "tests/test_research_chain_phase2.py",
+    "tests/test_research_chain_phase3.py",
+    "evidence/research-chain/phase-3/implementation-gate-reports/gate-report.json",
+    "evidence/research-chain/phase-3/final-gate-reports/gate-report.json"
+  ],
+  "exit_criteria": [
+    {
+      "id": "RC3-owned-runtime-chain",
+      "status": "passed-local",
+      "evidence_paths": ["tests/test_research_chain_phase3.py"],
+      "test_ids": [
+        "tests/test_research_chain_phase3.py::test_model_chain_exports_trains_and_predicts"
+      ]
+    },
+    {
+      "id": "RC3-tamper-rejections",
+      "status": "passed-local",
+      "evidence_paths": ["tests/test_research_chain_phase3.py"],
+      "test_ids": [
+        "tests/test_research_chain_phase3.py::test_tampered_export_rejects_before_model_stage",
+        "tests/test_research_chain_phase3.py::test_tampered_artifact_rejects_read"
+      ]
+    },
+    {
+      "id": "RC3-quality-decision-boundary",
+      "status": "passed-local",
+      "evidence_paths": [
+        "tests/test_research_chain_phase2.py",
+        "tests/test_research_chain_phase3.py"
+      ],
+      "test_ids": [
+        "tests/test_research_chain_phase2.py::test_factor_stage_rejects_wrong_reviewed_decision",
+        "tests/test_research_chain_phase3.py::test_wrong_artifact_quality_report_rejects_publication"
+      ]
+    },
+    {
+      "id": "RC3-unified-gate-final-head",
+      "status": "passed-local-final-head",
+      "bound_commit": "4fdd7dfbbfafa65003e41589acf9175a13b8f344",
+      "extras": ["dev", "real", "qlib"],
+      "test_ids": ["scripts/run_gate.sh"],
+      "test_summary": "428 passed",
+      "evidence_paths": ["evidence/research-chain/phase-3/final-gate-reports/gate-report.json"]
+    },
+    {
+      "id": "RC3-unified-gate-remote",
+      "status": "pending-remote-head",
+      "evidence_paths": ["evidence/research-chain/phase-3/remote-ci/"],
+      "test_ids": ["github-actions:10-cell unified gate"]
+    }
+  ],
+  "notes": [
+    "Phase 3 adapters use only owning Qlib export/receipt, run/artifact, and prediction APIs.",
+    "Factor stage now requires a typed reviewed quality_decision envelope with checksum, trust anchor, and exact subject generation.",
+    "Artifact quality decisions are supplied as a subject-generation callback so the reviewed report binds the final artifact identity."
+  ]
+}
