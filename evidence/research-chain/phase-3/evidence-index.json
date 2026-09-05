@@ -3,7 +3,7 @@
   "phase": 3,
   "record_version": 1,
   "implementation_commit": "4fdd7dfbbfafa65003e41589acf9175a13b8f344",
-  "status": "implemented_pending_remote_gate",
+  "status": "exited_after_remote_gate",
   "entries": [
     {
       "kind": "local-gate-implementation-head",
@@ -21,7 +21,22 @@
       "bound_commit": "4fdd7dfbbfafa65003e41589acf9175a13b8f344",
       "status": "passed",
       "test_summary": "428 passed"
+    },
+    {
+      "kind": "remote-ci",
+      "path": "remote-ci/33943688601/",
+      "run_id": "33943688601",
+      "head_sha": "f4cfbdc83129e2f1e8641008b0a0b55d81e73a39",
+      "status": "passed"
     }
   ],
-  "notes": ["Remote 10-cell gate pending after implementation commit 4fdd7df."]
+  "notes": [
+    "Local final gate binds implementation commit 4fdd7df; remote CI binds evidence commit f4cfbdc."
+  ],
+  "remote_gate": {
+    "head_sha": "f4cfbdc83129e2f1e8641008b0a0b55d81e73a39",
+    "run_id": "33943688601",
+    "status": "passed",
+    "summary_path": "remote-ci/33943688601/run.json"
+  }
 }

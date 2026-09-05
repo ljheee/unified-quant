@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0–2 exited; Phase 3 implemented pending remote gate**
+Status: **gated implementation order v0.6; Phase 0–3 exited; Phase 4 is the next runtime phase**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -317,9 +317,9 @@ test node IDs before their owning phase exits.
 | RC2a | 2 | `tests/test_research_chain_phase2.py::test_factor_stage_binds_verified_partition` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed |
 | RC2b | 2 | `tests/test_research_chain_phase2.py::test_dataset_stage_binds_reviewed_policy_and_verified_inputs` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed |
 | RC2c | 2 | `tests/test_research_chain_phase2.py::test_dataset_stage_rejects_wrong_reviewed_quality_decision` + `tests/test_research_chain_phase2.py::test_dataset_stage_rejects_preprocessing_input_mismatch` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed-local; full-chain guard deferred to RC5b |
-| RC3a | 3 | `tests/test_research_chain_phase3.py::test_model_chain_exports_trains_and_predicts` | `tests/test_research_chain_phase3.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed-local; remote pending |
-| RC3b | 3 | `tests/test_research_chain_phase3.py::test_tampered_export_rejects_before_model_stage` + `tests/test_research_chain_phase3.py::test_tampered_artifact_rejects_read` | `tests/test_research_chain_phase3.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed-local; remote pending |
-| RC3c | 3 | `tests/test_research_chain_phase2.py::test_factor_stage_rejects_wrong_reviewed_decision` + `tests/test_research_chain_phase3.py::test_wrong_artifact_quality_report_rejects_publication` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed-local; remote pending |
+| RC3a | 3 | `tests/test_research_chain_phase3.py::test_model_chain_exports_trains_and_predicts` | `tests/test_research_chain_phase3.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed |
+| RC3b | 3 | `tests/test_research_chain_phase3.py::test_tampered_export_rejects_before_model_stage` + `tests/test_research_chain_phase3.py::test_tampered_artifact_rejects_read` | `tests/test_research_chain_phase3.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed |
+| RC3c | 3 | `tests/test_research_chain_phase2.py::test_factor_stage_rejects_wrong_reviewed_decision` + `tests/test_research_chain_phase3.py::test_wrong_artifact_quality_report_rejects_publication` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed |
 | RC4a | 4 | `planned:test_portfolio_stage_binds_prediction_and_universe` | `planned:phase-4/fixtures/` | `planned:phase-4/gate-reports/gate-report.json` | blocked |
 | RC4b | 4 | `planned:test_backtest_stage_binds_ordered_target_weights_and_inputs` | `planned:phase-4/fixtures/` | `planned:phase-4/gate-reports/gate-report.json` | blocked |
 | RC4c | 4 | `planned:test_market_input_tampering_rejects_before_execution` | `planned:phase-4/fixtures/` | `planned:phase-4/gate-reports/gate-report.json` | blocked |
@@ -342,6 +342,6 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Push the Phase 3 implementation commit and archive the remote 10-cell gate.
-2. Finalize the Phase 3 phase record and evidence index before Phase 4 entry.
-3. Expand RC4a/b/c into concrete test IDs before portfolio/backtest runtime.
+1. Expand RC4a/b/c into concrete test IDs and fixture paths before runtime.
+2. Implement the portfolio adapter first, then the backtest adapter in dependency order.
+3. Require governed market/calendar/suspension/corporate-action bindings before any backtest execution.
