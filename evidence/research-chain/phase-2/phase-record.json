@@ -41,10 +41,14 @@
         "tests/test_research_chain_phase2.py"
       ],
       "id": "RC2-dataset-governed-rejections",
-      "status": "passed-local",
+      "status": "passed-local-cr-remediation",
       "test_ids": [
         "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_wrong_reviewed_quality_decision",
-        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_preprocessing_input_mismatch"
+        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_preprocessing_input_mismatch",
+        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_adjusted_price_manifest_mismatch",
+        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_label_manifest_mismatch",
+        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_tampered_universe_membership",
+        "tests/test_research_chain_phase2.py::test_dataset_stage_rejects_missing_upstream_binding"
       ]
     },
     {
@@ -99,10 +103,13 @@
   "notes": [
     "Dataset policy is carried as a reviewed research-run contract.",
     "Dataset adapter validates upstream identities, universe membership, preprocessing recomputation, and external quality decisions before DatasetWriter publication.",
-    "Final local gate and remote CI both bind evidence commit e631740."
+    "Final local gate and remote CI both bind evidence commit e631740.",
+    "CR remediation strengthened adjusted/label manifest binding, universe generation checking, and missing/tampered upstream rejection coverage."
   ],
   "phase": 2,
   "record_version": 1,
-  "remediation_commits": [],
-  "status": "exited_after_cr_remediation"
+  "remediation_commits": [
+    "pending"
+  ],
+  "status": "in_progress_cr_remediation"
 }

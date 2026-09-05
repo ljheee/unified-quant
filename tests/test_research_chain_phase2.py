@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import dataclasses
+
 from datetime import date, datetime, timezone
 from pathlib import Path
 import json
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -369,6 +370,85 @@ def test_dataset_stage_rejects_wrong_reviewed_quality_decision(tmp_path: Path) -
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=wrong_decision,
+            preprocessing_quality_decision=_preprocessing_quality_decision(),
+        )
+
+
+def test_dataset_stage_rejects_adjusted_price_manifest_mismatch(tmp_path: Path) -> None:
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    binding = plan.stage_bindings[2]
+    plan = dataclasses.replace(plan, stage_bindings=(
+        *plan.stage_bindings[:2],
+        ResolvedStageBinding(
+            stage=binding.stage,
+            output_family=binding.output_family,
+            generation_id=binding.generation_id,
+            manifest_digest_sha256="f" * 64,
+            data_checksum_sha256=binding.data_checksum_sha256,
+        ),
+        *plan.stage_bindings[3:],
+    ))
+    with pytest.raises(ContractError, match="adjusted price binding manifest digest mismatch"):
+        adapter.run(
+            plan,
+            runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+            quality_decision=_dataset_quality_decision(),
+            preprocessing_quality_decision=_preprocessing_quality_decision(),
+        )
+
+
+def test_dataset_stage_rejects_label_manifest_mismatch(tmp_path: Path) -> None:
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    binding = plan.stage_bindings[3]
+    plan = dataclasses.replace(plan, stage_bindings=(
+        *plan.stage_bindings[:3],
+        ResolvedStageBinding(
+            stage=binding.stage,
+            output_family=binding.output_family,
+            generation_id=binding.generation_id,
+            manifest_digest_sha256="f" * 64,
+            data_checksum_sha256=binding.data_checksum_sha256,
+        ),
+        *plan.stage_bindings[4:],
+    ))
+    with pytest.raises(ContractError, match="label binding manifest digest mismatch"):
+        adapter.run(
+            plan,
+            runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+            quality_decision=_dataset_quality_decision(),
+            preprocessing_quality_decision=_preprocessing_quality_decision(),
+        )
+
+
+def test_dataset_stage_rejects_tampered_universe_membership(tmp_path: Path) -> None:
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    universe_path = tmp_path / "universes" / "research-whitelist" / plan.stage_bindings[1].generation_id / "members.csv"
+    universe_path.write_text(universe_path.read_text() + "EXTRA\n")
+    with pytest.raises(ContractError, match="tampered universe membership"):
+        adapter.run(
+            plan,
+            runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+            quality_decision=_dataset_quality_decision(),
+            preprocessing_quality_decision=_preprocessing_quality_decision(),
+        )
+
+
+def test_dataset_stage_rejects_missing_upstream_binding(tmp_path: Path) -> None:
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    bindings = list(plan.stage_bindings)
+    bindings[2] = ResolvedStageBinding(
+        stage=bindings[2].stage,
+        output_family=bindings[2].output_family,
+        generation_id="0" * 64,
+        manifest_digest_sha256="0" * 64,
+        data_checksum_sha256="0" * 64,
+    )
+    plan = dataclasses.replace(plan, stage_bindings=tuple(bindings))
+    with pytest.raises(ContractError, match="unpublished adjusted price dataset"):
+        adapter.run(
+            plan,
+            runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+            quality_decision=_dataset_quality_decision(),
             preprocessing_quality_decision=_preprocessing_quality_decision(),
         )
 

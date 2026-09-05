@@ -223,8 +223,8 @@ class DatasetStageAdapter:
         _, factor_frame = self.factor_store.read_partition(factor_binding.generation_id)
 
         universe_manifest = self.universe_store.read_manifest(universe_binding.generation_id)
-        if universe_binding.manifest_digest_sha256 and universe_manifest.get("manifest_digest_sha256") not in (None, universe_binding.manifest_digest_sha256):
-            raise ContractError("universe binding manifest digest mismatch")
+        if universe_manifest["generation_id"] != universe_binding.generation_id:
+            raise ContractError("universe binding generation mismatch")
         members = self.universe_store.read_members(
             universe_manifest["generation_id"],
             universe_id=universe_manifest["universe_id"],
@@ -237,6 +237,8 @@ class DatasetStageAdapter:
             raise ContractError("factor artifact has no universe members")
 
         adjusted_manifest = self.adjusted_price_store.read_manifest(adjusted_binding.generation_id)
+        if adjusted_manifest["manifest_digest_sha256"] != adjusted_binding.manifest_digest_sha256:
+            raise ContractError("adjusted price binding manifest digest mismatch")
         if adjusted_manifest["data_checksum_sha256"] != adjusted_binding.data_checksum_sha256:
             raise ContractError("adjusted price binding data checksum mismatch")
         label_manifest, label_frame = self.label_store.read_frame(label_binding.generation_id)
