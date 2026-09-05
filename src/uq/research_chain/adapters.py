@@ -855,6 +855,19 @@ class BacktestStageAdapter:
 class QlibExportStageAdapter:
     """Export and verify the governed model dataset through its owning APIs."""
 
+    @staticmethod
+    def _cache_files(root: str | Path) -> set[str]:
+        base = Path(root)
+        if not base.exists():
+            return set()
+        base_parts = base.resolve().parts
+        return {
+            path.resolve().as_posix()
+            for path in base.rglob("*")
+            if path.is_file()
+            and not any(part.startswith(".") for part in path.resolve().parts[len(base_parts):])
+        }
+
     def __init__(
         self,
         *,
@@ -881,7 +894,7 @@ class QlibExportStageAdapter:
         qlib_version: str,
         cache_root: str | Path,
         cache_files_before: set[str],
-        cache_files_after: set[str],
+        cache_files_after: set[str] | None,
         export_quality_decision: Mapping[str, Any],
         receipt_quality_decision: Mapping[str, Any],
         runner_identity: Mapping[str, str],
@@ -923,7 +936,7 @@ class QlibExportStageAdapter:
         if verified_export[0]["generation_id"] != export_manifest["generation_id"]:
             raise ContractError("Qlib export readback identity mismatch")
         cache_before = cache_files_before
-        cache_after = cache_files_after
+        cache_after = self._cache_files(cache_root) if cache_files_after is None else cache_files_after
         cache_root_prefix = str(cache_root).rstrip("/") + "/"
         new_cache_files = cache_after - cache_before
         if new_cache_files and not any(path.startswith(cache_root_prefix) for path in new_cache_files):

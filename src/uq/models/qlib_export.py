@@ -311,7 +311,7 @@ class QlibInitReceiptBuilder:
             "qlib_import_path": qlib_import_path,
             "qlib_version": qlib_version,
             "cache_root": cache_root,
-            "cache_diff_checksum_sha256": "0" * 64,
+            "cache_diff_checksum_sha256": _sha256_text("\n".join(sorted(new_cache_files))),
             "no_ungoverned_source_assertion": True,
             "quality_report_checksum_sha256": "0" * 64,
             "generation_id": "0" * 64,

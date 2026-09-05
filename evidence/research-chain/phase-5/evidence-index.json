@@ -1,36 +1,45 @@
 {
-  "evidence_index_version": 1,
-  "layer": "research_chain",
-  "phase": 5,
-  "status": "exited_after_remote_gate",
-  "implementation_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
+  "blocked_by": [
+    "preserve fresh local gate report at remediation HEAD",
+    "preserve and mechanically verify fresh remote CI aggregation at remediation HEAD"
+  ],
   "entries": [
     {
-      "id": "local-gate",
-      "status": "passed",
-      "path": "implementation-gate-reports/gate-report.json",
       "command": "UQ_GATE_EXTRAS=qlib bash scripts/run_gate.sh",
-      "git_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69"
+      "git_commit": "b891f8f0edf2690c704c6a7e45843f28bd63eeb2",
+      "id": "local-gate-before-final-cr",
+      "path": "implementation-gate-reports/gate-report.json",
+      "status": "historical"
     },
     {
-      "id": "requirements-lock",
-      "status": "passed",
-      "path": "implementation-gate-reports/requirements.lock.txt.sha256",
-      "sha256_file": "implementation-gate-reports/requirements.lock.txt.sha256"
-    },
-    {
-      "id": "remote-run",
-      "status": "passed",
+      "git_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
+      "id": "remote-run-before-final-cr",
       "path": "final-head-ci/33960583993/run.json",
       "run_id": 33960583993,
-      "git_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69"
+      "status": "passed-for-7ee7a8f-pending-remediation-head"
     },
     {
-      "id": "remote-aggregated-gates",
-      "status": "passed",
-      "path": "final-head-ci/33960583993/aggregated-gates.json",
       "cell_count": 10,
-      "git_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69"
+      "git_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
+      "id": "remote-aggregated-gates-verified",
+      "path": "final-head-ci/33960583993/aggregated-gates.json",
+      "status": "passed-for-7ee7a8f-pending-remediation-head",
+      "verifier": "scripts/verify_research_evidence.py"
+    },
+    {
+      "id": "fresh-remediation-local-gate",
+      "path": "remediation-gate-reports/gate-report.json",
+      "status": "pending"
+    },
+    {
+      "id": "fresh-remediation-remote-run",
+      "path": "final-head-ci/<remediation-run-id>/run.json",
+      "status": "pending"
     }
-  ]
+  ],
+  "evidence_index_version": 1,
+  "implementation_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
+  "layer": "research_chain",
+  "phase": 5,
+  "status": "cr_remediation_in_progress"
 }

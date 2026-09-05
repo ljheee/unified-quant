@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -323,7 +324,7 @@ class ResearchChainRunner:
             qlib_version=qlib_version or "0.9.7",
             cache_root=str(cache_root),
             cache_files_before=cache_before,
-            cache_files_after=self._cache_files(cache_root),
+            cache_files_after=None,
             export_quality_decision=self._decision(quality_decisions, "qlib_dataset_export"),
             receipt_quality_decision=self._decision(quality_decisions, "qlib_init_receipt"),
             runner_identity=dict(runner_identity),
@@ -807,9 +808,14 @@ class ResearchChainRunner:
         elif family == "qlib_init_receipt":
             manifest = self._read_receipt(binding)
         elif family == "model_run":
-            if self.model_adapter.last_result is None:
-                raise ContractError("model stage result is unavailable for readback")
-            manifest = self.model_adapter.last_result.run_manifest
+            run_path = self.run_store.root / "model_runs" / f"{generation_id}.json"
+            if not run_path.is_file():
+                raise ContractError("published model run is unavailable for readback")
+            try:
+                manifest = json.loads(run_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise ContractError("malformed model run manifest") from exc
+            ModelContractLoader.validate("model_run", manifest)
         elif family == "model_artifact":
             if self.model_adapter.last_result is None:
                 raise ContractError("model stage result is unavailable for readback")

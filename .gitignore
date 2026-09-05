@@ -15,5 +15,8 @@ data/
 
 /models/
 /predictions/
+/model_runs/
+/qlib_exports/
+/research_exports/
 /.qlib/
 qlib_data/

@@ -348,4 +348,16 @@ class ModelRunBuilder:
         _,manifest_digest=model_manifest_identities(manifest,schema_name="model_run",exclude_fields={"quality_report_checksum_sha256"})
         manifest["manifest_digest_sha256"] = manifest_digest
         ModelContractLoader.validate("model_run", manifest)
+        model_runs_dir = Path(store_root) / "model_runs"
+        model_runs_dir.mkdir(parents=True, exist_ok=True)
+        run_path = model_runs_dir / f"{run_content_generation_id}.json"
+        run_payload = json.dumps(manifest, sort_keys=True, indent=2) + "\n"
+        if run_path.exists():
+            existing = json.loads(run_path.read_text(encoding="utf-8"))
+            if existing != manifest:
+                raise ContractError("immutable model run manifest conflict")
+        else:
+            staging = run_path.with_name(f"{run_path.name}.staging.{uuid.uuid4().hex}")
+            staging.write_text(run_payload, encoding="utf-8")
+            os.replace(staging, run_path)
         return manifest, bound_definition

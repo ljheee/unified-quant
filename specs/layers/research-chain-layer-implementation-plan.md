@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0–5 exited after local and remote gate evidence; Phase 6 release reconciliation is next**
+Status: **gated implementation order v0.7; Phase 5 final CR remediation in progress; Phase 6 remains paused until fresh local and remote evidence passes**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -326,8 +326,13 @@ test node IDs before their owning phase exits.
 | RC4c | 4 | `tests/test_research_chain_phase4.py::test_portfolio_prediction_binding_mismatch_fails` + `tests/test_research_chain_phase4.py::test_portfolio_weight_overwrite_fails` + `tests/test_research_chain_phase4.py::test_wrong_portfolio_quality_decision_fails` + `tests/test_research_chain_phase4.py::test_backtest_rejects_corporate_action_overlap` + `tests/test_research_chain_phase4.py::test_backtest_rejects_tampered_price_panel` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/final-head-ci/33951272818/aggregated-gates.json` | passed |
 | RC5a | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
 | RC5b | 5 | `tests/test_research_chain_phase5.py::test_failed_stage_stops_run_and_publishes_failure` + `tests/test_research_chain_phase5.py::test_every_stage_failure_stops_later_stages` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
-| RC5c | 5 | `tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state` + `tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
+| RC5c | 5 | `tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state` + `tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions` | `tests/test_research_chain_phase5.py` | pending final remediation gate | blocked |
 | RC5d | 5 | `tests/test_research_chain_phase5.py::test_locked_environment_rebuild_is_reproducible` | `evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
+| RC5e | 5 | `scripts/run_gate.sh` | `evidence/research-chain/phase-5/remediation-gate-reports/gate-report.json` | remediation HEAD report | pending |
+| RC5f | 5 | `github-actions:10-cell unified gate` + `scripts/verify_research_evidence.py` | `evidence/research-chain/phase-5/final-head-ci/<remediation-run-id>/aggregated-gates.json` | `evidence/research-chain/phase-5/final-head-ci/<remediation-run-id>/run.json` | blocked |
+| RC5g | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `src/uq/research_chain/runner.py` | final gate | pending |
+| RC5h | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `src/uq/models/qlib_export.py` | final gate | pending |
+| RC5i | 5 | `scripts/verify_research_evidence.py` + `tests/test_research_chain_phase5.py::test_remote_evidence_aggregation_is_mechanically_verified` | `scripts/verify_research_evidence.py` | `evidence/research-chain/phase-5/final-head-ci/33960583993/` | passed |
 | RC6a | 6 | `scripts/run_gate.sh` | `evidence/research-chain/release/final-gate-report.json` | `evidence/research-chain/release/final-gate-report.json` | blocked |
 | RC6b | 6 | `github-actions:10-cell unified gate` | `evidence/research-chain/release/remote-matrix/` | `evidence/research-chain/release/remote-matrix/` | blocked |
 
@@ -343,6 +348,7 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Complete Phase 6 release reconciliation.
-2. Update the release record and evidence index after final local and remote gates.
-3. Require governed market/calendar/suspension/corporate-action bindings before any backtest execution.
+1. Complete Phase 5 CLI provider wiring or explicitly move execute-mode runtime to Phase 6 without leaving the current stub overclaimed.
+2. Preserve fresh local gate evidence at the remediation HEAD.
+3. Trigger remote CI, preserve the ten-cell raw artifacts/aggregation, and run the mechanical verifier.
+4. Only after Phase 5 re-exit, perform Phase 6 release reconciliation.

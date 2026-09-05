@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -10,6 +9,8 @@ from uq.contracts.model_layer import research_contract_identities
 from uq.errors import ContractError
 import dataclasses
 import pandas as pd
+
+from types import SimpleNamespace
 
 from tests.review_key import REVIEWER_PRIVATE_KEY
 from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision, research_contract_identities
@@ -480,3 +481,18 @@ def test_locked_environment_rebuild_is_reproducible(tmp_path: Path) -> None:
         and left["data_checksum_sha256"] == right["data_checksum_sha256"]
         for left, right in zip(stable_bindings(first_stored), stable_bindings(second_stored))
     )
+
+
+def test_remote_evidence_aggregation_is_mechanically_verified() -> None:
+    import importlib.util
+
+    script = ROOT / "scripts/verify_research_evidence.py"
+    spec = importlib.util.spec_from_file_location("verify_research_evidence", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    summary = module.verify(
+        ROOT / "evidence/research-chain/phase-5/final-head-ci/33960583993"
+    )
+    assert summary["cell_count"] == 10
+    assert summary["git_commit"] == "7ee7a8f60a5da61b686cb34550597df149a50f69"

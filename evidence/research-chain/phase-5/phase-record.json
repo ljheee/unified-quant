@@ -1,20 +1,25 @@
 {
-  "blocked_by": [],
+  "blocked_by": [
+    "CLI execute provider wiring remains a stub and must be implemented or explicitly deferred before Phase 5 re-exit",
+    "regenerate final HEAD local gate report after remediation commit",
+    "trigger remote CI on remediation commit and mechanically verify ten cells"
+  ],
   "entry_criteria": {
     "phase_4_exited": true,
     "phase_4_head": "fe628fb7a74d031e8d149590bf659cb80024d6da",
     "status": "passed"
   },
   "evidence_paths": [
-    "src/uq/research_chain/runner.py",
-    "src/uq/research_chain/cli.py",
-    "tests/test_research_chain_phase5.py",
+    "evidence/research-chain/phase-5/final-head-ci/33960583993/aggregated-gates.json",
+    "evidence/research-chain/phase-5/final-head-ci/33960583993/run.json",
+    "evidence/research-chain/phase-5/implementation-gate-reports/command.txt",
     "evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json",
     "evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt",
     "evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt.sha256",
-    "evidence/research-chain/phase-5/implementation-gate-reports/command.txt",
-    "evidence/research-chain/phase-5/final-head-ci/33960583993/run.json",
-    "evidence/research-chain/phase-5/final-head-ci/33960583993/aggregated-gates.json"
+    "scripts/verify_research_evidence.py",
+    "src/uq/research_chain/cli.py",
+    "src/uq/research_chain/runner.py",
+    "tests/test_research_chain_phase5.py"
   ],
   "exit_criteria": [
     {
@@ -37,7 +42,7 @@
     {
       "description": "CLI dry-run and execute modes follow the published contract",
       "id": "RC5c",
-      "status": "passed",
+      "status": "blocked",
       "test_ids": [
         "tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state",
         "tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions"
@@ -64,23 +69,45 @@
       "description": "Remote ten-cell unified gate passes on Phase 5 implementation HEAD",
       "evidence_path": "evidence/research-chain/phase-5/final-head-ci/33960583993/aggregated-gates.json",
       "id": "RC5f",
-      "status": "passed",
+      "status": "passed-for-7ee7a8f-pending-remediation-head",
       "test_ids": [
         "github-actions:10-cell unified gate"
+      ]
+    },
+    {
+      "id": "RC5g-result-closure",
+      "status": "passed-local-pending-final-evidence",
+      "test_ids": [
+        "tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end"
+      ]
+    },
+    {
+      "id": "RC5h-cache-diff",
+      "status": "passed-local-pending-final-evidence",
+      "test_ids": [
+        "tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end"
+      ]
+    },
+    {
+      "id": "RC5i-evidence-verifier",
+      "status": "passed-local-pending-final-evidence",
+      "test_ids": [
+        "scripts/verify_research_evidence.py",
+        "tests/test_research_chain_phase5.py::test_remote_evidence_aggregation_is_mechanically_verified"
       ]
     }
   ],
   "implementation_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
   "layer": "research_chain",
   "notes": [
-    "Phase 5 runner, result reconciliation, CLI, end-to-end, per-stage failure, and locked-environment tests are implemented.",
-    "The preserved local gate covers dev+real+qlib on Python 3.12.13 and macOS arm64.",
-    "Remote CI run 33960583993 passed all six base and four Qlib runtime cells on commit 7ee7a8f60a5da61b686cb34550597df149a50f69."
+    "Final CR remediation fixes Qlib cache snapshot timing, cache diff identity, disk-backed model-run readback, and complete result stage closure.",
+    "Remote evidence for 7ee7a8f is verified by scripts/verify_research_evidence.py but no longer certifies the remediation HEAD.",
+    "Phase 5 remains blocked pending local and remote gate evidence at the remediation commit."
   ],
   "phase": 5,
   "record_version": 1,
   "remediation_commits": [
     "7ee7a8f60a5da61b686cb34550597df149a50f69"
   ],
-  "status": "exited_after_remote_gate"
+  "status": "cr_remediation_in_progress"
 }

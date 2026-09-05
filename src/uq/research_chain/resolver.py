@@ -420,8 +420,19 @@ class FileResearchRunStore:
             raise ContractError("research result reconciliation generation mismatch")
         if result_binding["manifest_digest_sha256"] != manifest_digest_sha256:
             raise ContractError("research result reconciliation digest mismatch")
-        if not any(value == "passed" for value in result["readback_status"].values()):
-            raise ContractError("research result has no passed readback evidence")
+        runtime_stage_records = result["stage_records"][1:-1]
+        if [record.get("stage") for record in runtime_stage_records] != _STAGE_PLAN[1:-1]:
+            raise ContractError("research result stage closure is incomplete")
+        if any(record.get("status") != "passed" for record in runtime_stage_records):
+            raise ContractError("research result contains failed stages")
+        for record in runtime_stage_records:
+            bindings = record.get("output_bindings")
+            if not isinstance(bindings, list) or not bindings:
+                raise ContractError(f"research result stage output is missing: {record['stage']}")
+            for binding in bindings:
+                family = binding.get("output_family")
+                if result["readback_status"].get(family) != "passed":
+                    raise ContractError(f"research result has no passed readback evidence: {family}")
         return result
 
     def _atomic_write(self, relative_path: Path, document: Mapping[str, Any]) -> Path:
