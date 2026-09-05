@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0–4 exited; Phase 5 implementation is local-gate green and pending remote evidence**
+Status: **gated implementation order v0.6; Phase 0–5 exited after local and remote gate evidence; Phase 6 release reconciliation is next**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -316,7 +316,7 @@ test node IDs before their owning phase exits.
 | RC1c | 1 | `tests/test_research_chain_phase1.py::test_provider_failures_are_typed` + `tests/test_research_chain_phase1.py::test_request_failures_are_typed` | `tests/test_research_chain_phase1.py` | `evidence/research-chain/phase-1/gate-reports/gate-report.json` | passed |
 | RC2a | 2 | `tests/test_research_chain_phase2.py::test_factor_stage_binds_verified_partition` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed |
 | RC2b | 2 | `tests/test_research_chain_phase2.py::test_dataset_stage_binds_reviewed_policy_and_verified_inputs` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed |
-| RC2c | 2 | `tests/test_research_chain_phase2.py::test_dataset_stage_rejects_wrong_reviewed_quality_decision` + `tests/test_research_chain_phase2.py::test_dataset_stage_rejects_preprocessing_input_mismatch` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed-local; full-chain guard deferred to RC5b |
+| RC2c | 2 | `tests/test_research_chain_phase2.py::test_dataset_stage_rejects_wrong_reviewed_quality_decision` + `tests/test_research_chain_phase2.py::test_dataset_stage_rejects_preprocessing_input_mismatch` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-2/final-gate-reports/gate-report.json` | passed |
 | RC3a | 3 | `tests/test_research_chain_phase3.py::test_model_chain_exports_trains_and_predicts` | `tests/test_research_chain_phase3.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed |
 | RC3b | 3 | `tests/test_research_chain_phase3.py::test_tampered_export_rejects_before_model_stage` + `tests/test_research_chain_phase3.py::test_tampered_artifact_rejects_read` | `tests/test_research_chain_phase3.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed |
 | RC3c | 3 | `tests/test_research_chain_phase2.py::test_factor_stage_rejects_wrong_reviewed_decision` + `tests/test_research_chain_phase3.py::test_wrong_artifact_quality_report_rejects_publication` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed |
@@ -324,10 +324,10 @@ test node IDs before their owning phase exits.
 | RC4a | 4 | `tests/test_research_chain_phase4.py::test_portfolio_stage_binds_prediction_and_universe` + `tests/test_research_chain_phase4.py::test_portfolio_chain_links_previous_target_generation` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/implementation-gate-reports/gate-report.json` | passed |
 | RC4b | 4 | `tests/test_research_chain_phase4.py::test_backtest_stage_publishes_ordered_weight_lineage` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/implementation-gate-reports/gate-report.json` | passed |
 | RC4c | 4 | `tests/test_research_chain_phase4.py::test_portfolio_prediction_binding_mismatch_fails` + `tests/test_research_chain_phase4.py::test_portfolio_weight_overwrite_fails` + `tests/test_research_chain_phase4.py::test_wrong_portfolio_quality_decision_fails` + `tests/test_research_chain_phase4.py::test_backtest_rejects_corporate_action_overlap` + `tests/test_research_chain_phase4.py::test_backtest_rejects_tampered_price_panel` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/final-head-ci/33951272818/aggregated-gates.json` | passed |
-| RC5a | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed-local; remote pending |
-| RC5b | 5 | `tests/test_research_chain_phase5.py::test_failed_stage_stops_run_and_publishes_failure` + `tests/test_research_chain_phase5.py::test_every_stage_failure_stops_later_stages` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed-local; remote pending |
-| RC5c | 5 | `tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state` + `tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed-local; remote pending |
-| RC5d | 5 | `tests/test_research_chain_phase5.py::test_locked_environment_rebuild_is_reproducible` | `evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed-local; remote pending |
+| RC5a | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
+| RC5b | 5 | `tests/test_research_chain_phase5.py::test_failed_stage_stops_run_and_publishes_failure` + `tests/test_research_chain_phase5.py::test_every_stage_failure_stops_later_stages` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
+| RC5c | 5 | `tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state` + `tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
+| RC5d | 5 | `tests/test_research_chain_phase5.py::test_locked_environment_rebuild_is_reproducible` | `evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
 | RC6a | 6 | `scripts/run_gate.sh` | `evidence/research-chain/release/final-gate-report.json` | `evidence/research-chain/release/final-gate-report.json` | blocked |
 | RC6b | 6 | `github-actions:10-cell unified gate` | `evidence/research-chain/release/remote-matrix/` | `evidence/research-chain/release/remote-matrix/` | blocked |
 
@@ -343,6 +343,6 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Push the Phase 5 local-gate green implementation.
-2. Collect the remote 10-cell unified-gate evidence on that implementation HEAD.
+1. Complete Phase 6 release reconciliation.
+2. Update the release record and evidence index after final local and remote gates.
 3. Require governed market/calendar/suspension/corporate-action bindings before any backtest execution.

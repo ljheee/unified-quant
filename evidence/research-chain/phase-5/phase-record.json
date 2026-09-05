@@ -1,5 +1,5 @@
 {
-  "blocked_by": ["remote_10_cell_unified_gate_on_phase5_head"],
+  "blocked_by": [],
   "entry_criteria": {
     "phase_4_exited": true,
     "phase_4_head": "fe628fb7a74d031e8d149590bf659cb80024d6da",
@@ -12,57 +12,75 @@
     "evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json",
     "evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt",
     "evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt.sha256",
-    "evidence/research-chain/phase-5/implementation-gate-reports/command.txt"
+    "evidence/research-chain/phase-5/implementation-gate-reports/command.txt",
+    "evidence/research-chain/phase-5/final-head-ci/33960583993/run.json",
+    "evidence/research-chain/phase-5/final-head-ci/33960583993/aggregated-gates.json"
   ],
   "exit_criteria": [
     {
       "description": "Execute publishes all expected outputs and one successful result",
       "id": "RC5a",
-      "status": "passed_local",
-      "test_ids": ["tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end"]
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end"
+      ]
     },
     {
       "description": "Each simulated stage failure stops later stages",
       "id": "RC5b",
-      "status": "passed_local",
-      "test_ids": ["tests/test_research_chain_phase5.py::test_failed_stage_stops_run_and_publishes_failure", "tests/test_research_chain_phase5.py::test_every_stage_failure_stops_later_stages"]
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase5.py::test_failed_stage_stops_run_and_publishes_failure",
+        "tests/test_research_chain_phase5.py::test_every_stage_failure_stops_later_stages"
+      ]
     },
     {
       "description": "CLI dry-run and execute modes follow the published contract",
       "id": "RC5c",
-      "status": "passed_local",
-      "test_ids": ["tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state", "tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions"]
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state",
+        "tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions"
+      ]
     },
     {
       "description": "Rebuild under one locked environment satisfies declared reproducibility",
       "id": "RC5d",
-      "status": "passed_local",
-      "test_ids": ["tests/test_research_chain_phase5.py::test_locked_environment_rebuild_is_reproducible"]
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase5.py::test_locked_environment_rebuild_is_reproducible"
+      ]
     },
     {
       "description": "Unified local gate remains green",
+      "evidence_path": "evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json",
       "id": "RC5e",
-      "status": "passed_local",
-      "test_ids": ["scripts/run_gate.sh"],
-      "evidence_path": "evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json"
+      "status": "passed",
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ]
     },
     {
       "description": "Remote ten-cell unified gate passes on Phase 5 implementation HEAD",
+      "evidence_path": "evidence/research-chain/phase-5/final-head-ci/33960583993/aggregated-gates.json",
       "id": "RC5f",
-      "status": "blocked",
-      "test_ids": ["github-actions:10-cell unified gate"],
-      "evidence_path": "pending"
+      "status": "passed",
+      "test_ids": [
+        "github-actions:10-cell unified gate"
+      ]
     }
   ],
-  "implementation_commit": "b1ce585e56f37c93a35ae829511f6b112e9c7b26",
+  "implementation_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
   "layer": "research_chain",
   "notes": [
     "Phase 5 runner, result reconciliation, CLI, end-to-end, per-stage failure, and locked-environment tests are implemented.",
     "The preserved local gate covers dev+real+qlib on Python 3.12.13 and macOS arm64.",
-    "Phase 5 cannot exit until a remote ten-cell run is collected on this implementation HEAD."
+    "Remote CI run 33960583993 passed all six base and four Qlib runtime cells on commit 7ee7a8f60a5da61b686cb34550597df149a50f69."
   ],
   "phase": 5,
   "record_version": 1,
-  "remediation_commits": [],
-  "status": "implemented_local_gate_green"
+  "remediation_commits": [
+    "7ee7a8f60a5da61b686cb34550597df149a50f69"
+  ],
+  "status": "exited_after_remote_gate"
 }

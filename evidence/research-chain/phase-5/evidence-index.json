@@ -1,0 +1,36 @@
+{
+  "evidence_index_version": 1,
+  "layer": "research_chain",
+  "phase": 5,
+  "status": "exited_after_remote_gate",
+  "implementation_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
+  "entries": [
+    {
+      "id": "local-gate",
+      "status": "passed",
+      "path": "implementation-gate-reports/gate-report.json",
+      "command": "UQ_GATE_EXTRAS=qlib bash scripts/run_gate.sh",
+      "git_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69"
+    },
+    {
+      "id": "requirements-lock",
+      "status": "passed",
+      "path": "implementation-gate-reports/requirements.lock.txt.sha256",
+      "sha256_file": "implementation-gate-reports/requirements.lock.txt.sha256"
+    },
+    {
+      "id": "remote-run",
+      "status": "passed",
+      "path": "final-head-ci/33960583993/run.json",
+      "run_id": 33960583993,
+      "git_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69"
+    },
+    {
+      "id": "remote-aggregated-gates",
+      "status": "passed",
+      "path": "final-head-ci/33960583993/aggregated-gates.json",
+      "cell_count": 10,
+      "git_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69"
+    }
+  ]
+}
