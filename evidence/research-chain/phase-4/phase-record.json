@@ -1,0 +1,27 @@
+{
+  "layer": "research_chain",
+  "phase": 4,
+  "record_version": 1,
+  "status": "in_progress",
+  "blocked_by": [
+    "portfolio definition runtime synthesis boundary must be frozen before publication",
+    "remote 10-cell gate evidence after implementation commit"
+  ],
+  "entry_criteria": {
+    "phase_3_exited": true,
+    "phase_3_final_cr_status": "exited_after_final_cr",
+    "phase_3_head": "7dcb8cb",
+    "status": "passed"
+  },
+  "implementation_commit": null,
+  "remediation_commits": [],
+  "evidence_paths": [
+    "src/uq/research_chain/adapters.py",
+    "tests/test_research_chain_phase4.py",
+    "evidence/research-chain/phase-4/implementation-gate-reports/gate-report.json"
+  ],
+  "exit_criteria": [],
+  "notes": [
+    "Phase 4 implementation began after Phase 3 final CR exit."
+  ]
+}

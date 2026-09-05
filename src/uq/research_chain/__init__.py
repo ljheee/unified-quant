@@ -1,6 +1,14 @@
 """Research Chain orchestration contracts."""
 
-from .adapters import DatasetStageAdapter, FactorStageAdapter
+from .adapters import (
+    BacktestStageAdapter,
+    DatasetStageAdapter,
+    FactorStageAdapter,
+    ModelStageAdapter,
+    PortfolioStageAdapter,
+    PredictionStageAdapter,
+    QlibExportStageAdapter,
+)
 from .resolver import FileResearchRunStore
 from .resolver import (
     ResearchChainRequestResolver,
@@ -10,8 +18,13 @@ from .resolver import (
 )
 
 __all__ = [
+    "BacktestStageAdapter",
     "DatasetStageAdapter",
     "FactorStageAdapter",
+    "ModelStageAdapter",
+    "PortfolioStageAdapter",
+    "PredictionStageAdapter",
+    "QlibExportStageAdapter",
     "FileResearchRunStore",
     "ResearchChainRequestResolver",
     "ResearchResolutionError",

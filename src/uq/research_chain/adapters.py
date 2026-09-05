@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 import pandas as pd
 
+from ..backtest.engine import BacktestEngine, BacktestResultStore
 from ..contracts.canonical_v2 import file_sha256_bytes
 from ..contracts.gate_contracts import adjustment_snapshot_generation
 from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, canonical_json, model_manifest_identities, research_contract_identities, sha256_bytes
@@ -19,8 +20,15 @@ from ..models.trainer import ModelRunBuilder
 from ..models.dataset_writer import DatasetWriter
 from ..models.feature_preprocessing import FeaturePreprocessorBuilder
 from ..models.features import FeatureSchemaBuilder, FeatureSchemaValidator
+from ..portfolio.builder import PortfolioBuilder, PortfolioDefinitionBinding, TargetWeightStore
 from .contracts import PublishedState
-from .owning_contracts import AdjustedPriceDatasetStore, FeaturePreprocessingStore, FeatureSchemaStore, LabelStore
+from .owning_contracts import (
+    AdjustedPriceDatasetStore,
+    BacktestConfigStore,
+    FeaturePreprocessingStore,
+    FeatureSchemaStore,
+    LabelStore,
+)
 from .resolver import FileResearchRunStore, ResolvedExecutionPlan, _STAGE_PLAN
 
 
@@ -458,6 +466,268 @@ class PredictionStageResult:
     manifest: dict[str, Any]
     frame: pd.DataFrame
     published_state: PublishedState
+
+
+@dataclass(frozen=True)
+class PortfolioStageResult:
+    definition_manifest: dict[str, Any]
+    target_weight_manifests: dict[str, dict[str, Any]]
+    target_weight_frames: dict[str, pd.DataFrame]
+    published_state: PublishedState
+
+
+@dataclass(frozen=True)
+class BacktestStageResult:
+    config_manifest: dict[str, Any]
+    result_manifest: dict[str, Any]
+    result_artifacts: dict[str, pd.DataFrame]
+    published_state: PublishedState
+
+
+def _synthesized_portfolio_definition(
+    plan: ResolvedExecutionPlan,
+    *,
+    template: Mapping[str, Any],
+    prediction_generation_id: str,
+    universe_generation_id: str,
+    created_at: str,
+) -> dict[str, Any]:
+    template_keys = {
+        "contract_version", "portfolio_name", "weight_scheme", "scheme_parameters",
+        "score_policy", "constraints", "rebalance_schedule", "industry_source_binding",
+    }
+    definition = {
+        **{key: value for key, value in template.items() if key in template_keys},
+        "schema_version": "1.0.0",
+        "universe_snapshot_generation_id": universe_generation_id,
+        "prediction_set_generation_id": prediction_generation_id,
+        "run_id": plan.request["run_id"],
+        "created_at": created_at,
+        "quality_report_checksum_sha256": "0" * 64,
+        "manifest_digest_sha256": "0" * 64,
+        "generation_id": "0" * 64,
+    }
+    definition["generation_id"], definition["manifest_digest_sha256"] = model_manifest_identities(
+        definition, schema_name="portfolio_definition"
+    )
+    return definition
+
+
+class PortfolioStageAdapter:
+    """Construct daily target weights from the reviewed prediction stage."""
+
+    def __init__(
+        self,
+        *,
+        universe_store: UniverseSnapshotStore,
+        portfolio_builder: PortfolioBuilder,
+        target_weight_store: TargetWeightStore,
+        run_store: FileResearchRunStore,
+    ) -> None:
+        self.universe_store = universe_store
+        self.portfolio_builder = portfolio_builder
+        self.target_weight_store = target_weight_store
+        self.run_store = run_store
+
+    def run(
+        self,
+        plan: ResolvedExecutionPlan,
+        *,
+        prediction_stage_result: PredictionStageResult,
+        decision_dates: Sequence[str],
+        definition_quality_decision: Mapping[str, Any],
+        weights_quality_decision: Mapping[str, Any],
+        runner_identity: Mapping[str, str],
+        created_at: str | None = None,
+    ) -> PortfolioStageResult:
+        if not decision_dates:
+            raise ContractError("portfolio construction requires decision dates")
+        prediction_binding = _stage_binding(
+            plan, stage="prediction_publication", output_family="prediction_set"
+        )
+        if prediction_stage_result.manifest["generation_id"] != prediction_binding.generation_id:
+            raise ContractError("portfolio prediction binding mismatch")
+        if (
+            prediction_stage_result.manifest["manifest_digest_sha256"]
+            != prediction_binding.manifest_digest_sha256
+        ):
+            raise ContractError("portfolio prediction manifest digest mismatch")
+        universe_binding = _stage_binding(
+            plan, stage="factor_computation", output_family="universe_snapshot"
+        )
+        definition = _synthesized_portfolio_definition(
+            plan,
+            template=plan.request["portfolio_definition_template"],
+            prediction_generation_id=prediction_binding.generation_id,
+            universe_generation_id=universe_binding.generation_id,
+            created_at=created_at or prediction_stage_result.manifest["created_at"],
+        )
+        report = definition_quality_decision.get("owning_report")
+        if not isinstance(report, dict):
+            raise ContractError("portfolio stage requires a bound owning quality report")
+        bound_definition, _ = PortfolioDefinitionBinding.bind(
+            definition, quality_decision=dict(definition_quality_decision)
+        )
+        members = self.universe_store.read_members(
+            universe_binding.generation_id,
+            universe_id=plan.request["universe_id"],
+        )
+        universe_instruments = members["instrument"].astype(str).tolist()
+
+        target_manifests: dict[str, dict[str, Any]] = {}
+        target_frames: dict[str, pd.DataFrame] = {}
+        previous_generation: str | None = None
+        previous_frame: pd.DataFrame | None = None
+        output_bindings: list[dict[str, Any]] = []
+        for decision_date in sorted(set(decision_dates)):
+            scores = prediction_stage_result.frame.set_index("instrument")["score"]
+            previous_target_weights = (
+                dict(zip(previous_frame["instrument"], previous_frame["weight"]))
+                if previous_frame is not None else None
+            )
+            manifest, frame = self.portfolio_builder.build(
+                definition=bound_definition,
+                prediction_generation_id=prediction_binding.generation_id,
+                decision_date=decision_date,
+                scores=scores,
+                universe_instruments=universe_instruments,
+                previous_target_weights=previous_target_weights,
+                quality_decision=None,
+            )
+            self.target_weight_store.publish(
+                manifest,
+                frame,
+                quality_decision=dict(weights_quality_decision),
+                previous_target_weights_generation_id=previous_generation,
+            )
+            readback_manifest, readback_frame = self.target_weight_store.read(
+                manifest["generation_id"], decision_date
+            )
+            if readback_manifest["generation_id"] != manifest["generation_id"]:
+                raise ContractError("target-weight readback identity mismatch")
+            target_manifests[decision_date] = readback_manifest
+            target_frames[decision_date] = readback_frame
+            previous_generation = readback_manifest["generation_id"]
+            previous_frame = readback_frame
+            output_bindings.append({
+                "output_family": "target_weights",
+                "generation_id": readback_manifest["generation_id"],
+                "manifest_digest_sha256": readback_manifest["manifest_digest_sha256"],
+                "data_checksum_sha256": readback_manifest["weights_checksum_sha256"],
+                "physical_path": f"target_weights/date={decision_date}/generation={readback_manifest['generation_id']}",
+                "quality_decision_checksum_sha256": readback_manifest["quality_report_checksum_sha256"],
+                "failure_reason": None,
+            })
+        state = build_stage_state(
+            plan,
+            stage="portfolio_construction",
+            output_bindings=output_bindings,
+            runner_identity=runner_identity,
+            created_at=created_at,
+        )
+        return PortfolioStageResult(
+            definition_manifest=bound_definition,
+            target_weight_manifests=target_manifests,
+            target_weight_frames=target_frames,
+            published_state=self.run_store.publish_state(state, stage="portfolio_construction"),
+        )
+
+
+class BacktestStageAdapter:
+    """Execute one governed backtest from ordered portfolio stage outputs."""
+
+    def __init__(
+        self,
+        *,
+        backtest_engine: BacktestEngine,
+        backtest_result_store: BacktestResultStore,
+        backtest_config_store: BacktestConfigStore,
+        run_store: FileResearchRunStore,
+    ) -> None:
+        self.backtest_engine = backtest_engine
+        self.backtest_result_store = backtest_result_store
+        self.backtest_config_store = backtest_config_store
+        self.run_store = run_store
+
+    def run(
+        self,
+        plan: ResolvedExecutionPlan,
+        *,
+        portfolio_stage_result: PortfolioStageResult,
+        price_panel: pd.DataFrame,
+        suspension_dates: set[tuple[str, str]] | None,
+        corporate_action_instruments: set[str] | None,
+        quality_decision: Mapping[str, Any],
+        runner_identity: Mapping[str, str],
+        created_at: str | None = None,
+    ) -> BacktestStageResult:
+        config_binding = _stage_binding(
+            plan, stage="backtest_execution", output_family="backtest_config"
+        )
+        config = self.backtest_config_store.read_manifest(
+            config_binding.generation_id
+        )
+        if config["manifest_digest_sha256"] != config_binding.manifest_digest_sha256:
+            raise ContractError("backtest config manifest digest mismatch")
+        if (
+            config["universe_binding"]["snapshot_generation_id"]
+            != portfolio_stage_result.definition_manifest["universe_snapshot_generation_id"]
+        ):
+            raise ContractError("backtest universe binding mismatch")
+        ordered_dates = sorted(portfolio_stage_result.target_weight_manifests)
+        weight_partitions = {
+            decision_date: portfolio_stage_result.target_weight_frames[decision_date]
+            for decision_date in ordered_dates
+        }
+        target_weight_generations = [
+            {
+                "decision_date": decision_date,
+                "generation_id": portfolio_stage_result.target_weight_manifests[decision_date]["generation_id"],
+                "manifest_digest_sha256": portfolio_stage_result.target_weight_manifests[decision_date]["manifest_digest_sha256"],
+            }
+            for decision_date in ordered_dates
+        ]
+        manifest, artifacts = self.backtest_engine.run(
+            config=config,
+            portfolio_definition=portfolio_stage_result.definition_manifest,
+            weight_partitions=weight_partitions,
+            price_panel=price_panel,
+            suspension_dates=suspension_dates,
+            corporate_action_instruments=corporate_action_instruments,
+            quality_decision=dict(quality_decision),
+        )
+        self.backtest_result_store.publish(
+            manifest,
+            artifacts,
+            quality_decision=dict(quality_decision),
+            target_weight_generations=target_weight_generations,
+        )
+        readback_manifest, readback_artifacts = self.backtest_result_store.read(
+            manifest["generation_id"]
+        )
+        if readback_manifest["generation_id"] != manifest["generation_id"]:
+            raise ContractError("backtest result readback identity mismatch")
+        state = build_stage_state(
+            plan,
+            stage="backtest_execution",
+            output_bindings=[{
+                "output_family": "backtest_result",
+                "generation_id": readback_manifest["generation_id"],
+                "manifest_digest_sha256": readback_manifest["manifest_digest_sha256"],
+                "data_checksum_sha256": readback_manifest["equity_curve_artifact"]["checksum_sha256"],
+                "physical_path": f"backtest_results/result={readback_manifest['generation_id']}",
+                "quality_decision_checksum_sha256": readback_manifest["quality_report_checksum_sha256"],
+                "failure_reason": None,
+            }],
+            runner_identity=runner_identity,
+            created_at=created_at,
+        )
+        return BacktestStageResult(
+            config_manifest=config,
+            result_manifest=readback_manifest,
+            result_artifacts=readback_artifacts,
+            published_state=self.run_store.publish_state(state, stage="backtest_execution"),
+        )
 
 
 class QlibExportStageAdapter:
