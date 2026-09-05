@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.8; Phase 0–5 exited after final CR and CLI wiring evidence; Phase 6 release reconciliation is next**
+Status: **released v0.8; Phase 0–6 exited after local and mechanically verified remote ten-cell gate evidence**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -333,8 +333,8 @@ test node IDs before their owning phase exits.
 | RC5g | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `src/uq/research_chain/runner.py` | `evidence/research-chain/phase-5/cli-wiring-gate-reports/gate-report.json` | passed |
 | RC5h | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `src/uq/models/qlib_export.py` | `evidence/research-chain/phase-5/cli-wiring-gate-reports/gate-report.json` | passed |
 | RC5i | 5 | `scripts/verify_research_evidence.py` + `tests/test_research_chain_phase5.py::test_remote_evidence_aggregation_is_mechanically_verified` | `scripts/verify_research_evidence.py` | `evidence/research-chain/phase-5/final-head-ci/33960583993/` | passed |
-| RC6a | 6 | `scripts/run_gate.sh` | `evidence/research-chain/release/final-gate-report.json` | `evidence/research-chain/release/final-gate-report.json` | pending |
-| RC6b | 6 | `github-actions:10-cell unified gate` + `scripts/verify_research_evidence.py` | `evidence/research-chain/release/remote-matrix/aggregated-gates.json` | `evidence/research-chain/release/remote-matrix/run.json` | pending |
+| RC6a | 6 | `scripts/run_gate.sh` | `evidence/research-chain/release/final-gate-report.json` | `evidence/research-chain/release/final-gate-report.json` | passed |
+| RC6b | 6 | `github-actions:10-cell unified gate` + `scripts/verify_research_evidence.py` | `evidence/research-chain/release/remote-matrix/aggregated-gates.json` | `evidence/research-chain/release/remote-matrix/run.json` | passed |
 
 ## 10. Risks
 
@@ -348,6 +348,6 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Complete Phase 6 release reconciliation.
-2. Preserve release-record and final evidence at the release HEAD.
-3. Rerun the unified gate and remote ten-cell verifier before release declaration.
+1. Research Chain v0.8 is reconciled and released.
+2. Any future semantic change starts a new contract version and phase record.
+3. Never reuse this release evidence for a different HEAD.

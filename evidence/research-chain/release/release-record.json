@@ -1,0 +1,45 @@
+{
+  "evidence": {
+    "local_gate": "evidence/research-chain/release/final-gate-report.json",
+    "phase_records": [
+      "evidence/research-chain/phase-0/phase-record.json",
+      "evidence/research-chain/phase-1/phase-record.json",
+      "evidence/research-chain/phase-2/phase-record.json",
+      "evidence/research-chain/phase-3/phase-record.json",
+      "evidence/research-chain/phase-4/phase-record.json",
+      "evidence/research-chain/phase-5/phase-record.json",
+      "evidence/research-chain/phase-6/phase-record.json"
+    ],
+    "remote_matrix": "evidence/research-chain/release/remote-matrix/aggregated-gates.json",
+    "remote_run": "evidence/research-chain/release/remote-matrix/run.json",
+    "verifier": "scripts/verify_research_evidence.py"
+  },
+  "layer": "research_chain",
+  "manifest_digest_sha256": null,
+  "record_version": 1,
+  "release": "v0.8",
+  "release_head": "6f6e663e12346f6168c9a0ad19ab4c49c14fc8ac",
+  "release_record_content_generation_id": null,
+  "remote_ci_run_id": "33967568614",
+  "risk_limitations": [
+    "Factor layer official reference-price provenance remains outside the scope of Research Chain release certification."
+  ],
+  "scope": {
+    "execution_modes": [
+      "dry-run",
+      "execute"
+    ],
+    "phases_exited": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "research_chain_version": "1.0.0",
+    "security_lineage_fail_closed_deferred": false
+  },
+  "status": "released"
+}

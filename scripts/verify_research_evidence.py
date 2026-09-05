@@ -44,9 +44,9 @@ def verify(directory: Path) -> dict[str, Any]:
     run_path = directory / "run.json"
     aggregated = _read_json(aggregated_path)
     run = _read_json(run_path)
-    run_id = directory.name
+    run_id = str(aggregated.get("run_id") or directory.name)
     if not run_id.isdigit():
-        raise SystemExit(f"evidence directory must be a numeric CI run id: {directory}")
+        raise SystemExit(f"evidence directory must resolve to a numeric CI run id: {directory}")
     if aggregated.get("aggregate_result") != "passed" or run.get("conclusion") != "success":
         raise SystemExit("remote gate evidence is not successful")
     if run.get("status") != "completed":

@@ -1,9 +1,5 @@
 {
-  "blocked_by": [
-    "preserve final local gate at release HEAD",
-    "preserve and mechanically verify final remote ten-cell matrix at release HEAD",
-    "bind Phase 0-6 records into release record"
-  ],
+  "blocked_by": [],
   "entry_criteria": {
     "phase_5_exited": true,
     "phase_5_head": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
@@ -16,6 +12,12 @@
     "evidence/research-chain/phase-3/phase-record.json",
     "evidence/research-chain/phase-4/phase-record.json",
     "evidence/research-chain/phase-5/phase-record.json",
+    "evidence/research-chain/release/final-gate-report.json",
+    "evidence/research-chain/release/final-gate-report/command.txt",
+    "evidence/research-chain/release/final-gate-report/requirements.lock.txt",
+    "evidence/research-chain/release/final-gate-report/requirements.lock.txt.sha256",
+    "evidence/research-chain/release/remote-matrix/aggregated-gates.json",
+    "evidence/research-chain/release/remote-matrix/run.json",
     "scripts/verify_research_evidence.py"
   ],
   "exit_criteria": [
@@ -25,7 +27,7 @@
         "evidence/research-chain/release/final-gate-report.json"
       ],
       "id": "RC6a",
-      "status": "pending",
+      "status": "passed",
       "test_ids": [
         "scripts/run_gate.sh"
       ]
@@ -37,7 +39,7 @@
         "evidence/research-chain/release/remote-matrix/run.json"
       ],
       "id": "RC6b",
-      "status": "pending",
+      "status": "passed",
       "test_ids": [
         "github-actions:10-cell unified gate",
         "scripts/verify_research_evidence.py"
@@ -49,7 +51,7 @@
         "specs/layers/research-chain-layer-implementation-plan.md"
       ],
       "id": "RC6c",
-      "status": "pending",
+      "status": "passed",
       "test_ids": [
         "specs/layers/research-chain-layer-implementation-plan.md"
       ]
@@ -57,7 +59,7 @@
     {
       "description": "Release record and evidence index are committed",
       "id": "RC6d",
-      "status": "pending",
+      "status": "passed",
       "test_ids": [
         "evidence/research-chain/release/release-record.json",
         "evidence/research-chain/release/evidence-index.json"
@@ -67,10 +69,12 @@
   "implementation_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
   "layer": "research_chain",
   "notes": [
-    "Phase 6 begins with all Phase 0-5 records exited.",
-    "Final evidence must be generated at the release HEAD after docs and records are committed."
+    "Local Qlib gate passed 459 tests on release reconciliation HEAD 6f6e663e12346f6168c9a0ad19ab4c49c14fc8ac.",
+    "Remote CI run 33967568614 passed all ten base/Qlib cells on the same HEAD.",
+    "Remote aggregation was mechanically verified with scripts/verify_research_evidence.py.",
+    "Security, lineage, and fail-closed acceptance rows are executable and not deferred."
   ],
   "phase": 6,
   "record_version": 1,
-  "status": "release_reconciliation_in_progress"
+  "status": "exited_after_remote_gate"
 }
