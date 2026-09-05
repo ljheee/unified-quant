@@ -1,7 +1,6 @@
 {
   "blocked_by": [
-    "preserve fresh local gate report at remediation HEAD",
-    "preserve and mechanically verify fresh remote CI aggregation at remediation HEAD"
+    "implement CLI execute provider wiring before Phase 5 re-exit"
   ],
   "entries": [
     {
@@ -16,30 +15,42 @@
       "id": "remote-run-before-final-cr",
       "path": "final-head-ci/33960583993/run.json",
       "run_id": 33960583993,
-      "status": "passed-for-7ee7a8f-pending-remediation-head"
+      "status": "historical"
     },
     {
       "cell_count": 10,
       "git_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
-      "id": "remote-aggregated-gates-verified",
+      "id": "remote-aggregated-gates-before-final-cr",
       "path": "final-head-ci/33960583993/aggregated-gates.json",
-      "status": "passed-for-7ee7a8f-pending-remediation-head",
+      "status": "historical",
       "verifier": "scripts/verify_research_evidence.py"
     },
     {
+      "command": "UQ_GATE_EXTRAS=qlib bash scripts/run_gate.sh",
+      "git_commit": "316a5c0108fd07a3c1529550039d4f40629d11ee",
       "id": "fresh-remediation-local-gate",
       "path": "remediation-gate-reports/gate-report.json",
-      "status": "pending"
+      "status": "passed"
     },
     {
-      "id": "fresh-remediation-remote-run",
-      "path": "final-head-ci/<remediation-run-id>/run.json",
-      "status": "pending"
+      "git_commit": "316a5c0108fd07a3c1529550039d4f40629d11ee",
+      "id": "remote-run-remediation",
+      "path": "final-head-ci/33965499400/run.json",
+      "run_id": 33965499400,
+      "status": "passed"
+    },
+    {
+      "cell_count": 10,
+      "git_commit": "316a5c0108fd07a3c1529550039d4f40629d11ee",
+      "id": "remote-aggregated-gates-remediation",
+      "path": "final-head-ci/33965499400/aggregated-gates.json",
+      "status": "passed",
+      "verifier": "scripts/verify_research_evidence.py"
     }
   ],
   "evidence_index_version": 1,
   "implementation_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
   "layer": "research_chain",
   "phase": 5,
-  "status": "cr_remediation_in_progress"
+  "status": "cr_remediation_gates_passed_cli_blocked"
 }

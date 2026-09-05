@@ -1,8 +1,6 @@
 {
   "blocked_by": [
-    "CLI execute provider wiring remains a stub and must be implemented or explicitly deferred before Phase 5 re-exit",
-    "regenerate final HEAD local gate report after remediation commit",
-    "trigger remote CI on remediation commit and mechanically verify ten cells"
+    "CLI execute provider wiring remains a stub and must be implemented or explicitly deferred before Phase 5 re-exit"
   ],
   "entry_criteria": {
     "phase_4_exited": true,
@@ -12,10 +10,16 @@
   "evidence_paths": [
     "evidence/research-chain/phase-5/final-head-ci/33960583993/aggregated-gates.json",
     "evidence/research-chain/phase-5/final-head-ci/33960583993/run.json",
+    "evidence/research-chain/phase-5/final-head-ci/33965499400/aggregated-gates.json",
+    "evidence/research-chain/phase-5/final-head-ci/33965499400/run.json",
     "evidence/research-chain/phase-5/implementation-gate-reports/command.txt",
     "evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json",
     "evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt",
     "evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt.sha256",
+    "evidence/research-chain/phase-5/remediation-gate-reports/command.txt",
+    "evidence/research-chain/phase-5/remediation-gate-reports/gate-report.json",
+    "evidence/research-chain/phase-5/remediation-gate-reports/requirements.lock.txt",
+    "evidence/research-chain/phase-5/remediation-gate-reports/requirements.lock.txt.sha256",
     "scripts/verify_research_evidence.py",
     "src/uq/research_chain/cli.py",
     "src/uq/research_chain/runner.py",
@@ -67,11 +71,12 @@
     },
     {
       "description": "Remote ten-cell unified gate passes on Phase 5 implementation HEAD",
-      "evidence_path": "evidence/research-chain/phase-5/final-head-ci/33960583993/aggregated-gates.json",
+      "evidence_path": "evidence/research-chain/phase-5/final-head-ci/33965499400/aggregated-gates.json",
       "id": "RC5f",
-      "status": "passed-for-7ee7a8f-pending-remediation-head",
+      "status": "passed",
       "test_ids": [
-        "github-actions:10-cell unified gate"
+        "github-actions:10-cell unified gate",
+        "scripts/verify_research_evidence.py"
       ]
     },
     {
@@ -101,13 +106,13 @@
   "layer": "research_chain",
   "notes": [
     "Final CR remediation fixes Qlib cache snapshot timing, cache diff identity, disk-backed model-run readback, and complete result stage closure.",
-    "Remote evidence for 7ee7a8f is verified by scripts/verify_research_evidence.py but no longer certifies the remediation HEAD.",
-    "Phase 5 remains blocked pending local and remote gate evidence at the remediation commit."
+    "Fresh local gate and remote CI run 33965499400 both passed on remediation commit 316a5c0108fd07a3c1529550039d4f40629d11ee.",
+    "Phase 5 remains blocked solely by the CLI execute provider wiring stub; do not declare Phase 5 exited yet."
   ],
   "phase": 5,
   "record_version": 1,
   "remediation_commits": [
     "7ee7a8f60a5da61b686cb34550597df149a50f69"
   ],
-  "status": "cr_remediation_in_progress"
+  "status": "cr_remediation_gates_passed_cli_blocked"
 }
