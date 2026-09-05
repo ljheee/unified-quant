@@ -1,13 +1,15 @@
 {
-  "blocked_by": [
-    "CLI execute provider wiring remains a stub and must be implemented or explicitly deferred before Phase 5 re-exit"
-  ],
+  "blocked_by": [],
   "entry_criteria": {
     "phase_4_exited": true,
     "phase_4_head": "fe628fb7a74d031e8d149590bf659cb80024d6da",
     "status": "passed"
   },
   "evidence_paths": [
+    "evidence/research-chain/phase-5/cli-wiring-gate-reports/command.txt",
+    "evidence/research-chain/phase-5/cli-wiring-gate-reports/gate-report.json",
+    "evidence/research-chain/phase-5/cli-wiring-gate-reports/requirements.lock.txt",
+    "evidence/research-chain/phase-5/cli-wiring-gate-reports/requirements.lock.txt.sha256",
     "evidence/research-chain/phase-5/final-head-ci/33960583993/aggregated-gates.json",
     "evidence/research-chain/phase-5/final-head-ci/33960583993/run.json",
     "evidence/research-chain/phase-5/final-head-ci/33965499400/aggregated-gates.json",
@@ -48,10 +50,11 @@
     {
       "description": "CLI dry-run and execute modes follow the published contract",
       "id": "RC5c",
-      "status": "blocked",
+      "status": "passed",
       "test_ids": [
         "tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state",
-        "tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions"
+        "tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions",
+        "tests/test_research_chain_phase5.py::test_cli_execute_provider_wiring_is_complete"
       ]
     },
     {
@@ -108,13 +111,14 @@
   "layer": "research_chain",
   "notes": [
     "Final CR remediation fixes Qlib cache snapshot timing, cache diff identity, disk-backed model-run readback, and complete result stage closure.",
+    "CLI execute is wired through owning stores, ResearchChainRequestResolver, governed scores validation, and an external decision-provider subprocess boundary.",
     "Local and remote ten-cell gate evidence are preserved and mechanically verified at evidence commit f248a61bf06f1c146bfb45f33724ce5e7a831687.",
-    "Phase 5 remains blocked solely by the CLI execute provider wiring stub; do not declare Phase 5 exited yet."
+    "Phase 5 is pending final re-exit confirmation after fresh local and remote gates for the CLI wiring commit."
   ],
   "phase": 5,
   "record_version": 1,
   "remediation_commits": [
     "7ee7a8f60a5da61b686cb34550597df149a50f69"
   ],
-  "status": "cr_remediation_gates_passed_cli_blocked"
+  "status": "cli_wiring_remediation_complete_pending_final_evidence"
 }

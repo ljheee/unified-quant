@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Research scores provider v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "schema_version",
+    "scores_by_decision_date"
+  ],
+  "properties": {
+    "contract_version": {"const": 1},
+    "schema_version": {"const": "1.0.0"},
+    "scores_by_decision_date": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[0-9]{4}-[0-9]{2}-[0-9]{2}$": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["instrument", "score"],
+            "properties": {
+              "instrument": {"type": "string", "minLength": 1},
+              "score": {"type": "number"}
+            }
+          }
+        }
+      },
+      "minProperties": 1
+    }
+  }
+}

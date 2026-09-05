@@ -326,7 +326,7 @@ test node IDs before their owning phase exits.
 | RC4c | 4 | `tests/test_research_chain_phase4.py::test_portfolio_prediction_binding_mismatch_fails` + `tests/test_research_chain_phase4.py::test_portfolio_weight_overwrite_fails` + `tests/test_research_chain_phase4.py::test_wrong_portfolio_quality_decision_fails` + `tests/test_research_chain_phase4.py::test_backtest_rejects_corporate_action_overlap` + `tests/test_research_chain_phase4.py::test_backtest_rejects_tampered_price_panel` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/final-head-ci/33951272818/aggregated-gates.json` | passed |
 | RC5a | 5 | `tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end` | `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
 | RC5b | 5 | `tests/test_research_chain_phase5.py::test_failed_stage_stops_run_and_publishes_failure` + `tests/test_research_chain_phase5.py::test_every_stage_failure_stops_later_stages` | `tests/test_research_chain_phase5.py` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
-| RC5c | 5 | `tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state` + `tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions` | `tests/test_research_chain_phase5.py` | CLI execute provider wiring remains a stub | blocked |
+| RC5c | 5 | `tests/test_research_chain_phase5.py::test_cli_dry_run_publishes_only_request_and_state` + `tests/test_research_chain_phase5.py::test_cli_execute_requires_external_decisions` + `tests/test_research_chain_phase5.py::test_cli_execute_provider_wiring_is_complete` | `src/uq/research_chain/cli.py` | pending CLI wiring gate | passed-local |
 | RC5d | 5 | `tests/test_research_chain_phase5.py::test_locked_environment_rebuild_is_reproducible` | `evidence/research-chain/phase-5/implementation-gate-reports/requirements.lock.txt` | `evidence/research-chain/phase-5/implementation-gate-reports/gate-report.json` | passed |
 | RC5e | 5 | `scripts/run_gate.sh` | `evidence/research-chain/phase-5/remediation-gate-reports/gate-report.json` | remediation HEAD report | passed |
 | RC5f | 5 | `github-actions:10-cell unified gate` + `scripts/verify_research_evidence.py` | `evidence/research-chain/phase-5/final-head-ci/33965499400/aggregated-gates.json` | `evidence/research-chain/phase-5/final-head-ci/33965499400/run.json` | passed |
@@ -348,7 +348,7 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Implement or formally defer CLI execute provider wiring before Phase 5 re-exit.
-2. Preserve local gate evidence at the CLI remediation HEAD.
-3. Rerun remote CI and the mechanical ten-cell verifier.
-4. Only after Phase 5 re-exit, perform Phase 6 release reconciliation.
+1. Preserve local gate evidence at the CLI wiring HEAD.
+2. Rerun remote CI and the mechanical ten-cell verifier.
+3. Mark Phase 5 re-exit only after both fresh evidence paths pass.
+4. Then perform Phase 6 release reconciliation.

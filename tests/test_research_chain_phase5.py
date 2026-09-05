@@ -496,3 +496,22 @@ def test_remote_evidence_aggregation_is_mechanically_verified() -> None:
     )
     assert summary["cell_count"] == 10
     assert summary["git_commit"] == "7ee7a8f60a5da61b686cb34550597df149a50f69"
+
+
+@requires_qlib
+def test_cli_execute_provider_wiring_is_complete(tmp_path: Path) -> None:
+    from uq.research_chain.cli import _build_runner
+
+    runner = _build_runner(
+        project_root=ROOT,
+        data_root=tmp_path,
+        run_store=FileResearchRunStore(tmp_path),
+    )
+    assert isinstance(runner.factor_adapter, FactorStageAdapter)
+    assert isinstance(runner.dataset_adapter, DatasetStageAdapter)
+    assert isinstance(runner.export_adapter, QlibExportStageAdapter)
+    assert isinstance(runner.model_adapter, ModelStageAdapter)
+    assert isinstance(runner.prediction_adapter, PredictionStageAdapter)
+    assert isinstance(runner.portfolio_adapter, PortfolioStageAdapter)
+    assert isinstance(runner.backtest_adapter, BacktestStageAdapter)
+    assert runner.run_store.root == tmp_path

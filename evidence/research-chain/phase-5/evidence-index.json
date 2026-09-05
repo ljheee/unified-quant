@@ -1,6 +1,7 @@
 {
   "blocked_by": [
-    "implement CLI execute provider wiring before Phase 5 re-exit"
+    "preserve fresh local gate report at CLI wiring HEAD",
+    "trigger remote CI on CLI wiring HEAD and mechanically verify ten cells"
   ],
   "entries": [
     {
@@ -61,11 +62,19 @@
       "path": "final-head-ci/33965761414/aggregated-gates.json",
       "status": "passed",
       "verifier": "scripts/verify_research_evidence.py"
+    },
+    {
+      "id": "cli-wiring-provider",
+      "path": "src/uq/research_chain/cli.py",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase5.py::test_cli_execute_provider_wiring_is_complete"
+      ]
     }
   ],
   "evidence_index_version": 1,
   "implementation_commit": "7ee7a8f60a5da61b686cb34550597df149a50f69",
   "layer": "research_chain",
   "phase": 5,
-  "status": "cr_remediation_gates_passed_cli_blocked"
+  "status": "cli_wiring_remediation_complete_pending_final_evidence"
 }
