@@ -290,7 +290,14 @@ class FileResearchRunStore:
             manifest_digest_sha256=state["manifest_digest_sha256"],
         )
 
-    def read_published_document(self, output_family: str, generation_id: str) -> dict[str, Any]:
+    def read_published_document(
+        self,
+        output_family: str,
+        generation_id: str,
+        *,
+        manifest_digest_sha256: str,
+        data_checksum_sha256: str,
+    ) -> dict[str, Any]:
         """Read an owning manifest by its Research Chain output family."""
         import json as _json
 
@@ -314,7 +321,12 @@ class FileResearchRunStore:
             raise ContractError(f"unpublished {output_family}: {generation_id}")
         if len(matches) != 1:
             raise ContractError(f"ambiguous {output_family}: {generation_id}")
-        return matches[0]
+        manifest = matches[0]
+        if manifest.get("manifest_digest_sha256") != manifest_digest_sha256:
+            raise ContractError(f"{output_family} manifest digest mismatch")
+        if manifest.get("data_checksum_sha256") != data_checksum_sha256:
+            raise ContractError(f"{output_family} data checksum mismatch")
+        return manifest
 
     def read_state(
         self,

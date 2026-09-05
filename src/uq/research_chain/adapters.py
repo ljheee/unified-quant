@@ -168,7 +168,8 @@ def _prepare_preprocessed_frame(
     if input_schema["generation_id"] != preprocessing["input_feature_schema_generation_id"]:
         raise ContractError("preprocessing input feature schema mismatch")
     output_frame = builder.transform(input_frame, ordered_features)
-    if builder.frame_fingerprint(output_frame) != preprocessing["output_frame_sha256"]:
+    output_frame_fingerprint = FeaturePreprocessorBuilder.frame_fingerprint(output_frame)
+    if output_frame_fingerprint != preprocessing["output_frame_sha256"]:
         raise ContractError("preprocessing output frame fingerprint mismatch")
     FeatureSchemaValidator.validate_against_frame(dict(output_schema), output_frame)
     if output_schema["generation_id"] != preprocessing["output_feature_schema_generation_id"]:
@@ -254,7 +255,6 @@ class DatasetStageAdapter:
             raise ContractError("label binding manifest digest mismatch")
         if label_manifest["data_checksum_sha256"] != label_binding.data_checksum_sha256:
             raise ContractError("label binding data checksum mismatch")
-
         preprocessing = self.preprocessing_store.read_manifest(preprocessing_binding.generation_id)
         if preprocessing["manifest_digest_sha256"] != preprocessing_binding.manifest_digest_sha256:
             raise ContractError("preprocessing binding manifest digest mismatch")
@@ -495,14 +495,15 @@ class QlibExportStageAdapter:
         runner_identity: Mapping[str, str],
         created_at: str | None = None,
     ) -> QlibExportStageResult:
-        if dataset_generation_id != plan.request["dataset_generation_id"] or dataset_manifest_digest_sha256 != plan.request["dataset_manifest_digest_sha256"]:
+        dataset_binding = _stage_binding(plan, stage="dataset_preparation", output_family="model_dataset")
+        if dataset_generation_id != dataset_binding.generation_id or dataset_manifest_digest_sha256 != dataset_binding.manifest_digest_sha256:
             raise ContractError("dataset stage binding mismatch")
         dataset_manifest, dataset_frame = self.dataset_writer.read(
             plan.request["dataset_policy_template"]["dataset_name"],
             plan.request["dataset_policy_template"]["semantic_version"],
             dataset_generation_id,
         )
-        if dataset_manifest["manifest_digest_sha256"] != plan.request["dataset_manifest_digest_sha256"]:
+        if dataset_manifest["manifest_digest_sha256"] != dataset_manifest_digest_sha256:
             raise ContractError("verified dataset manifest digest mismatch")
         ordered_features = list(dataset_manifest["ordered_features"])
         if list(feature_columns) != ordered_features:
@@ -531,7 +532,8 @@ class QlibExportStageAdapter:
             raise ContractError("Qlib export readback identity mismatch")
         cache_before = cache_files_before
         cache_after = cache_files_after
-        if str(cache_root) not in cache_after and f"{cache_root}/qlib/calendar.pkl" not in cache_after:
+        cache_root_prefix = str(cache_root).rstrip("/") + "/"
+        if not any(path.startswith(cache_root_prefix) for path in cache_after - cache_before):
             raise ContractError("Qlib cache evidence missing")
         receipt = self.receipt_builder.build(
             export_manifest=export_manifest,
@@ -582,13 +584,15 @@ class ModelStageAdapter:
     def __init__(
         self,
         *,
-        trainer: Any,
+        trainer: QlibRuntimeTrainer,
+        exporter: QlibDatasetExporter,
         artifact_store: Any,
         dataset_writer: DatasetWriter,
         universe_store: UniverseSnapshotStore,
         run_store: FileResearchRunStore,
     ) -> None:
         self.trainer = trainer
+        self.exporter = exporter
         self.artifact_store = artifact_store
         self.dataset_writer = dataset_writer
         self.universe_store = universe_store
@@ -615,9 +619,9 @@ class ModelStageAdapter:
         created_at: str | None = None,
     ) -> ModelStageResult:
         factor_binding = _stage_binding(plan, stage="factor_computation", output_family="factor_partition")
+        dataset_binding = _stage_binding(plan, stage="dataset_preparation", output_family="model_dataset")
         universe_binding = _stage_binding(plan, stage="factor_computation", output_family="universe_snapshot")
         label_binding = _stage_binding(plan, stage="dataset_preparation", output_family="label_set")
-        dataset_binding = _stage_binding(plan, stage="dataset_preparation", output_family="model_dataset")
         if dataset_generation_id != dataset_binding.generation_id:
             raise ContractError("model stage dataset binding mismatch")
         if label_generation_id != label_binding.generation_id:
@@ -626,14 +630,24 @@ class ModelStageAdapter:
             raise ContractError("model stage universe binding mismatch")
         if factor_generation_id != factor_binding.generation_id:
             raise ContractError("model stage factor binding mismatch")
-        dataset_manifest, dataset_frame = self.dataset_writer.read(
+        dataset_manifest, _ = self.dataset_writer.read(
             plan.request["dataset_policy_template"]["dataset_name"],
             plan.request["dataset_policy_template"]["semantic_version"],
             dataset_generation_id,
         )
-        label_manifest = self.run_store.read_published_document("label_set", label_generation_id)
+        if dataset_generation_id != dataset_binding.generation_id or dataset_manifest["manifest_digest_sha256"] != dataset_binding.manifest_digest_sha256:
+            raise ContractError("model stage dataset binding mismatch")
+        label_manifest = self.run_store.read_published_document(
+            "label_set", label_generation_id,
+            manifest_digest_sha256=label_binding.manifest_digest_sha256,
+            data_checksum_sha256=label_binding.data_checksum_sha256,
+        )
         universe_manifest = self.universe_store.read_manifest(universe_generation_id)
-        factor_manifest = self.run_store.read_published_document("factor_partition", factor_generation_id)
+        factor_manifest = self.run_store.read_published_document(
+            "factor_partition", factor_generation_id,
+            manifest_digest_sha256=factor_binding.manifest_digest_sha256,
+            data_checksum_sha256=factor_binding.data_checksum_sha256,
+        )
         run_manifest, bound_definition = ModelRunBuilder.build(
             definition=definition,
             dataset_manifest=dataset_manifest,
@@ -649,9 +663,17 @@ class ModelStageAdapter:
         )
         if bound_definition["model_run_content_generation_id"] != run_manifest["run_content_generation_id"]:
             raise ContractError("model run content binding mismatch")
+        verified_export = self.exporter.read(
+            dataset_manifest["dataset_name"], export_manifest["generation_id"],
+        )
+        if verified_export[0] != export_manifest or verified_export[0]["manifest_digest_sha256"] != export_manifest["manifest_digest_sha256"]:
+            raise ContractError("verified Qlib export binding mismatch")
         artifact_manifest, artifact_bytes = self.trainer.train(
             definition=bound_definition,
-            dataset_frame=dataset_frame,
+            dataset_manifest=dataset_manifest,
+            export_manifest=export_manifest,
+            receipt_manifest=receipt_manifest,
+            verified_export=verified_export,
             feature_columns=list(feature_columns),
             label_column=label_column,
         )
@@ -728,7 +750,8 @@ class PredictionStageAdapter:
         runner_identity: Mapping[str, str],
         created_at: str | None = None,
     ) -> PredictionStageResult:
-        if dataset_generation_id != plan.request["dataset_generation_id"]:
+        dataset_binding = _stage_binding(plan, stage="dataset_preparation", output_family="model_dataset")
+        if dataset_generation_id != dataset_binding.generation_id:
             raise ContractError("prediction dataset binding mismatch")
         manifest, artifact = self.prediction_builder.build(
             prediction_set_name="research_prediction_set",

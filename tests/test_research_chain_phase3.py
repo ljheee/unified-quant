@@ -27,7 +27,12 @@ from uq.research_chain import ResolvedStageBinding
 from uq.models.dataset_writer import DatasetWriter
 from uq.models.definition import ModelDefinitionBuilder
 from uq.models.predictions import PredictionBuilder
-from uq.models.trainer import ModelTrainer, ArtifactStore
+from io import BytesIO
+
+import joblib
+from uq.models.qlib_runtime import QlibRuntimeTrainer
+from uq.models.trainer import ModelRunBuilder
+from uq.models.trainer import ArtifactStore
 from tests.test_research_chain_phase2 import (
     RUN_ID,
     _dataset_quality_decision,
@@ -110,8 +115,6 @@ def _prepare_model_stage(tmp_path: Path):
         data_checksum_sha256=dataset_result.manifest["data_checksum_sha256"],
     )
     plan = dataclasses.replace(plan, stage_bindings=(*plan.stage_bindings, dataset_binding))
-    plan.request["dataset_generation_id"] = dataset_generation_id
-    plan.request["dataset_manifest_digest_sha256"] = dataset_result.manifest["manifest_digest_sha256"]
     binding = plan.stage_bindings[0]
     _, factor_frame = factor_store.read_partition(binding.generation_id)
     return plan, dataset_result, dataset_generation_id, factor_frame, adapter
@@ -142,7 +145,7 @@ def test_model_chain_exports_trains_and_predicts(tmp_path: Path):
         label_column="label",
         provider_uri="file:///research-exports",
         qlib_import_path="qlib",
-        qlib_version="0.9.6",
+        qlib_version="0.9.7",
         cache_root=str(tmp_path / ".cache"),
         cache_files_before=set(),
         cache_files_after={str(cache_file)},
@@ -150,17 +153,20 @@ def test_model_chain_exports_trains_and_predicts(tmp_path: Path):
         receipt_quality_decision=receipt_decision(),
         runner_identity={"code_fingerprint": DIGEST, "environment_profile": "locked-test", "lock_digest_sha256": DIGEST},
     )
-    assert export_result.manifest["export_generation_id"] == dataset_generation_id or True
+    assert export_result.manifest["export_generation_id"] == export_result.export_manifest["generation_id"]
+    assert export_result.manifest["export_manifest_digest_sha256"] == export_result.export_manifest["manifest_digest_sha256"]
 
+    preprocessing = dataset_adapter.preprocessing_store.read_manifest(plan.stage_bindings[4].generation_id)
     definition = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True).build(
-        algorithm="regularized_linear", hyperparameters={"alpha": 0.5},
+        algorithm="qlib_linear", hyperparameters={"alpha": 0.5, "fit_intercept": False},
         seed_policy={"base_seed": 7, "derivation": "fixed"}, model_set="research-baseline",
-        model_version="1.0.0", feature_schema_generation_id=DIGEST,
+        model_version="1.0.0", feature_schema_generation_id=preprocessing["output_feature_schema_generation_id"],
         compatible_dataset_versions=[plan.request["dataset_policy_template"]["semantic_version"]],
         metrics=[{"name": "ic", "direction": "maximize"}], selection_rule="maximum validation ic",
+        serializer_version="joblib-v1",
     )
     model_adapter = ModelStageAdapter(
-        trainer=ModelTrainer(tmp_path), artifact_store=ArtifactStore(tmp_path),
+        trainer=QlibRuntimeTrainer(), exporter=exporter, artifact_store=ArtifactStore(tmp_path),
         dataset_writer=writer, universe_store=dataset_adapter.universe_store, run_store=run_store,
     )
     model_result = model_adapter.run(
@@ -181,10 +187,36 @@ def test_model_chain_exports_trains_and_predicts(tmp_path: Path):
         runner_identity={"code_fingerprint": DIGEST, "environment_profile": "locked-test", "lock_digest_sha256": DIGEST},
     )
     assert model_result.published_state.manifest_path.is_file()
+    model = joblib.load(BytesIO(model_result.artifact_bytes))
+    assert model.__class__.__name__ == "LinearModel"
+
+    repeated_definition_input = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True).build(
+        algorithm="qlib_linear", hyperparameters={"alpha": 0.5, "fit_intercept": False},
+        seed_policy={"base_seed": 7, "derivation": "fixed"}, model_set="research-baseline",
+        model_version="1.0.0", feature_schema_generation_id=preprocessing["output_feature_schema_generation_id"],
+        compatible_dataset_versions=[plan.request["dataset_policy_template"]["semantic_version"]],
+        metrics=[{"name": "ic", "direction": "maximize"}], selection_rule="maximum validation ic",
+        serializer_version="joblib-v1",
+    )
+    _, repeated_definition = ModelRunBuilder.build(
+        definition=repeated_definition_input, dataset_manifest=dataset_result.manifest,
+        export_manifest=export_result.export_manifest, receipt_manifest=export_result.manifest,
+        environment_lock_sha256=DIGEST, determinism_controls={"random_seed": 7, "threads": 1},
+        label_manifest=dataset_adapter.label_store.read_manifest(plan.stage_bindings[3].generation_id),
+        universe_snapshot=dataset_adapter.universe_store.read_manifest(plan.stage_bindings[1].generation_id),
+        factor_manifests={plan.stage_bindings[0].generation_id: dataset_adapter.factor_store.read_manifest(plan.stage_bindings[0].generation_id)},
+        quality_decision=run_decision(), store_root=run_store.root,
+    )
+    _, repeated_bytes = QlibRuntimeTrainer().train(
+        definition=repeated_definition, dataset_manifest=dataset_result.manifest,
+        export_manifest=export_result.export_manifest, receipt_manifest=export_result.manifest,
+        verified_export=exporter.read(plan.request["dataset_policy_template"]["dataset_name"], export_result.export_manifest["generation_id"]),
+        feature_columns=list(dataset_result.manifest["ordered_features"]), label_column="label",
+    )
+    assert repeated_bytes == model_result.artifact_bytes
 
     scores = dataset_frame[["instrument", "datetime"]].copy()
-    weights = json.loads(model_result.artifact_bytes)["weights"]
-    scores["score"] = dataset_frame[dataset_result.manifest["ordered_features"][0]].to_numpy() * weights[0]
+    scores["score"] = dataset_frame[dataset_result.manifest["ordered_features"][0]].to_numpy()
     prediction_adapter = PredictionStageAdapter(
         PredictionBuilder(tmp_path), run_store,
     )
