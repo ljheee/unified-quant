@@ -25,6 +25,7 @@ from .contracts import PublishedState
 from .owning_contracts import (
     AdjustedPriceDatasetStore,
     BacktestConfigStore,
+    BacktestMarketDatasetStore,
     FeaturePreprocessingStore,
     FeatureSchemaStore,
     LabelStore,
@@ -523,11 +524,13 @@ class PortfolioStageAdapter:
         portfolio_builder: PortfolioBuilder,
         target_weight_store: TargetWeightStore,
         run_store: FileResearchRunStore,
+        prediction_builder: PredictionBuilder,
     ) -> None:
         self.universe_store = universe_store
         self.portfolio_builder = portfolio_builder
         self.target_weight_store = target_weight_store
         self.run_store = run_store
+        self.prediction_builder = prediction_builder
 
     def run(
         self,
@@ -539,12 +542,18 @@ class PortfolioStageAdapter:
         weights_quality_decision: Mapping[str, Any],
         runner_identity: Mapping[str, str],
         created_at: str | None = None,
+        prediction_generation_by_date: Mapping[str, str] | None = None,
     ) -> PortfolioStageResult:
         if not decision_dates:
             raise ContractError("portfolio construction requires decision dates")
-        prediction_binding = _stage_binding(
-            plan, stage="prediction_publication", output_family="prediction_set"
-        )
+        prediction_bindings = [
+            binding for binding in plan.stage_bindings
+            if binding.stage == "prediction_publication"
+            and binding.output_family == "prediction_set"
+        ]
+        if not prediction_bindings:
+            raise ContractError("resolved plan has no prediction_set binding")
+        prediction_binding = prediction_bindings[0]
         if prediction_stage_result.manifest["generation_id"] != prediction_binding.generation_id:
             raise ContractError("portfolio prediction binding mismatch")
         if (
@@ -565,6 +574,15 @@ class PortfolioStageAdapter:
         report = definition_quality_decision.get("owning_report")
         if not isinstance(report, dict):
             raise ContractError("portfolio stage requires a bound owning quality report")
+        prediction_generation_map = dict(prediction_generation_by_date or {})
+        prediction_generation_digests = {
+            binding.generation_id: binding.manifest_digest_sha256
+            for binding in plan.stage_bindings
+            if binding.output_family == "prediction_set"
+        }
+        for decision_date in sorted(set(decision_dates)):
+            if decision_date not in prediction_generation_map:
+                prediction_generation_map[decision_date] = prediction_binding.generation_id
         bound_definition, _ = PortfolioDefinitionBinding.bind(
             definition, quality_decision=dict(definition_quality_decision)
         )
@@ -580,14 +598,24 @@ class PortfolioStageAdapter:
         previous_frame: pd.DataFrame | None = None
         output_bindings: list[dict[str, Any]] = []
         for decision_date in sorted(set(decision_dates)):
-            scores = prediction_stage_result.frame.set_index("instrument")["score"]
+            current_prediction_generation = prediction_generation_map[decision_date]
+            prediction_manifest, prediction_frame = self.prediction_builder.read(
+                current_prediction_generation, decision_date
+            )
+            if current_prediction_generation not in prediction_generation_digests:
+                raise ContractError("portfolio prediction binding mismatch")
+            if prediction_manifest["manifest_digest_sha256"] != prediction_generation_digests[current_prediction_generation]:
+                raise ContractError("portfolio prediction manifest digest mismatch")
+            if prediction_manifest["decision_date"] != decision_date:
+                raise ContractError("portfolio prediction decision date mismatch")
+            scores = prediction_frame.set_index("instrument")["score"]
             previous_target_weights = (
                 dict(zip(previous_frame["instrument"], previous_frame["weight"]))
                 if previous_frame is not None else None
             )
             manifest, frame = self.portfolio_builder.build(
                 definition=bound_definition,
-                prediction_generation_id=prediction_binding.generation_id,
+                prediction_generation_id=current_prediction_generation,
                 decision_date=decision_date,
                 scores=scores,
                 universe_instruments=universe_instruments,
@@ -643,7 +671,11 @@ class BacktestStageAdapter:
         backtest_result_store: BacktestResultStore,
         backtest_config_store: BacktestConfigStore,
         run_store: FileResearchRunStore,
+        adjusted_price_store: AdjustedPriceDatasetStore,
+        market_dataset_store: BacktestMarketDatasetStore,
     ) -> None:
+        self.adjusted_price_store = adjusted_price_store
+        self.market_dataset_store = market_dataset_store
         self.backtest_engine = backtest_engine
         self.backtest_result_store = backtest_result_store
         self.backtest_config_store = backtest_config_store
@@ -654,9 +686,6 @@ class BacktestStageAdapter:
         plan: ResolvedExecutionPlan,
         *,
         portfolio_stage_result: PortfolioStageResult,
-        price_panel: pd.DataFrame,
-        suspension_dates: set[tuple[str, str]] | None,
-        corporate_action_instruments: set[str] | None,
         quality_decision: Mapping[str, Any],
         runner_identity: Mapping[str, str],
         created_at: str | None = None,
@@ -669,12 +698,105 @@ class BacktestStageAdapter:
         )
         if config["manifest_digest_sha256"] != config_binding.manifest_digest_sha256:
             raise ContractError("backtest config manifest digest mismatch")
+        state = self.run_store.read_state(
+            plan.request["request_content_generation_id"],
+            plan.request["run_id"],
+            "portfolio_construction",
+            portfolio_stage_result.published_state.manifest_digest_sha256,
+        )
+        expected_state_keys = {
+            "request_content_generation_id": plan.request["request_content_generation_id"],
+            "run_id": plan.request["run_id"],
+        }
+        if (
+            state["manifest_digest_sha256"] != portfolio_stage_result.published_state.manifest_digest_sha256
+            or any(state.get(key) != value for key, value in expected_state_keys.items())
+        ):
+            raise ContractError("portfolio stage published state binding mismatch")
+        portfolio_stage = next(
+            record for record in state["stage_records"] if record["stage"] == "portfolio_construction"
+        )
+        if portfolio_stage["status"] != "passed" or len(portfolio_stage["output_bindings"]) != len(portfolio_stage_result.target_weight_manifests):
+            raise ContractError("portfolio stage published state is incomplete")
         if (
             config["universe_binding"]["snapshot_generation_id"]
             != portfolio_stage_result.definition_manifest["universe_snapshot_generation_id"]
         ):
             raise ContractError("backtest universe binding mismatch")
         ordered_dates = sorted(portfolio_stage_result.target_weight_manifests)
+        for decision_date in ordered_dates:
+            manifest = portfolio_stage_result.target_weight_manifests[decision_date]
+            output_binding = next(
+                binding for binding in portfolio_stage["output_bindings"]
+                if binding["output_family"] == "target_weights"
+                and binding.get("physical_path") == f"target_weights/date={decision_date}/generation={manifest['generation_id']}"
+            )
+            if (
+                output_binding["manifest_digest_sha256"] != manifest["manifest_digest_sha256"]
+                or output_binding["data_checksum_sha256"] != manifest["weights_checksum_sha256"]
+            ):
+                raise ContractError("portfolio target-weight published binding mismatch")
+
+        price_binding = config["price_source_binding"]
+        adjusted_binding = _stage_binding(
+            plan, stage="dataset_preparation", output_family="adjusted_price_dataset"
+        )
+        if price_binding["dataset_generation_id"] != adjusted_binding.generation_id:
+            raise ContractError("backtest price binding mismatch")
+        adjusted_manifest = self.adjusted_price_store.read_manifest(price_binding["dataset_generation_id"])
+        price_frame = self.adjusted_price_store.read_frame(price_binding["dataset_generation_id"])
+        required_price_columns = {"datetime", "instrument", "open", "high", "low", "close", "volume", "amount"}
+        if not required_price_columns.issubset(price_frame.columns):
+            raise ContractError("backtest price dataset is missing required columns")
+        if file_sha256_bytes(
+            self.adjusted_price_store.data_path(price_binding["dataset_generation_id"]).read_bytes()
+        ) != price_binding["data_checksum_sha256"]:
+            raise ContractError("backtest price data checksum mismatch")
+        price_panel = price_frame.copy()
+        price_panel["date"] = pd.to_datetime(price_panel["datetime"]).dt.strftime("%Y-%m-%d")
+        price_panel = price_panel.set_index(["date", "instrument"])[["open", "high", "low", "close", "volume", "amount"]]
+
+        calendar_frame = self.market_dataset_store.read_frame(
+            config["calendar_binding"]["generation_id"],
+            config["calendar_binding"]["checksum_sha256"],
+            dataset_type="calendar",
+            required_columns={"date"},
+        )
+        calendar_dates = sorted(calendar_frame["date"].astype(str).unique().tolist())
+        price_dates = sorted({str(value) for value in price_panel.index.get_level_values("date").unique()})
+        if not set(ordered_dates).issubset(set(calendar_dates)):
+            raise ContractError("portfolio decision dates are not in the governed calendar")
+        if set(price_dates) != set(calendar_dates):
+            raise ContractError("backtest price dates do not match governed calendar")
+
+        suspension_frame = self.market_dataset_store.read_frame(
+            config["suspension_binding"]["dataset_generation_id"],
+            config["suspension_binding"]["data_checksum_sha256"],
+            dataset_type="suspension",
+            required_columns={"date", "instrument", "suspended"},
+        )
+        suspension_dates = {
+            (str(row.date), str(row.instrument))
+            for row in suspension_frame.loc[suspension_frame["suspended"].astype(bool)].itertuples(index=False)
+        }
+        print("SUSP", suspension_dates)
+        corporate_action_frame = self.market_dataset_store.read_frame(
+            config["corporate_action_binding"]["dataset_generation_id"],
+            config["corporate_action_binding"]["data_checksum_sha256"],
+            dataset_type="corporate_action",
+            required_columns={"date", "instrument"},
+        )
+        corporate_action_instruments = set(
+            corporate_action_frame.loc[
+                corporate_action_frame["date"].astype(str).isin(
+                    {
+                        str(price_dates[price_dates.index(date) + 1])
+                        for date in ordered_dates
+                        if price_dates.index(date) + 1 < len(price_dates)
+                    }
+                ), "instrument"
+            ].astype(str).unique().tolist()
+        )
         weight_partitions = {
             decision_date: portfolio_stage_result.target_weight_frames[decision_date]
             for decision_date in ordered_dates
@@ -707,7 +829,7 @@ class BacktestStageAdapter:
         )
         if readback_manifest["generation_id"] != manifest["generation_id"]:
             raise ContractError("backtest result readback identity mismatch")
-        state = build_stage_state(
+        final_state = build_stage_state(
             plan,
             stage="backtest_execution",
             output_bindings=[{
@@ -726,7 +848,7 @@ class BacktestStageAdapter:
             config_manifest=config,
             result_manifest=readback_manifest,
             result_artifacts=readback_artifacts,
-            published_state=self.run_store.publish_state(state, stage="backtest_execution"),
+            published_state=self.run_store.publish_state(final_state, stage="backtest_execution"),
         )
 
 
@@ -1024,7 +1146,7 @@ class PredictionStageAdapter:
         if dataset_generation_id != dataset_binding.generation_id:
             raise ContractError("prediction dataset binding mismatch")
         manifest, artifact = self.prediction_builder.build(
-            prediction_set_name="research_prediction_set",
+            prediction_set_name=f"research_prediction_{decision_date}",
             model_artifact_generation_id=model_stage_result.artifact_manifest["generation_id"],
             model_artifact_checksum=model_stage_result.artifact_manifest["artifact_checksum_sha256"],
             input_dataset_generation_id=dataset_generation_id,
@@ -1062,3 +1184,32 @@ class PredictionStageAdapter:
             frame=frame,
             published_state=self.run_store.publish_state(state, stage="prediction_publication"),
         )
+
+    def run_for_dates(
+        self,
+        plan: ResolvedExecutionPlan,
+        *,
+        dataset_generation_id: str,
+        model_stage_result: ModelStageResult,
+        scores_by_decision_date: Mapping[str, pd.DataFrame],
+        quality_decision: Mapping[str, Any],
+        eligibility_policy: str,
+        eligibility_status: str,
+        runner_identity: Mapping[str, str],
+        created_at: str | None = None,
+    ) -> list[PredictionStageResult]:
+        return [
+            self.run(
+                plan,
+                dataset_generation_id=dataset_generation_id,
+                model_stage_result=model_stage_result,
+                scores=scores,
+                decision_date=decision_date,
+                quality_decision=dict(quality_decision),
+                eligibility_policy=eligibility_policy,
+                eligibility_status=eligibility_status,
+                runner_identity=runner_identity,
+                created_at=created_at,
+            )
+            for decision_date, scores in sorted(scores_by_decision_date.items())
+        ]

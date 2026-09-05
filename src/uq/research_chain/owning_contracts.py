@@ -35,6 +35,18 @@ class AdjustedPriceDatasetStore:
         self.root = Path(root)
 
     def read_manifest(self, generation_id: str) -> dict[str, Any]:
+        manifest, _ = self._read_verified_directory(generation_id)
+        return manifest
+
+    def read_frame(self, generation_id: str) -> pd.DataFrame:
+        manifest, directory = self._read_verified_directory(generation_id)
+        return pd.read_parquet(directory / "data.parquet")
+
+    def data_path(self, generation_id: str) -> Path:
+        _, directory = self._read_verified_directory(generation_id)
+        return directory / "data.parquet"
+
+    def _read_verified_directory(self, generation_id: str) -> tuple[dict[str, Any], Path]:
         _validate_generation_id(generation_id, "adjusted price")
         candidates = _manifests_under(self.root / "canonical")
         matches: list[Path] = []
@@ -50,7 +62,7 @@ class AdjustedPriceDatasetStore:
             raise ContractError(f"unpublished adjusted price dataset: {generation_id}")
         if len(matches) > 1:
             raise ContractError(f"ambiguous adjusted price dataset generation: {generation_id}")
-        return self._read_verified_manifest(matches[0])
+        return self._read_verified_manifest(matches[0]), matches[0]
 
     def _read_verified_manifest(self, directory: Path) -> dict[str, Any]:
         manifest = _read_json(directory / "manifest.json")
@@ -92,6 +104,49 @@ class AdjustedPriceDatasetStore:
         if file_sha256_bytes(report_path.read_bytes()) != manifest["quality_report_checksum"]:
             raise ContractError("adjusted price quality report checksum mismatch")
         return manifest
+
+
+class BacktestMarketDatasetStore:
+    """Read immutable market-data artifacts referenced by backtest config bindings."""
+
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root)
+
+    def read_frame(
+        self,
+        generation_id: str,
+        expected_checksum_sha256: str,
+        *,
+        dataset_type: str,
+        required_columns: set[str] | None = None,
+    ) -> pd.DataFrame:
+        _validate_generation_id(generation_id, f"{dataset_type} dataset")
+        if not re.fullmatch(r"[0-9a-f]{64}", expected_checksum_sha256):
+            raise ContractError(f"invalid {dataset_type} dataset checksum")
+        directory = self.root / "backtest_market_data" / f"dataset={generation_id}"
+        if not directory.is_dir():
+            raise ContractError(f"unpublished {dataset_type} dataset: {generation_id}")
+        manifest = _read_json(directory / "manifest.json")
+        if manifest.get("generation_id") != generation_id:
+            raise ContractError(f"{dataset_type} dataset manifest identity mismatch")
+        if manifest.get("dataset_type") != dataset_type:
+            raise ContractError(f"{dataset_type} dataset manifest type mismatch")
+        data_path = directory / "data.parquet"
+        if not data_path.is_file():
+            raise ContractError(f"incomplete {dataset_type} dataset: {generation_id}")
+        actual_checksum = file_sha256_bytes(data_path.read_bytes())
+        if actual_checksum != expected_checksum_sha256:
+            raise ContractError(f"tampered {dataset_type} dataset checksum")
+        if manifest.get("data_checksum_sha256") != expected_checksum_sha256:
+            raise ContractError(f"{dataset_type} dataset manifest checksum mismatch")
+        frame = pd.read_parquet(data_path)
+        if list(frame.columns) != manifest.get("columns"):
+            raise ContractError(f"{dataset_type} dataset column mismatch")
+        if len(frame) != manifest.get("row_count"):
+            raise ContractError(f"{dataset_type} dataset row count mismatch")
+        if required_columns is not None and not required_columns.issubset(frame.columns):
+            raise ContractError(f"{dataset_type} dataset is missing required columns")
+        return frame
 
 
 class LabelStore:

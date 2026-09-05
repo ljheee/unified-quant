@@ -181,6 +181,13 @@ class BacktestEngine:
                 )
                 
                 if is_suspended:
+                    fills_rows.append(self._fill_row(
+                        date=exec_date, instrument=inst, side="sell",
+                        target_shares=0, filled_shares=0,
+                        gross_execution_price=float(open_price) if open_price is not None and not pd.isna(open_price) else 0.0,
+                        net_execution_price=float(open_price) if open_price is not None and not pd.isna(open_price) else 0.0,
+                        commission_fee=0, stamp_duty_fee=0, status="skipped_suspended",
+                    ))
                     if current_sellable > 0:
                         fills_rows.append(self._fill_row(
                             date=exec_date, instrument=inst, side="sell",
