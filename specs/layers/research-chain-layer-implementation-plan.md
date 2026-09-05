@@ -1,6 +1,6 @@
 # Research Chain Layer Implementation Plan
 
-Status: **gated implementation order v0.6; Phase 0–3 exited after final CR remediation; Phase 4 is the next runtime phase**
+Status: **gated implementation order v0.6; Phase 0–4 exited after local and remote gate evidence; Phase 5 is the next runtime phase**
 
 Source spec: `specs/layers/research-chain-layer-spec.md`
 
@@ -321,9 +321,9 @@ test node IDs before their owning phase exits.
 | RC3b | 3 | `tests/test_research_chain_phase3.py::test_tampered_export_rejects_before_model_stage` + `tests/test_research_chain_phase3.py::test_tampered_artifact_rejects_read` | `tests/test_research_chain_phase3.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed |
 | RC3c | 3 | `tests/test_research_chain_phase2.py::test_factor_stage_rejects_wrong_reviewed_decision` + `tests/test_research_chain_phase3.py::test_wrong_artifact_quality_report_rejects_publication` | `tests/test_research_chain_phase2.py` | `evidence/research-chain/phase-3/final-gate-reports/gate-report.json` | passed |
 | RC3d | 3 | `github-actions:qlib-runtime unified gate` | `evidence/research-chain/phase-3/final-head-ci/33945900595/artifacts/qlib-gate-report-*` | `evidence/research-chain/phase-3/final-head-ci/33945900595/run.json` | passed |
-| RC4a | 4 | `planned:test_portfolio_stage_binds_prediction_and_universe` | `planned:phase-4/fixtures/` | `planned:phase-4/gate-reports/gate-report.json` | blocked |
-| RC4b | 4 | `planned:test_backtest_stage_binds_ordered_target_weights_and_inputs` | `planned:phase-4/fixtures/` | `planned:phase-4/gate-reports/gate-report.json` | blocked |
-| RC4c | 4 | `planned:test_market_input_tampering_rejects_before_execution` | `planned:phase-4/fixtures/` | `planned:phase-4/gate-reports/gate-report.json` | blocked |
+| RC4a | 4 | `tests/test_research_chain_phase4.py::test_portfolio_stage_binds_prediction_and_universe` + `tests/test_research_chain_phase4.py::test_portfolio_chain_links_previous_target_generation` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/final-gate-reports/gate-report.json` | passed |
+| RC4b | 4 | `tests/test_research_chain_phase4.py::test_backtest_stage_publishes_ordered_weight_lineage` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/final-gate-reports/gate-report.json` | passed |
+| RC4c | 4 | `tests/test_research_chain_phase4.py::test_portfolio_prediction_binding_mismatch_fails` + `tests/test_research_chain_phase4.py::test_portfolio_weight_overwrite_fails` + `tests/test_research_chain_phase4.py::test_wrong_portfolio_quality_decision_fails` + `tests/test_research_chain_phase4.py::test_backtest_rejects_corporate_action_overlap` + `tests/test_research_chain_phase4.py::test_backtest_rejects_tampered_price_panel` | `evidence/research-chain/phase-4/` | `evidence/research-chain/phase-4/final-head-ci/33948029954/run.json` | passed |
 | RC5a | 5 | `planned:test_full_research_chain_end_to_end` | `planned:phase-5/fixtures/full-run.json` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
 | RC5b | 5 | `planned:test_every_stage_failure_stops_later_stages` | `planned:phase-5/fixtures/` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
 | RC5c | 5 | `planned:test_cli_dry_run_and_execute_modes` | `planned:phase-5/fixtures/` | `planned:phase-5/gate-reports/gate-report.json` | blocked |
@@ -343,6 +343,6 @@ test node IDs before their owning phase exits.
 
 ## 11. Immediate Next Actions
 
-1. Expand RC4a/b/c into concrete test IDs and fixture paths before runtime.
-2. Implement the portfolio adapter first, then the backtest adapter in dependency order.
+1. Implement the Phase 5 runner, result reconciliation, CLI, and end-to-end gate in dependency order.
+2. Expand RC5a/b/c/d into concrete test IDs and fixture paths before runtime.
 3. Require governed market/calendar/suspension/corporate-action bindings before any backtest execution.

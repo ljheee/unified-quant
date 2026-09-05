@@ -1,27 +1,77 @@
 {
-  "layer": "research_chain",
-  "phase": 4,
-  "record_version": 1,
-  "status": "in_progress",
-  "blocked_by": [
-    "portfolio definition runtime synthesis boundary must be frozen before publication",
-    "remote 10-cell gate evidence after implementation commit"
-  ],
+  "blocked_by": [],
   "entry_criteria": {
     "phase_3_exited": true,
     "phase_3_final_cr_status": "exited_after_final_cr",
     "phase_3_head": "7dcb8cb",
     "status": "passed"
   },
-  "implementation_commit": null,
-  "remediation_commits": [],
   "evidence_paths": [
     "src/uq/research_chain/adapters.py",
     "tests/test_research_chain_phase4.py",
-    "evidence/research-chain/phase-4/implementation-gate-reports/gate-report.json"
+    "evidence/research-chain/phase-4/implementation-gate-reports/gate-report.json",
+    "evidence/research-chain/phase-4/final-gate-reports/gate-report.json",
+    "evidence/research-chain/phase-4/final-gate-reports/requirements.lock.txt",
+    "evidence/research-chain/phase-4/final-gate-reports/requirements.lock.txt.sha256",
+    "evidence/research-chain/phase-4/final-head-ci/33948029954/run.json"
   ],
-  "exit_criteria": [],
+  "exit_criteria": [
+    {
+      "description": "Portfolio stage binds prediction, universe, definition, and daily weights",
+      "id": "RC4a",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase4.py::test_portfolio_stage_binds_prediction_and_universe",
+        "tests/test_research_chain_phase4.py::test_portfolio_chain_links_previous_target_generation"
+      ]
+    },
+    {
+      "description": "Backtest stage binds ordered target weights, governed config, and result artifacts",
+      "id": "RC4b",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase4.py::test_backtest_stage_publishes_ordered_weight_lineage"
+      ]
+    },
+    {
+      "description": "Tampered, mismatched, overwritten, and unreviewed inputs fail closed",
+      "id": "RC4c",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_research_chain_phase4.py::test_portfolio_prediction_binding_mismatch_fails",
+        "tests/test_research_chain_phase4.py::test_portfolio_weight_overwrite_fails",
+        "tests/test_research_chain_phase4.py::test_wrong_portfolio_quality_decision_fails",
+        "tests/test_research_chain_phase4.py::test_backtest_rejects_corporate_action_overlap",
+        "tests/test_research_chain_phase4.py::test_backtest_rejects_tampered_price_panel"
+      ]
+    },
+    {
+      "description": "Local unified gate passes on final implementation HEAD",
+      "evidence_path": "evidence/research-chain/phase-4/final-gate-reports/gate-report.json",
+      "id": "RC4d",
+      "status": "passed",
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ]
+    },
+    {
+      "description": "Remote ten-cell unified gate passes on final implementation HEAD",
+      "evidence_path": "evidence/research-chain/phase-4/final-head-ci/33948029954/run.json",
+      "id": "RC4e",
+      "status": "passed",
+      "test_ids": [
+        "github-actions:10-cell unified gate"
+      ]
+    }
+  ],
+  "implementation_commit": "537f2698e169614a62e9861ee8bbf2ef99f9beac",
+  "layer": "research_chain",
   "notes": [
-    "Phase 4 implementation began after Phase 3 final CR exit."
-  ]
+    "Phase 4 implementation began after Phase 3 final CR exit.",
+    "Implementation commit 537f2698e169614a62e9861ee8bbf2ef99f9beac passed local gate and remote CI run 33948029954."
+  ],
+  "phase": 4,
+  "record_version": 1,
+  "remediation_commits": [],
+  "status": "exited_after_remote_gate"
 }
