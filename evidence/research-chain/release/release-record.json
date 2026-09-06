@@ -15,12 +15,12 @@
     "verifier": "scripts/verify_research_evidence.py"
   },
   "layer": "research_chain",
-  "manifest_digest_sha256": "4fad454ada2e342aeca1eb2ab79dc0fc9585a657a5763e58c3ff797f25dcd422",
+  "manifest_digest_sha256": "a609ebabc34e3544fd09c4a3e56826d89c945b981b6c33eca17bce18cbf452c7",
   "record_version": 1,
   "release": "v0.8",
-  "release_head": "6f6e663e12346f6168c9a0ad19ab4c49c14fc8ac",
-  "release_record_content_generation_id": "7f69805cbce8232bf24b82bc05bddcd5deaf67af6177dfa06083f40064e8601a",
-  "remote_ci_run_id": "33967568614",
+  "release_head": "9f208267e585b0f95a219af2dd3f9367a5fb4d3e",
+  "release_record_content_generation_id": "f50abd19415049f95d73e04768c4b471c2575db2370074155ef05cc1d736ded0",
+  "remote_ci_run_id": "34004669663",
   "risk_limitations": [
     "Factor layer official reference-price provenance remains outside the scope of Research Chain release certification."
   ],

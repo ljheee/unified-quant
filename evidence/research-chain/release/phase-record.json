@@ -66,11 +66,12 @@
       ]
     }
   ],
-  "implementation_commit": "133fa83db7c4477bd32f8146ccab668e6fba60b9",
+  "implementation_commit": "9f208267e585b0f95a219af2dd3f9367a5fb4d3e",
   "layer": "research_chain",
   "notes": [
-    "Local Qlib gate passed 459 tests on release reconciliation HEAD 6f6e663e12346f6168c9a0ad19ab4c49c14fc8ac.",
-    "Remote CI run 33967568614 passed all ten base/Qlib cells on the same HEAD.",
+    "Release evidence was reconciled to implementation HEAD 9f208267e585b0f95a219af2dd3f9367a5fb4d3e.",
+    "Local Qlib gate passed 462 tests on the implementation HEAD.",
+    "Remote CI run 34004669663 passed all ten base/Qlib cells on the same HEAD.",
     "Remote aggregation was mechanically verified with scripts/verify_research_evidence.py.",
     "Security, lineage, and fail-closed acceptance rows are executable and not deferred."
   ],
