@@ -1,0 +1,63 @@
+{
+  "layer": "risk_control_plane",
+  "phase": 5,
+  "record_version": 1,
+  "status": "exited_after_remote_gate",
+  "blocked_by": [],
+  "implementation_commit": "02992e1ea1ef91f06beee46678df962d64ab3220",
+  "evidence_commit": "231b77c6426d4a6ab70c28e15744b61aef909477",
+  "entry_criteria": {
+    "phase_4_implemented": true,
+    "status": "passed"
+  },
+  "exit_criteria": [
+    {
+      "id": "RCP5a",
+      "description": "Final local unified gate passes on the release implementation commit",
+      "status": "passed",
+      "test_ids": [
+        "scripts/run_gate.sh",
+        "python -m pytest"
+      ],
+      "evidence_paths": [
+        "evidence/risk/release/final-gate-report.json",
+        "evidence/risk/release/requirements.lock.txt"
+      ]
+    },
+    {
+      "id": "RCP5b",
+      "description": "Remote matrix evidence passes on the declared base and Qlib runtime cells",
+      "status": "passed",
+      "test_ids": [
+        "github-actions:ci",
+        "github-actions:f4-certification"
+      ],
+      "evidence_paths": [
+        "evidence/risk/release/remote-matrix/34044714986/"
+      ]
+    },
+    {
+      "id": "RCP5c",
+      "description": "Phase and release records reconcile architecture, spec, and plan status",
+      "status": "passed",
+      "test_ids": [],
+      "evidence_paths": [
+        "specs/architecture.md",
+        "specs/layers/risk-control-plane-spec.md",
+        "specs/layers/risk-control-plane-implementation-plan.md",
+        "evidence/risk/release/release-record.json"
+      ]
+    }
+  ],
+  "evidence_paths": [
+    "evidence/risk/release/final-gate-report.json",
+    "evidence/risk/release/requirements.lock.txt",
+    "evidence/risk/release/requirements.lock.txt.sha256",
+    "evidence/risk/release/remote-matrix/34044714986/",
+    "evidence/risk/release/release-record.json"
+  ],
+  "notes": [
+    "The local gate report is bound to the implementation commit, not the evidence-only release commit.",
+    "The remote matrix preserves ten original per-cell reports and verifies platform and Python distinctness."
+  ]
+}

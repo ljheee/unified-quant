@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.8 Phase 4 implemented pending final HEAD gate evidence**
+Status: **v0.2.9 released; Phases 0–5 exited**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -11,9 +11,10 @@ does not authorize production execution, real-time streaming, broker
 connectivity, or a generic rules engine.
 
 The source spec is approved. Activation condition 5 is recorded in
-`evidence/risk/activation.json`. Phase 0–3 are exited with preserved local gate evidence. Phase 4 is
-implemented with Research Chain v2 integration and focused tests; final
-implementation-HEAD gate and release reconciliation remain required.
+`evidence/risk/activation.json`. Phase 0–4 are exited with preserved gate evidence. Phase 5 release
+reconciliation is complete: the unified local gate passed 505 tests on the
+implementation HEAD, and remote CI passed the declared base and Qlib runtime
+environment cells. Production execution remains out of scope.
 
 ## 1. Scope
 
@@ -325,8 +326,8 @@ it must become `passed` with evidence before the phase exits.
 | RCP4b | 4 | `test_research_request_v2_requires_risk_decision` | `evidence/risk/phase-4/` | implemented |
 | RCP4c | 4 | `test_research_stage_stops_on_rejected_decision` | `evidence/risk/phase-4/` | implemented |
 | RCP4d | 4 | `test_research_runner_cannot_sign_risk_reviews` | `evidence/risk/phase-4/` | implemented |
-| RCP5a | 5 | `scripts/run_gate.sh` | `evidence/risk/release/` | pending |
-| RCP5b | 5 | remote unified gate | `evidence/risk/release/remote-matrix/` | pending |
+| RCP5a | 5 | `scripts/run_gate.sh` | `evidence/risk/release/final-gate-report.json`; 505 passed | implemented |
+| RCP5b | 5 | remote unified gate | `evidence/risk/release/remote-matrix/34044714986/`; 10 cells passed | implemented |
 
 The plan is not executable until every relevant phase's rows are expanded or
 marked with an approved non-security deferral.

@@ -1,0 +1,27 @@
+{
+  "layer": "risk_control_plane",
+  "release": "v1.0.0",
+  "status": "released",
+  "records": [
+    {
+      "path": "evidence/risk/release/phase-record.json",
+      "sha256": "9eb3df1bfaaefdd7f9d5868611bb426eeff50eeef74fb6edf4e573abd4874878"
+    },
+    {
+      "path": "evidence/risk/release/release-record.json",
+      "sha256": "c3ea20bb190b14b86a770d6136b91927d90ca432edfa7fd9fc174710eacc33fc"
+    },
+    {
+      "path": "evidence/risk/release/final-gate-report.json",
+      "sha256": "021e3fe4328b8bcf074dcce8231fcab8614bcf47b22daadea65a9c34ce8d5826"
+    },
+    {
+      "path": "evidence/risk/release/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/risk/release/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    }
+  ]
+}

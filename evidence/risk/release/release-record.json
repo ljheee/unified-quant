@@ -1,0 +1,73 @@
+{
+  "layer": "risk_control_plane",
+  "status": "released",
+  "release": "v1.0.0",
+  "record_version": 1,
+  "implementation_commit": "02992e1ea1ef91f06beee46678df962d64ab3220",
+  "phases_exited": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "scope": {
+    "portfolio_risk_decision": true,
+    "backtest_pre_trade_decision": true,
+    "stateful_loss_control_actions": true,
+    "research_chain_integration": true,
+    "research_run_request_v2": true,
+    "production_execution": false,
+    "real_time_streaming": false,
+    "broker_connectivity": false,
+    "generic_rules_engine": false
+  },
+  "local_gate": {
+    "result": "passed",
+    "runner": "uv",
+    "extras": [
+      "dev",
+      "real",
+      "qlib"
+    ],
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "commit_bound": "02992e1ea1ef91f06beee46678df962d64ab3220",
+    "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+    "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+    "report_path": "evidence/risk/release/final-gate-report.json",
+    "report_sha256": "021e3fe4328b8bcf074dcce8231fcab8614bcf47b22daadea65a9c34ce8d5826",
+    "timestamp": "2026-09-06T16:11:47.682315+00:00"
+  },
+  "remote_gate": {
+    "result": "success",
+    "run_id": "34044714986",
+    "commit_bound": "231b77c6426d4a6ab70c28e15744b61aef909477",
+    "summary": {
+      "passed": 10,
+      "failed": 0,
+      "total": 10
+    },
+    "matrix_root": "evidence/risk/release/remote-matrix/34044714986/",
+    "base_cells": 6,
+    "qlib_runtime_cells": 4
+  },
+  "evidence_index": {
+    "phase_records": [
+      "evidence/risk/phase-0/phase-record.json",
+      "evidence/risk/phase-1/phase-record.json",
+      "evidence/risk/phase-2/phase-record.json",
+      "evidence/risk/phase-3/phase-record.json",
+      "evidence/risk/phase-4/phase-record.json",
+      "evidence/risk/release/phase-record.json"
+    ],
+    "local_gate": "evidence/risk/release/final-gate-report.json",
+    "requirements_lock": "evidence/risk/release/requirements.lock.txt",
+    "remote_matrix": "evidence/risk/release/remote-matrix/34044714986/"
+  },
+  "notes": [
+    "Local unified Qlib gate passed 505 tests on implementation commit 02992e1ea1ef91f06beee46678df962d64ab3220.",
+    "Remote CI run 34044714986 passed six distinct base cells and four distinct Qlib runtime cells on evidence commit 231b77c6426d4a6ab70c28e15744b61aef909477."
+  ]
+}

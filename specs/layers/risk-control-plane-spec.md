@@ -1,14 +1,15 @@
 # Risk Control Plane Specification
 
-Status: **v0.2.1 final-CR remediated contract draft; approved and contract-only activated**
+Status: **v0.2.2 released; Phases 0–5 exited with local and remote gate evidence**
 
 Design input: `layering.md` from the one-stop-quant project.
 Related specs: `specs/layers/portfolio-backtest-layer-spec.md`, `specs/layers/model-layer-spec.md`, `specs/layers/research-chain-layer-spec.md`.
 
 Approval state: `approved`.
-Activation state: `active` for contract-only Phase 0 under condition 5
-(policy/exception audit becomes a compliance requirement). Runtime remains
-limited to Phase 0; Phase 1 opens only after Phase 0 exit.
+Activation state: `active` under condition 5 (policy/exception audit is a
+compliance requirement). Runtime Phases 0–5 are completed and evidence-bound;
+production execution, real-time streaming, broker connectivity, and generic
+rules engines remain out of scope.
 
 ## 1. Purpose
 
