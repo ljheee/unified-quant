@@ -269,6 +269,7 @@ def _candidate_metrics(
     pit_volume: float,
     sellable_shares: int,
     execution_price: float,
+    slippage_bps: float,
 ) -> dict[str, float]:
     instrument = str(order["instrument"])
     side = str(order["side"])
@@ -281,11 +282,12 @@ def _candidate_metrics(
         eligible_shares = requested_shares
     notional = abs(requested_shares * execution_price)
     participation = requested_shares / pit_volume if pit_volume > 0.0 else float("inf")
+    slipped_price = execution_price * (1.0 + slippage_bps / 10000.0)
     return {
         "order_notional": round(notional, 12),
         "order_participation": round(participation, 12),
         "cash_after_order": round(
-            cash + (eligible_shares * execution_price if side == "sell" else -eligible_shares * execution_price),
+            cash - (eligible_shares * slipped_price if side == "buy" else 0.0),
             12,
         ),
         "sellable_shares": float(sellable_shares),
@@ -310,6 +312,9 @@ class RiskEngine:
         suspended: bool,
         sellable_shares: int,
         limit_ratio: float,
+        board_lot: int,
+        slippage_bps: float,
+        seen_order_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         """Evaluate one deterministic candidate order before submission."""
         _validate_policy_document(policy, execution_date, policy_review, expected_scope="order")
@@ -337,6 +342,13 @@ class RiskEngine:
             raise ContractError("sellable shares exceed current holdings")
         if not isinstance(limit_ratio, (int, float)) or not math.isfinite(limit_ratio) or limit_ratio < 0.0:
             raise ContractError("limit ratio must be non-negative")
+        if not isinstance(board_lot, int) or isinstance(board_lot, bool) or board_lot <= 0:
+            raise ContractError("board lot must be positive")
+        if not isinstance(slippage_bps, (int, float)) or not math.isfinite(slippage_bps) or slippage_bps < 0.0:
+            raise ContractError("slippage bps must be non-negative")
+        order_id = str(order["order_id"])
+        if seen_order_ids is not None and order_id in seen_order_ids:
+            raise ContractError("duplicate or stale order id")
 
         metrics = _candidate_metrics(
             order,
@@ -345,6 +357,7 @@ class RiskEngine:
             pit_volume=decision_date_volume,
             sellable_shares=sellable_shares,
             execution_price=float(execution_price),
+            slippage_bps=float(slippage_bps),
         )
         limit_up_price = previous_close * (1.0 + limit_ratio)
         limit_down_price = previous_close * (1.0 - limit_ratio)
@@ -410,7 +423,9 @@ class RiskEngine:
                         "instrument": instrument,
                     })
                 elif finding["rule_id"] == "order_participation_limit" and finding["threshold"] is not None:
-                    allowed_shares = math.floor(float(decision_date_volume) * float(finding["threshold"]))
+                    allowed_shares = math.floor(
+                        float(decision_date_volume) * float(finding["threshold"]) / board_lot
+                    ) * board_lot
                     if side == "sell":
                         allowed_shares = min(allowed_shares, sellable_shares, int(order["shares"]))
                     constraints.append({
@@ -419,9 +434,16 @@ class RiskEngine:
                         "instrument": instrument,
                     })
                 elif finding["rule_id"] == "order_notional_limit" and finding["threshold"] is not None:
-                    allowed_shares = math.floor(float(finding["threshold"]) / float(execution_price))
+                    allowed_notional = float(finding["threshold"])
+                    unit_price = float(execution_price) * (1.0 + float(slippage_bps) / 10000.0)
+                    allowed_shares = math.floor(allowed_notional / unit_price / board_lot) * board_lot
                     if side == "sell":
                         allowed_shares = min(allowed_shares, sellable_shares, int(order["shares"]))
+                    constraints.append({
+                        "constraint_type": "allowed_notional",
+                        "value": allowed_notional,
+                        "instrument": instrument,
+                    })
                     constraints.append({
                         "constraint_type": "allowed_shares",
                         "value": float(max(0, allowed_shares)),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -87,6 +88,8 @@ def _evaluate(**overrides):
         "suspended": False,
         "sellable_shares": 0,
         "limit_ratio": 0.10,
+        "board_lot": 100,
+        "slippage_bps": 0.0,
     }
     values.update(overrides)
     return RiskEngine().evaluate_order(**values)
@@ -148,9 +151,16 @@ def test_risk_participation_and_notional_resize_exact():
         decision_date_volume=1000000.0,
     )
     assert notional["action"] == "resize"
-    assert notional["constraints"][0] == {
-        "constraint_type": "allowed_shares", "instrument": "A", "value": 9174.0
+    allowed_shares = next(
+        constraint for constraint in notional["constraints"]
+        if constraint["constraint_type"] == "allowed_shares"
+    )
+    assert allowed_shares == {
+        "constraint_type": "allowed_shares", "instrument": "A", "value": 9100.0
     }
+    assert {
+        "constraint_type": "allowed_notional", "instrument": "A", "value": 100000.0
+    } in notional["constraints"]
 
 
 def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
@@ -192,13 +202,17 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
             "2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [1.0]})
         },
         price_panel=price_panel.set_index(["date", "instrument"]),
+        suspension_dates={("2026-01-06", "A")},
     )
     assert len(risk_run["decision_bindings"]) == 1
     stored_run, payloads = gate.run_store.read(risk_run["generation_id"])
     assert len(payloads) == 1
+    assert payloads["decision-0.json"]["action"] == "block_order"
     assert payloads["decision-0.json"]["decision_digest"] == decision_digest(payloads)
+    verified_run, _ = gate.read_verified_risk_run(risk_run["generation_id"])
+    assert len(verified_run["event_bindings"]) == 1
     fills = artifacts["fills"]
-    assert "skipped_risk_blocked" not in set(fills["status"])
+    assert "skipped_risk_blocked" in set(fills["status"])
     assert list(fills.columns) == [
         "date", "instrument", "side", "target_shares", "filled_shares",
         "gross_execution_price", "net_execution_price", "commission_fee",
@@ -237,6 +251,8 @@ def test_risk_run_tampering_rejects_read(tmp_path):
         suspended=False,
         sellable_shares=0,
         limit_ratio=0.10,
+        board_lot=100,
+        slippage_bps=0.0,
     )
     event = {
         "contract_version": 1,
@@ -338,3 +354,27 @@ def test_risk_run_tampering_rejects_read(tmp_path):
     decision_manifest_path.write_text(json.dumps(tampered))
     with pytest.raises(ContractError, match="identity mismatch"):
         gate.read_verified_risk_run(run["generation_id"])
+
+
+def test_duplicate_order_id_fails_closed():
+    policy, review = _order_policy()
+    gate = PortfolioPublicationRiskGate(tempfile.mkdtemp())
+    kwargs = {
+        "policy": policy,
+        "policy_review": review,
+        "order": {"order_id": "order-1", "instrument": "A", "side": "buy", "shares": 100},
+        "execution_date": "2026-01-05",
+        "execution_price": 10.0,
+        "previous_close": 10.0,
+        "decision_date_volume": 100000.0,
+        "holdings": {"A": 0},
+        "cash": 100000.0,
+        "suspended": False,
+        "sellable_shares": 0,
+        "limit_ratio": 0.10,
+        "board_lot": 100,
+        "slippage_bps": 0.0,
+    }
+    gate.evaluate_order(**kwargs)
+    with pytest.raises(ContractError, match="duplicate or stale"):
+        gate.evaluate_order(**kwargs)

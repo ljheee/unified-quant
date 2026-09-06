@@ -215,6 +215,8 @@ class BacktestEngine:
                         "suspended": is_suspended,
                         "sellable_shares": current_sellable,
                         "limit_ratio": limit_ratio,
+                        "board_lot": board_lot,
+                        "slippage_bps": cost_model["slippage_bps"],
                     }
                     decision = risk_gate(candidate, context)
                     if decision["action"] in _RISK_BLOCKED_ACTIONS:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from pathlib import Path
@@ -17,6 +18,11 @@ from .engine import RiskEngine
 from .stores import RiskDecisionStore, RiskEventStore, RiskPolicyStore, RiskRunStore, RiskStateStore, make_binding
 
 
+_BACKTEST_GATE_CODE_FINGERPRINT = hashlib.sha256(
+    b"uq/risk/backtest-pre-trade-gate-v1"
+).hexdigest()
+
+
 class PortfolioPublicationRiskGate:
     """Evaluate target weights and persist immutable risk evidence before publication."""
 
@@ -28,6 +34,7 @@ class PortfolioPublicationRiskGate:
         self.event_store = RiskEventStore(root)
         self.run_store = RiskRunStore(root)
         self.engine = RiskEngine()
+        self._seen_order_ids: set[str] = set()
 
     def gate(
         self,
@@ -136,8 +143,13 @@ class PortfolioPublicationRiskGate:
         suspended: bool,
         sellable_shares: int,
         limit_ratio: float,
+        board_lot: int,
+        slippage_bps: float,
     ) -> dict[str, Any]:
-        return self.engine.evaluate_order(
+        order_id = str(order["order_id"])
+        if order_id in self._seen_order_ids:
+            raise ContractError("duplicate or stale order id")
+        decision = self.engine.evaluate_order(
             policy=policy,
             policy_review=policy_review,
             order=order,
@@ -150,10 +162,16 @@ class PortfolioPublicationRiskGate:
             suspended=suspended,
             sellable_shares=sellable_shares,
             limit_ratio=limit_ratio,
+            board_lot=board_lot,
+            slippage_bps=slippage_bps,
+            seen_order_ids=self._seen_order_ids,
         )
+        self._seen_order_ids.add(order_id)
+        return decision
 
     def run_with_risk_gate(self, engine: Any, *, config: Mapping[str, Any], policy: Mapping[str, Any], policy_review: Mapping[str, Any], **kwargs: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
         decisions: list[dict[str, Any]] = []
+        event_bindings: list[dict[str, str]] = []
 
         def gate(candidate: Mapping[str, Any], context: Mapping[str, Any]) -> dict[str, Any]:
             decision = self.evaluate_order(
@@ -169,14 +187,16 @@ class PortfolioPublicationRiskGate:
                 suspended=context["suspended"],
                 sellable_shares=context["sellable_shares"],
                 limit_ratio=context["limit_ratio"],
+                board_lot=context["board_lot"],
+                slippage_bps=context["slippage_bps"],
             )
             decisions.append(decision)
-            return decision
-
-        manifest, artifacts = engine.run(config=config, **kwargs, risk_gate=gate)
-
-        event_bindings = []
-        for sequence_number, decision in enumerate(decisions, start=1):
+            self.decision_store.publish(decision, {
+                "action": decision["action"],
+                "constraints": decision["constraints"],
+                "decision_digest": decision["decision_digest"],
+                "findings": decision["findings"],
+            })
             event = {
                 "contract_version": 1,
                 "schema_version": "1.0.0",
@@ -187,7 +207,7 @@ class PortfolioPublicationRiskGate:
                 "event_class": "risk_triggered" if decision["action"] != "allow" else "risk_cleared",
                 "scope_type": "order",
                 "scope_id": "backtest_pre_trade",
-                "event_sequence_number": sequence_number,
+                "event_sequence_number": len(decisions),
                 "as_of_date": decision["as_of_date"],
                 "visible_through": decision["visible_through"],
                 "policy_generation_id": policy["generation_id"],
@@ -204,6 +224,9 @@ class PortfolioPublicationRiskGate:
             event["manifest_digest_sha256"] = event_digest
             self.event_store.publish(event)
             event_bindings.append(make_binding(event, family="risk_event_v1"))
+            return decision
+
+        manifest, artifacts = engine.run(config=config, **kwargs, risk_gate=gate)
 
         payloads = {
             f"decision-{index}.json": {
@@ -226,7 +249,7 @@ class PortfolioPublicationRiskGate:
             "as_of_date": config["start_date"],
             "visible_through": f"{config['end_date']}T15:00:00+00:00",
             "producer": {
-                "producer_code_fingerprint": "0" * 64,
+                "producer_code_fingerprint": _BACKTEST_GATE_CODE_FINGERPRINT,
                 "run_id": str(uuid.uuid4()),
                 "created_at": "1970-01-01T00:00:00+00:00",
             },

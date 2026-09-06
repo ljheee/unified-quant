@@ -315,6 +315,7 @@ it must become `passed` with evidence before the phase exits.
 | RCP2e | 2 | `test_risk_run_tampering_rejects_read` | `evidence/risk/phase-2/` | implemented |
 | RCP2f | 2 | `test_backtest_result_v1_contract_remains_frozen` | existing backtest contract tests | implemented |
 | RCP2g | 2 | `test_risk_rejected_candidate_is_not_added_to_frozen_fills` | `evidence/risk/phase-2/frozen-fills.json` | implemented |
+| RCP2h | 2 | `test_duplicate_order_id_fails_closed` | `tests/test_risk_control_plane_phase2.py` | implemented |
 | RCP3a | 3 | `test_risk_state_transition_is_deterministic` | `evidence/risk/phase-3/golden/` | pending |
 | RCP3b | 3 | `test_risk_hysteresis_and_cooldown_are_exact` | `evidence/risk/phase-3/golden/` | pending |
 | RCP3c | 3 | `test_risk_late_visibility_creates_new_generation` | `evidence/risk/phase-3/` | pending |
