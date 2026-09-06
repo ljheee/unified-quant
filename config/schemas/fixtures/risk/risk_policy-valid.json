@@ -1,0 +1,40 @@
+{
+  "activation_status": "approved",
+  "approval_binding": {
+    "family": "risk_review_decision_v1",
+    "review_generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+    "review_manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8"
+  },
+  "contract_version": 1,
+  "effective_from": "2026-09-01",
+  "effective_to": null,
+  "generation_id": "d7aa02a49f35836922c9f7271645888df6c9a393c4244c09484f3699b5b174a6",
+  "industry_membership_binding": null,
+  "manifest_digest_sha256": "ccb7fbc0d371a5473c6b72731467abc7d24605b7b7435ecb75949310e6b10548",
+  "policy_id": "research-policy",
+  "policy_scope": "portfolio",
+  "policy_version": "1.0.0",
+  "producer": {
+    "created_at": "2026-09-06T00:00:00Z",
+    "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "run_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "rules": [
+    {
+      "action": "resize",
+      "cooldown_days": 0,
+      "hysteresis_exit_threshold": null,
+      "metric": "gross_stock_exposure",
+      "operator": "greater_than",
+      "priority": 10,
+      "rule_id": "portfolio_gross_exposure_limit",
+      "rule_scope": "portfolio",
+      "severity": "critical",
+      "state_required": false,
+      "state_window_days": 0,
+      "threshold": 0.95
+    }
+  ],
+  "schema_version": "1.0.0",
+  "serialization_profile": "json-canonical-v1"
+}

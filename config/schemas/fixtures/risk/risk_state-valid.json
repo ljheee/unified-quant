@@ -1,0 +1,42 @@
+{
+  "as_of_date": "2026-09-05",
+  "calendar_binding": {
+    "family": "trading_calendar_v1",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "contract_version": 1,
+  "files": [
+    {
+      "byte_size": 64,
+      "path": "state.json",
+      "serialization_profile": "json-canonical-v1",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "generation_id": "db703a69399ea6a381355bfb4baf7a5e8c0b1e5bd043ecd7a124f8f85c5be788",
+  "manifest_digest_sha256": "ff42f8e2dd11e14831f0d60aed1738d8684ae21c1f711c6fb88e59d0ffb1b78a",
+  "metric_names": [
+    "gross_stock_exposure"
+  ],
+  "previous_state_generation_id": null,
+  "producer": {
+    "created_at": "2026-09-06T00:00:00Z",
+    "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "run_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "schema_version": "1.0.0",
+  "scope_id": "research",
+  "serialization_profile": "json-canonical-v1",
+  "state_scope_type": "portfolio",
+  "state_status": "initial",
+  "supersedes_state_generation_id": null,
+  "upstream_bindings": [
+    {
+      "family": "target_weights_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "visible_through": "2026-09-05T15:00:00+08:00"
+}

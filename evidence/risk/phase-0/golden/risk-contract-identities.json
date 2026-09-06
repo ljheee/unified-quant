@@ -1,0 +1,37 @@
+{
+  "golden_version": 1,
+  "identities": {
+    "risk_de_risk_contract": {
+      "generation_id": "ccb62e53f0ceed1fdcfe371a34428ea93154363f5ac4e12afd505e42a5f84323",
+      "manifest_digest_sha256": "bf6b4633d7ba4da0a4d6dd4017478eec82e246dfcd5766f67bc540919e4d9116"
+    },
+    "risk_decision": {
+      "generation_id": "ed905872027c3f79fb6d1cd60490f90865c6479676723ee105ed9da4d6957ac4",
+      "manifest_digest_sha256": "4cb80c4d4c365ef8bc982676dfcb76c13938902c1ccadf0a5798f126a28daf80"
+    },
+    "risk_event": {
+      "generation_id": "875ce8f32fcd7d83ecb4c26169af09b65baa8fbc78179486f55483575fd231f1",
+      "manifest_digest_sha256": "5f386541355f8913ebed2af2ab29ca26a11fcf93a5ecfbb4f80f9e81f04b04e2"
+    },
+    "risk_exception": {
+      "generation_id": "7fe57a7fccc3da5a30f3d7cc275c0fb459735a4b0a0b3745fc58aaf39e95ffd2",
+      "manifest_digest_sha256": "b99cb09c5063f7b7af898ad947342e84f5593f51027ce39a636b20ce631b9644"
+    },
+    "risk_policy": {
+      "generation_id": "d7aa02a49f35836922c9f7271645888df6c9a393c4244c09484f3699b5b174a6",
+      "manifest_digest_sha256": "ccb7fbc0d371a5473c6b72731467abc7d24605b7b7435ecb75949310e6b10548"
+    },
+    "risk_review_decision": {
+      "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+      "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8"
+    },
+    "risk_run": {
+      "generation_id": "bf6e2d33e2956097da6011a3b14defaaad08c2cc59879e9da9b073dd911b9796",
+      "manifest_digest_sha256": "922099a7a1cd0774fc4f75f7f7e9006408428b6091a8d588fca82f2d498a22a7"
+    },
+    "risk_state": {
+      "generation_id": "db703a69399ea6a381355bfb4baf7a5e8c0b1e5bd043ecd7a124f8f85c5be788",
+      "manifest_digest_sha256": "ff42f8e2dd11e14831f0d60aed1738d8684ae21c1f711c6fb88e59d0ffb1b78a"
+    }
+  }
+}

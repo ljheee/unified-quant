@@ -1,0 +1,29 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "exception_id": "research-exception",
+  "scope_type": "portfolio",
+  "scope_id": "research",
+  "policy_binding": {
+    "family": "risk_policy_v1",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "rule_id": "portfolio_gross_exposure_limit",
+  "permitted_action": "allow",
+  "status": "self_approved",
+  "expires_at": "2026-09-30",
+  "reason": "controlled research exception",
+  "evidence_bindings": [],
+  "review_binding": {
+    "family": "risk_policy_v1",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "producer": {
+    "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "run_id": "00000000-0000-0000-0000-000000000001",
+    "created_at": "2026-09-06T00:00:00Z"
+  },
+  "serialization_profile": "json-canonical-v1"
+}

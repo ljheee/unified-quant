@@ -1,0 +1,18 @@
+{
+  "contract_version": 1,
+  "errors": [],
+  "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+  "key_id": "risk-reviewer-v1-2026-09",
+  "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8",
+  "policy": "reject_all",
+  "review_signature_sha256": "7c11a845148bf9ade37547e0366a76a09a9073878382f536d2c65c65e48b2cc6c3a809b2f6b2c85a3ea12fd94075918af99bbe088a958697d54ed64d542b020e",
+  "review_status": "approved",
+  "review_type": "risk_policy_activation",
+  "reviewed_at_utc": "2026-09-06T00:00:00Z",
+  "reviewer": "repository-owner",
+  "schema_version": "1.0.0",
+  "subject_content_sha256": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+  "subject_generation_id": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+  "subject_manifest_digest_sha256": "cfd9c82fa8e34fdd350d7673093966cea54a728b827e7381a4f35f3ed625fa72",
+  "warnings": []
+}

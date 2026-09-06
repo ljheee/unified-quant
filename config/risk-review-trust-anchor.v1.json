@@ -1,0 +1,20 @@
+{
+  "contract_version": 1,
+  "registry_version": 1,
+  "status": "reviewed",
+  "anchors": [
+    {
+      "trust_anchor_version": 1,
+      "algorithm": "Ed25519",
+      "key_id": "risk-reviewer-v1-2026-09",
+      "public_key_hex": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+      "reviewer": "repository-owner",
+      "valid_from": "2026-09-01",
+      "valid_to": "2027-08-31",
+      "review_types": [
+        "risk_policy_activation",
+        "risk_exception_grant"
+      ]
+    }
+  ]
+}

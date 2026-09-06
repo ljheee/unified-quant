@@ -1,0 +1,37 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "policy_id": "research-policy",
+  "policy_version": "1.0.0",
+  "policy_scope": "portfolio",
+  "activation_status": "approved",
+  "effective_from": "2026-09-01",
+  "effective_to": null,
+  "rules": [
+    {
+      "rule_id": "portfolio_gross_exposure_limit",
+      "rule_scope": "portfolio",
+      "metric": "gross_stock_exposure",
+      "operator": "greater_than",
+      "threshold": 0.95,
+      "action": "sell_all",
+      "severity": "critical",
+      "priority": 10,
+      "state_required": false,
+      "state_window_days": 0,
+      "hysteresis_exit_threshold": null,
+      "cooldown_days": 0
+    }
+  ],
+  "industry_membership_binding": null,
+  "approval_binding": {
+    "review_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "review_manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "producer": {
+    "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "run_id": "00000000-0000-0000-0000-000000000001",
+    "created_at": "2026-09-06T00:00:00Z"
+  },
+  "serialization_profile": "json-canonical-v1"
+}

@@ -1,0 +1,21 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "event_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "event_class": "not_a_risk_event",
+  "scope_type": "portfolio",
+  "scope_id": "research",
+  "event_sequence_number": 1,
+  "as_of_date": "2026-09-05",
+  "visible_through": "2026-09-05T15:00:00+08:00",
+  "policy_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "state_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "decision_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "reason": "initial snapshot",
+  "producer": {
+    "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "run_id": "00000000-0000-0000-0000-000000000001",
+    "created_at": "2026-09-06T00:00:00Z"
+  },
+  "serialization_profile": "json-canonical-v1"
+}

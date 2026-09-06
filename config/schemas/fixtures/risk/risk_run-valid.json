@@ -1,0 +1,34 @@
+{
+  "as_of_date": "2026-09-05",
+  "consumer_binding": {
+    "family": "target_weights_v1",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "contract_version": 1,
+  "decision_bindings": [
+    {
+      "family": "risk_policy_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "event_bindings": [],
+  "generation_id": "bf6e2d33e2956097da6011a3b14defaaad08c2cc59879e9da9b073dd911b9796",
+  "manifest_digest_sha256": "922099a7a1cd0774fc4f75f7f7e9006408428b6091a8d588fca82f2d498a22a7",
+  "producer": {
+    "created_at": "2026-09-06T00:00:00Z",
+    "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "run_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "risk_policy_binding": {
+    "family": "risk_policy_v1",
+    "generation_id": "7c3b946511bb7b7a5b08dd97faeb4686d666f541633f9501b8cd24576bd101d0",
+    "manifest_digest_sha256": "ce6bc4ba894893c60a36877ee59de789a39529c483d8ee134893929e448b93a5"
+  },
+  "risk_state_binding": null,
+  "run_scope": "portfolio_publication",
+  "schema_version": "1.0.0",
+  "serialization_profile": "json-canonical-v1",
+  "visible_through": "2026-09-05T15:00:00+08:00"
+}

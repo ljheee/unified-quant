@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/risk_exception.v1.json",
+  "title": "risk_exception.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "schema_version",
+    "exception_id",
+    "scope_type",
+    "scope_id",
+    "policy_binding",
+    "rule_id",
+    "permitted_action",
+    "status",
+    "expires_at",
+    "reason",
+    "evidence_bindings",
+    "review_binding",
+    "producer",
+    "serialization_profile",
+    "generation_id",
+    "manifest_digest_sha256"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "exception_id": {
+      "$ref": "#/$defs/path_segment"
+    },
+    "scope_type": {
+      "enum": [
+        "strategy",
+        "portfolio",
+        "account"
+      ]
+    },
+    "scope_id": {
+      "$ref": "#/$defs/path_segment"
+    },
+    "policy_binding": {
+      "$ref": "#/$defs/binding"
+    },
+    "rule_id": {
+      "$ref": "#/$defs/path_segment"
+    },
+    "permitted_action": {
+      "enum": [
+        "allow",
+        "warn",
+        "resize",
+        "block",
+        "block_order",
+        "block_new_buy",
+        "de_risk",
+        "flatten",
+        "halt_strategy",
+        "escalate_review"
+      ]
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "approved",
+        "expired",
+        "rejected",
+        "retired"
+      ]
+    },
+    "expires_at": {
+      "$ref": "#/$defs/date"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_bindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/binding"
+      }
+    },
+    "review_binding": {
+      "$ref": "#/$defs/binding"
+    },
+    "producer": {
+      "$ref": "#/$defs/producer"
+    },
+    "serialization_profile": {
+      "const": "json-canonical-v1"
+    },
+    "generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "path_segment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "manifest_digest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "byte_size",
+        "serialization_profile"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$",
+          "not": {
+            "pattern": "(^|/)\\.\\.?(/|$)"
+          }
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "byte_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "row_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "serialization_profile": {
+          "enum": [
+            "json-canonical-v1",
+            "parquet-v1",
+            "ndjson-v1"
+          ]
+        }
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "producer_code_fingerprint",
+        "run_id",
+        "created_at"
+      ],
+      "properties": {
+        "producer_code_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "run_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "request_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "created_at": {
+          "$ref": "#/$defs/date_time"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "contract_id": "backtest-de-risk",
+  "consumer_type": "backtest",
+  "status": "declared",
+  "supported_actions": [
+    "de_risk"
+  ],
+  "transition_semantics": "scale_weights_by_fraction",
+  "execution_available": false,
+  "review_binding": {
+    "family": "risk_policy_v1",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "producer": {
+    "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "run_id": "00000000-0000-0000-0000-000000000001",
+    "created_at": "2026-09-06T00:00:00Z"
+  },
+  "serialization_profile": "json-canonical-v1"
+}

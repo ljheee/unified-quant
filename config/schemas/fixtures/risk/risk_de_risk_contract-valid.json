@@ -1,0 +1,25 @@
+{
+  "consumer_type": "backtest",
+  "contract_id": "backtest-de-risk",
+  "contract_version": 1,
+  "execution_available": true,
+  "generation_id": "ccb62e53f0ceed1fdcfe371a34428ea93154363f5ac4e12afd505e42a5f84323",
+  "manifest_digest_sha256": "bf6b4633d7ba4da0a4d6dd4017478eec82e246dfcd5766f67bc540919e4d9116",
+  "producer": {
+    "created_at": "2026-09-06T00:00:00Z",
+    "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "run_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "review_binding": {
+    "family": "risk_review_decision_v1",
+    "generation_id": "b84bd565c6ab9b203be8095858be7980fcbdb3a532cc27dd040bd75f1d30f352",
+    "manifest_digest_sha256": "b455f85c0e783f91932c31d43ea8c4344790a92e466c75c45aceefb7e4496c10"
+  },
+  "schema_version": "1.0.0",
+  "serialization_profile": "json-canonical-v1",
+  "status": "declared",
+  "supported_actions": [
+    "de_risk"
+  ],
+  "transition_semantics": "scale_weights_by_fraction"
+}

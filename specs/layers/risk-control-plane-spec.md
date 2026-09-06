@@ -1,13 +1,14 @@
 # Risk Control Plane Specification
 
-Status: **v0.2.1 final-CR remediated contract draft; implementation paused pending explicit activation**
+Status: **v0.2.1 final-CR remediated contract draft; approved and contract-only activated**
 
 Design input: `layering.md` from the one-stop-quant project.
 Related specs: `specs/layers/portfolio-backtest-layer-spec.md`, `specs/layers/model-layer-spec.md`, `specs/layers/research-chain-layer-spec.md`.
 
-Approval state: `draft-not-approved`. This document authorizes contract drafting
-and review only; no schema, store, engine, publication, or backtest code may be
-implemented until `contract_draft=approved` and `activation=active` in §2A.
+Approval state: `approved`.
+Activation state: `active` for contract-only Phase 0 under condition 5
+(policy/exception audit becomes a compliance requirement). Runtime remains
+limited to Phase 0; Phase 1 opens only after Phase 0 exit.
 
 ## 1. Purpose
 
@@ -183,7 +184,7 @@ Every durable artifact follows the repository identity convention:
 Closed enums are normative:
 
 1. `policy_scope`: `strategy`, `portfolio`, `account`;
-2. `rule_scope`: `strategy`, `portfolio`, `order`;
+2. `rule_scope`: `strategy`, `portfolio`, `account`, `order`;
 3. `rule_operator`: `greater_than`, `greater_than_or_equal`, `less_than`,
    `less_than_or_equal`;
 4. `risk_action`: `allow`, `warn`, `resize`, `block`, `block_order`,
@@ -191,8 +192,9 @@ Closed enums are normative:
 5. `severity`: `warning`, `error`, `critical`;
 6. `serialization_profile`: `json-canonical-v1`, `parquet-v1`, `ndjson-v1`.
 
-Rule/scope compatibility is `strategy -> strategy`, `portfolio -> portfolio`,
-and `order -> order`. No cross-scope policy rule is valid.
+Rule/scope compatibility is exact: `strategy -> strategy`,
+`portfolio -> portfolio`, `account -> account`, and `order -> order`. No
+cross-scope policy rule is valid.
 
 Excluded stable-identity fields are:
 
@@ -496,14 +498,18 @@ Signing is normative:
 
 - algorithm: Ed25519;
 - signature input: canonical JSON over exactly `review_type`,
-  `subject_generation_id`, `subject_manifest_digest_sha256`, `review_status`,
-  `reviewer`, `key_id`, `policy`, `errors`, and `warnings`;
+  `subject_generation_id`, `subject_manifest_digest_sha256`,
+  `subject_content_sha256`, `review_status`, `reviewer`, `key_id`, `policy`,
+  `reviewed_at_utc`, `errors`, and `warnings`;
 - signature output: 128 lowercase hexadecimal characters in
   `review_signature_sha256`;
 - `subject_content_sha256` must equal the canonical JSON SHA-256 of the
   subject manifest before its run-metadata fields; it provides stable content
   review, while `subject_manifest_digest_sha256` binds the exact durable
   manifest;
+- for `risk_policy_activation`, the signed subject is the zero-binding policy
+  draft; after review, the publisher replaces the placeholder approval binding
+  with the signed review identity and recomputes the final policy identity;
 - verification must check both digests independently.
 
 `risk_de_risk_contract.v1` is declared now as a required Phase 0 contract

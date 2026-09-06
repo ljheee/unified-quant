@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.1 final-CR remediated contract plan; runtime paused pending explicit activation**
+Status: **v0.2.1 final-CR remediated contract plan; Phase 0 implemented draft pending final HEAD gate evidence**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -10,10 +10,9 @@ This plan turns the Risk Control Plane into a bounded, contract-first slice. It
 does not authorize production execution, real-time streaming, broker
 connectivity, or a generic rules engine.
 
-The repository currently permits draft/review work. Runtime implementation is
-paused until the plan §10 activation checklist has a checked condition and a
-dated activation note. Phase 0 entry also requires the source spec approval
-state to become `approved`.
+The source spec is approved. Activation condition 5 is recorded in
+`evidence/risk/activation.json`. Runtime is open only for Phase 0 contract
+work; Phase 1 remains gated on Phase 0 exit.
 
 ## 1. Scope
 
@@ -118,7 +117,9 @@ Exit criteria:
   digest, type, expiration, and failure taxonomy;
 - canonical JSON is deterministic;
 - no runtime publication/backtest behavior changes;
-- focused tests and full suite pass.
+- focused tests and full suite pass;
+- a gate report generated at the final implementation commit is preserved under
+  the phase evidence directory and indexed in the phase record.
 
 ## 5. Phase 1 — Portfolio Risk Decision
 
@@ -273,10 +274,11 @@ Before opening Phase 0, check one condition and record a dated activation note:
 - [ ] Research Chain needs cross-strategy/account risk binding;
 - [ ] drawdown/volatility trigger becomes a release gate;
 - [ ] live/paper positions require persistent risk state;
-- [ ] policy/exception audit becomes a compliance requirement.
+- [x] policy/exception audit becomes a compliance requirement.
 
-Activation note fields: condition, evidence path, approver, date, and explicit
-scope. A checked box without this note is invalid.
+Activation note: condition 5 is active for contract-only Phase 0 work. See
+`evidence/risk/activation.json`; approver is repository-owner, dated
+2026-09-06. No Execution Layer, live position, or real-time path is activated.
 
 ## 11. Acceptance Matrix
 
@@ -285,15 +287,19 @@ it must become `passed` with evidence before the phase exits.
 
 | ID | Phase | Test ID | Fixture/evidence | Status |
 |---|---:|---|---|---|
-| RCP0a | 0 | `test_risk_contract_fixtures_are_valid` | `config/schemas/fixtures/risk/*-valid.json` | pending |
-| RCP0b | 0 | `test_risk_contract_negative_fixtures_fail` | `config/schemas/fixtures/risk/*-negative.json` | pending |
-| RCP0c | 0 | `test_risk_generation_excludes_run_metadata` | `evidence/risk/phase-0/golden/` | pending |
-| RCP0d | 0 | `test_risk_identity_changes_on_each_binding` | `evidence/risk/phase-0/golden/` | pending |
-| RCP0e | 0 | `test_risk_manifest_digest_and_payload_checksum_reject_tampering` | `config/schemas/fixtures/risk/*-negative.json` | pending |
-| RCP0f | 0 | `test_risk_review_decision_requires_external_trust_anchor` | `config/schemas/fixtures/risk/review-*` | pending |
-| RCP0g | 0 | `test_risk_rule_scope_compatibility_matrix` | `evidence/risk/phase-0/scope-matrix.json` | pending |
-| RCP0h | 0 | `test_risk_manifest_file_path_and_checksum_reject_mismatch` | `config/schemas/fixtures/risk/path-negative.json` | pending |
-| RCP0i | 0 | `test_risk_event_rejects_duplicate_or_stale_sequence` | `config/schemas/fixtures/risk/event-negative.json` | pending |
+| RCP0a | 0 | `test_all_risk_contract_fixtures_are_valid` | `config/schemas/fixtures/risk/*-valid.json` | implemented |
+| RCP0b | 0 | `test_all_risk_contract_negative_fixtures_fail` | `config/schemas/fixtures/risk/*-negative.json` | implemented |
+| RCP0c | 0 | `test_risk_generation_excludes_run_metadata` | `evidence/risk/phase-0/golden/` | implemented |
+| RCP0d | 0 | `test_risk_identity_changes_on_each_binding` | `evidence/risk/phase-0/golden/` | implemented |
+| RCP0e | 0 | `test_risk_manifest_digest_rejects_tampering` | `config/schemas/fixtures/risk/*-negative.json` | implemented |
+| RCP0f | 0 | `test_risk_review_decision_requires_external_trust_anchor` | `config/schemas/fixtures/risk/risk_review_decision-*` | implemented |
+| RCP0g | 0 | `test_risk_rule_scope_compatibility_matrix` | policy and decision fixtures | implemented |
+| RCP0h | 0 | `test_risk_artifact_bytes_require_checksum_match` and `test_risk_file_path_rejects_escape` | `config/schemas/fixtures/risk/risk_state-*` | implemented |
+| RCP0i | 0 | `test_risk_event_sequence_rejects_duplicate_or_stale_entries` | `config/schemas/fixtures/risk/risk_event-*` | implemented |
+| RCP0j | 0 | `test_industry_limit_requires_membership_contract` | `config/schemas/fixtures/risk/risk_policy-*` | implemented |
+| RCP0k | 0 | `test_enforceable_de_risk_contract_fails_closed` | `config/schemas/fixtures/risk/risk_de_risk_contract-*` | implemented |
+| RCP0l | 0 | `test_phase0_golden_identities_are_persisted` | `evidence/risk/phase-0/golden/risk-contract-identities.json` | implemented |
+| RCP0m | 0 | `test_approved_policy_binds_verified_external_review_decision` | `config/schemas/fixtures/risk/risk_policy-*` | implemented |
 | RCP1a | 1 | `test_risk_portfolio_missing_inputs_fail_closed` | `evidence/risk/phase-1/fixtures/` | pending |
 | RCP1b | 1 | `test_risk_portfolio_decision_is_deterministic` | `evidence/risk/phase-1/golden/` | pending |
 | RCP1c | 1 | `test_risk_portfolio_action_ranking_is_deterministic` | `evidence/risk/phase-1/golden/` | pending |

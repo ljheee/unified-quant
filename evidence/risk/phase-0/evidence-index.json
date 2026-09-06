@@ -1,0 +1,31 @@
+{
+  "entries": [
+    {
+      "kind": "activation",
+      "path": "evidence/risk/activation.json"
+    },
+    {
+      "kind": "golden_vectors",
+      "path": "evidence/risk/phase-0/golden/risk-contract-identities.json"
+    },
+    {
+      "kind": "local_gate_historical_pre_final_head",
+      "path": "evidence/risk/phase-0/gate-reports/gate-report.json"
+    },
+    {
+      "kind": "locked_requirements",
+      "path": "evidence/risk/phase-0/gate-reports/requirements.lock.txt"
+    },
+    {
+      "kind": "requirements_digest",
+      "path": "evidence/risk/phase-0/gate-reports/requirements.lock.txt.sha256"
+    },
+    {
+      "kind": "phase_record",
+      "path": "evidence/risk/phase-0/phase-record.json"
+    }
+  ],
+  "evidence_version": 1,
+  "layer": "risk_control_plane",
+  "phase": "0"
+}

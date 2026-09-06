@@ -1,0 +1,63 @@
+{
+  "blocked_by": [
+    "final HEAD gate report generation after commit"
+  ],
+  "entry_criteria": "passed",
+  "evidence_paths": [
+    "evidence/risk/activation.json",
+    "evidence/risk/phase-0/gate-reports"
+  ],
+  "exit_criteria": "pending_final_head_gate_evidence",
+  "fixtures": [
+    "config/schemas/fixtures/risk/risk_de_risk_contract-negative.json",
+    "config/schemas/fixtures/risk/risk_de_risk_contract-valid.json",
+    "config/schemas/fixtures/risk/risk_decision-negative.json",
+    "config/schemas/fixtures/risk/risk_decision-valid.json",
+    "config/schemas/fixtures/risk/risk_event-negative.json",
+    "config/schemas/fixtures/risk/risk_event-valid.json",
+    "config/schemas/fixtures/risk/risk_exception-negative.json",
+    "config/schemas/fixtures/risk/risk_exception-valid.json",
+    "config/schemas/fixtures/risk/risk_policy-negative.json",
+    "config/schemas/fixtures/risk/risk_policy-valid.json",
+    "config/schemas/fixtures/risk/risk_review_decision-negative.json",
+    "config/schemas/fixtures/risk/risk_review_decision-valid.json",
+    "config/schemas/fixtures/risk/risk_review_trust_anchor-negative.json",
+    "config/schemas/fixtures/risk/risk_review_trust_anchor-valid.json",
+    "config/schemas/fixtures/risk/risk_run-negative.json",
+    "config/schemas/fixtures/risk/risk_run-valid.json",
+    "config/schemas/fixtures/risk/risk_state-negative.json",
+    "config/schemas/fixtures/risk/risk_state-valid.json"
+  ],
+  "golden_vectors": [
+    "evidence/risk/phase-0/golden/risk-contract-identities.json"
+  ],
+  "layer": "risk_control_plane",
+  "local_gate": {
+    "commit_bound": "bf823abc929021948794a300fca81f480ff7eb26",
+    "status": "historical_pre_final_head",
+    "test_result": "passed",
+    "utc_timestamp": "2026-09-06T12:33:49.321137+00:00"
+  },
+  "phase": "0",
+  "remote_matrix": {
+    "status": "not_applicable_to_phase_0_contract_exit"
+  },
+  "status": "implemented_pending_final_head_gate_evidence",
+  "test_ids": [
+    "test_all_risk_contract_fixtures_are_valid",
+    "test_all_risk_contract_negative_fixtures_fail",
+    "test_risk_generation_excludes_run_metadata",
+    "test_risk_identity_changes_on_each_binding",
+    "test_risk_manifest_digest_rejects_tampering",
+    "test_risk_artifact_bytes_require_checksum_match",
+    "test_risk_file_path_rejects_escape",
+    "test_risk_review_decision_requires_external_trust_anchor",
+    "test_approved_policy_binds_verified_external_review_decision",
+    "test_risk_rule_scope_compatibility_matrix",
+    "test_industry_limit_requires_membership_contract",
+    "test_risk_event_sequence_rejects_duplicate_or_stale_entries",
+    "test_enforceable_de_risk_contract_fails_closed",
+    "test_phase0_golden_identities_are_persisted"
+  ],
+  "updated_at_utc": "2026-09-06T12:34:29.592353+00:00"
+}

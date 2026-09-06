@@ -1,0 +1,16 @@
+{
+  "review_type": "risk_policy_activation",
+  "subject_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_content_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "review_status": "approved",
+  "reviewer": "repository-owner",
+  "key_id": "risk-reviewer-v1-2026-09",
+  "policy": "reject_all",
+  "errors": [
+    "failure"
+  ],
+  "warnings": [],
+  "reviewed_at_utc": "2026-09-06T00:00:00Z",
+  "review_signature_sha256": "6f330c846583bed404023af2451d6578a92d11ba5a6908fc61e2c63507439bd2011f93ae14b7f46d28fd9d7ec1f7550a3654b062d8d9cd972881c1c214aab60a"
+}

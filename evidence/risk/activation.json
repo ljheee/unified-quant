@@ -1,0 +1,25 @@
+{
+  "activation_version": 1,
+  "layer": "risk_control_plane",
+  "condition": "policy/exception audit becomes a compliance requirement",
+  "condition_index": 5,
+  "status": "active",
+  "scope": "contract-only Phase 0 schema, typed loader, fixture, golden-vector, and identity tests",
+  "approver": "repository-owner",
+  "approved_at_utc": "2026-09-06T00:00:00Z",
+  "spec_contract_draft_state": "approved",
+  "runtime_phases_open": [
+    "0"
+  ],
+  "runtime_phases_blocked": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5"
+  ],
+  "evidence_paths": [
+    "specs/layers/risk-control-plane-spec.md",
+    "specs/layers/risk-control-plane-implementation-plan.md"
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "action": "allow",
+  "as_of_date": "2026-09-05",
+  "constraints": [],
+  "contract_version": 1,
+  "decision_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "decision_scope": "portfolio_publication",
+  "files": [],
+  "findings": [
+    {
+      "action": "resize",
+      "observed": 0.9,
+      "operator": "greater_than",
+      "result": "passed",
+      "rule_id": "portfolio_gross_exposure_limit",
+      "severity": "critical",
+      "state_required": false,
+      "threshold": 0.95
+    }
+  ],
+  "generation_id": "ed905872027c3f79fb6d1cd60490f90865c6479676723ee105ed9da4d6957ac4",
+  "input_bindings": [
+    {
+      "family": "target_weights_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "manifest_digest_sha256": "4cb80c4d4c365ef8bc982676dfcb76c13938902c1ccadf0a5798f126a28daf80",
+  "producer": {
+    "created_at": "2026-09-06T00:00:00Z",
+    "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "run_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "risk_policy_binding": {
+    "family": "risk_policy_v1",
+    "generation_id": "7c3b946511bb7b7a5b08dd97faeb4686d666f541633f9501b8cd24576bd101d0",
+    "manifest_digest_sha256": "ce6bc4ba894893c60a36877ee59de789a39529c483d8ee134893929e448b93a5"
+  },
+  "risk_state_binding": null,
+  "schema_version": "1.0.0",
+  "serialization_profile": "json-canonical-v1",
+  "visible_through": "2026-09-05T15:00:00+08:00"
+}
