@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.7 Phase 3 implemented with preserved local gate evidence**
+Status: **v0.2.8 Phase 4 implemented pending final HEAD gate evidence**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -11,9 +11,9 @@ does not authorize production execution, real-time streaming, broker
 connectivity, or a generic rules engine.
 
 The source spec is approved. Activation condition 5 is recorded in
-`evidence/risk/activation.json`. Phase 0–2 are exited with preserved local gate evidence. Phase 3 is
-implemented with deterministic state transitions and local gate evidence;
-release reconciliation remains Phase 5 work.
+`evidence/risk/activation.json`. Phase 0–3 are exited with preserved local gate evidence. Phase 4 is
+implemented with Research Chain v2 integration and focused tests; final
+implementation-HEAD gate and release reconciliation remain required.
 
 ## 1. Scope
 
@@ -321,10 +321,10 @@ it must become `passed` with evidence before the phase exits.
 | RCP3c | 3 | `test_risk_late_visibility_creates_new_generation` | `tests/test_risk_control_plane_phase3.py` | implemented |
 | RCP3d | 3 | `test_risk_exception_expiry_restores_enforcement` | `tests/test_risk_control_plane_phase3.py` | implemented |
 | RCP3e | 3 | `test_risk_missing_de_risk_contract_fails_closed` | `tests/test_risk_control_plane_phase3.py`; `config/schemas/fixtures/risk/risk_de_risk_contract-negative.json` | implemented |
-| RCP4a | 4 | `test_research_request_v1_stage_plan_is_frozen` | existing research chain tests | pending |
-| RCP4b | 4 | `test_research_request_v2_requires_risk_decision` | `evidence/risk/phase-4/` | pending |
-| RCP4c | 4 | `test_research_stage_stops_on_rejected_decision` | `evidence/risk/phase-4/` | pending |
-| RCP4d | 4 | `test_research_runner_cannot_sign_risk_reviews` | `evidence/risk/phase-4/` | pending |
+| RCP4a | 4 | `test_research_request_v1_stage_plan_is_frozen` | existing research chain tests | implemented |
+| RCP4b | 4 | `test_research_request_v2_requires_risk_decision` | `evidence/risk/phase-4/` | implemented |
+| RCP4c | 4 | `test_research_stage_stops_on_rejected_decision` | `evidence/risk/phase-4/` | implemented |
+| RCP4d | 4 | `test_research_runner_cannot_sign_risk_reviews` | `evidence/risk/phase-4/` | implemented |
 | RCP5a | 5 | `scripts/run_gate.sh` | `evidence/risk/release/` | pending |
 | RCP5b | 5 | remote unified gate | `evidence/risk/release/remote-matrix/` | pending |
 

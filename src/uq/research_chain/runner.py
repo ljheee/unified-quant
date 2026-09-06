@@ -12,10 +12,16 @@ from ..contracts.model_layer import (
     ModelContractLoader,
     bind_reviewed_quality_decision,
     research_contract_identities,
+    research_stage_plan_sha256,
+    research_stage_plan_v2_sha256,
     sha256_json,
 )
 from ..contracts.gate_contracts import adjustment_snapshot_generation
 from ..errors import ContractError
+from ..risk.contracts import (
+    validate_risk_event_sequence,
+    validate_risk_manifest,
+)
 
 
 def _result_output_binding(binding: ResolvedStageBinding) -> dict[str, Any]:
@@ -53,6 +59,7 @@ from .adapters import (
     build_stage_state,
 )
 from ..models.definition import ModelDefinitionBuilder
+from .contracts import research_request_schema_name, verify_stage_plan_review
 from .resolver import FileResearchRunStore, ResolvedExecutionPlan, ResolvedStageBinding, build_dry_run_state
 
 
@@ -114,6 +121,7 @@ class ResearchChainRunner:
         export_layout_root: Path | str | None = None,
         artifact_decision_provider: Callable[[str], Mapping[str, Any]] | None = None,
         definition_decision_provider: Callable[[str], Mapping[str, Any]] | None = None,
+        risk_documents: Mapping[str, Any] | None = None,
         created_at: str | None = None,
     ) -> ResearchRunOutcome:
         if plan.request.get("execution_mode") != "full_research_run":
@@ -157,6 +165,7 @@ class ResearchChainRunner:
             )
             for prediction_result in prediction_results:
                 plan = self._plan_with_stage_outputs(plan, prediction_result.published_state.manifest_path)
+            self._enforce_risk_gate(plan, risk_documents=risk_documents)
             portfolio_result = self._run_portfolio(
                 plan, runner_identity=runner_identity,
                 quality_decisions=quality_decisions, created_at=created_at,
@@ -180,14 +189,101 @@ class ResearchChainRunner:
             raise
         return result
 
+    def _validate_risk_binding(
+        self,
+        plan: ResolvedExecutionPlan,
+        risk_documents: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        if plan.request.get("contract_version") != 2:
+            if risk_documents is not None:
+                raise ContractError("risk documents are only accepted by research request v2")
+            return {}
+        if not isinstance(risk_documents, Mapping):
+            raise ContractError("research request v2 requires risk documents")
+        binding = plan.request["risk_binding"]
+        policy = risk_documents.get("policy")
+        state = risk_documents.get("state")
+        run = risk_documents.get("run")
+        decision = risk_documents.get("decision")
+        events = risk_documents.get("events")
+        if any(document is None for document in (policy, state, run, decision)) or not isinstance(events, list):
+            raise ContractError("research request v2 risk evidence is incomplete")
+        validate_risk_manifest("risk_policy", dict(policy))
+        validate_risk_manifest("risk_state", dict(state))
+        validate_risk_manifest("risk_run", dict(run))
+        validate_risk_manifest("risk_decision", dict(decision))
+        validate_risk_event_sequence([dict(event) for event in events])
+        expected = {
+            "policy": binding["policy_binding"],
+            "state": binding["state_binding"],
+            "run": binding["run_binding"],
+        }
+        documents = {"policy": policy, "state": state, "run": run}
+        for key, expected_binding in expected.items():
+            actual = {
+                "family": "risk_policy_v1" if key == "policy" else (
+                    "risk_state_v1" if key == "state" else "risk_run_v1"
+                ),
+                "generation_id": documents[key]["generation_id"],
+                "manifest_digest_sha256": documents[key]["manifest_digest_sha256"],
+            }
+            if actual != expected_binding:
+                raise ContractError(f"research request v2 risk {key} lineage mismatch")
+        if decision["risk_policy_binding"] != binding["policy_binding"]:
+            raise ContractError("research request v2 risk decision policy lineage mismatch")
+        if decision["risk_state_binding"] != binding["state_binding"]:
+            raise ContractError("research request v2 risk decision state lineage mismatch")
+        if binding["decision_binding"]["generation_id"] != decision["generation_id"] or binding["decision_binding"]["manifest_digest_sha256"] != decision["manifest_digest_sha256"]:
+            raise ContractError("research request v2 risk decision lineage mismatch")
+        if binding["decision_binding"]["action"] != decision["action"] or binding["decision_binding"]["decision_scope"] != decision["decision_scope"] or binding["decision_binding"]["decision_digest"] != decision["decision_digest"]:
+            raise ContractError("research request v2 risk decision semantic mismatch")
+        if run["run_scope"] != "portfolio_publication" or run["risk_policy_binding"] != binding["policy_binding"] or run["risk_state_binding"] != binding["state_binding"]:
+            raise ContractError("research request v2 risk run lineage mismatch")
+        decision_index = {
+            (item["generation_id"], item["manifest_digest_sha256"])
+            for item in run["decision_bindings"]
+        }
+        if (decision["generation_id"], decision["manifest_digest_sha256"]) not in decision_index:
+            raise ContractError("research request v2 risk decision is not indexed by risk run")
+        event_index = {
+            (item["generation_id"], item["manifest_digest_sha256"])
+            for item in run["event_bindings"]
+        }
+        if any(
+            (event_binding["generation_id"], event_binding["manifest_digest_sha256"]) not in event_index
+            for event_binding in binding["event_bindings"]
+        ):
+            raise ContractError("research request v2 risk events are not indexed by risk run")
+        return {"policy": policy, "state": state, "run": run, "decision": decision, "events": events}
+
+    def _enforce_risk_gate(
+        self,
+        plan: ResolvedExecutionPlan,
+        *,
+        risk_documents: Mapping[str, Any] | None,
+    ) -> None:
+        documents = self._validate_risk_binding(plan, risk_documents)
+        if plan.request.get("contract_version") != 2:
+            return
+        if documents["decision"]["action"] != "allow":
+            raise ContractError("research portfolio stage stopped by rejected risk decision")
+
     def _validate_plan(self, plan: ResolvedExecutionPlan) -> None:
-        if plan.request["stage_plan_sha256"] != sha256_json({
-            "schema_version": "v1",
-            "stage_plan": _STAGE_PLAN,
-        }):
+        request_schema = research_request_schema_name(plan.request)
+        if request_schema == "research_run_request_v2":
+            verify_stage_plan_review(
+                plan.request["stage_plan_review"],
+                stage_plan_sha256=plan.request["stage_plan_sha256"],
+            )
+        expected_stage_plan_sha256 = (
+            research_stage_plan_sha256()
+            if request_schema == "research_run_request"
+            else research_stage_plan_v2_sha256()
+        )
+        if plan.request["stage_plan_sha256"] != expected_stage_plan_sha256:
             raise ContractError("research request stage plan digest mismatch")
         expected_generation, expected_digest = research_contract_identities(
-            plan.request, schema_name="research_run_request"
+            plan.request, schema_name=research_request_schema_name(plan.request)
         )
         if (
             plan.request["request_content_generation_id"] != expected_generation
@@ -530,6 +626,13 @@ class ResearchChainRunner:
         readback_status: dict[str, str] = {
             "research_run_request": "passed",
         }
+        if plan.request.get("contract_version") == 2:
+            readback_status.update({
+                "risk_policy": "passed",
+                "risk_state": "passed",
+                "risk_run": "passed",
+                "risk_decision": "passed",
+            })
         resolution_state = self.run_store.read_state(
             plan.request["request_content_generation_id"],
             plan.request["run_id"],

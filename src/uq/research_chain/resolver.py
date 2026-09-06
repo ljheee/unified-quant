@@ -13,10 +13,19 @@ from ..contracts.model_layer import (
     ModelContractLoader,
     research_contract_identities,
     research_stage_plan_sha256,
+    research_stage_plan_v2_sha256,
     sha256_json,
 )
 from ..errors import ContractError
-from .contracts import PublishedRequest, PublishedResult, PublishedState, StateSummary, validate_research_layout
+from .contracts import (
+    PublishedRequest,
+    PublishedResult,
+    PublishedState,
+    StateSummary,
+    research_request_schema_name,
+    validate_research_layout,
+    verify_stage_plan_review,
+)
 from .owning_contracts import (
     AdjustedPriceDatasetStore,
     BacktestConfigStore,
@@ -103,14 +112,25 @@ class ResearchChainRequestResolver:
     ) -> ResolvedExecutionPlan:
         try:
             candidate = dict(request)
-            ModelContractLoader.validate("research_run_request", candidate)
-            if candidate["stage_plan_sha256"] != _EXPECTED_STAGE_PLAN_SHA256:
+            request_schema = research_request_schema_name(candidate)
+            ModelContractLoader.validate(request_schema, candidate)
+            if request_schema == "research_run_request_v2":
+                verify_stage_plan_review(
+                    candidate["stage_plan_review"],
+                    stage_plan_sha256=candidate["stage_plan_sha256"],
+                )
+            expected_stage_plan_sha256 = (
+                _EXPECTED_STAGE_PLAN_SHA256
+                if request_schema == "research_run_request"
+                else research_stage_plan_v2_sha256()
+            )
+            if candidate["stage_plan_sha256"] != expected_stage_plan_sha256:
                 raise ResearchResolutionError(
                     "request_invalid",
                     "request stage plan digest does not match the normative v1 plan",
                 )
             expected_generation, expected_digest = research_contract_identities(
-                candidate, schema_name="research_run_request"
+                candidate, schema_name=request_schema
             )
             if candidate["request_content_generation_id"] != expected_generation:
                 raise ResearchResolutionError("request_invalid", "request stable identity mismatch")
@@ -231,9 +251,10 @@ class FileResearchRunStore:
         if path_policy != "strict_v1":
             raise ContractError("unsupported research path policy")
         request = dict(manifest)
-        ModelContractLoader.validate("research_run_request", request)
+        request_schema = research_request_schema_name(request)
+        ModelContractLoader.validate(request_schema, request)
         expected_generation, expected_digest = research_contract_identities(
-            request, schema_name="research_run_request"
+            request, schema_name=request_schema
         )
         if request["request_content_generation_id"] != expected_generation:
             raise ContractError("research request stable content identity mismatch")
@@ -261,9 +282,10 @@ class FileResearchRunStore:
         if len(matches) > 1:
             raise ContractError(f"ambiguous research request: {request_content_generation_id}")
         request = _read_json(matches[0] / "manifest.json")
-        ModelContractLoader.validate("research_run_request", request)
+        request_schema = research_request_schema_name(request)
+        ModelContractLoader.validate(request_schema, request)
         expected_generation, expected_digest = research_contract_identities(
-            request, schema_name="research_run_request"
+            request, schema_name=request_schema
         )
         if request["request_content_generation_id"] != request_content_generation_id:
             raise ContractError("research request generation mismatch")

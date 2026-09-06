@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID
 from typing import Any, Mapping, Protocol
 
+from ..contracts.model_layer import canonical_json
 from ..errors import ContractError
 
 
@@ -229,3 +230,48 @@ def validate_provider_config_ref(
     if not set(supported_binding_types).issubset(_QUALITY_BINDING_TYPES):
         raise ContractError("provider configuration has unsupported quality binding types")
     return ProviderConfig(provider_id=provider_id, trust_anchor_id=trust_anchor_id, config_path=str(resolved))
+
+
+_STAGE_PLAN_REVIEW_FIELDS = (
+    "review_type", "subject_generation_id", "subject_manifest_digest_sha256",
+    "review_status", "reviewer", "key_id",
+)
+
+
+def verify_stage_plan_review(review: Mapping[str, Any], *, stage_plan_sha256: str) -> None:
+    """Verify the externally signed v2 stage-plan activation review."""
+    if not isinstance(review, Mapping):
+        raise ContractError("research stage plan review is invalid")
+    if set(review) != set(_STAGE_PLAN_REVIEW_FIELDS) | {"review_signature_sha256"}:
+        raise ContractError("research stage plan review fields mismatch")
+    if review["review_type"] != "research_stage_plan_v2_activation":
+        raise ContractError("research stage plan review type mismatch")
+    if review["review_status"] != "approved":
+        raise ContractError("research stage plan is not approved")
+    if (
+        review["subject_generation_id"] != stage_plan_sha256
+        or review["subject_manifest_digest_sha256"] != stage_plan_sha256
+    ):
+        raise ContractError("research stage plan review subject mismatch")
+    anchor_path = Path(__file__).parents[3] / "config/research-stage-plan-review-anchor.v1.json"
+    anchor = json.loads(anchor_path.read_text(encoding="utf-8"))
+    if review["key_id"] != anchor["key_id"] or anchor["review_type"] != review["review_type"]:
+        raise ContractError("research stage plan review trust anchor mismatch")
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+    unsigned = {key: review[key] for key in _STAGE_PLAN_REVIEW_FIELDS}
+    try:
+        key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(anchor["public_key_hex"]))
+        key.verify(bytes.fromhex(review["review_signature_sha256"]), canonical_json(unsigned))
+    except (InvalidSignature, ValueError, TypeError) as exc:
+        raise ContractError("research stage plan review signature mismatch") from exc
+
+
+def research_request_schema_name(request: Mapping[str, Any]) -> str:
+    version = request.get("contract_version")
+    if version == 1:
+        return "research_run_request"
+    if version == 2:
+        return "research_run_request_v2"
+    raise ContractError(f"unsupported research request contract version: {version}")

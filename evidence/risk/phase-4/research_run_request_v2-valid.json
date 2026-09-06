@@ -1,0 +1,175 @@
+{
+  "adjusted_price_binding": {
+    "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "backtest_config_binding": {
+    "family": "backtest_config",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "contract_version": 2,
+  "created_at": "2026-01-30T07:00:00+00:00",
+  "dataset_policy_template": {
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "contract_version": 1,
+    "dataset_name": "research_baseline",
+    "missing_policy": "fail_closed",
+    "semantic_version": "1.0.0",
+    "split_policy": {
+      "embargo_trading_days": 2,
+      "purge_trading_days": 5,
+      "splits": [
+        {
+          "end_date": "2026-01-12",
+          "name": "train",
+          "start_date": "2026-01-05"
+        },
+        {
+          "end_date": "2026-01-26",
+          "name": "validation",
+          "start_date": "2026-01-23"
+        }
+      ]
+    },
+    "status": "reviewed",
+    "template_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "template_manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "template_version": "1.0.0"
+  },
+  "decision_timezone": "Asia/Shanghai",
+  "environment": {
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "environment_lock_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "seed": 7,
+    "serialization_profile_id": "uq-parquet-v1",
+    "thread_count": 1
+  },
+  "execution_mode": "full_research_run",
+  "factor_binding": {
+    "family": "factor_partition",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "feature_preprocessing_binding": {
+    "family": "feature_preprocessing",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "label_binding": {
+    "family": "label_set",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "manifest_digest_sha256": "af4ab6b1b79c14d2c03c8b2f24885f3f6be442ee75a36df6cde7c169c8041ad4",
+  "model_definition_template": {
+    "algorithm": "qlib_linear",
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "compatible_dataset_versions": [
+      "1.0.0"
+    ],
+    "contract_version": 1,
+    "hyperparameters": {
+      "alpha": 0.5
+    },
+    "metrics": [
+      {
+        "direction": "maximize",
+        "name": "ic"
+      }
+    ],
+    "model_set": "baseline",
+    "model_version": "1.0.0",
+    "quality_policy": "reject_all",
+    "seed_policy": {
+      "base_seed": 7,
+      "derivation": "fixed"
+    },
+    "selection_rule": "maximum validation ic",
+    "serializer_version": "json-numpy-v1",
+    "status": "reviewed",
+    "template_generation_id": "1ebc548c2702a1cf941a4d5673ed582e7d94a5c2be6fd76e4d4cebec17c9233d",
+    "template_manifest_digest_sha256": "0231f1c3fc612e38eeb9eeaede55e70ad34bfafadcf168dfa973277f5380484c",
+    "template_version": "1.0.0"
+  },
+  "portfolio_definition_template": {
+    "constraints": {
+      "cash_reserve": 0.05,
+      "max_industry_weight": null,
+      "max_single_weight": 0.1,
+      "max_turnover": null
+    },
+    "contract_version": 1,
+    "industry_source_binding": null,
+    "portfolio_name": "top20",
+    "rebalance_schedule": "daily",
+    "scheme_parameters": {
+      "n": 20
+    },
+    "score_policy": {
+      "direction": "descending",
+      "nan_policy": "exclude",
+      "tie_policy": "first_by_instrument_id"
+    },
+    "status": "reviewed",
+    "template_generation_id": "6d72056d696c3d1c51c6303a65814027a046c4f5be32ea8216c6ec4b73512519",
+    "template_manifest_digest_sha256": "71c354dfa1dc8424800de5b25ee491d686e85984cb16014a86978b83a1d847fa",
+    "template_version": "1.0.0",
+    "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "weight_scheme": "top_n_equal_weight"
+  },
+  "request_content_generation_id": "571c1bda44d8917beadb63a1297a16e50c8cb054fa8485786ec1a5628cf8f688",
+  "research_name": "adjusted_return_baseline",
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "run_visible_cutoff": "2026-01-30T15:00:00+08:00",
+  "schema_version": "2.0.0",
+  "stage_plan_sha256": "6d8b3e3d358a2989fc298e9612ec23bfd95000e31a7c2b0620be99a3394eaa81",
+  "universe_snapshot_binding": {
+    "family": "universe_snapshot",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "window_end_date": "2026-01-29",
+  "window_start_date": "2025-12-01",
+  "risk_binding": {
+    "policy_binding": {
+      "family": "risk_policy_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "state_binding": {
+      "family": "risk_state_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "run_binding": {
+      "family": "risk_run_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "decision_binding": {
+      "family": "risk_decision_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "action": "allow",
+      "decision_scope": "portfolio_publication",
+      "decision_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "event_bindings": [
+      {
+        "family": "risk_event_v1",
+        "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "stage_plan_review": {
+    "review_type": "research_stage_plan_v2_activation",
+    "subject_generation_id": "6d8b3e3d358a2989fc298e9612ec23bfd95000e31a7c2b0620be99a3394eaa81",
+    "subject_manifest_digest_sha256": "6d8b3e3d358a2989fc298e9612ec23bfd95000e31a7c2b0620be99a3394eaa81",
+    "review_status": "approved",
+    "reviewer": "repository-owner",
+    "key_id": "research-stage-plan-reviewer-v1-2026-09",
+    "review_signature_sha256": "282e85ed122e0a102a0369a24906150415ee68960a4b34bdf680c9e2955e7bd230544b67fbc502d3db82767714a2d24e0c23637b638aa86e06766f0c4c784505"
+  }
+}

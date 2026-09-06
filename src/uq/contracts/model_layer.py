@@ -46,6 +46,7 @@ _QUALITY_BOUND_FIELDS = {
 _MODEL_CONTRACT_FAMILIES = {*_SCHEMA_NAMES, "model_quality_report"}
 _RESEARCH_SCHEMA_NAMES = {
     "research_run_request",
+    "research_run_request_v2",
     "research_run_state",
     "research_run_result",
     "model_definition_template",
@@ -58,6 +59,7 @@ _ED25519_SIGNATURE_HEX = re.compile(r"^[0-9a-f]{128}$")
 _ORDERING_FIELDS = ("factor_set", "factor_version", "partition_date", "generation_id")
 _RESEARCH_IDENTITY_EXCLUDED_FIELDS = {
     "research_run_request": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
+    "research_run_request_v2": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
     "research_run_state": {"state_content_generation_id", "manifest_digest_sha256"},
     "research_run_result": {
         "result_content_generation_id", "manifest_digest_sha256",
@@ -184,6 +186,24 @@ def research_stage_plan_sha256() -> str:
     })
 
 
+def research_stage_plan_v2_sha256() -> str:
+    """Return the externally reviewed Research Chain stage-plan v2 digest."""
+    return sha256_json({
+        "schema_version": "v2",
+        "stage_plan": [
+            "resolve_request",
+            "factor_computation",
+            "dataset_preparation",
+            "qlib_export",
+            "model_training",
+            "prediction_publication",
+            "portfolio_construction",
+            "backtest_execution",
+            "result_reconciliation",
+        ],
+    })
+
+
 def _without_physical_path(value: Any) -> Any:
     if isinstance(value, list):
         return [_without_physical_path(item) for item in value]
@@ -228,7 +248,7 @@ def research_contract_identities(
         content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
     elif schema_name == "portfolio_definition_template":
         content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
-    elif schema_name == "research_run_request":
+    elif schema_name in {"research_run_request", "research_run_request_v2"}:
         content_field, digest_field = "request_content_generation_id", "manifest_digest_sha256"
     elif schema_name == "research_run_state":
         content_field, digest_field = "state_content_generation_id", "manifest_digest_sha256"
@@ -389,7 +409,10 @@ class ModelContractLoader:
             return
         if schema_name in _RESEARCH_SCHEMA_NAMES:
             _reject_non_finite(payload)
-            validate_contract(f"{schema_name}.v1.json", payload)
+            validate_contract(
+                f"{schema_name}.json" if schema_name == "research_run_request_v2"
+                else f"{schema_name}.v1.json", payload
+            )
             if schema_name == "research_run_result":
                 _validate_stage_record_order(payload["stage_records"], require_complete=True, payload=payload)
                 expected_final_status = payload["stage_records"][-1]["status"]
@@ -402,6 +425,7 @@ class ModelContractLoader:
                 "dataset_policy_template": "template_generation_id",
                 "portfolio_definition_template": "template_generation_id",
                 "research_run_request": "request_content_generation_id",
+                "research_run_request_v2": "request_content_generation_id",
                 "research_run_state": "state_content_generation_id",
                 "research_run_result": "result_content_generation_id",
                 "quality_decision": "decision_checksum_sha256",
@@ -436,6 +460,7 @@ class ModelContractLoader:
                 "dataset_policy_template": "template_manifest_digest_sha256",
                 "portfolio_definition_template": "template_manifest_digest_sha256",
                 "research_run_request": "manifest_digest_sha256",
+                "research_run_request_v2": "manifest_digest_sha256",
                 "research_run_state": "manifest_digest_sha256",
                 "research_run_result": "manifest_digest_sha256",
             }[schema_name]
