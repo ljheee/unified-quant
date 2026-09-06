@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.5 post-CR remediated plan; Phases 0–2 exited with preserved local gate evidence**
+Status: **v0.2.6 final-CR hardened plan; Phases 0–2 exited with preserved local gate evidence**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
