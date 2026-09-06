@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2 executable contract plan; runtime paused pending explicit activation**
+Status: **v0.2.1 final-CR remediated contract plan; runtime paused pending explicit activation**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -97,6 +97,7 @@ Deliverables:
 6. `config/schemas/contracts/risk_review_decision.v1.json`;
 7. `config/schemas/contracts/risk_review_trust_anchor.v1.json`;
 8. `config/schemas/contracts/risk_run.v1.json`;
+8a. `config/schemas/contracts/risk_de_risk_contract.v1.json`;
 9. `config/risk-review-trust-anchor.v1.json` registry;
 10. `src/uq/risk/contracts.py` typed loaders and identity helpers;
 11. per-family representative/negative fixtures under
@@ -192,7 +193,8 @@ Acceptance:
 - sell-before-buy and cash settlement semantics remain unchanged;
 - tampering with decision, event, run, order, or input lineage rejects the
   risk-run read;
-- rejected orders appear in both risk and execution ledgers;
+- risk-rejected candidate orders appear in the risk ledger without violating
+  the frozen v1 fills schema;
 - released backtest result schema/read tests remain green.
 
 ## 7. Phase 3 — Stateful Loss-Control Actions
@@ -231,7 +233,8 @@ Entry criteria:
 
 Deliverables:
 
-1. optional risk policy/state/exception bindings in request v2;
+1. required risk policy binding in request v2; policy may permit no active
+   state rules, but the enforceable decision reference itself is required;
 2. a new risk review stage or explicit binding into portfolio/backtest stages;
 3. fail-closed stage behavior on enforceable decisions;
 4. result evidence index entries for risk runs/decisions/events;
@@ -289,18 +292,22 @@ it must become `passed` with evidence before the phase exits.
 | RCP0e | 0 | `test_risk_manifest_digest_and_payload_checksum_reject_tampering` | `config/schemas/fixtures/risk/*-negative.json` | pending |
 | RCP0f | 0 | `test_risk_review_decision_requires_external_trust_anchor` | `config/schemas/fixtures/risk/review-*` | pending |
 | RCP0g | 0 | `test_risk_rule_scope_compatibility_matrix` | `evidence/risk/phase-0/scope-matrix.json` | pending |
+| RCP0h | 0 | `test_risk_manifest_file_path_and_checksum_reject_mismatch` | `config/schemas/fixtures/risk/path-negative.json` | pending |
+| RCP0i | 0 | `test_risk_event_rejects_duplicate_or_stale_sequence` | `config/schemas/fixtures/risk/event-negative.json` | pending |
 | RCP1a | 1 | `test_risk_portfolio_missing_inputs_fail_closed` | `evidence/risk/phase-1/fixtures/` | pending |
 | RCP1b | 1 | `test_risk_portfolio_decision_is_deterministic` | `evidence/risk/phase-1/golden/` | pending |
 | RCP1c | 1 | `test_risk_portfolio_action_ranking_is_deterministic` | `evidence/risk/phase-1/golden/` | pending |
 | RCP1d | 1 | `test_risk_portfolio_resize_formula_is_exact` | `evidence/risk/phase-1/golden/` | pending |
 | RCP1e | 1 | `test_risk_portfolio_overlapping_policies_fail_closed` | `config/schemas/fixtures/risk/policy-overlap-negative.json` | pending |
 | RCP1f | 1 | `test_risk_portfolio_publication_rejects_block` | `evidence/risk/phase-1/` | pending |
+| RCP1g | 1 | `test_risk_industry_limit_disabled_without_contract` | `evidence/risk/phase-1/industry-disabled.json` | pending |
 | RCP2a | 2 | `test_risk_order_missing_context_fails_closed` | `evidence/risk/phase-2/fixtures/` | pending |
 | RCP2b | 2 | `test_risk_order_rules_are_deterministic` | `evidence/risk/phase-2/golden/` | pending |
 | RCP2c | 2 | `test_risk_t1_sellable_quantity_is_enforced` | `evidence/risk/phase-2/` | pending |
-| RCP2d | 2 | `test_risk_rejected_order_is_recorded_in_both_ledgers` | `evidence/risk/phase-2/` | pending |
+| RCP2d | 2 | `test_risk_rejected_candidate_is_recorded_in_risk_ledger` | `evidence/risk/phase-2/` | pending |
 | RCP2e | 2 | `test_risk_run_tampering_rejects_read` | `evidence/risk/phase-2/` | pending |
 | RCP2f | 2 | `test_backtest_result_v1_contract_remains_frozen` | existing backtest contract tests | pending |
+| RCP2g | 2 | `test_risk_rejected_candidate_is_not_added_to_frozen_fills` | `evidence/risk/phase-2/frozen-fills.json` | pending |
 | RCP3a | 3 | `test_risk_state_transition_is_deterministic` | `evidence/risk/phase-3/golden/` | pending |
 | RCP3b | 3 | `test_risk_hysteresis_and_cooldown_are_exact` | `evidence/risk/phase-3/golden/` | pending |
 | RCP3c | 3 | `test_risk_late_visibility_creates_new_generation` | `evidence/risk/phase-3/` | pending |

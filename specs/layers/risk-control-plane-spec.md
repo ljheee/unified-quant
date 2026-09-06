@@ -1,13 +1,13 @@
 # Risk Control Plane Specification
 
-Status: **v0.2 executable contract draft; implementation paused pending explicit activation**
+Status: **v0.2.1 final-CR remediated contract draft; implementation paused pending explicit activation**
 
 Design input: `layering.md` from the one-stop-quant project.
 Related specs: `specs/layers/portfolio-backtest-layer-spec.md`, `specs/layers/model-layer-spec.md`, `specs/layers/research-chain-layer-spec.md`.
 
 Approval state: `draft-not-approved`. This document authorizes contract drafting
 and review only; no schema, store, engine, publication, or backtest code may be
-implemented until the approval and activation states in §4A are both `active`.
+implemented until `contract_draft=approved` and `activation=active` in §2A.
 
 ## 1. Purpose
 
@@ -180,6 +180,32 @@ Every durable artifact follows the repository identity convention:
 5. producer code fingerprint;
 6. serialization profile and physical-file checksums.
 
+Closed enums are normative:
+
+1. `policy_scope`: `strategy`, `portfolio`, `account`;
+2. `rule_scope`: `strategy`, `portfolio`, `order`;
+3. `rule_operator`: `greater_than`, `greater_than_or_equal`, `less_than`,
+   `less_than_or_equal`;
+4. `risk_action`: `allow`, `warn`, `resize`, `block`, `block_order`,
+   `block_new_buy`, `de_risk`, `flatten`, `halt_strategy`, `escalate_review`;
+5. `severity`: `warning`, `error`, `critical`;
+6. `serialization_profile`: `json-canonical-v1`, `parquet-v1`, `ndjson-v1`.
+
+Rule/scope compatibility is `strategy -> strategy`, `portfolio -> portfolio`,
+and `order -> order`. No cross-scope policy rule is valid.
+
+Excluded stable-identity fields are:
+
+| Family | Excluded from stable generation |
+|---|---|
+| `risk_policy.v1` | `run_id`, `request_id`, `created_at` |
+| `risk_state.v1` | `run_id`, `request_id`, `created_at` |
+| `risk_decision.v1` | `run_id`, `request_id`, `created_at` |
+| `risk_event.v1` | `run_id`, `request_id`, `created_at`, `event_sequence_number` |
+| `risk_exception.v1` | `run_id`, `request_id`, `created_at` |
+| `risk_review_decision.v1` | `created_at`, `request_id` |
+| `risk_run.v1` | `created_at`, `run_id` |
+
 Normative identity rules:
 
 1. stable generation excludes `created_at`, `run_id`, `request_id`, and other
@@ -329,16 +355,26 @@ Evaluation is deterministic and ordered:
 4. the final action is the finding with the highest rank; ties use lower rule
    priority and then lexical `rule_id`;
 5. error findings with no bound threshold are `critical` and final;
-6. numeric comparisons use tolerance `abs(observed-threshold) <= 1e-12`; for
-   ratio limits, use `round(observed, 12) > round(threshold, 12)`;
+6. numeric comparisons use tolerance `round(observed, 12) >
+   round(threshold, 12)` for limit violations; equality variants compare
+   rounded values directly;
 7. multiple active policies for one scope must have disjoint effective ranges;
    overlapping generations fail closed;
-8. `resize` must include one constraint:
-   - portfolio weight: `allowed_weight=min(requested_weight, rule.limit)`;
-   - order shares: `allowed_shares=floor(rule.limit / board_lot) * board_lot`;
-   - order notional: `allowed_notional=rule.limit`;
-9. an action may not be downgraded by a lower-priority finding;
-10. exceptions can authorize a consumer to proceed, but never rewrite the
+8. all restrictive resize findings are normalized to a single
+   `allowed_fraction`, the minimum over every such finding, before conflict
+   resolution;
+9. portfolio resize uses `allowed_weight = floor(requested_weight *
+   allowed_fraction / 1e-8) * 1e-8`; `allowed_fraction` is the minimum of
+   `rule.weight_limit / requested_weight` and
+   `rule.total_notional_limit / current_total_notional`; both request and
+   limit are positive;
+10. order shares resize uses
+    `allowed_shares = min(requested_shares, floor(rule.notional_limit /
+    (execution_price * (1 + slippage_bps / 10000)) / board_lot) * board_lot)`;
+    execution price and board lot are required context and must be positive;
+11. order notional resize uses `allowed_notional = rule.notional_limit`;
+12. an action may not be downgraded by a lower-priority finding;
+13. exceptions can authorize a consumer to proceed, but never rewrite the
     original immutable decision.
 
 
@@ -455,6 +491,24 @@ verify registry -> verify signature -> verify subject generation/digest
 Failure taxonomy is normative: `missing`, `schema_invalid`, `tampered`,
 `untrusted_key`, `expired`, `wrong_subject`, `wrong_review_type`, `rejected`,
 and `reviewer_mismatch`. Any failure fails closed.
+
+Signing is normative:
+
+- algorithm: Ed25519;
+- signature input: canonical JSON over exactly `review_type`,
+  `subject_generation_id`, `subject_manifest_digest_sha256`, `review_status`,
+  `reviewer`, `key_id`, `policy`, `errors`, and `warnings`;
+- signature output: 128 lowercase hexadecimal characters in
+  `review_signature_sha256`;
+- `subject_content_sha256` must equal the canonical JSON SHA-256 of the
+  subject manifest before its run-metadata fields; it provides stable content
+  review, while `subject_manifest_digest_sha256` binds the exact durable
+  manifest;
+- verification must check both digests independently.
+
+`risk_de_risk_contract.v1` is declared now as a required Phase 0 contract
+deliverable so its version and schema identity are frozen before any Phase 3
+runtime work.
 
 ## 9. Evaluation Contracts
 
