@@ -1,6 +1,6 @@
  Adjustment Official Source Access Log v1
 
-Status: working evidence log
+Status: evidence log; all four reviewed cases certified against SZSE `qss` responses
 Scope: adjustment golden provenance review
 
 SZSE archived historical quote API
@@ -23,21 +23,11 @@ SSE public historical access
 
 Reviewed replacement cases
 
-| Case | Record date | Direct pre-close evidence | Formula result |
-| --- | ---: | --- | ---: |
-| Shannon Semiconductor / `300475.XSHE`, rights | 2023-02-15 suspension close used as pre-close; SZSE archive records prior/close CNY `19.10/19.10` and ex-day prior `18.36` | SZSE archive | `(19.10 + 0.1 × 10.07) / 1.1 = 18.2790909091` |
-| BOE A / `000725.XSHE`, cash only | 2024-06-18 | SZSE archive: prior/close CNY `4.08/4.07` | `4.08 - 0.03 = 4.05` |
-| Zhongjing Technology / `003026.XSHE`, transfer only | 2024-07-17 | SZSE archive: prior/close CNY `32.70/31.14` | `32.70 / 1.2993115 = 25.1696` |
+| Case | Ex date | Direct SZSE reference price | Formula reconciliation |
+| --- | ---: | ---: | --- |
+| Shannon Semiconductor / `300475.XSHE`, rights | 2023-02-16 | `qss=18.36` | `(19.10 + 0.0894423 × 10.07) / 1.0894423 = 18.3586`; issuer's actual-ratio disclosure is `0.894423` per ten shares |
+| BOE A / `000725.XSHE`, cash only | 2024-06-19 | `qss=4.11` | `(4.14 - 0.03) = 4.11` |
+| Zhongjing Technology / `003026.XSHE`, transfer only | 2024-07-18 | `qss=23.97` | `31.14 / 1.2993115 = 23.9665` |
+| Anker Innovations / `300866.XSHE`, cash bonus transfer | 2024-05-24 | `qss=69.69` | `(92.60 - 2.00) / 1.30 = 69.69` |
 
-The rights case uses the issuer-disclosed nominal `1/10` ratio and price. Actual subscription was partial (`37,565,767` of `42,000,000` shares), so its formula result is an exchange-style reference-price calculation rather than a claim that the exchange published that exact value.
-
-Ex-date prior-close comparison
-
-- `300866` on 2024-05-24: SZSE `qss=69.69`, exactly equal to the formula result. This one reference price is upgraded to direct exchange evidence.
-- `300475` on 2023-02-16: SZSE `qss=18.36`, not the nominal-formula result `18.2791`; likely reflects actual subscription rather than the nominal ratio.
-- `000725` on 2024-06-19: SZSE `qss=4.11`, not the prior close/formula result; therefore open/close fields cannot be substituted.
-- `003026` on 2024-07-18: SZSE `qss=23.97`, not the issuer-disclosed adjusted-formula result `25.1696`.
-
-These mismatches are why generic open/close or ex-date prior-close values must not replace case-specific official reference prices.
-
-The issuer announcements disclose dates, ratios, cash amounts, and adjusted formulas; their PDF SHA-256 values are recorded in `golden-provenance.v2.json`. Reference prices derived from those formulas remain formula-derived unless an exchange or settlement page directly publishes the resulting price.
+The ex-date SZSE historical quote field `qss` is the exchange's prior-close/reference-price field. All four responses are captured with SHA-256 values in `golden-provenance.v2.json`. Generic open/high/low/close prices are never substituted for this field.

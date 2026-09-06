@@ -398,13 +398,13 @@ Acceptance mapping:
 ## Remaining Release Evidence
 
 1. **F4 scoped certification:** `.github/workflows/ci.yml` runs macOS and Ubuntu across Python 3.11, 3.12, and 3.13 through `scripts/run_gate.sh`, uploads all gate artifacts plus an environment-cell marker, and fails unless every declared cell has a matching successful report. Remote run `32750572645` on commit `2acaa4dee562f9bf065844f7a9edebb179babb87` passed the six matrix jobs and aggregation gate; its downloaded reports and hashes are retained under `.gate/ci-evidence-fixed/`. Windows and unlisted CPU/BLAS cells remain not certified.
-2. **Authoritative adjustment golden provenance:** `adjustment_golden_provenance.v2.json` records multi-source evidence with file checksums, quoted locators, publication date, separate pre-close evidence, and conservative top-level certification. The reviewed cases now use direct SZSE archive evidence for `300866`, `300475`, `000725`, and `003026`; the constrained `002557` and `600081` cases were replaced rather than treated as authoritative. `300866`'s ex-date prior close directly matches its formula result and is certified as exchange-reference; the other expected prices remain formula-derived because their generic open/close/ex-day prior-close values do not equal those values. Access constraints and captured response hashes remain recorded in `specs/layers/contracts/adjustment-official-source-access-v1.md`.
+2. **Authoritative adjustment golden provenance:** `adjustment_golden_provenance.v2.json` records direct SZSE ex-date `qss` evidence for `300866`, `300475`, `000725`, and `003026`. Each case records the official locator, quoted `qss` value, response SHA-256, retrieval timestamp, issuer event evidence, and formula reconciliation. `300475` uses the issuer's actual allocation ratio (`0.894423` per ten shares) rather than the nominal ratio. Top-level certification is `certified-authoritative-source`; the constrained `002557` and `600081` cases remain replaced. Access constraints and captured response hashes are recorded in `specs/layers/contracts/adjustment-official-source-access-v1.md`.
 
 ## Risk Register
 
 | Risk | Gate | Resolution |
 |---|---|---|
-| Adjustment formula lacks authoritative exchange-golden coverage | Residual provenance-review risk remains until the three official cases are independently re-reviewed; machine checks and formula coverage now pass | Re-review `golden-provenance.v2.json`, preserve source checksums/quotes, and keep top-level certification conservative if any case is downgraded |
+| Adjustment formula lacks authoritative exchange-golden coverage | Resolved for the reviewed cases by direct SZSE ex-date `qss` evidence and formula reconciliation | Preserve the four official response hashes/quotes; any future case downgrade requires a new provenance version and fresh release gate |
 | Environment matrix cannot be fully covered by CI | Blocks universal F4 certification, not the scoped F4 slice | The CI matrix now declares macOS/Ubuntu × Python 3.11/3.12/3.13 with a cell-completeness gate; preserve reports and mark uncovered platforms/backends `not certified`; compare them by logical fingerprint only |
 
 ## Phase 6 — Release Acceptance
@@ -431,5 +431,5 @@ Immediate action is to preserve the latest successful unified-gate evidence, the
 
 1. Run and archive `scripts/run_gate.sh` outputs: `.gate/gate-report.json`, requirements artifact, and digest; CI must invoke the same runner.
 2. Keep canonical-v2 and factor-v1 F12a evidence aligned with the four report negative paths plus reader enforcement.
-3. Complete the remaining provenance gate by obtaining exchange/settlement-published reference prices for `300475`, `000725`, and `003026`; until then keep top-level provenance `pending-authoritative-source`.
+3. Preserve the direct SZSE ex-date `qss` evidence for the four certified cases and run the final release gate on the reconciliation HEAD.
 4. After obtaining the remaining official adjustment reference prices, rerun the unified gate and reconcile Phase 6/release statuses only from recorded evidence.

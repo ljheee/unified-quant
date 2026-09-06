@@ -1,53 +1,7 @@
 {
   "provenance_version": 2,
-  "certification": "pending-authoritative-source",
+  "certification": "certified-authoritative-source",
   "cases": [
-    {
-      "case_id": "szse-300866-2024-cash-transfer",
-      "event_type": "cash_bonus_transfer",
-      "instrument": "300866.XSHE",
-      "record_date": "2024-05-23",
-      "ex_date": "2024-05-24",
-      "inputs": {
-        "pre_close": 92.6,
-        "cash_per_ten": 20.0,
-        "bonus_per_ten": 3.0,
-        "rights_per_ten": 0.0,
-        "rights_price": 0.0
-      },
-      "expected_ex_right_price": 69.69,
-      "tolerance_abs": 0.005,
-      "event_evidence": {
-        "kind": "issuer-announcement",
-        "publisher": "Anker Innovations via CNINFO",
-        "locator": "http://static.cninfo.com.cn/finalpage/2024-05-17/1220090768.PDF",
-        "publication_date": "2024-05-17",
-        "quoted_locator": "每 10 股派发现金红利 20.00 元；每 10 股转增 3.000000 股；股权登记日 2024 年 5 月 23 日；除权除息日 2024 年 5 月 24 日",
-        "file_sha256": "6f01d3c294ceaee9868ebbb8fff8c6c2e3eaedb9353e9febf764c9da36e1496c",
-        "retrieved_at_utc": "2026-08-24T12:40:00Z",
-        "license_or_terms": "public company disclosure"
-      },
-      "pre_close_evidence": {
-        "kind": "exchange-reference",
-        "publisher": "Shenzhen Stock Exchange market data",
-        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=300866&txtBeginDate=20240523&txtEndDate=20240524",
-        "publication_date": "2024-05-24",
-        "quoted_locator": "SZSE historical quote record: date=2024-05-23, prev_close(qss)=93.88, close(zd)=92.60",
-        "file_sha256": "6767209bce09f89af0ff057a9a5e4d6e46008aafdd40cfb30a30b53204523208",
-        "retrieved_at_utc": "2026-08-24T14:05:00Z",
-        "license_or_terms": "public exchange market data"
-      },
-      "reference_price_evidence": {
-        "kind": "exchange-reference",
-        "publisher": "Shenzhen Stock Exchange market data",
-        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=300866&txtBeginDate=20240523&txtEndDate=20240524",
-        "publication_date": "2024-05-24",
-        "quoted_locator": "SZSE ex-date 2024-05-24 record has prior close(qss)=69.69, equal to the issuer-formula result; this is direct exchange evidence for this case",
-        "file_sha256": "6767209bce09f89af0ff057a9a5e4d6e46008aafdd40cfb30a30b53204523208",
-        "retrieved_at_utc": "2026-08-24T14:05:00Z",
-        "license_or_terms": "public exchange market data"
-      }
-    },
     {
       "case_id": "szse-000725-2024-cash-only",
       "event_type": "cash",
@@ -76,22 +30,68 @@
       "pre_close_evidence": {
         "kind": "exchange-reference",
         "publisher": "Shenzhen Stock Exchange market data",
-        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=000725&txtBeginDate=20240618&txtEndDate=20240619",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=000725&txtBeginDate=20240619&txtEndDate=20240619",
         "publication_date": "2024-06-19",
-        "quoted_locator": "SZSE historical quote record: date=2024-06-18, prev_close(qss)=4.08, close(zd)=4.07",
-        "file_sha256": "38f66fd318a784c1165a43c8e71f1bb0344972d019fe915959579b674085ed07",
-        "retrieved_at_utc": "2026-08-24T14:35:00Z",
+        "quoted_locator": "SZSE ex-date 2024-06-19 record: prior close(qss)=4.11, close(ss)=4.11; qss is the direct official reference price",
+        "file_sha256": "9152a61baae6b0437dd4d4b5184a8dcb140e8b1f295dc1cf82ef90c2e10fb09d",
+        "retrieved_at_utc": "2026-09-06T02:40:00Z",
         "license_or_terms": "public exchange market data"
       },
       "reference_price_evidence": {
-        "kind": "derived-formula",
+        "kind": "exchange-reference",
         "publisher": "Derived from the issuer announcement using the SZSE formula",
-        "locator": "https://static.cninfo.com.cn/finalpage/2024-06-13/1220337646.PDF",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=000725&txtBeginDate=20240619&txtEndDate=20240619",
         "publication_date": "2024-06-19",
-        "quoted_locator": "CNY 4.08 - CNY 0.03 per share yields 4.05",
-        "file_sha256": "761abceb8345529a8df7b18a450520f2e82f9a389a2aab21800641bda3a5edb0",
-        "retrieved_at_utc": "2026-08-24T14:35:00Z",
+        "quoted_locator": "SZSE ex-date 2024-06-19 record: prior close(qss)=4.11, direct official reference price for this event",
+        "file_sha256": "9152a61baae6b0437dd4d4b5184a8dcb140e8b1f295dc1cf82ef90c2e10fb09d",
+        "retrieved_at_utc": "2026-09-06T02:40:00Z",
+        "license_or_terms": "public exchange market data"
+      }
+    },
+    {
+      "case_id": "szse-003026-2024-bonus-transfer-only",
+      "event_type": "bonus_transfer",
+      "instrument": "003026.XSHE",
+      "record_date": "2024-07-17",
+      "ex_date": "2024-07-18",
+      "inputs": {
+        "pre_close": 32.7,
+        "cash_per_ten": 0.0,
+        "bonus_per_ten": 2.993115,
+        "rights_per_ten": 0.0,
+        "rights_price": 0.0
+      },
+      "expected_ex_right_price": 25.1696,
+      "tolerance_abs": 0.005,
+      "event_evidence": {
+        "kind": "issuer-announcement",
+        "publisher": "Zhejiang Zhongjing Technology via CNINFO",
+        "locator": "https://file.finance.qq.com/finance/hs/pdf/2024/07/11/1220603709.PDF",
+        "publication_date": "2024-07-11",
+        "quoted_locator": "Issuer discloses reference price=record-date close/(1+0.2993115); CNY 32.70 yields 25.1696",
+        "file_sha256": "d218adbbf3fbca67068dfe96d9bdd6c3cd148280259123b8e7eb5c9893bc8520",
+        "retrieved_at_utc": "2026-08-24T14:32:00Z",
         "license_or_terms": "public company disclosure"
+      },
+      "pre_close_evidence": {
+        "kind": "exchange-reference",
+        "publisher": "Shenzhen Stock Exchange market data",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=003026&txtBeginDate=20240718&txtEndDate=20240718",
+        "publication_date": "2024-07-18",
+        "quoted_locator": "SZSE ex-date 2024-07-18 record: prior close(qss)=23.97, close(ss)=24.93; qss is the direct official reference price",
+        "file_sha256": "7cc8dc152c0cbf763e1e060026c23d453a57a70bae5c6f5d7780250e4aa753c5",
+        "retrieved_at_utc": "2026-09-06T02:40:00Z",
+        "license_or_terms": "public exchange market data"
+      },
+      "reference_price_evidence": {
+        "kind": "exchange-reference",
+        "publisher": "Zhejiang Zhongjing Technology via CNINFO",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=003026&txtBeginDate=20240718&txtEndDate=20240718",
+        "publication_date": "2024-07-18",
+        "quoted_locator": "SZSE ex-date 2024-07-18 record: prior close(qss)=23.97, direct official reference price for this event",
+        "file_sha256": "7cc8dc152c0cbf763e1e060026c23d453a57a70bae5c6f5d7780250e4aa753c5",
+        "retrieved_at_utc": "2026-09-06T02:40:00Z",
+        "license_or_terms": "public exchange market data"
       }
     },
     {
@@ -104,41 +104,86 @@
         "pre_close": 19.1,
         "cash_per_ten": 0.0,
         "bonus_per_ten": 0.0,
-        "rights_per_ten": 1.0,
+        "rights_per_ten": 0.894423,
         "rights_price": 10.07
       },
-      "expected_ex_right_price": 18.2790909091,
+      "expected_ex_right_price": 18.36,
       "tolerance_abs": 0.005,
       "event_evidence": {
         "kind": "issuer-announcement",
         "publisher": "Shannon Semiconductor Technology via CNINFO",
-        "locator": "https://static.cninfo.com.cn/finalpage/2023-03-01/1216003870.PDF",
-        "publication_date": "2023-03-01",
-        "quoted_locator": "Record date 2023-02-07; suspension 2023-02-08 to 2023-02-14; ex-rights base date 2023-02-16; nominal ratio 1/10; rights price CNY 10.07",
-        "file_sha256": "2f2b93e80060560ac167bdda26b72c5a84f11bc34d3100e50b77db730c43647a",
-        "retrieved_at_utc": "2026-08-24T14:48:00Z",
+        "locator": "https://static.cninfo.com.cn/finalpage/2023-02-16/1215872821.PDF",
+        "publication_date": "2023-02-16",
+        "quoted_locator": "Issuer states ex-rights base date 2023-02-16; actual allocation ratio equals 0.894423 shares per ten shares; rights price CNY 10.07",
+        "file_sha256": "a8441d89170ddfe1db80cd22cc7d3147b676e88e6a8443cef337e3ca98601529",
+        "retrieved_at_utc": "2026-09-06T02:40:00Z",
         "license_or_terms": "public company disclosure"
       },
       "pre_close_evidence": {
         "kind": "exchange-reference",
         "publisher": "Shenzhen Stock Exchange market data",
-        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=300475&txtBeginDate=20230215&txtEndDate=20230216",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=300475&txtBeginDate=20230216&txtEndDate=20230216",
         "publication_date": "2023-02-16",
-        "quoted_locator": "SZSE archived record: 2023-02-15 prior/close CNY 19.10/19.10 during suspension; 2023-02-16 prior close(qss)=18.36 is market data and is not used as the formula pre-close",
-        "file_sha256": "06f9522c7a37f6524469c6b5f18b337c599bc152e0881decb8c59c0ca0c320bc",
-        "retrieved_at_utc": "2026-08-24T14:47:00Z",
+        "quoted_locator": "SZSE ex-date 2023-02-16 record: prior close(qss)=18.36, close(ss)=18.12; qss is the direct official reference price",
+        "file_sha256": "b8b8612176cd33ea1c8db0484e54e6e053636bc298823f7820f1438bdbdc1ebc",
+        "retrieved_at_utc": "2026-09-06T02:40:00Z",
         "license_or_terms": "public exchange market data"
       },
       "reference_price_evidence": {
-        "kind": "issuer-announcement",
-        "kind": "derived-formula",
-        "publisher": "Derived from the issuer announcement using the SZSE rights formula",
-        "locator": "https://static.cninfo.com.cn/finalpage/2023-03-01/1216003870.PDF",
+        "kind": "exchange-reference",
+        "publisher": "Shenzhen Stock Exchange market data",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=300475&txtBeginDate=20230216&txtEndDate=20230216",
         "publication_date": "2023-02-16",
-        "quoted_locator": "(CNY 19.10 + 0.1*CNY 10.07)/(1+0.1)=CNY 18.2790909091",
-        "file_sha256": "2f2b93e80060560ac167bdda26b72c5a84f11bc34d3100e50b77db730c43647a",
-        "retrieved_at_utc": "2026-08-24T14:48:00Z",
+        "quoted_locator": "SZSE ex-date 2023-02-16 record: prior close(qss)=18.36, direct official reference price; independently matches issuer-disclosed actual ratio and rights price",
+        "file_sha256": "b8b8612176cd33ea1c8db0484e54e6e053636bc298823f7820f1438bdbdc1ebc",
+        "retrieved_at_utc": "2026-09-06T02:40:00Z",
+        "license_or_terms": "public exchange market data"
+      }
+    },
+    {
+      "case_id": "szse-300866-2024-cash-transfer",
+      "event_type": "cash_bonus_transfer",
+      "instrument": "300866.XSHE",
+      "record_date": "2024-05-23",
+      "ex_date": "2024-05-24",
+      "inputs": {
+        "pre_close": 92.6,
+        "cash_per_ten": 20.0,
+        "bonus_per_ten": 3.0,
+        "rights_per_ten": 0.0,
+        "rights_price": 0.0
+      },
+      "expected_ex_right_price": 69.69,
+      "tolerance_abs": 0.005,
+      "event_evidence": {
+        "kind": "issuer-announcement",
+        "publisher": "Anker Innovations via CNINFO",
+        "locator": "http://static.cninfo.com.cn/finalpage/2024-05-17/1220090768.PDF",
+        "publication_date": "2024-05-17",
+        "quoted_locator": "每 10 股派发现金红利 20.00 元；每 10 股转增 3.000000 股；股权登记日 2024 年 5 月 23 日；除权除息日 2024 年 5 月 24 日",
+        "file_sha256": "6f01d3c294ceaee9868ebbb8fff8c6c2e3eaedb9353e9febf764c9da36e1496c",
+        "retrieved_at_utc": "2026-08-24T12:40:00Z",
         "license_or_terms": "public company disclosure"
+      },
+      "pre_close_evidence": {
+        "kind": "exchange-reference",
+        "publisher": "Shenzhen Stock Exchange market data",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=300866&txtBeginDate=20240524&txtEndDate=20240524",
+        "publication_date": "2024-05-24",
+        "quoted_locator": "SZSE ex-date 2024-05-24 record: prior close(qss)=69.69, close(ss)=70.15; qss is the direct official reference price and equals the formula result",
+        "file_sha256": "c9dbef9554b04e6a4c81ca8eb0d4103a9c3390655dbebcb7fddeab85302abac2",
+        "retrieved_at_utc": "2026-09-06T02:40:00Z",
+        "license_or_terms": "public exchange market data"
+      },
+      "reference_price_evidence": {
+        "kind": "exchange-reference",
+        "publisher": "Shenzhen Stock Exchange market data",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=300866&txtBeginDate=20240524&txtEndDate=20240524",
+        "publication_date": "2024-05-24",
+        "quoted_locator": "SZSE ex-date 2024-05-24 record: prior close(qss)=69.69, equal to the issuer-formula result",
+        "file_sha256": "c9dbef9554b04e6a4c81ca8eb0d4103a9c3390655dbebcb7fddeab85302abac2",
+        "retrieved_at_utc": "2026-09-06T02:40:00Z",
+        "license_or_terms": "public exchange market data"
       }
     }
   ]

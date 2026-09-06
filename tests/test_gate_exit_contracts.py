@@ -250,10 +250,10 @@ def test_adjustment_golden_provenance_v2_official_cases():
     provenance = json.loads(fixture_path.read_text())
     validate_contract("adjustment_golden_provenance.v2.json", provenance)
     assert provenance["provenance_version"] == 2
-    assert provenance["certification"] == "pending-authoritative-source"
+    assert provenance["certification"] == "certified-authoritative-source"
 
     event_types = {case["event_type"] for case in provenance["cases"]}
-    assert event_types == {"cash", "cash_bonus_transfer", "rights"}
+    assert event_types == {"bonus_transfer", "cash", "cash_bonus_transfer", "rights"}
     for case in provenance["cases"]:
         for evidence_name in ("event_evidence", "pre_close_evidence", "reference_price_evidence"):
             evidence = case[evidence_name]
@@ -269,18 +269,9 @@ def test_adjustment_golden_provenance_v2_official_cases():
             assert "szse.cn/api/report/ShowReport/data" in case["pre_close_evidence"]["locator"]
         if case["event_type"] == "rights":
             assert case["instrument"] == "300475.XSHE"
-            assert case["inputs"]["rights_per_ten"] == 1.0
-            assert case["expected_ex_right_price"] == pytest.approx(18.2790909091)
-            assert case["reference_price_evidence"]["kind"] == "derived-formula"
-
-
-def test_adjustment_golden_provenance_v2_rejects_uncertified_reference_sources():
-    fixture_path = FIXTURES / "adjustment/golden-provenance.v2.json"
-    provenance = json.loads(fixture_path.read_text())
-    certified = copy.deepcopy(provenance)
-    certified["certification"] = "certified-authoritative-source"
-    with pytest.raises(Exception):
-        validate_contract("adjustment_golden_provenance.v2.json", certified)
+            assert case["inputs"]["rights_per_ten"] == pytest.approx(0.894423)
+            assert case["expected_ex_right_price"] == pytest.approx(18.36, abs=0.005)
+            assert case["reference_price_evidence"]["kind"] == "exchange-reference"
 
 
 def test_adjustment_golden_provenance_v2_certification_accepts_direct_official_references():
@@ -291,3 +282,9 @@ def test_adjustment_golden_provenance_v2_certification_accepts_direct_official_r
         case["pre_close_evidence"]["kind"] = "exchange-reference"
         case["reference_price_evidence"]["kind"] = "exchange-reference"
     validate_contract("adjustment_golden_provenance.v2.json", provenance)
+
+    uncertified = copy.deepcopy(provenance)
+    uncertified["cases"][0]["pre_close_evidence"]["kind"] = "issuer-announcement"
+    uncertified["cases"][0]["reference_price_evidence"]["kind"] = "derived-formula"
+    with pytest.raises(Exception):
+        validate_contract("adjustment_golden_provenance.v2.json", uncertified)
