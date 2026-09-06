@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.3 final-CR remediated plan; Phases 0–1 exited; Phase 2 implemented pending final HEAD gate evidence**
+Status: **v0.2.4 final-CR remediated plan; Phases 0–2 exited with preserved local gate evidence**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -12,8 +12,8 @@ connectivity, or a generic rules engine.
 
 The source spec is approved. Activation condition 5 is recorded in
 `evidence/risk/activation.json`. Phase 0 and Phase 1 are exited with local
-gate evidence. Phase 2 is implemented draft pending final HEAD gate evidence.
-Phase 3 remains gated on Phase 2 exit.
+gate evidence. Phase 2 is exited with preserved local gate evidence. Phase 3
+remains gated on Phase 2 exit and its own acceptance expansion.
 
 ## 1. Scope
 

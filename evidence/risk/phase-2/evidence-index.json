@@ -7,6 +7,22 @@
     {
       "kind": "phase_record",
       "path": "evidence/risk/phase-2/phase-record.json"
+    },
+    {
+      "kind": "local_gate_final_head",
+      "path": "evidence/risk/phase-2/gate-reports/final-head/gate-report.json"
+    },
+    {
+      "kind": "final_head_command",
+      "path": "evidence/risk/phase-2/gate-reports/final-head/command.txt"
+    },
+    {
+      "kind": "final_head_locked_requirements",
+      "path": "evidence/risk/phase-2/gate-reports/final-head/requirements.lock.txt"
+    },
+    {
+      "kind": "final_head_requirements_digest",
+      "path": "evidence/risk/phase-2/gate-reports/final-head/requirements.lock.txt.sha256"
     }
   ],
   "evidence_version": 1,
