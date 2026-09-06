@@ -10,7 +10,10 @@
     "test_risk_hysteresis_and_cooldown_are_exact",
     "test_risk_late_visibility_creates_new_generation",
     "test_risk_exception_expiry_restores_enforcement",
-    "test_risk_missing_de_risk_contract_fails_closed"
+    "test_risk_missing_de_risk_contract_fails_closed",
+    "test_risk_prior_state_payload_tampering_fails_closed",
+    "test_risk_exception_policy_lineage_mismatch_fails_closed",
+    "test_risk_state_event_sequence_is_monotonic_across_generations"
   ],
   "fixtures": [
     "tests/test_risk_control_plane_phase3.py"
@@ -32,5 +35,6 @@
     "test_result": "passed",
     "utc_timestamp": "2026-09-06T15:00:42.283497+00:00"
   },
-  "updated_at_utc": "2026-09-06T15:00:42.283497+00:00"
+  "updated_at_utc": "2026-09-06T15:00:42.283497+00:00",
+  "final_cr": "passed_before_gate_evidence_refresh"
 }

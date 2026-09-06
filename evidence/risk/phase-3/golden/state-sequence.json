@@ -8,8 +8,8 @@
       "event_class": "risk_triggered",
       "event_id": "d9d4b77cf1bdb01c8d58fb9a3db0acc848186b8d48e4719759920bba854f7ee6",
       "event_sequence_number": 1,
-      "generation_id": "2e398d3c7bdae7a2af786410f83ce894af9b8791a7c6a996234519814379cc9d",
-      "manifest_digest_sha256": "76f0016314c11ee8d1c5e0fdc1685f0bc156b126715acf1884306d210d0d36a0",
+      "generation_id": "596a22d32ff5e373ec831c28f21108b7786de307e944639625a0587cf5df8a4e",
+      "manifest_digest_sha256": "e37465dff5f0dc19e34d45ccd82de1bb69c7ce87394a9d9011429af35f7bf82d",
       "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
       "producer": {
         "created_at": "1970-01-01T00:00:00+00:00",
@@ -21,7 +21,7 @@
       "scope_id": "strategy-loss-control",
       "scope_type": "strategy",
       "serialization_profile": "json-canonical-v1",
-      "state_generation_id": "8ba6b257c9ba8cd7f8fae2d5ebaf865da6848c72938d6622af159654e9a84adc",
+      "state_generation_id": "8a52636856fef323795fb63bc79d74afa63f2afb8c66cfb3679953a4fe32d398",
       "visible_through": "2026-01-05T16:00:00+00:00"
     },
     {
@@ -29,22 +29,22 @@
       "contract_version": 1,
       "decision_generation_id": null,
       "event_class": "state_snapshot_published",
-      "event_id": "a8f9baab1c7b951e257ecc494dce1f28ec4371fa16bf9736a2037485b79f4349",
+      "event_id": "7d853ce47c029594cd329a3ce740d15ff06ce1cd37acde041bdf42c79f32f158",
       "event_sequence_number": 2,
-      "generation_id": "bf1e160f845868ba1715d2091e14e94be6e9de2307bee1bb8d1959feae5d3cb1",
-      "manifest_digest_sha256": "dace1ef247ea7276a5b6de1d59c7b0e230252ed653adcf28e656ec2dcbc3da50",
+      "generation_id": "a202d637a6ff8cb2ab3697c8aae3c4beb985e53ad2f612be60fb42f622ddaacc",
+      "manifest_digest_sha256": "dae17bc1bf49bcb608a1180317cfa1f6dd8cadf0c342897f5c601ad695c07599",
       "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
       "producer": {
         "created_at": "1970-01-01T00:00:00+00:00",
         "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
         "run_id": "00000000-0000-0000-0000-000000000001"
       },
-      "reason": "state 8ba6b257c9ba8cd7f8fae2d5ebaf865da6848c72938d6622af159654e9a84adc published",
+      "reason": "state 8a52636856fef323795fb63bc79d74afa63f2afb8c66cfb3679953a4fe32d398 published",
       "schema_version": "1.0.0",
       "scope_id": "strategy-loss-control",
       "scope_type": "strategy",
       "serialization_profile": "json-canonical-v1",
-      "state_generation_id": "8ba6b257c9ba8cd7f8fae2d5ebaf865da6848c72938d6622af159654e9a84adc",
+      "state_generation_id": "8a52636856fef323795fb63bc79d74afa63f2afb8c66cfb3679953a4fe32d398",
       "visible_through": "2026-01-05T16:00:00+00:00"
     },
     {
@@ -52,22 +52,22 @@
       "contract_version": 1,
       "decision_generation_id": null,
       "event_class": "state_snapshot_published",
-      "event_id": "f5694ac8bd14bedef215a6a13423aa8e57fde3c756a65ee6f6e30485b53dc64c",
+      "event_id": "0b8d92e2cf9f532bf343b3ef5b118b0d2732d4c3fbed97b5097722079745bdfc",
       "event_sequence_number": 3,
-      "generation_id": "d5b7dfba4635636b0fcd91024934b86bc1cab207f099fcf73a47d998c034bcd2",
-      "manifest_digest_sha256": "859415b8fa1cd30829579ca1dd401703b00c2acbd73c8963f1024c02aff0e86d",
+      "generation_id": "ed1724579f4ca08ef37d1a6940806ac059f3df604f6046fc7ea0642320dc4eca",
+      "manifest_digest_sha256": "ced9cf498da67ad115a7232c7d3dcf571382900af02a4172ce2014d5307c9af7",
       "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
       "producer": {
         "created_at": "1970-01-01T00:00:00+00:00",
         "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
         "run_id": "00000000-0000-0000-0000-000000000001"
       },
-      "reason": "state 2354013e18a92ba671dc626f543f45ba8a2194a41b96bf6819473204cb8f0b4b published",
+      "reason": "state 36a3baebec5a65ec488f4ca45dfc7e9c4bf6e40547a42176a60fffd4dc305d94 published",
       "schema_version": "1.0.0",
       "scope_id": "strategy-loss-control",
       "scope_type": "strategy",
       "serialization_profile": "json-canonical-v1",
-      "state_generation_id": "2354013e18a92ba671dc626f543f45ba8a2194a41b96bf6819473204cb8f0b4b",
+      "state_generation_id": "36a3baebec5a65ec488f4ca45dfc7e9c4bf6e40547a42176a60fffd4dc305d94",
       "visible_through": "2026-01-06T16:00:00+00:00"
     },
     {
@@ -77,8 +77,8 @@
       "event_class": "risk_cleared",
       "event_id": "5635a16d413a2bce744b4a1f8c21a5ecc935b22337c4488a7113979e83d4799e",
       "event_sequence_number": 4,
-      "generation_id": "4634fc5df7f5952a2b50ebac414190b0d053706aeb3ac4cd5500eb96bc425a93",
-      "manifest_digest_sha256": "302d5ec02845ee502497c2cb01ae5633fac9ef3065dd053d5da9a559287fc67b",
+      "generation_id": "e782c5c009456b9f33c0fff496a12249e3ba9d196d59f76e0be693396beb2b09",
+      "manifest_digest_sha256": "1ba0dccfc7ed321cb2b5a956814d1d65951ca319f8c14dabf1f08a796ac5a5e9",
       "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
       "producer": {
         "created_at": "1970-01-01T00:00:00+00:00",
@@ -90,7 +90,7 @@
       "scope_id": "strategy-loss-control",
       "scope_type": "strategy",
       "serialization_profile": "json-canonical-v1",
-      "state_generation_id": "20ae45b80a36b7d0e4fc634456ee5a92db45d553fd6aff8ba70b62074a4c8f41",
+      "state_generation_id": "94d4dacc1fc3dac20765d8c4b37a7aa015942fd592d7f97ae31f6409d9b2ad92",
       "visible_through": "2026-01-07T16:00:00+00:00"
     },
     {
@@ -98,22 +98,22 @@
       "contract_version": 1,
       "decision_generation_id": null,
       "event_class": "state_snapshot_published",
-      "event_id": "f46edf69ef307d2237faf61eef6ccf4da77caaef07ad3ea78c5a3d489be702cc",
+      "event_id": "1816be79806364e75672922b1fc95b5f42a2be952e6210954e556ecdd574e65b",
       "event_sequence_number": 5,
-      "generation_id": "b3d718c8ba0a75dc560fce95970656df1c47c91f2ebf31ba101304f3dfa651f5",
-      "manifest_digest_sha256": "8d1fb3b08636ae6ab657727f340e20492ae5762f6ab460543196b364d93319b5",
+      "generation_id": "aa47fdc375bcb7854a44c2ae2f968b6f54281103d225e8f9f7be80e4a27f00b5",
+      "manifest_digest_sha256": "b9df681fd1e3045a229a50d01e2885dc828f8e6e31c07d204b62980781a32480",
       "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
       "producer": {
         "created_at": "1970-01-01T00:00:00+00:00",
         "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
         "run_id": "00000000-0000-0000-0000-000000000001"
       },
-      "reason": "state 20ae45b80a36b7d0e4fc634456ee5a92db45d553fd6aff8ba70b62074a4c8f41 published",
+      "reason": "state 94d4dacc1fc3dac20765d8c4b37a7aa015942fd592d7f97ae31f6409d9b2ad92 published",
       "schema_version": "1.0.0",
       "scope_id": "strategy-loss-control",
       "scope_type": "strategy",
       "serialization_profile": "json-canonical-v1",
-      "state_generation_id": "20ae45b80a36b7d0e4fc634456ee5a92db45d553fd6aff8ba70b62074a4c8f41",
+      "state_generation_id": "94d4dacc1fc3dac20765d8c4b37a7aa015942fd592d7f97ae31f6409d9b2ad92",
       "visible_through": "2026-01-07T16:00:00+00:00"
     }
   ],
@@ -129,18 +129,18 @@
     "contract_version": 1,
     "files": [
       {
-        "byte_size": 426,
+        "byte_size": 457,
         "path": "state.json",
         "serialization_profile": "json-canonical-v1",
-        "sha256": "ad407963f4f29f5c439ec060f67a653833a9b1f75471884a5ceae18d9e09dbbb"
+        "sha256": "ca221f312c9f34b2367bd22a2c715b193be610e03bc7245ebf08b06674fa2045"
       }
     ],
-    "generation_id": "20ae45b80a36b7d0e4fc634456ee5a92db45d553fd6aff8ba70b62074a4c8f41",
-    "manifest_digest_sha256": "1a4a77d8d0bec911c6f72958a59da2357b31fa5fadac0a8158beac8870cd49a4",
+    "generation_id": "94d4dacc1fc3dac20765d8c4b37a7aa015942fd592d7f97ae31f6409d9b2ad92",
+    "manifest_digest_sha256": "dc3f5cbe0b7e6efb3a92a5b6ddaa227d87318291b988d8b9bc39859a9187fd09",
     "metric_names": [
       "strategy_drawdown"
     ],
-    "previous_state_generation_id": "2354013e18a92ba671dc626f543f45ba8a2194a41b96bf6819473204cb8f0b4b",
+    "previous_state_generation_id": "36a3baebec5a65ec488f4ca45dfc7e9c4bf6e40547a42176a60fffd4dc305d94",
     "producer": {
       "created_at": "1970-01-01T00:00:00+00:00",
       "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
@@ -165,8 +165,8 @@
       },
       {
         "family": "risk_state_v1",
-        "generation_id": "2354013e18a92ba671dc626f543f45ba8a2194a41b96bf6819473204cb8f0b4b",
-        "manifest_digest_sha256": "25bc327977d40f88c3b78df5cc74712f755bec534f6322548d9497332e556948"
+        "generation_id": "36a3baebec5a65ec488f4ca45dfc7e9c4bf6e40547a42176a60fffd4dc305d94",
+        "manifest_digest_sha256": "73959d779949bf60d51bc44781dfdd87c3b1d7ec099304e7f68eb92dd9e36b86"
       }
     ],
     "visible_through": "2026-01-07T16:00:00+00:00"
@@ -180,6 +180,7 @@
     },
     "consecutive_trigger_days": 0,
     "cooldown_until_date": "2026-01-07",
+    "last_event_sequence_number": 5,
     "last_trigger_date": "2026-01-05",
     "metrics": {
       "strategy_drawdown": 0.09

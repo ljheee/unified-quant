@@ -132,11 +132,14 @@ def _validate_de_risk_contract(
 def _validate_exception(
     exception: Mapping[str, Any] | None,
     review: Mapping[str, Any] | None,
+    policy: Mapping[str, Any],
 ) -> None:
     if exception is None or review is None:
         raise ContractError("strategy exception requires both exception and review")
     validate_risk_manifest("risk_exception", dict(exception))
     validate_risk_manifest("risk_review_decision", dict(review))
+    if exception["policy_binding"] != _binding(policy, family="risk_policy_v1"):
+        raise ContractError("risk exception policy lineage mismatch")
     validate_risk_exception_governance(exception, review)
 
 
@@ -258,6 +261,40 @@ def _state_document(
     return document, payload
 
 
+def _validate_prior_payload(
+    payload: Mapping[str, Any],
+    state: Mapping[str, Any],
+    policy: Mapping[str, Any],
+) -> None:
+    if not isinstance(payload, Mapping):
+        raise ContractError("prior risk state payload must be a mapping")
+    metrics = payload.get("metrics")
+    if not isinstance(metrics, Mapping) or set(metrics) != set(state["metric_names"]):
+        raise ContractError("prior risk state metrics mismatch")
+    for name, value in metrics.items():
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) or value < 0.0:
+            raise ContractError(f"prior risk state metric is invalid: {name}")
+    if not isinstance(payload.get("active"), bool):
+        raise ContractError("prior risk state active flag is invalid")
+    if payload.get("triggered_rule_id") != policy["rules"][0]["rule_id"]:
+        raise ContractError("prior risk state rule mismatch")
+    consecutive = payload.get("consecutive_trigger_days")
+    if not isinstance(consecutive, int) or isinstance(consecutive, bool) or consecutive < 0:
+        raise ContractError("prior risk state trigger count is invalid")
+    last_event_sequence = payload.get("last_event_sequence_number")
+    if not isinstance(last_event_sequence, int) or isinstance(last_event_sequence, bool) or last_event_sequence < 0:
+        raise ContractError("prior risk state event sequence is invalid")
+    try:
+        last_trigger = payload.get("last_trigger_date")
+        if last_trigger is not None:
+            date.fromisoformat(last_trigger)
+        cooldown_until = payload.get("cooldown_until_date")
+        if cooldown_until is not None:
+            date.fromisoformat(cooldown_until)
+    except (TypeError, ValueError) as exc:
+        raise ContractError("prior risk state dates are invalid") from exc
+
+
 def evaluate_strategy_state(
     *,
     policy: Mapping[str, Any],
@@ -270,24 +307,45 @@ def evaluate_strategy_state(
     exception_review: Mapping[str, Any] | None = None,
     prior_state: Mapping[str, Any] | None = None,
     prior_payload: Mapping[str, Any] | None = None,
-    event_sequence: int = 0,
+    event_sequence: int | None = None,
 ) -> dict[str, Any]:
     """Evaluate observations and return immutable state, events, and action."""
     _validate_policy(policy, policy_review)
     _validate_calendar_binding(calendar_binding)
     if not isinstance(observations, list) or not observations:
         raise ContractError("strategy state observations must be a non-empty list")
+    if prior_payload is not None:
+        expected_sequence = prior_payload.get("last_event_sequence_number")
+        if event_sequence is None:
+            event_sequence = expected_sequence
+        elif event_sequence != expected_sequence:
+            raise ContractError("risk event sequence mismatch")
+    elif event_sequence is None:
+        event_sequence = 0
     if not isinstance(event_sequence, int) or isinstance(event_sequence, bool) or event_sequence < 0:
         raise ContractError("risk event sequence must be non-negative")
 
     if exception is not None:
-        _validate_exception(exception, exception_review)
+        _validate_exception(exception, exception_review, policy)
     if prior_state is not None:
         validate_risk_manifest("risk_state", dict(prior_state))
         if prior_payload is None or not isinstance(prior_payload, Mapping):
             raise ContractError("prior risk state payload is required")
         if prior_state["state_scope_type"] != "strategy":
             raise ContractError("prior risk state scope mismatch")
+        if len(prior_state["files"]) != 1:
+            raise ContractError("prior risk state must contain one artifact")
+        if prior_state["calendar_binding"] != calendar_binding:
+            raise ContractError("prior risk state calendar mismatch")
+        if prior_state["calendar_binding"] != prior_payload.get("calendar_binding"):
+            raise ContractError("prior risk state payload calendar mismatch")
+        state_file = prior_state["files"][0]
+        content = (
+            json.dumps(prior_payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        if state_file["path"] != "state.json" or state_file["sha256"] != hashlib.sha256(content).hexdigest():
+            raise ContractError("prior risk state payload identity mismatch")
+        _validate_prior_payload(prior_payload, prior_state, policy)
 
     rules = sorted(policy["rules"], key=lambda rule: (rule["priority"], rule["rule_id"]))
     rule = rules[0]
@@ -416,6 +474,7 @@ def evaluate_strategy_state(
             "consecutive_trigger_days": consecutive_triggers,
             "last_trigger_date": last_trigger_date,
             "cooldown_until_date": cooldown_until,
+            "last_event_sequence_number": sequence + 1,
         }
         document, payload = _state_document(
             payload=state_payload,

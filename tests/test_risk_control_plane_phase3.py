@@ -59,7 +59,7 @@ def _policy(**overrides) -> tuple[dict, dict]:
             "rule_scope": "strategy",
             "metric": "strategy_drawdown",
             "operator": "greater_than_or_equal",
-            "threshold": 0.20,
+            "threshold": overrides.pop("threshold", 0.20),
             "action": "flatten",
             "severity": "critical",
             "priority": 10,
@@ -249,7 +249,6 @@ def test_risk_late_visibility_creates_new_generation():
         [_observation("2026-01-05", 0.26, "2026-01-06T10:00:00+00:00")],
         prior_state=first["state"],
         prior_payload=first["state_payload"],
-        event_sequence=first["events"][-1]["event_sequence_number"],
     )
     assert late["state"]["generation_id"] != first["state"]["generation_id"]
     assert late["state"]["supersedes_state_generation_id"] == first["state"]["generation_id"]
@@ -294,3 +293,42 @@ def test_risk_missing_de_risk_contract_fails_closed():
             [_observation("2026-01-05", 0.25, "2026-01-05T16:00:00+00:00")],
             contract=None,
         )
+
+
+def test_risk_prior_state_payload_tampering_fails_closed():
+    first = _evaluate([_observation("2026-01-05", 0.25, "2026-01-05T16:00:00+00:00")])
+    tampered_payload = {**first["state_payload"], "active": False}
+    with pytest.raises(ContractError, match="prior risk state payload identity mismatch"):
+        _evaluate(
+            [_observation("2026-01-06", 0.09, "2026-01-06T16:00:00+00:00")],
+            prior_state=first["state"],
+            prior_payload=tampered_payload,
+        )
+
+
+def test_risk_exception_policy_lineage_mismatch_fails_closed():
+    bound_policy, _ = _policy(threshold=0.20)
+    evaluated_policy, evaluated_policy_review = _policy(threshold=0.30)
+    exception, exception_review = _exception(bound_policy, expires_at="2026-01-06")
+    with pytest.raises(ContractError, match="policy lineage mismatch"):
+        _evaluate(
+            [_observation("2026-01-05", 0.25, "2026-01-05T16:00:00+00:00")],
+            policy=(evaluated_policy, evaluated_policy_review),
+            exception=exception,
+            exception_review=exception_review,
+        )
+
+
+def test_risk_state_event_sequence_is_monotonic_across_generations():
+    first = _evaluate([_observation("2026-01-05", 0.25, "2026-01-05T16:00:00+00:00")])
+    second = _evaluate(
+        [_observation("2026-01-06", 0.24, "2026-01-06T16:00:00+00:00")],
+        prior_state=first["state"],
+        prior_payload=first["state_payload"],
+    )
+    first_last = first["events"][-1]["event_sequence_number"]
+    second_last = second["events"][-1]["event_sequence_number"]
+    assert first["state_payload"]["last_event_sequence_number"] == first_last
+    assert second["state_payload"]["last_event_sequence_number"] == second_last
+    assert second["events"][0]["event_sequence_number"] == first_last + 1
+    assert second_last > first_last
