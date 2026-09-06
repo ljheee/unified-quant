@@ -1,0 +1,72 @@
+{
+  "layer": "factor",
+  "status": "released",
+  "release": "v1.0.0",
+  "record_version": 1,
+  "implementation_commit": "452890d7ed865d05468f7d4225279f4b5935b5e4",
+  "phases_exited": [
+    0,
+    1,
+    2,
+    "2A",
+    3,
+    4,
+    5
+  ],
+  "scope": {
+    "raw_price_factors": true,
+    "adjusted_factors": true,
+    "adjustment_reference_provenance": "certified-authoritative-source",
+    "certified_adjustment_cases": [
+      "300866.XSHE",
+      "300475.XSHE",
+      "000725.XSHE",
+      "003026.XSHE"
+    ]
+  },
+  "local_gate": {
+    "result": "passed",
+    "runner": "uv",
+    "extras": [
+      "dev",
+      "real",
+      "qlib"
+    ],
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "commit_bound": "452890d7ed865d05468f7d4225279f4b5935b5e4",
+    "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+    "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+    "report_path": "evidence/factor/release/final-gate-report.json",
+    "report_sha256": "29627e573316c84ff15aaec0c6346d87dd47257b2803ba8897f05ee0c52c278b",
+    "timestamp": "2026-09-06T03:19:19.026534+00:00"
+  },
+  "remote_gate": {
+    "result": "success",
+    "run_id": "34008647514",
+    "commit_bound": "452890d7ed865d05468f7d4225279f4b5935b5e4",
+    "summary": {
+      "passed": 10,
+      "failed": 0,
+      "total": 10
+    },
+    "aggregated_path": "evidence/factor/release/remote-matrix/452890d-34008647514/aggregated-gates.json",
+    "run_path": "evidence/factor/release/remote-matrix/452890d-34008647514/run.json"
+  },
+  "risk_limitations": [
+    "Platform and backend certification is scoped to the declared CI cells; Windows and unlisted CPU/BLAS combinations remain not certified.",
+    "Adjustment golden provenance certifies four reviewed SZSE cases with direct ex-date prior-close evidence; it is not a universal corporate-action oracle."
+  ],
+  "evidence_index": {
+    "local_gate": "evidence/factor/release/final-gate-report.json",
+    "local_gate_sha256": "evidence/factor/release/final-gate-report.json.sha256",
+    "requirements_lock": "evidence/factor/release/requirements.lock.txt",
+    "requirements_lock_sha256": "evidence/factor/release/requirements.lock.txt.sha256",
+    "remote_matrix": "evidence/factor/release/remote-matrix/452890d-34008647514/",
+    "release_marker": "evidence/factor/release/MARKER.md",
+    "access_log": "specs/layers/contracts/adjustment-official-source-access-v1.md",
+    "golden_provenance": "config/schemas/fixtures/adjustment/golden-provenance.v2.json",
+    "phase_record": "evidence/factor/release/phase-record.json",
+    "acceptance_matrix": "specs/layers/factor-layer-spec.md"
+  }
+}

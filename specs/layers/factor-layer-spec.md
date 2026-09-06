@@ -1,22 +1,22 @@
 # Factor Layer Specification
 
-Status: **design v0.3; boundary partially implemented**
+Status: **v1.0.0; scoped release implemented**
 
-Implemented today:
+Implemented in the scoped v1.0 release:
 
 - manifest-first canonical read path in `FactorContext`;
 - immutable canonical publication and checksum verification;
-- versioned adjustment derivation `adj_factor.derived_v4`.
+- versioned adjustment derivation with persisted snapshot governance;
+- factor registry, engine, schemas, configured quality gates, and immutable store;
+- raw-price factors and reviewed adjusted-return factors;
+- direct official provenance for four reviewed adjustment golden cases.
 
-Not implemented yet:
+Outside this scoped release: machine-learning feature governance, production
+multi-tenant storage, distributed compute, and historical universe
+reconstruction.
 
-- factor registry/engine/store;
-- factor schema/config governance;
-- adjusted-close series publication;
-- factor manifests and quality gate.
-
-The acceptance matrix in section 11 distinguishes tests that are executable now
-from tests blocked on those components.
+The acceptance matrix in section 11 records the executable tests and evidence
+for the scoped v1.0 release.
 
 ## 1. Purpose
 
@@ -518,7 +518,7 @@ Minimum acceptance:
 | F1 | Factor code cannot read unpublished canonical partitions. | 0/3 | None for single-date full-frame reads; range/filter semantics need Phase 2A | `test_factor_context_reads_published_data_only` | Partial: single-date case executable now |
 | F2 | Insufficient history emits null without failing unrelated rows. | 3 | Factor engine | `tests/test_raw_price_engine.py::test_raw_price_factor_values_and_insufficient_history_nulls` | Passed for implemented raw-price subset |
 | F3 | Implementation change changes fingerprint and requires reviewed set-version action. | 2/6 | Registry/config governance | `tests/test_release_acceptance.py::test_f3_changed_semantics_cannot_reuse_old_version` | Passed |
-| F4 | Identical locked-environment runs produce identical artifact checksums. | 4A/5 | Engine, serialization profile, factor store | `tests/test_repro_staging.py::test_repeated_staging_outputs_are_byte_and_logically_identical`; `tests/test_release_acceptance.py::test_f4_identical_runs_produce_identical_artifacts`; CI `f4-certification` job | Passed for local covered locked environment; six-cell macOS/Ubuntu Python 3.11–3.13 remote run `32750572645` certified; other platforms remain not certified |
+| F4 | Identical locked-environment runs produce identical artifact checksums. | 4A/5 | Engine, serialization profile, factor store | `tests/test_repro_staging.py::test_repeated_staging_outputs_are_byte_and_logically_identical`; `tests/test_release_acceptance.py::test_f4_identical_runs_produce_identical_artifacts`; CI `f4-certification` job | Passed for local covered locked environment; six-cell macOS/Ubuntu Python 3.11–3.13 remote run `34008647514` certified; other platforms remain not certified |
 | F5 | Future-dated input cannot affect a historical partition. | 3 | Engine/input selection | `tests/test_raw_price_engine.py::test_future_partition_cannot_affect_historical_compute` | Passed |
 | F6 | Adjusted return factors do not use raw close. | 4 | Adjusted-input prerequisite and adjustment lineage gate | `tests/test_adjusted_price_engine.py::test_raw_close_substitution_detected`; `tests/test_adjusted_governance_chain.py` plus shared negative suite | Passed through governed engine/registry/publication subset |
 | F7 | Immutable factor partitions reject overwrite. | 5 | Factor store | `tests/test_release_acceptance.py::test_f7_overwrite_rejected` | Passed |
@@ -548,7 +548,7 @@ Minimum acceptance:
 | F18b | Warning policy is governed by reviewed definition, not silently accepted by reject-all stores. | 5 | Quality policy binding | `tests/test_release_acceptance.py::test_warning_policy_allows_bound_warning_report` | Passed for rejection of mismatched reviewed policy |
 | F19 | Quarantine artifacts have checksummed governance metadata and manual-review retention. | 5 | Quarantine governance | `tests/test_release_acceptance.py::test_quarantine_is_not_an_accepted_factor_partition` | Passed |
 
-Implemented release acceptance sub-items now have executable runtime evidence. Implemented security gates now include upstream visibility fail-closed behavior and quarantine isolation. Remaining release gates are remote evidence for the declared six-cell cross-platform F4 matrix, authoritative exchange/settlement golden provenance for Phase 1, and final release reconciliation.
+Implemented release acceptance sub-items now have executable runtime evidence. Implemented security gates now include upstream visibility fail-closed behavior and quarantine isolation. Factor v1.0 release gates are complete: six-cell F4 remote evidence and four reviewed SZSE ex-date prior-close cases are reconciled in `evidence/factor/release/`.
 
 ## 12. Explicit Non-Goals for v0
 

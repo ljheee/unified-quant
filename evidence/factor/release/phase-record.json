@@ -1,0 +1,84 @@
+{
+  "layer": "factor",
+  "phase": 6,
+  "record_version": 1,
+  "status": "exited_after_remote_gate",
+  "blocked_by": [],
+  "implementation_commit": "452890d7ed865d05468f7d4225279f4b5935b5e4",
+  "entry_criteria": {
+    "phase_5_implemented": true,
+    "adjustment_provenance": "certified-authoritative-source",
+    "status": "passed"
+  },
+  "exit_criteria": [
+    {
+      "id": "F6a",
+      "description": "All security/lineage acceptance sub-items pass with no deferral",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_release_acceptance.py",
+        "tests/test_gate_exit_contracts.py"
+      ],
+      "evidence_paths": [
+        "evidence/factor/release/final-gate-report.json"
+      ]
+    },
+    {
+      "id": "F6b",
+      "description": "Identical-input determinism checks pass locally and across the declared F4 remote matrix",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_repro_staging.py",
+        "tests/test_release_acceptance.py::test_f4_identical_runs_produce_identical_artifacts",
+        "github-actions:f4-certification"
+      ],
+      "evidence_paths": [
+        "evidence/factor/release/remote-matrix/452890d-34008647514/aggregated-gates.json",
+        "evidence/factor/release/remote-matrix/452890d-34008647514/run.json"
+      ]
+    },
+    {
+      "id": "F6c",
+      "description": "Focused contract reviews and full unified gate pass on the release HEAD",
+      "status": "passed",
+      "test_ids": [
+        "scripts/run_gate.sh",
+        "python -m pytest"
+      ],
+      "evidence_paths": [
+        "evidence/factor/release/final-gate-report.json",
+        "evidence/factor/release/final-gate-report.json.sha256"
+      ]
+    },
+    {
+      "id": "F6d",
+      "description": "Official adjustment provenance and release records are reconciled and committed",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_gate_exit_contracts.py",
+        "tests/test_adjustment_snapshot_runtime.py"
+      ],
+      "evidence_paths": [
+        "config/schemas/fixtures/adjustment/golden-provenance.v2.json",
+        "specs/layers/contracts/adjustment-official-source-access-v1.md",
+        "evidence/factor/release/release-record.json",
+        "evidence/factor/release/MARKER.md"
+      ]
+    }
+  ],
+  "evidence_paths": [
+    "evidence/factor/release/final-gate-report.json",
+    "evidence/factor/release/final-gate-report.json.sha256",
+    "evidence/factor/release/requirements.lock.txt",
+    "evidence/factor/release/requirements.lock.txt.sha256",
+    "evidence/factor/release/remote-matrix/452890d-34008647514/aggregated-gates.json",
+    "evidence/factor/release/remote-matrix/452890d-34008647514/run.json",
+    "evidence/factor/release/release-record.json",
+    "evidence/factor/release/MARKER.md"
+  ],
+  "notes": [
+    "Local Qlib unified gate passed 461 tests on 452890d7ed865d05468f7d4225279f4b5935b5e4.",
+    "Remote CI run 34008647514 passed six declared F4 cells and four Qlib runtime cells on the same commit.",
+    "Four reviewed SZSE adjustment cases use direct ex-date prior-close(qss) evidence."
+  ]
+}
