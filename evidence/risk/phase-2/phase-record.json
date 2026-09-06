@@ -1,0 +1,33 @@
+{
+  "blocked_by": [
+    "final HEAD gate report generation after commit"
+  ],
+  "entry_criteria": "passed",
+  "evidence_paths": [
+    "evidence/risk/phase-2"
+  ],
+  "exit_criteria": "pending_final_head_gate_evidence",
+  "fixtures": [
+    "tests/test_risk_control_plane_phase2.py"
+  ],
+  "golden_vectors": [
+    "evidence/risk/phase-2/golden/order-decision.json"
+  ],
+  "layer": "risk_control_plane",
+  "phase": "2",
+  "remote_matrix": {
+    "status": "not_applicable_to_phase_2"
+  },
+  "status": "implemented_pending_final_head_gate_evidence",
+  "test_ids": [
+    "test_risk_order_missing_context_fails_closed",
+    "test_risk_order_rules_are_deterministic",
+    "test_risk_order_halt_blocks_candidate",
+    "test_risk_t1_sellable_quantity_is_enforced",
+    "test_risk_participation_and_notional_resize_exact",
+    "test_risk_rejected_candidate_is_not_added_to_frozen_fills",
+    "test_risk_run_tampering_rejects_read",
+    "test_backtest_result_v1_contract_remains_frozen"
+  ],
+  "updated_at_utc": "2026-09-06T14:00:00+00:00"
+}

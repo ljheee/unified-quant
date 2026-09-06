@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.2 final-CR remediated plan; Phases 0–1 exited with preserved local gate evidence**
+Status: **v0.2.3 final-CR remediated plan; Phases 0–1 exited; Phase 2 implemented pending final HEAD gate evidence**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -12,8 +12,8 @@ connectivity, or a generic rules engine.
 
 The source spec is approved. Activation condition 5 is recorded in
 `evidence/risk/activation.json`. Phase 0 and Phase 1 are exited with local
-gate evidence; Phase 2 remains gated on Phase 1 exit and its own acceptance
-expansion.
+gate evidence. Phase 2 is implemented draft pending final HEAD gate evidence.
+Phase 3 remains gated on Phase 2 exit.
 
 ## 1. Scope
 
@@ -308,13 +308,13 @@ it must become `passed` with evidence before the phase exits.
 | RCP1e | 1 | `test_risk_portfolio_overlapping_policies_fail_closed` | `tests/test_risk_control_plane_phase1.py` | implemented |
 | RCP1f | 1 | `test_risk_portfolio_publication_gate_rejects_block` | `evidence/risk/phase-1/gate-reports/` | implemented |
 | RCP1g | 1 | `test_risk_industry_limit_disabled_without_contract` | `tests/test_risk_control_plane_phase1.py` | implemented |
-| RCP2a | 2 | `test_risk_order_missing_context_fails_closed` | `evidence/risk/phase-2/fixtures/` | pending |
-| RCP2b | 2 | `test_risk_order_rules_are_deterministic` | `evidence/risk/phase-2/golden/` | pending |
-| RCP2c | 2 | `test_risk_t1_sellable_quantity_is_enforced` | `evidence/risk/phase-2/` | pending |
-| RCP2d | 2 | `test_risk_rejected_candidate_is_recorded_in_risk_ledger` | `evidence/risk/phase-2/` | pending |
-| RCP2e | 2 | `test_risk_run_tampering_rejects_read` | `evidence/risk/phase-2/` | pending |
-| RCP2f | 2 | `test_backtest_result_v1_contract_remains_frozen` | existing backtest contract tests | pending |
-| RCP2g | 2 | `test_risk_rejected_candidate_is_not_added_to_frozen_fills` | `evidence/risk/phase-2/frozen-fills.json` | pending |
+| RCP2a | 2 | `test_risk_order_missing_context_fails_closed` | `evidence/risk/phase-2/fixtures/` | implemented |
+| RCP2b | 2 | `test_risk_order_rules_are_deterministic` | `evidence/risk/phase-2/golden/` | implemented |
+| RCP2c | 2 | `test_risk_t1_sellable_quantity_is_enforced` | `evidence/risk/phase-2/` | implemented |
+| RCP2d | 2 | `test_risk_rejected_candidate_is_recorded_in_risk_ledger` | `evidence/risk/phase-2/` | implemented |
+| RCP2e | 2 | `test_risk_run_tampering_rejects_read` | `evidence/risk/phase-2/` | implemented |
+| RCP2f | 2 | `test_backtest_result_v1_contract_remains_frozen` | existing backtest contract tests | implemented |
+| RCP2g | 2 | `test_risk_rejected_candidate_is_not_added_to_frozen_fills` | `evidence/risk/phase-2/frozen-fills.json` | implemented |
 | RCP3a | 3 | `test_risk_state_transition_is_deterministic` | `evidence/risk/phase-3/golden/` | pending |
 | RCP3b | 3 | `test_risk_hysteresis_and_cooldown_are_exact` | `evidence/risk/phase-3/golden/` | pending |
 | RCP3c | 3 | `test_risk_late_visibility_creates_new_generation` | `evidence/risk/phase-3/` | pending |

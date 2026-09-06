@@ -8,7 +8,7 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -24,6 +24,20 @@ from ..contracts.model_layer import (
 from ..errors import ContractError
 
 ANNUALIZATION_DAYS = 252
+_FILL_COLUMNS = [
+    "date", "instrument", "side", "target_shares", "filled_shares",
+    "gross_execution_price", "net_execution_price", "commission_fee",
+    "stamp_duty_fee", "status",
+]
+_RISK_BLOCKED_ACTIONS = {"block", "block_order", "block_new_buy", "halt_strategy"}
+
+
+def _order_direction(target_shares: int, current_total: int) -> str:
+    return "sell" if target_shares < current_total else "buy"
+
+
+def _candidate_shares(target_shares: int, current_total: int) -> int:
+    return abs(target_shares - current_total)
 
 
 class BacktestEngine:
@@ -42,6 +56,7 @@ class BacktestEngine:
         suspension_dates: set[tuple[str, str]] | None = None,
         corporate_action_instruments: set[str] | None = None,
         quality_decision: dict[str, Any] | None = None,
+        risk_gate: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
     ) -> tuple[dict[str, Any], dict[str, pd.DataFrame]]:
         """Run a deterministic daily backtest.
 
@@ -180,6 +195,53 @@ class BacktestEngine:
                     or (exec_date, inst) in (suspension_dates or set())
                 )
                 
+                risk_side = _order_direction(target_shares, current_total)
+                risk_candidate_shares = _candidate_shares(target_shares, current_total)
+                risk_allowed_shares: int | None = None
+                if risk_gate is not None and risk_candidate_shares > 0:
+                    candidate = {
+                        "order_id": f"{date}:{exec_date}:{inst}:{risk_side}",
+                        "instrument": inst,
+                        "side": risk_side,
+                        "shares": risk_candidate_shares,
+                    }
+                    context = {
+                        "execution_date": exec_date,
+                        "execution_price": float(open_price) if open_price is not None and not pd.isna(open_price) else 0.0,
+                        "previous_close": prev_close_prices.get(inst, float(open_price or 0.0)),
+                        "decision_date_volume": float(pit_volume),
+                        "holdings": dict(holdings),
+                        "cash": cash,
+                        "suspended": is_suspended,
+                        "sellable_shares": current_sellable,
+                        "limit_ratio": limit_ratio,
+                    }
+                    decision = risk_gate(candidate, context)
+                    if decision["action"] in _RISK_BLOCKED_ACTIONS:
+                        fills_rows.append(self._fill_row(
+                            date=exec_date, instrument=inst, side=risk_side,
+                            target_shares=risk_candidate_shares, filled_shares=0,
+                            gross_execution_price=context["execution_price"],
+                            net_execution_price=context["execution_price"],
+                            commission_fee=0, stamp_duty_fee=0,
+                            status="skipped_risk_blocked",
+                        ))
+                        continue
+                    if decision["action"] == "resize":
+                        allowed = next((
+                            constraint["value"]
+                            for constraint in decision["constraints"]
+                            if constraint.get("instrument") == inst and constraint.get("constraint_type") == "allowed_shares"
+                        ), None)
+                        if allowed is None:
+                            raise ContractError("risk resize decision lacks allowed_shares")
+                        allowed_values = [
+                            int(constraint["value"])
+                            for constraint in decision["constraints"]
+                            if constraint.get("instrument") == inst and constraint.get("constraint_type") == "allowed_shares"
+                        ]
+                        risk_allowed_shares = min(allowed_values)
+                
                 if is_suspended:
                     fills_rows.append(self._fill_row(
                         date=exec_date, instrument=inst, side="sell",
@@ -203,7 +265,10 @@ class BacktestEngine:
                 
                 if target_shares < current_total:
                     # SELL: reduce to target or liquidate
-                    shares_to_sell = min(current_sellable, current_total - target_shares)
+                    requested_sell_shares = current_total - target_shares
+                    shares_to_sell = min(current_sellable, requested_sell_shares)
+                    if risk_allowed_shares is not None:
+                        shares_to_sell = min(shares_to_sell, risk_allowed_shares)
                     if shares_to_sell <= 0:
                         if current_total - target_shares > 0:
                             fills_rows.append(self._fill_row(
@@ -252,6 +317,8 @@ class BacktestEngine:
                 elif target_shares > current_total:
                     # BUY: increase position or open new
                     shares_to_buy = target_shares - current_total
+                    if risk_allowed_shares is not None:
+                        shares_to_buy = min(shares_to_buy, risk_allowed_shares)
                     
                     if float(open_price) >= limit_up_price:
                         fills_rows.append(self._fill_row(
@@ -311,11 +378,7 @@ class BacktestEngine:
 # Compute summary metrics
         equity_df = pd.DataFrame(equity_rows)
         metrics_df = pd.DataFrame(metrics_rows)
-        fills_df = pd.DataFrame(fills_rows) if fills_rows else pd.DataFrame(columns=[
-            "date", "instrument", "side", "target_shares", "filled_shares",
-            "gross_execution_price", "net_execution_price", "commission_fee",
-            "stamp_duty_fee", "status"
-        ])
+        fills_df = pd.DataFrame(fills_rows) if fills_rows else pd.DataFrame(columns=_FILL_COLUMNS)
 
         returns = metrics_df["daily_return"].values
         n_days = len(returns)

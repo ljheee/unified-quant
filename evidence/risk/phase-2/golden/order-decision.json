@@ -1,0 +1,101 @@
+{
+  "action": "allow",
+  "as_of_date": "2026-01-05",
+  "constraints": [],
+  "contract_version": 1,
+  "decision_digest": "e0a1937063af95d863d4a0c6a307f4f9735dac97950797e6d90f621b692d6558",
+  "decision_scope": "order_submission",
+  "files": [
+    {
+      "byte_size": 1168,
+      "path": "decision.json",
+      "serialization_profile": "json-canonical-v1",
+      "sha256": "3ed3b17d91b8959b14a0d84f28c0ac762c0d591b8b36f726eca841c45f9ac2ce"
+    }
+  ],
+  "findings": [
+    {
+      "action": "allow",
+      "observed": 10900.0,
+      "operator": "less_than_or_equal",
+      "result": "passed",
+      "rule_id": "order_notional_limit",
+      "severity": "critical",
+      "state_required": false,
+      "threshold": 100000.0
+    },
+    {
+      "action": "allow",
+      "observed": 0.01,
+      "operator": "less_than_or_equal",
+      "result": "passed",
+      "rule_id": "order_participation_limit",
+      "severity": "critical",
+      "state_required": false,
+      "threshold": 0.1
+    },
+    {
+      "action": "allow",
+      "observed": null,
+      "operator": null,
+      "result": "passed",
+      "rule_id": "order_insufficient_cash",
+      "severity": "critical",
+      "state_required": false,
+      "threshold": null
+    },
+    {
+      "action": "allow",
+      "observed": null,
+      "operator": null,
+      "result": "passed",
+      "rule_id": "order_instrument_halt",
+      "severity": "critical",
+      "state_required": false,
+      "threshold": null
+    },
+    {
+      "action": "allow",
+      "observed": null,
+      "operator": null,
+      "result": "passed",
+      "rule_id": "order_limit_price",
+      "severity": "critical",
+      "state_required": false,
+      "threshold": null
+    },
+    {
+      "action": "allow",
+      "observed": null,
+      "operator": null,
+      "result": "passed",
+      "rule_id": "order_t1_sellable_quantity",
+      "severity": "critical",
+      "state_required": false,
+      "threshold": null
+    }
+  ],
+  "generation_id": "e4cd551caadbd80e491099938afd2527c700f35b44c3f2c591a30d8a22c0ced9",
+  "input_bindings": [
+    {
+      "family": "candidate_order_v1",
+      "generation_id": "de2c73b4bbd72e7c52f1aaa81ed0a60c38a6cfe7091a1095aa7f3cc16fd7861a",
+      "manifest_digest_sha256": "2f757f349745e16064af2426329a54627f6a1f058ef0ad5043dde49ebb0de765"
+    }
+  ],
+  "manifest_digest_sha256": "07c0feb7259a79dd9a9b5420566ef81039911f4a73e6148ebfd9811d2471cff8",
+  "producer": {
+    "created_at": "1970-01-01T00:00:00+00:00",
+    "producer_code_fingerprint": "06d35878c51c40d550086306656242e952f8b6f70f8d9c00e1e96de49ba33581",
+    "run_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "risk_policy_binding": {
+    "family": "risk_policy_v1",
+    "generation_id": "3bb872630c31e794a802ce8cabebea537998b6941c8ecd10403c5497c86bfa76",
+    "manifest_digest_sha256": "2756880330096ffffc7fd61232b5c1a7edd9d9d604b3877b2fee270c5dff5b70"
+  },
+  "risk_state_binding": null,
+  "schema_version": "1.0.0",
+  "serialization_profile": "json-canonical-v1",
+  "visible_through": "2026-01-05T15:00:00+00:00"
+}

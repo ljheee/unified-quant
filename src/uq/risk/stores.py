@@ -83,6 +83,60 @@ class RiskRunStore(_ImmutableRiskManifestStore):
     family = "risk_run"
     directory_name = "runs"
 
+    def publish(self, document: dict[str, Any], payloads: dict[str, dict[str, Any]] | None = None) -> Path:
+        validate_risk_manifest(self.family, dict(document))
+        if payloads is not None:
+            if len(document.get("decision_bindings", [])) != len(payloads):
+                raise ContractError("risk run payload count does not match decision bindings")
+            expected_paths = [f"decision-{index}.json" for index in range(len(payloads))]
+            actual_paths = [entry["path"] for entry in document.get("files", [])]
+            if actual_paths != expected_paths:
+                raise ContractError("risk run decision payload paths are invalid")
+        partition = self._partition(document)
+        partition.mkdir(parents=True, exist_ok=False)
+        try:
+            for path, payload in payloads.items():
+                content = (
+                    json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
+                ).encode("utf-8")
+                validate_risk_file_payload(document, path=path, content=content)
+                tmp = partition / f"{path}.tmp"
+                tmp.write_bytes(content)
+                os.replace(tmp, partition / path)
+            manifest_path = partition / "manifest.json"
+            _atomic_write_json(manifest_path, document)
+        except Exception:
+            shutil.rmtree(partition, ignore_errors=True)
+            raise
+        return partition
+
+    def read(self, generation_id: str) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+        if not _SHA256.fullmatch(generation_id):
+            raise ContractError("invalid risk run generation id")
+        manifest_path = self.directory / f"generation={generation_id}" / "manifest.json"
+        if not manifest_path.is_file():
+            raise ContractError(f"risk run is unavailable: {generation_id}")
+        try:
+            document = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContractError("malformed risk run manifest") from exc
+        validate_risk_manifest(self.family, document)
+        if document["generation_id"] != generation_id:
+            raise ContractError("risk run generation mismatch on read")
+        payloads: dict[str, dict[str, Any]] = {}
+        for file_entry in document.get("files", []):
+            path = file_entry["path"]
+            payload_path = manifest_path.parent / path
+            if not payload_path.is_file():
+                raise ContractError(f"risk run artifact is unavailable: {path}")
+            try:
+                payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ContractError(f"malformed risk run artifact: {path}") from exc
+            validate_risk_file_payload(document, path=path, content=payload_path.read_bytes())
+            payloads[path] = payload
+        return document, payloads
+
 
 class RiskStateStore(_ImmutableRiskManifestStore):
     family = "risk_state"

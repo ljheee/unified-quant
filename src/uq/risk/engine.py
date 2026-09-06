@@ -54,6 +54,22 @@ _RULE_SCOPES = {
     "portfolio_turnover_limit": "portfolio",
     "portfolio_cash_reserve_limit": "portfolio",
 }
+_ORDER_RULE_SCOPES = {
+    "order_notional_limit": "order",
+    "order_participation_limit": "order",
+    "order_insufficient_cash": "order",
+    "order_instrument_halt": "order",
+    "order_limit_price": "order",
+    "order_t1_sellable_quantity": "order",
+}
+_ORDER_ACTIONS = {
+    "order_notional_limit": "resize",
+    "order_participation_limit": "resize",
+    "order_insufficient_cash": "block_order",
+    "order_instrument_halt": "block_order",
+    "order_limit_price": "block_order",
+    "order_t1_sellable_quantity": "resize",
+}
 
 
 def _binding(document: Mapping[str, Any], *, family: str) -> dict[str, str]:
@@ -148,24 +164,29 @@ def _validate_universe_binding(
 
 
 def _validate_policy_document(
-    policy: Mapping[str, Any], as_of_date: str, policy_review: Mapping[str, Any]
-) -> None:
+    policy: Mapping[str, Any],
+    as_of_date: str,
+    policy_review: Mapping[str, Any],
+    *,
+    expected_scope: str = "portfolio",
+) -> tuple[date, Any]:
     validate_risk_manifest("risk_policy", dict(policy))
-    if policy["policy_scope"] != "portfolio":
-        raise ContractError("portfolio risk policy scope mismatch")
+    if policy["policy_scope"] != expected_scope:
+        raise ContractError(f"{expected_scope} risk policy scope mismatch")
     validate_risk_policy_scope_compatibility(policy)
     if policy["activation_status"] != "approved":
-        raise ContractError("portfolio risk policy is not approved")
+        raise ContractError("risk policy is not approved")
     validate_risk_policy_governance(policy, policy_review)
     rule_ids = [rule["rule_id"] for rule in policy["rules"]]
     if len(rule_ids) != len(set(rule_ids)):
-        raise ContractError("portfolio risk policy contains overlapping rule ids")
+        raise ContractError("risk policy contains overlapping rule ids")
     as_of = _require_date(as_of_date, "as_of_date")
     if as_of < date.fromisoformat(policy["effective_from"]):
-        raise ContractError("portfolio risk policy is not yet effective")
+        raise ContractError("risk policy is not yet effective")
     effective_to = policy.get("effective_to")
     if effective_to is not None and as_of > date.fromisoformat(effective_to):
-        raise ContractError("portfolio risk policy has expired")
+        raise ContractError("risk policy has expired")
+    return as_of, policy
 
 
 def _validate_state_binding(
@@ -240,8 +261,215 @@ def _resize_value(
     return threshold
 
 
+def _candidate_metrics(
+    order: Mapping[str, Any],
+    *,
+    holdings: Mapping[str, int],
+    cash: float,
+    pit_volume: float,
+    sellable_shares: int,
+    execution_price: float,
+) -> dict[str, float]:
+    instrument = str(order["instrument"])
+    side = str(order["side"])
+    requested_shares = int(order["shares"])
+    if side == "sell" and requested_shares > int(holdings.get(instrument, 0)):
+        raise ContractError("candidate sell exceeds current holdings")
+    if side == "sell":
+        eligible_shares = min(requested_shares, sellable_shares)
+    else:
+        eligible_shares = requested_shares
+    notional = abs(requested_shares * execution_price)
+    participation = requested_shares / pit_volume if pit_volume > 0.0 else float("inf")
+    return {
+        "order_notional": round(notional, 12),
+        "order_participation": round(participation, 12),
+        "cash_after_order": round(
+            cash + (eligible_shares * execution_price if side == "sell" else -eligible_shares * execution_price),
+            12,
+        ),
+        "sellable_shares": float(sellable_shares),
+    }
+
+
 class RiskEngine:
     """Evaluate an immutable portfolio target-weight partition against one policy."""
+
+    def evaluate_order(
+        self,
+        *,
+        policy: Mapping[str, Any],
+        policy_review: Mapping[str, Any],
+        order: Mapping[str, Any],
+        execution_date: str,
+        execution_price: float,
+        previous_close: float,
+        decision_date_volume: float,
+        holdings: Mapping[str, int],
+        cash: float,
+        suspended: bool,
+        sellable_shares: int,
+        limit_ratio: float,
+    ) -> dict[str, Any]:
+        """Evaluate one deterministic candidate order before submission."""
+        _validate_policy_document(policy, execution_date, policy_review, expected_scope="order")
+        if not isinstance(order, Mapping) or not isinstance(order.get("order_id"), str) or not order["order_id"]:
+            raise ContractError("candidate order must contain a non-empty order_id")
+        if order.get("side") not in {"buy", "sell"}:
+            raise ContractError("candidate order side must be buy or sell")
+        instrument = order.get("instrument")
+        if not isinstance(instrument, str) or not instrument or len(instrument) > 64:
+            raise ContractError("candidate order instrument is invalid")
+        shares = order.get("shares")
+        if not isinstance(shares, int) or isinstance(shares, bool) or shares <= 0:
+            raise ContractError("candidate order shares must be positive")
+        if not isinstance(execution_price, (int, float)) or not math.isfinite(execution_price) or execution_price <= 0.0:
+            raise ContractError("candidate order execution price must be positive")
+        if not isinstance(previous_close, (int, float)) or not math.isfinite(previous_close) or previous_close <= 0.0:
+            raise ContractError("candidate order previous close must be positive")
+        if not isinstance(decision_date_volume, (int, float)) or not math.isfinite(decision_date_volume) or decision_date_volume < 0.0:
+            raise ContractError("decision-date volume must be non-negative")
+        if not isinstance(cash, (int, float)) or not math.isfinite(cash):
+            raise ContractError("available cash must be finite")
+        if not isinstance(sellable_shares, int) or isinstance(sellable_shares, bool) or sellable_shares < 0:
+            raise ContractError("sellable shares must be non-negative")
+        if sellable_shares > holdings.get(instrument, 0):
+            raise ContractError("sellable shares exceed current holdings")
+        if not isinstance(limit_ratio, (int, float)) or not math.isfinite(limit_ratio) or limit_ratio < 0.0:
+            raise ContractError("limit ratio must be non-negative")
+
+        metrics = _candidate_metrics(
+            order,
+            holdings=holdings,
+            cash=cash,
+            pit_volume=decision_date_volume,
+            sellable_shares=sellable_shares,
+            execution_price=float(execution_price),
+        )
+        limit_up_price = previous_close * (1.0 + limit_ratio)
+        limit_down_price = previous_close * (1.0 - limit_ratio)
+        side = str(order["side"])
+        context_failures = {
+            "order_instrument_halt": suspended,
+            "order_limit_price": (
+                execution_price >= limit_up_price if side == "buy" else execution_price <= limit_down_price
+            ),
+            "order_insufficient_cash": side == "buy" and metrics["cash_after_order"] < 0.0,
+            "order_t1_sellable_quantity": side == "sell" and shares > sellable_shares,
+            "order_participation_limit": False,
+            "order_notional_limit": False,
+        }
+        findings: list[dict[str, Any]] = []
+        rules = sorted(policy["rules"], key=lambda rule: (rule["priority"], rule["rule_id"]))
+        for rule in rules:
+            rule_id = rule["rule_id"]
+            if _ORDER_RULE_SCOPES.get(rule_id) != "order":
+                raise ContractError(f"unsupported order risk rule: {rule_id}")
+            if rule["rule_scope"] != "order":
+                raise ContractError(f"order rule has wrong scope: {rule_id}")
+            if rule.get("action") != _ORDER_ACTIONS[rule_id]:
+                raise ContractError(f"order rule action is not normative: {rule_id}")
+            result = "failed" if context_failures[rule_id] else "passed"
+            observed: float | None = metrics.get(rule["metric"])
+            threshold: float | None = rule["threshold"]
+            operator: str | None = rule["operator"]
+            if rule_id == "order_notional_limit":
+                observed = metrics["order_notional"]
+                result = "failed" if metrics["order_notional"] > float(threshold) else "passed"
+            elif rule_id == "order_participation_limit":
+                observed = metrics["order_participation"]
+                if math.isinf(observed):
+                    observed = None
+                result = "failed" if context_failures[rule_id] or metrics["order_participation"] > float(threshold) else "passed"
+            elif rule_id in {"order_instrument_halt", "order_limit_price", "order_insufficient_cash", "order_t1_sellable_quantity"}:
+                observed = None
+                threshold = None
+                operator = None
+            findings.append({
+                "rule_id": rule_id,
+                "observed": observed,
+                "threshold": threshold,
+                "operator": operator,
+                "result": result,
+                "severity": rule["severity"],
+                "action": rule["action"] if result == "failed" else "allow",
+                "state_required": rule["state_required"],
+            })
+        failed = [finding for finding in findings if finding["result"] == "failed"]
+        action = "allow"
+        if failed:
+            failed.sort(key=lambda item: (_ACTION_RANK[item["action"]], _SEVERITY_RANK[item["severity"]], item["rule_id"]))
+            action = failed[0]["action"]
+        constraints: list[dict[str, Any]] = []
+        if action == "resize":
+            for finding in failed:
+                if finding["rule_id"] == "order_t1_sellable_quantity":
+                    constraints.append({
+                        "constraint_type": "allowed_shares",
+                        "value": float(min(int(order["shares"]), sellable_shares)),
+                        "instrument": instrument,
+                    })
+                elif finding["rule_id"] == "order_participation_limit" and finding["threshold"] is not None:
+                    allowed_shares = math.floor(float(decision_date_volume) * float(finding["threshold"]))
+                    if side == "sell":
+                        allowed_shares = min(allowed_shares, sellable_shares, int(order["shares"]))
+                    constraints.append({
+                        "constraint_type": "allowed_shares",
+                        "value": float(max(0, allowed_shares)),
+                        "instrument": instrument,
+                    })
+                elif finding["rule_id"] == "order_notional_limit" and finding["threshold"] is not None:
+                    allowed_shares = math.floor(float(finding["threshold"]) / float(execution_price))
+                    if side == "sell":
+                        allowed_shares = min(allowed_shares, sellable_shares, int(order["shares"]))
+                    constraints.append({
+                        "constraint_type": "allowed_shares",
+                        "value": float(max(0, allowed_shares)),
+                        "instrument": instrument,
+                    })
+            if not constraints:
+                raise ContractError("resize order rule lacks a supported resize target")
+        decision_digest = sha256_json({"action": action, "constraints": constraints, "findings": findings})
+        decision_payload = {
+            "action": action,
+            "constraints": constraints,
+            "findings": findings,
+            "decision_digest": decision_digest,
+        }
+        decision_content = _json_content(decision_payload)
+        decision = {
+            "contract_version": 1,
+            "schema_version": "1.0.0",
+            "decision_scope": "order_submission",
+            "risk_policy_binding": _binding(policy, family="risk_policy_v1"),
+            "risk_state_binding": None,
+            "input_bindings": [
+                {
+                    "family": "candidate_order_v1",
+                    "generation_id": sha256_json(dict(order)),
+                    "manifest_digest_sha256": sha256_json({"candidate_order": dict(order)}),
+                }
+            ],
+            "as_of_date": execution_date,
+            "visible_through": f"{execution_date}T15:00:00+00:00",
+            "findings": findings,
+            "action": action,
+            "constraints": constraints,
+            "decision_digest": decision_digest,
+            "files": [_file_entry("decision.json", decision_content)],
+            "producer": {
+                "producer_code_fingerprint": _CODE_FINGERPRINT,
+                "run_id": _RUN_ID,
+                "created_at": "1970-01-01T00:00:00+00:00",
+            },
+            "serialization_profile": "json-canonical-v1",
+            "generation_id": "0" * 64,
+            "manifest_digest_sha256": "0" * 64,
+        }
+        generation, digest = risk_contract_identities(decision, schema_name="risk_decision")
+        decision["generation_id"] = generation
+        decision["manifest_digest_sha256"] = digest
+        return decision
 
     def evaluate_portfolio(
         self,
@@ -258,7 +486,7 @@ class RiskEngine:
         state_payload: Mapping[str, Any] | None = None,
         previous_target_weights: Mapping[str, float] | None = None,
     ) -> dict[str, Any]:
-        _validate_policy_document(policy, as_of_date, policy_review)
+        _validate_policy_document(policy, as_of_date, policy_review, expected_scope="portfolio")
         _validate_target_weights(target_weights, target_weights_frame)
         _validate_definition_binding(definition, target_weights)
         _validate_universe_binding(universe, definition, target_weights)

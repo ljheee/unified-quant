@@ -51,7 +51,8 @@
       "enum": [
         "strategy",
         "portfolio",
-        "account"
+        "account",
+        "order"
       ]
     },
     "scope_id": {

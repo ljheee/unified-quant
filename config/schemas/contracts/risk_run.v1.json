@@ -62,6 +62,12 @@
         "$ref": "#/$defs/binding"
       }
     },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    },
     "as_of_date": {
       "$ref": "#/$defs/date"
     },

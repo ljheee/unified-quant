@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "kind": "golden_vectors",
+      "path": "evidence/risk/phase-2/golden/order-decision.json"
+    },
+    {
+      "kind": "phase_record",
+      "path": "evidence/risk/phase-2/phase-record.json"
+    }
+  ],
+  "evidence_version": 1,
+  "layer": "risk_control_plane",
+  "phase": "2"
+}
