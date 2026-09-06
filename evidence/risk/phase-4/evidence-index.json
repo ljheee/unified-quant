@@ -1,0 +1,25 @@
+{
+  "phase": "risk-phase-4",
+  "records": [
+    {
+      "path": "evidence/risk/phase-4/phase-record.json",
+      "sha256": "a021d72eb4b101f372be8b295ed689c2477085780465e83cb31ee9947a384ab9"
+    },
+    {
+      "path": "evidence/risk/phase-4/gate-reports/final-head/gate-report.json",
+      "sha256": "021e3fe4328b8bcf074dcce8231fcab8614bcf47b22daadea65a9c34ce8d5826"
+    },
+    {
+      "path": "evidence/risk/phase-4/gate-reports/final-head/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/risk/phase-4/gate-reports/final-head/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/risk/phase-4/research_run_request_v2-valid.json",
+      "sha256": "90d7d1ccd082a731aa2d827251d391cf06ebd3ced0b86fab92c14762753f0cdf"
+    }
+  ]
+}

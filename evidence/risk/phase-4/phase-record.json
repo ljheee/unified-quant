@@ -1,0 +1,70 @@
+{
+  "phase": "risk-phase-4",
+  "title": "Research Chain Integration",
+  "status": "implemented",
+  "gate_exit": "pending-release-reconciliation",
+  "implementation_commit": "02992e1ea1ef91f06beee46678df962d64ab3220",
+  "acceptance": [
+    {
+      "id": "RCP4a",
+      "test_id": "test_research_request_v1_stage_plan_is_frozen",
+      "status": "implemented"
+    },
+    {
+      "id": "RCP4b",
+      "test_id": "test_research_request_v2_requires_risk_decision",
+      "status": "implemented"
+    },
+    {
+      "id": "RCP4c",
+      "test_id": "test_research_stage_stops_on_rejected_decision",
+      "status": "implemented"
+    },
+    {
+      "id": "RCP4d",
+      "test_id": "test_research_runner_cannot_sign_risk_reviews",
+      "status": "implemented"
+    }
+  ],
+  "evidence": {
+    "gate_report": "evidence/risk/phase-4/gate-reports/final-head/gate-report.json",
+    "requirements_lock": "evidence/risk/phase-4/gate-reports/final-head/requirements.lock.txt",
+    "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+    "fixture": "evidence/risk/phase-4/research_run_request_v2-valid.json",
+    "test_files": [
+      "tests/test_risk_control_plane_phase4.py",
+      "tests/test_research_chain_phase5.py"
+    ]
+  },
+  "gate_summary": {
+    "command": "uv sync --locked --extra dev --extra real --extra qlib && uv run --no-sync python -m pytest",
+    "extras": [
+      "dev",
+      "real",
+      "qlib"
+    ],
+    "test_result": "passed",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "utc_timestamp": "2026-09-06T16:11:47.682315+00:00",
+    "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1"
+  },
+  "artifacts": [
+    {
+      "path": "evidence/risk/phase-4/gate-reports/final-head/gate-report.json",
+      "sha256": "021e3fe4328b8bcf074dcce8231fcab8614bcf47b22daadea65a9c34ce8d5826"
+    },
+    {
+      "path": "evidence/risk/phase-4/gate-reports/final-head/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/risk/phase-4/gate-reports/final-head/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/risk/phase-4/research_run_request_v2-valid.json",
+      "sha256": "90d7d1ccd082a731aa2d827251d391cf06ebd3ced0b86fab92c14762753f0cdf"
+    }
+  ]
+}
