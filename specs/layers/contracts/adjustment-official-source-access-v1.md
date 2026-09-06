@@ -11,7 +11,7 @@ SZSE archived historical quote API
 - The response is a JSON array. Its first element has `metadata` and `data`.
 - Relevant fields are `jyrq` (trade date), `zqdm` (instrument code), `qss` (prior close), and `zd` (close).
 - Observed archive cutoff in the 2026-08-24 response metadata was `2025-07-31`; later record dates returned no data.
-- Captured responses live under `.gate/evidence/szse-<code>.json`; provenance fixtures record each response's SHA-256.
+- Captured formula-input responses live under `.gate/evidence/szse-<code>-window.json` (record date), official ex-date responses live under `.gate/evidence/szse-<code>-ex-date.json`; provenance fixtures record each response's SHA-256.
 
 SSE public historical access
 

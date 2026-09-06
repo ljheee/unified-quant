@@ -9,13 +9,13 @@
       "record_date": "2024-06-18",
       "ex_date": "2024-06-19",
       "inputs": {
-        "pre_close": 4.08,
+        "pre_close": 4.14,
         "cash_per_ten": 0.3,
         "bonus_per_ten": 0.0,
         "rights_per_ten": 0.0,
         "rights_price": 0.0
       },
-      "expected_ex_right_price": 4.05,
+      "expected_ex_right_price": 4.11,
       "tolerance_abs": 0.005,
       "event_evidence": {
         "kind": "issuer-announcement",
@@ -30,11 +30,11 @@
       "pre_close_evidence": {
         "kind": "exchange-reference",
         "publisher": "Shenzhen Stock Exchange market data",
-        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=000725&txtBeginDate=20240619&txtEndDate=20240619",
-        "publication_date": "2024-06-19",
-        "quoted_locator": "SZSE ex-date 2024-06-19 record: prior close(qss)=4.11, close(ss)=4.11; qss is the direct official reference price",
-        "file_sha256": "9152a61baae6b0437dd4d4b5184a8dcb140e8b1f295dc1cf82ef90c2e10fb09d",
-        "retrieved_at_utc": "2026-09-06T02:40:00Z",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=000725&txtBeginDate=20240618&txtEndDate=20240618",
+        "publication_date": "2024-06-18",
+        "quoted_locator": "SZSE record-date 2024-06-18 market record: close(ss)=4.14; this close is the formula input and its ex-date prior close(qss)=4.11 is the direct official reference price",
+        "file_sha256": "38f66fd318a784c1165a43c8e71f1bb0344972d019fe915959579b674085ed07",
+        "retrieved_at_utc": "2026-09-06T02:39:00Z",
         "license_or_terms": "public exchange market data"
       },
       "reference_price_evidence": {
@@ -55,13 +55,13 @@
       "record_date": "2024-07-17",
       "ex_date": "2024-07-18",
       "inputs": {
-        "pre_close": 32.7,
+        "pre_close": 31.14,
         "cash_per_ten": 0.0,
         "bonus_per_ten": 2.993115,
         "rights_per_ten": 0.0,
         "rights_price": 0.0
       },
-      "expected_ex_right_price": 25.1696,
+      "expected_ex_right_price": 23.97,
       "tolerance_abs": 0.005,
       "event_evidence": {
         "kind": "issuer-announcement",
@@ -76,11 +76,11 @@
       "pre_close_evidence": {
         "kind": "exchange-reference",
         "publisher": "Shenzhen Stock Exchange market data",
-        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=003026&txtBeginDate=20240718&txtEndDate=20240718",
-        "publication_date": "2024-07-18",
-        "quoted_locator": "SZSE ex-date 2024-07-18 record: prior close(qss)=23.97, close(ss)=24.93; qss is the direct official reference price",
-        "file_sha256": "7cc8dc152c0cbf763e1e060026c23d453a57a70bae5c6f5d7780250e4aa753c5",
-        "retrieved_at_utc": "2026-09-06T02:40:00Z",
+        "locator": "https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=003026&txtBeginDate=20240717&txtEndDate=20240717",
+        "publication_date": "2024-07-17",
+        "quoted_locator": "SZSE record-date 2024-07-17 market record: close(ss)=31.14; this close is the formula input and its ex-date prior close(qss)=23.97 is the direct official reference price",
+        "file_sha256": "df6c8334938b24083794c0c4b76be645a23c344b813ee355d17eb3bee8e62410",
+        "retrieved_at_utc": "2026-09-06T02:39:00Z",
         "license_or_terms": "public exchange market data"
       },
       "reference_price_evidence": {
