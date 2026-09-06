@@ -1,0 +1,190 @@
+{
+  "action": null,
+  "events": [
+    {
+      "as_of_date": "2026-01-05",
+      "contract_version": 1,
+      "decision_generation_id": null,
+      "event_class": "risk_triggered",
+      "event_id": "d9d4b77cf1bdb01c8d58fb9a3db0acc848186b8d48e4719759920bba854f7ee6",
+      "event_sequence_number": 1,
+      "generation_id": "2e398d3c7bdae7a2af786410f83ce894af9b8791a7c6a996234519814379cc9d",
+      "manifest_digest_sha256": "76f0016314c11ee8d1c5e0fdc1685f0bc156b126715acf1884306d210d0d36a0",
+      "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
+      "producer": {
+        "created_at": "1970-01-01T00:00:00+00:00",
+        "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
+        "run_id": "00000000-0000-0000-0000-000000000001"
+      },
+      "reason": "strategy_drawdown_trigger triggered at 0.25",
+      "schema_version": "1.0.0",
+      "scope_id": "strategy-loss-control",
+      "scope_type": "strategy",
+      "serialization_profile": "json-canonical-v1",
+      "state_generation_id": "8ba6b257c9ba8cd7f8fae2d5ebaf865da6848c72938d6622af159654e9a84adc",
+      "visible_through": "2026-01-05T16:00:00+00:00"
+    },
+    {
+      "as_of_date": "2026-01-05",
+      "contract_version": 1,
+      "decision_generation_id": null,
+      "event_class": "state_snapshot_published",
+      "event_id": "a8f9baab1c7b951e257ecc494dce1f28ec4371fa16bf9736a2037485b79f4349",
+      "event_sequence_number": 2,
+      "generation_id": "bf1e160f845868ba1715d2091e14e94be6e9de2307bee1bb8d1959feae5d3cb1",
+      "manifest_digest_sha256": "dace1ef247ea7276a5b6de1d59c7b0e230252ed653adcf28e656ec2dcbc3da50",
+      "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
+      "producer": {
+        "created_at": "1970-01-01T00:00:00+00:00",
+        "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
+        "run_id": "00000000-0000-0000-0000-000000000001"
+      },
+      "reason": "state 8ba6b257c9ba8cd7f8fae2d5ebaf865da6848c72938d6622af159654e9a84adc published",
+      "schema_version": "1.0.0",
+      "scope_id": "strategy-loss-control",
+      "scope_type": "strategy",
+      "serialization_profile": "json-canonical-v1",
+      "state_generation_id": "8ba6b257c9ba8cd7f8fae2d5ebaf865da6848c72938d6622af159654e9a84adc",
+      "visible_through": "2026-01-05T16:00:00+00:00"
+    },
+    {
+      "as_of_date": "2026-01-06",
+      "contract_version": 1,
+      "decision_generation_id": null,
+      "event_class": "state_snapshot_published",
+      "event_id": "f5694ac8bd14bedef215a6a13423aa8e57fde3c756a65ee6f6e30485b53dc64c",
+      "event_sequence_number": 3,
+      "generation_id": "d5b7dfba4635636b0fcd91024934b86bc1cab207f099fcf73a47d998c034bcd2",
+      "manifest_digest_sha256": "859415b8fa1cd30829579ca1dd401703b00c2acbd73c8963f1024c02aff0e86d",
+      "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
+      "producer": {
+        "created_at": "1970-01-01T00:00:00+00:00",
+        "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
+        "run_id": "00000000-0000-0000-0000-000000000001"
+      },
+      "reason": "state 2354013e18a92ba671dc626f543f45ba8a2194a41b96bf6819473204cb8f0b4b published",
+      "schema_version": "1.0.0",
+      "scope_id": "strategy-loss-control",
+      "scope_type": "strategy",
+      "serialization_profile": "json-canonical-v1",
+      "state_generation_id": "2354013e18a92ba671dc626f543f45ba8a2194a41b96bf6819473204cb8f0b4b",
+      "visible_through": "2026-01-06T16:00:00+00:00"
+    },
+    {
+      "as_of_date": "2026-01-07",
+      "contract_version": 1,
+      "decision_generation_id": null,
+      "event_class": "risk_cleared",
+      "event_id": "5635a16d413a2bce744b4a1f8c21a5ecc935b22337c4488a7113979e83d4799e",
+      "event_sequence_number": 4,
+      "generation_id": "4634fc5df7f5952a2b50ebac414190b0d053706aeb3ac4cd5500eb96bc425a93",
+      "manifest_digest_sha256": "302d5ec02845ee502497c2cb01ae5633fac9ef3065dd053d5da9a559287fc67b",
+      "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
+      "producer": {
+        "created_at": "1970-01-01T00:00:00+00:00",
+        "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
+        "run_id": "00000000-0000-0000-0000-000000000001"
+      },
+      "reason": "strategy_drawdown_trigger cleared at 0.09",
+      "schema_version": "1.0.0",
+      "scope_id": "strategy-loss-control",
+      "scope_type": "strategy",
+      "serialization_profile": "json-canonical-v1",
+      "state_generation_id": "20ae45b80a36b7d0e4fc634456ee5a92db45d553fd6aff8ba70b62074a4c8f41",
+      "visible_through": "2026-01-07T16:00:00+00:00"
+    },
+    {
+      "as_of_date": "2026-01-07",
+      "contract_version": 1,
+      "decision_generation_id": null,
+      "event_class": "state_snapshot_published",
+      "event_id": "f46edf69ef307d2237faf61eef6ccf4da77caaef07ad3ea78c5a3d489be702cc",
+      "event_sequence_number": 5,
+      "generation_id": "b3d718c8ba0a75dc560fce95970656df1c47c91f2ebf31ba101304f3dfa651f5",
+      "manifest_digest_sha256": "8d1fb3b08636ae6ab657727f340e20492ae5762f6ab460543196b364d93319b5",
+      "policy_generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
+      "producer": {
+        "created_at": "1970-01-01T00:00:00+00:00",
+        "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
+        "run_id": "00000000-0000-0000-0000-000000000001"
+      },
+      "reason": "state 20ae45b80a36b7d0e4fc634456ee5a92db45d553fd6aff8ba70b62074a4c8f41 published",
+      "schema_version": "1.0.0",
+      "scope_id": "strategy-loss-control",
+      "scope_type": "strategy",
+      "serialization_profile": "json-canonical-v1",
+      "state_generation_id": "20ae45b80a36b7d0e4fc634456ee5a92db45d553fd6aff8ba70b62074a4c8f41",
+      "visible_through": "2026-01-07T16:00:00+00:00"
+    }
+  ],
+  "exception_applied": false,
+  "exception_expired": false,
+  "state": {
+    "as_of_date": "2026-01-07",
+    "calendar_binding": {
+      "family": "trading_calendar_v1",
+      "generation_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "manifest_digest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "contract_version": 1,
+    "files": [
+      {
+        "byte_size": 426,
+        "path": "state.json",
+        "serialization_profile": "json-canonical-v1",
+        "sha256": "ad407963f4f29f5c439ec060f67a653833a9b1f75471884a5ceae18d9e09dbbb"
+      }
+    ],
+    "generation_id": "20ae45b80a36b7d0e4fc634456ee5a92db45d553fd6aff8ba70b62074a4c8f41",
+    "manifest_digest_sha256": "1a4a77d8d0bec911c6f72958a59da2357b31fa5fadac0a8158beac8870cd49a4",
+    "metric_names": [
+      "strategy_drawdown"
+    ],
+    "previous_state_generation_id": "2354013e18a92ba671dc626f543f45ba8a2194a41b96bf6819473204cb8f0b4b",
+    "producer": {
+      "created_at": "1970-01-01T00:00:00+00:00",
+      "producer_code_fingerprint": "37083c22b91cbb91f0b81905ece5ce76e5a5674bdccdc7e2930ee751a9e354a2",
+      "run_id": "00000000-0000-0000-0000-000000000001"
+    },
+    "schema_version": "1.0.0",
+    "scope_id": "strategy-loss-control",
+    "serialization_profile": "json-canonical-v1",
+    "state_scope_type": "strategy",
+    "state_status": "updated",
+    "supersedes_state_generation_id": null,
+    "upstream_bindings": [
+      {
+        "family": "risk_policy_v1",
+        "generation_id": "c271fcada2ad0902f2aaea8fbc6ef948e2a60672266a910c9c4cbb6e54538d9a",
+        "manifest_digest_sha256": "9be8fd0400ad2915e8636016838b9d45968739581e0ee29751b8ba88f8b047fc"
+      },
+      {
+        "family": "strategy_observation_v1",
+        "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "manifest_digest_sha256": "0ff53585461e2d7770776317a9bdda8c8990d5f3cd5f14fefc24b2008a62eccf"
+      },
+      {
+        "family": "risk_state_v1",
+        "generation_id": "2354013e18a92ba671dc626f543f45ba8a2194a41b96bf6819473204cb8f0b4b",
+        "manifest_digest_sha256": "25bc327977d40f88c3b78df5cc74712f755bec534f6322548d9497332e556948"
+      }
+    ],
+    "visible_through": "2026-01-07T16:00:00+00:00"
+  },
+  "state_payload": {
+    "active": false,
+    "calendar_binding": {
+      "family": "trading_calendar_v1",
+      "generation_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "manifest_digest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "consecutive_trigger_days": 0,
+    "cooldown_until_date": "2026-01-07",
+    "last_trigger_date": "2026-01-05",
+    "metrics": {
+      "strategy_drawdown": 0.09
+    },
+    "triggered_rule_id": "strategy_drawdown_trigger"
+  },
+  "transition_semantics": null
+}

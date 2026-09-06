@@ -1,0 +1,36 @@
+{
+  "layer": "risk_control_plane",
+  "phase": "3",
+  "status": "exited",
+  "entry_criteria": "passed",
+  "exit_criteria": "passed",
+  "blocked_by": [],
+  "test_ids": [
+    "test_risk_state_transition_is_deterministic",
+    "test_risk_hysteresis_and_cooldown_are_exact",
+    "test_risk_late_visibility_creates_new_generation",
+    "test_risk_exception_expiry_restores_enforcement",
+    "test_risk_missing_de_risk_contract_fails_closed"
+  ],
+  "fixtures": [
+    "tests/test_risk_control_plane_phase3.py"
+  ],
+  "golden_vectors": [
+    "evidence/risk/phase-3/golden/state-sequence.json"
+  ],
+  "evidence_paths": [
+    "evidence/risk/phase-3"
+  ],
+  "remote_matrix": {
+    "status": "not_applicable_to_phase_3"
+  },
+  "local_gate": {
+    "commit_bound": "c8d4b3e808da4b8834528ac3bbb5a8c12eefe2b4",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "status": "passed",
+    "test_result": "passed",
+    "utc_timestamp": "2026-09-06T14:55:21.347469+00:00"
+  },
+  "updated_at_utc": "2026-09-06T14:57:16.882833+00:00"
+}

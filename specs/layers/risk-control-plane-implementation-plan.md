@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.6 final-CR hardened plan; Phases 0–2 exited with preserved local gate evidence**
+Status: **v0.2.7 Phase 3 implemented with preserved local gate evidence**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -11,9 +11,9 @@ does not authorize production execution, real-time streaming, broker
 connectivity, or a generic rules engine.
 
 The source spec is approved. Activation condition 5 is recorded in
-`evidence/risk/activation.json`. Phase 0 and Phase 1 are exited with local
-gate evidence. Phase 2 is exited with preserved local gate evidence. Phase 3
-remains gated on Phase 2 exit and its own acceptance expansion.
+`evidence/risk/activation.json`. Phase 0–2 are exited with preserved local gate evidence. Phase 3 is
+implemented with deterministic state transitions and local gate evidence;
+release reconciliation remains Phase 5 work.
 
 ## 1. Scope
 
@@ -316,11 +316,11 @@ it must become `passed` with evidence before the phase exits.
 | RCP2f | 2 | `test_backtest_result_v1_contract_remains_frozen` | existing backtest contract tests | implemented |
 | RCP2g | 2 | `test_risk_rejected_candidate_is_not_added_to_frozen_fills` | `evidence/risk/phase-2/frozen-fills.json` | implemented |
 | RCP2h | 2 | `test_duplicate_order_id_fails_closed` | `tests/test_risk_control_plane_phase2.py` | implemented |
-| RCP3a | 3 | `test_risk_state_transition_is_deterministic` | `evidence/risk/phase-3/golden/` | pending |
-| RCP3b | 3 | `test_risk_hysteresis_and_cooldown_are_exact` | `evidence/risk/phase-3/golden/` | pending |
-| RCP3c | 3 | `test_risk_late_visibility_creates_new_generation` | `evidence/risk/phase-3/` | pending |
-| RCP3d | 3 | `test_risk_exception_expiry_restores_enforcement` | `evidence/risk/phase-3/` | pending |
-| RCP3e | 3 | `test_risk_missing_de_risk_contract_fails_closed` | `config/schemas/fixtures/risk/de-risk-negative.json` | pending |
+| RCP3a | 3 | `test_risk_state_transition_is_deterministic` | `evidence/risk/phase-3/golden/state-sequence.json` | implemented |
+| RCP3b | 3 | `test_risk_hysteresis_and_cooldown_are_exact` | `tests/test_risk_control_plane_phase3.py` | implemented |
+| RCP3c | 3 | `test_risk_late_visibility_creates_new_generation` | `tests/test_risk_control_plane_phase3.py` | implemented |
+| RCP3d | 3 | `test_risk_exception_expiry_restores_enforcement` | `tests/test_risk_control_plane_phase3.py` | implemented |
+| RCP3e | 3 | `test_risk_missing_de_risk_contract_fails_closed` | `tests/test_risk_control_plane_phase3.py`; `config/schemas/fixtures/risk/risk_de_risk_contract-negative.json` | implemented |
 | RCP4a | 4 | `test_research_request_v1_stage_plan_is_frozen` | existing research chain tests | pending |
 | RCP4b | 4 | `test_research_request_v2_requires_risk_decision` | `evidence/risk/phase-4/` | pending |
 | RCP4c | 4 | `test_research_stage_stops_on_rejected_decision` | `evidence/risk/phase-4/` | pending |

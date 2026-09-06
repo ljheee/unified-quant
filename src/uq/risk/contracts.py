@@ -233,9 +233,13 @@ def build_risk_review_decision(
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-    if review_type not in {"risk_policy_activation", "risk_exception_grant"}:
+    if review_type not in {
+        "risk_policy_activation",
+        "risk_exception_grant",
+        "risk_de_risk_contract_activation",
+    }:
         raise ContractError("invalid risk review type")
-    if schema_name not in {"risk_policy", "risk_exception"}:
+    if schema_name not in {"risk_policy", "risk_exception", "risk_de_risk_contract"}:
         raise ContractError("invalid risk review subject schema")
     if review_status not in {"approved", "rejected"}:
         raise ContractError("invalid risk review status")
@@ -407,6 +411,94 @@ def risk_policy_draft_subject(payload: Mapping[str, Any]) -> dict[str, Any]:
     return draft
 
 
+def risk_de_risk_contract_draft_subject(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the canonical zero-binding de-risk contract manifest signed by a reviewer."""
+    draft = dict(payload)
+    draft["review_binding"] = {
+        "family": "risk_review_decision_v1",
+        "generation_id": "0" * 64,
+        "manifest_digest_sha256": "0" * 64,
+    }
+    draft["generation_id"] = "0" * 64
+    draft["manifest_digest_sha256"] = "0" * 64
+    generation, digest = risk_contract_identities(draft, schema_name="risk_de_risk_contract")
+    draft["generation_id"] = generation
+    draft["manifest_digest_sha256"] = digest
+    return draft
+
+
+def risk_exception_draft_subject(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the canonical zero-binding exception manifest signed by a reviewer."""
+    draft = dict(payload)
+    draft["review_binding"] = {
+        "family": "risk_review_decision_v1",
+        "generation_id": "0" * 64,
+        "manifest_digest_sha256": "0" * 64,
+    }
+    draft["generation_id"] = "0" * 64
+    draft["manifest_digest_sha256"] = "0" * 64
+    generation, digest = risk_contract_identities(draft, schema_name="risk_exception")
+    draft["generation_id"] = generation
+    draft["manifest_digest_sha256"] = digest
+    return draft
+
+
+def validate_risk_de_risk_contract_governance(
+    payload: Mapping[str, Any], review_document: Mapping[str, Any]
+) -> None:
+    """Validate an approved de-risk transition against a signed external review."""
+    if payload.get("status") != "approved":
+        return
+    review = payload.get("review_binding")
+    if not isinstance(review, dict):
+        raise ContractError("approved risk de-risk contract lacks review binding")
+    if review.get("family") != "risk_review_decision_v1":
+        raise ContractError("risk de-risk contract binds the wrong review family")
+    subject = risk_de_risk_contract_draft_subject(payload)
+    verify_risk_review_decision(
+        review_document,
+        expected_review_type="risk_de_risk_contract_activation",
+        expected_subject_generation_id=subject["generation_id"],
+        expected_subject_manifest_digest_sha256=subject["manifest_digest_sha256"],
+        expected_subject_content_sha256=risk_stable_content_id(
+            subject, schema_name="risk_de_risk_contract"
+        ),
+    )
+    if (
+        review_document["generation_id"] != review["generation_id"]
+        or review_document["manifest_digest_sha256"] != review["manifest_digest_sha256"]
+    ):
+        raise ContractError("risk de-risk contract review binding mismatch")
+
+
+def validate_risk_exception_governance(
+    payload: Mapping[str, Any], review_document: Mapping[str, Any]
+) -> None:
+    """Validate an approved exception against a signed external review."""
+    if payload.get("status") != "approved":
+        return
+    review = payload.get("review_binding")
+    if not isinstance(review, dict):
+        raise ContractError("approved risk exception lacks review binding")
+    if review.get("family") != "risk_review_decision_v1":
+        raise ContractError("risk exception binds the wrong review family")
+    subject = risk_exception_draft_subject(payload)
+    verify_risk_review_decision(
+        review_document,
+        expected_review_type="risk_exception_grant",
+        expected_subject_generation_id=subject["generation_id"],
+        expected_subject_manifest_digest_sha256=subject["manifest_digest_sha256"],
+        expected_subject_content_sha256=risk_stable_content_id(
+            subject, schema_name="risk_exception"
+        ),
+    )
+    if (
+        review_document["generation_id"] != review["generation_id"]
+        or review_document["manifest_digest_sha256"] != review["manifest_digest_sha256"]
+    ):
+        raise ContractError("risk exception review binding mismatch")
+
+
 def validate_risk_policy_governance(
     payload: Mapping[str, Any], review_document: Mapping[str, Any]
 ) -> None:
@@ -456,4 +548,10 @@ def validate_risk_manifest(schema_name: str, payload: dict[str, Any]) -> tuple[s
     _validate_run_local_metadata(payload, schema_name=schema_name)
     if schema_name == "risk_policy":
         _validate_policy_governance(payload)
+    if schema_name == "risk_de_risk_contract" and payload["status"] == "approved":
+        if not payload.get("review_binding"):
+            raise ContractError("approved risk de-risk contract lacks review binding")
+    if schema_name == "risk_exception" and payload["status"] == "approved":
+        if not payload.get("review_binding"):
+            raise ContractError("approved risk exception lacks review binding")
     return generation, digest

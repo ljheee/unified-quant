@@ -32,7 +32,8 @@
     "review_type": {
       "enum": [
         "risk_policy_activation",
-        "risk_exception_grant"
+        "risk_exception_grant",
+        "risk_de_risk_contract_activation"
       ]
     },
     "subject_generation_id": {

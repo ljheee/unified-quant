@@ -13,7 +13,8 @@
       "valid_to": "2027-08-31",
       "review_types": [
         "risk_policy_activation",
-        "risk_exception_grant"
+        "risk_exception_grant",
+        "risk_de_risk_contract_activation"
       ]
     }
   ]

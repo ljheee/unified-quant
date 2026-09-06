@@ -14,6 +14,7 @@ from .stores import (
     RiskStateStore,
 )
 from .adapter import PortfolioPublicationRiskGate
+from .state import evaluate_strategy_state
 
 __all__ = [
     "RISK_CONTRACT_NAMES",
@@ -24,6 +25,7 @@ __all__ = [
     "RiskPolicyStore",
     "RiskRunStore",
     "RiskStateStore",
+    "evaluate_strategy_state",
     "risk_contract_identities",
     "validate_risk_contract",
 ]
