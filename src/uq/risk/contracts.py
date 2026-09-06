@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, datetime
-import hashlib
 import re
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -21,7 +20,6 @@ from ..errors import ContractError
 _ROOT = Path(__file__).resolve().parents[3]
 _CONTRACT_DIR = _ROOT / "config" / "schemas" / "contracts"
 _ANCHOR_PATH = _ROOT / "config" / "risk-review-trust-anchor.v1.json"
-_FIXTURES_DIR = _ROOT / "config" / "schemas" / "fixtures" / "risk"
 
 RISK_CONTRACT_NAMES = {
     "risk_policy": "risk_policy.v1.json",
@@ -268,6 +266,8 @@ def build_risk_review_decision(
         "errors": errors,
         "warnings": warnings,
     }
+    if review_status == "approved" and errors:
+        raise ContractError("approved risk review contains errors")
     try:
         key = serialization.load_pem_private_key(Path(private_key_pem).read_bytes(), password=None)
     except (OSError, ValueError, TypeError) as exc:

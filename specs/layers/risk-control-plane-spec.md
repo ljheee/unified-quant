@@ -467,7 +467,7 @@ extended.
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | always `1` in this contract |
+| `schema_version` | always `1.0.0` in this contract |
 | `review_type` | `risk_policy_activation` or `risk_exception_grant` |
 | `subject_generation_id` | generation of the reviewed policy or exception manifest |
 | `subject_manifest_digest_sha256` | digest of that exact manifest |
