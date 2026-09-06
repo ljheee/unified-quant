@@ -207,8 +207,8 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
     assert len(risk_run["decision_bindings"]) == 1
     stored_run, payloads = gate.run_store.read(risk_run["generation_id"])
     assert len(payloads) == 1
-    assert payloads["decision-0.json"]["action"] == "block_order"
-    assert payloads["decision-0.json"]["decision_digest"] == decision_digest(payloads)
+    assert payloads["decision-0.json"]["decision"]["action"] == "block_order"
+    assert payloads["decision-0.json"]["decision"]["decision_digest"] == decision_digest(payloads)
     verified_run, _ = gate.read_verified_risk_run(risk_run["generation_id"])
     assert len(verified_run["event_bindings"]) == 1
     fills = artifacts["fills"]
@@ -221,7 +221,7 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
 
 
 def decision_digest(payloads: dict) -> str:
-    return payloads["decision-0.json"]["decision_digest"]
+    return payloads["decision-0.json"]["decision"]["decision_digest"]
 
 
 def test_backtest_result_v1_contract_remains_frozen():
@@ -238,10 +238,11 @@ def test_risk_run_tampering_rejects_read(tmp_path):
     root = tmp_path / "store"
     gate = PortfolioPublicationRiskGate(root)
     policy, review = _order_policy()
+    order = {"order_id": "order-1", "instrument": "A", "side": "buy", "shares": 100}
     decision = gate.evaluate_order(
         policy=policy,
         policy_review=review,
-        order={"order_id": "order-1", "instrument": "A", "side": "buy", "shares": 100},
+        order=order,
         execution_date="2026-01-05",
         execution_price=10.0,
         previous_close=10.0,
@@ -318,35 +319,29 @@ def test_risk_run_tampering_rejects_read(tmp_path):
         "decision_digest": decision["decision_digest"],
         "findings": decision["findings"],
     })
+    run["generation_id"], run["manifest_digest_sha256"] = risk_contract_identities(
+        run, schema_name="risk_run"
+    )
+    payload = {
+        "candidate_order": order,
+        "decision": {
+            "action": decision["action"],
+            "constraints": decision["constraints"],
+            "decision_digest": decision["decision_digest"],
+            "findings": decision["findings"],
+        },
+    }
+    encoded = (json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
     run["files"] = [{
         "path": "decision-0.json",
-        "sha256": hashlib.sha256((
-            json.dumps({
-                "action": decision["action"],
-                "constraints": decision["constraints"],
-                "decision_digest": decision["decision_digest"],
-                "findings": decision["findings"],
-            }, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
-        ).encode("utf-8")).hexdigest(),
-        "byte_size": len((
-            json.dumps({
-                "action": decision["action"],
-                "constraints": decision["constraints"],
-                "decision_digest": decision["decision_digest"],
-                "findings": decision["findings"],
-            }, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
-        ).encode("utf-8")),
+        "sha256": hashlib.sha256(encoded).hexdigest(),
+        "byte_size": len(encoded),
         "serialization_profile": "json-canonical-v1",
     }]
     run["generation_id"], run["manifest_digest_sha256"] = risk_contract_identities(
         run, schema_name="risk_run"
     )
-    gate.run_store.publish(run, {"decision-0.json": {
-        "action": decision["action"],
-        "constraints": decision["constraints"],
-        "decision_digest": decision["decision_digest"],
-        "findings": decision["findings"],
-    }})
+    gate.run_store.publish(run, {"decision-0.json": payload})
     assert gate.read_verified_risk_run(run["generation_id"])
     decision_manifest_path = next((root / "risk" / "decisions").glob("**/manifest.json"))
     tampered = json.loads(decision_manifest_path.read_text())

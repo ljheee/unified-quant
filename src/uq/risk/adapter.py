@@ -23,6 +23,30 @@ _BACKTEST_GATE_CODE_FINGERPRINT = hashlib.sha256(
 ).hexdigest()
 
 
+def _candidate_binding(order: Mapping[str, Any]) -> dict[str, str]:
+    generation = sha256_json(dict(order))
+    return {
+        "family": "candidate_order_v1",
+        "generation_id": generation,
+        "manifest_digest_sha256": sha256_json({
+            "generation_id": generation,
+            "candidate_order": dict(order),
+        }),
+    }
+
+
+def _content_binding(document: Mapping[str, Any], *, family: str) -> dict[str, str]:
+    generation = sha256_json(dict(document))
+    return {
+        "family": family,
+        "generation_id": generation,
+        "manifest_digest_sha256": sha256_json({
+            "generation_id": generation,
+            "consumer": dict(document),
+        }),
+    }
+
+
 class PortfolioPublicationRiskGate:
     """Evaluate target weights and persist immutable risk evidence before publication."""
 
@@ -171,7 +195,9 @@ class PortfolioPublicationRiskGate:
 
     def run_with_risk_gate(self, engine: Any, *, config: Mapping[str, Any], policy: Mapping[str, Any], policy_review: Mapping[str, Any], **kwargs: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
         decisions: list[dict[str, Any]] = []
+        candidate_orders: list[dict[str, Any]] = []
         event_bindings: list[dict[str, str]] = []
+        self._seen_order_ids.clear()
 
         def gate(candidate: Mapping[str, Any], context: Mapping[str, Any]) -> dict[str, Any]:
             decision = self.evaluate_order(
@@ -191,6 +217,7 @@ class PortfolioPublicationRiskGate:
                 slippage_bps=context["slippage_bps"],
             )
             decisions.append(decision)
+            candidate_orders.append(dict(candidate))
             self.decision_store.publish(decision, {
                 "action": decision["action"],
                 "constraints": decision["constraints"],
@@ -230,10 +257,13 @@ class PortfolioPublicationRiskGate:
 
         payloads = {
             f"decision-{index}.json": {
-                "action": decision["action"],
-                "constraints": decision["constraints"],
-                "decision_digest": decision["decision_digest"],
-                "findings": decision["findings"],
+                "candidate_order": candidate_orders[index],
+                "decision": {
+                    "action": decision["action"],
+                    "constraints": decision["constraints"],
+                    "decision_digest": decision["decision_digest"],
+                    "findings": decision["findings"],
+                },
             }
             for index, decision in enumerate(decisions)
         }
@@ -243,7 +273,7 @@ class PortfolioPublicationRiskGate:
             "run_scope": "order_submission",
             "risk_policy_binding": make_binding(policy, family="risk_policy_v1"),
             "risk_state_binding": None,
-            "consumer_binding": make_binding(config, family="backtest_config_v1"),
+            "consumer_binding": _content_binding(config, family="backtest_config_v1"),
             "decision_bindings": [make_binding(decision, family="risk_decision_v1") for decision in decisions],
             "event_bindings": event_bindings,
             "as_of_date": config["start_date"],
@@ -281,13 +311,20 @@ class PortfolioPublicationRiskGate:
             if binding != make_binding(decision, family="risk_decision_v1"):
                 raise ContractError(f"risk run decision binding mismatch at index {index}")
             expected_payload = {
-                "action": decision["action"],
-                "constraints": decision["constraints"],
-                "decision_digest": decision["decision_digest"],
-                "findings": decision["findings"],
+                "decision": {
+                    "action": decision["action"],
+                    "constraints": decision["constraints"],
+                    "decision_digest": decision["decision_digest"],
+                    "findings": decision["findings"],
+                },
             }
             path = f"decision-{index}.json"
-            if payloads.get(path) != expected_payload:
+            if payloads.get(path) is None:
+                raise ContractError(f"risk run decision payload mismatch: {path}")
+            actual_candidate = payloads[path]["candidate_order"]
+            if _candidate_binding(actual_candidate) != decision["input_bindings"][0]:
+                raise ContractError(f"risk run candidate order lineage mismatch: {path}")
+            if payloads[path]["decision"] != expected_payload["decision"]:
                 raise ContractError(f"risk run decision payload mismatch: {path}")
         for index, binding in enumerate(run["event_bindings"]):
             event = self.event_store.read(binding["generation_id"])

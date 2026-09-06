@@ -70,6 +70,22 @@ _ORDER_ACTIONS = {
     "order_limit_price": "block_order",
     "order_t1_sellable_quantity": "resize",
 }
+_ORDER_METRICS = {
+    "order_notional_limit": "order_notional",
+    "order_participation_limit": "order_participation",
+    "order_insufficient_cash": "cash_after_order",
+    "order_instrument_halt": "order_halt",
+    "order_limit_price": "order_limit_headroom",
+    "order_t1_sellable_quantity": "sellable_shares",
+}
+_ORDER_OPERATORS = {
+    "order_notional_limit": "less_than_or_equal",
+    "order_participation_limit": "less_than_or_equal",
+    "order_insufficient_cash": "greater_than_or_equal",
+    "order_instrument_halt": "less_than",
+    "order_limit_price": "greater_than",
+    "order_t1_sellable_quantity": "greater_than_or_equal",
+}
 
 
 def _binding(document: Mapping[str, Any], *, family: str) -> dict[str, str]:
@@ -287,7 +303,7 @@ def _candidate_metrics(
         "order_notional": round(notional, 12),
         "order_participation": round(participation, 12),
         "cash_after_order": round(
-            cash - (eligible_shares * slipped_price if side == "buy" else 0.0),
+            cash + (eligible_shares * execution_price if side == "sell" else -eligible_shares * slipped_price),
             12,
         ),
         "sellable_shares": float(sellable_shares),
@@ -382,6 +398,10 @@ class RiskEngine:
                 raise ContractError(f"order rule has wrong scope: {rule_id}")
             if rule.get("action") != _ORDER_ACTIONS[rule_id]:
                 raise ContractError(f"order rule action is not normative: {rule_id}")
+            if rule.get("metric") != _ORDER_METRICS[rule_id]:
+                raise ContractError(f"order rule metric is not normative: {rule_id}")
+            if rule.get("operator") != _ORDER_OPERATORS[rule_id]:
+                raise ContractError(f"order rule operator is not normative: {rule_id}")
             result = "failed" if context_failures[rule_id] else "passed"
             observed: float | None = metrics.get(rule["metric"])
             threshold: float | None = rule["threshold"]
@@ -469,7 +489,10 @@ class RiskEngine:
                 {
                     "family": "candidate_order_v1",
                     "generation_id": sha256_json(dict(order)),
-                    "manifest_digest_sha256": sha256_json({"candidate_order": dict(order)}),
+                    "manifest_digest_sha256": sha256_json({
+                        "generation_id": sha256_json(dict(order)),
+                        "candidate_order": dict(order),
+                    }),
                 }
             ],
             "as_of_date": execution_date,
