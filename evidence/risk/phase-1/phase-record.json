@@ -1,12 +1,10 @@
 {
-  "blocked_by": [
-    "final HEAD gate report generation after commit"
-  ],
+  "blocked_by": [],
   "entry_criteria": "passed",
   "evidence_paths": [
     "evidence/risk/phase-1/gate-reports"
   ],
-  "exit_criteria": "pending_final_head_gate_evidence",
+  "exit_criteria": "passed",
   "fixtures": [
     "config/schemas/fixtures/risk/risk_policy-valid.json"
   ],
@@ -15,18 +13,18 @@
   ],
   "layer": "risk_control_plane",
   "local_gate": {
-    "commit_bound": "a2638dc961450ea1ec536931714595c0f59144ef",
+    "commit_bound": "d73d62385e3e7e70468982a3d728bd1bf2596e61",
     "platform": "macOS-26.3-arm64-arm-64bit",
     "python_version": "3.12.13",
     "status": "passed",
     "test_result": "passed",
-    "utc_timestamp": "2026-09-06T13:13:31.847098+00:00"
+    "utc_timestamp": "2026-09-06T13:15:05.578735+00:00"
   },
   "phase": "1",
   "remote_matrix": {
     "status": "not_applicable_to_phase_1"
   },
-  "status": "implemented_pending_final_head_gate_evidence",
+  "status": "exited",
   "test_ids": [
     "test_risk_portfolio_decision_is_deterministic",
     "test_risk_portfolio_missing_inputs_fail_closed",
@@ -38,5 +36,5 @@
     "test_risk_stores_are_immutable_and_readable",
     "test_risk_portfolio_publication_gate_rejects_block"
   ],
-  "updated_at_utc": "2026-09-06T13:14:06.010653+00:00"
+  "updated_at_utc": "2026-09-06T13:15:05.578735+00:00"
 }

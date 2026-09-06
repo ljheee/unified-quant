@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.1 final-CR remediated contract plan; Phase 0 exited with preserved local gate evidence**
+Status: **v0.2.2 final-CR remediated plan; Phases 0–1 exited with preserved local gate evidence**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -11,8 +11,9 @@ does not authorize production execution, real-time streaming, broker
 connectivity, or a generic rules engine.
 
 The source spec is approved. Activation condition 5 is recorded in
-`evidence/risk/activation.json`. Runtime is open only for Phase 0 contract
-work; Phase 1 remains gated on Phase 0 exit.
+`evidence/risk/activation.json`. Phase 0 and Phase 1 are exited with local
+gate evidence; Phase 2 remains gated on Phase 1 exit and its own acceptance
+expansion.
 
 ## 1. Scope
 
