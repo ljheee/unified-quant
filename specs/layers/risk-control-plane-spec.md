@@ -1,9 +1,13 @@
 # Risk Control Plane Specification
 
-Status: **v0.1 draft; implementation paused**
+Status: **v0.2 executable contract draft; implementation paused pending explicit activation**
 
 Design input: `layering.md` from the one-stop-quant project.
 Related specs: `specs/layers/portfolio-backtest-layer-spec.md`, `specs/layers/model-layer-spec.md`, `specs/layers/research-chain-layer-spec.md`.
+
+Approval state: `draft-not-approved`. This document authorizes contract drafting
+and review only; no schema, store, engine, publication, or backtest code may be
+implemented until the approval and activation states in §4A are both `active`.
 
 ## 1. Purpose
 
@@ -58,6 +62,29 @@ must fail closed on any `critical` finding or on actions that restrict the
 intended operation unless a valid, unexpired reviewed exception explicitly
 permits that behavior. Restrictive actions include `block`, `block_order`,
 `block_new_buy`, `de_risk`, `flatten`, and `halt_strategy`.
+
+## 2A. Document State Machine
+
+This specification separates three independently auditable states:
+
+| State | Allowed value | Meaning |
+|---|---|---|
+| `contract_draft` | `drafting`, `ready-for-review`, `approved` | governs whether schemas and tests may be drafted |
+| `activation` | `inactive`, `active` | governs whether the first implementation slice may start |
+| `runtime` | `paused`, `open` | governs whether Phase 1+ code may be opened |
+
+Normative progression is:
+
+```text
+contract_draft=approved
+  AND activation=active
+  -> runtime=open; Phase 0 may start
+```
+
+`activation=active` requires a checked activation condition in the
+implementation plan §10 plus a dated note naming the condition and evidence.
+Approval and activation may be recorded in the same commit, but they remain
+separate predicates. Drafting schemas alone does not activate runtime work.
 
 ## 3. Non-Goals for v1
 
@@ -128,6 +155,20 @@ check that the owning layer already computed.
 | Backtest | execution simulation guards | pre-trade checks and order decision audit |
 | Future execution | broker/order gateway checks | consume the same pre-trade contract with lower-latency storage |
 
+Ownership is explicit:
+
+| Check class | Owning layer enforcement | Risk-plane behavior |
+|---|---|---|
+| canonical/factor/model quality and PIT | existing readers | no re-enforcement; bind generation identity only |
+| portfolio construction constraints | `PortfolioBuilder` | recompute selected rules as independent audit; never silently repair weights |
+| backtest exchange/feasibility guards | `BacktestEngine` | emit an independent decision; consumer compares native guard and risk action |
+| strategy drawdown/volatility triggers | no owner today | RiskEngine owns evaluation, but Phase 3 requires an executable consumer contract |
+| exception and policy approval | no owner today | Risk Control Plane owns the review artifacts and trust model |
+
+The engine may fail before native enforcement. It must not cause native checks
+to be skipped.
+
+
 ## 7. Core Artifact Families
 
 Every durable artifact follows the repository identity convention:
@@ -138,6 +179,43 @@ Every durable artifact follows the repository identity convention:
 4. upstream generation/checksum bindings;
 5. producer code fingerprint;
 6. serialization profile and physical-file checksums.
+
+Normative identity rules:
+
+1. stable generation excludes `created_at`, `run_id`, `request_id`, and other
+   provenance-only metadata;
+2. `manifest_digest_sha256` is canonical JSON SHA-256 including
+   `generation_id` and all durable binding/identity fields;
+3. a top-level artifact has one JSON manifest plus one Parquet or NDJSON data
+   file where rows/metrics require non-JSON storage;
+4. file names and physical paths must be derived from `scope_type`, `scope_id`,
+   date, and generation using path-safe segments;
+5. physical files are checksummed in `files[]`; a file may not be accepted when
+   its byte checksum or row count mismatches the manifest;
+6. `serialization_profile` is an explicit enum, not a free string;
+7. schema semantics are frozen within a released `.v1`; changes require v2.
+
+Normative storage root is:
+
+```text
+data/risk/
+  policies/<generation>/manifest.json
+  reviews/<review_type>/<generation>/manifest.json
+  states/<scope_type>/<scope_id>/<as_of_date>/<generation>/
+    manifest.json
+    state.parquet
+  decisions/<scope_type>/<scope_id>/<as_of_date>/<generation>/
+    manifest.json
+    findings.json
+  events/<scope_type>/<scope_id>/manifest.json
+    events.ndjson
+  exceptions/<generation>/manifest.json
+```
+
+The first implementation must include per-family fixtures and negative
+fixtures for missing file, checksum mismatch, wrong path generation, extra
+fields, unknown action, unapproved policy, and tampered lineage.
+
 
 ### 7.1 `risk_policy.v1`
 
@@ -184,6 +262,23 @@ Required semantic fields:
 State is derived from accepted upstream artifacts. It must not silently read
 unpublished, tampered, or future data.
 
+State semantics are normative:
+
+1. state is append-only by `(scope_type, scope_id, as_of_date, generation)`;
+2. `as_of_date` is the risk evaluation date, not the publication timestamp;
+3. `visible_through` is the latest upstream decision/execution time included;
+4. late-arriving data never rewrites prior state; it creates a new generation
+   with `supersedes_state_generation_id`;
+5. cooldown duration is measured in governed trading days from the trigger
+   `as_of_date`;
+6. exit is evaluated only after `hysteresis.exit_below` remains true for the
+   declared number of consecutive governed sessions;
+7. state requirement is declared per rule: `stateful=true` requires state;
+   stateless rules may evaluate without a prior state snapshot;
+8. multiple decisions on one date append multiple states/decisions; readers use
+   explicit generation IDs, never "latest" unless the API contract defines
+   deterministic ordering and rejects ties.
+
 ### 7.3 `risk_decision.v1`
 
 `risk_decision.v1` is the immutable output of one evaluation.
@@ -221,6 +316,31 @@ Allowed first-class actions are:
 `de_risk`, `flatten`, and `halt_strategy` are not executable until the consuming
 layer defines an execution contract. They must fail closed in backtest/execution
 rather than being interpreted ad hoc.
+
+### 7.3A Finding Aggregation
+
+Evaluation is deterministic and ordered:
+
+1. each rule produces at most one finding;
+2. findings are sorted by ascending rule `priority`, then `rule_id`;
+3. `failure_action_rank` is `allow=0`, `warn=1`, `escalate_review=2`,
+   `resize=3`, `block=4`, `block_order=4`, `block_new_buy=4`,
+   `de_risk=5`, `flatten=6`, `halt_strategy=7`;
+4. the final action is the finding with the highest rank; ties use lower rule
+   priority and then lexical `rule_id`;
+5. error findings with no bound threshold are `critical` and final;
+6. numeric comparisons use tolerance `abs(observed-threshold) <= 1e-12`; for
+   ratio limits, use `round(observed, 12) > round(threshold, 12)`;
+7. multiple active policies for one scope must have disjoint effective ranges;
+   overlapping generations fail closed;
+8. `resize` must include one constraint:
+   - portfolio weight: `allowed_weight=min(requested_weight, rule.limit)`;
+   - order shares: `allowed_shares=floor(rule.limit / board_lot) * board_lot`;
+   - order notional: `allowed_notional=rule.limit`;
+9. an action may not be downgraded by a lower-priority finding;
+10. exceptions can authorize a consumer to proceed, but never rewrite the
+    original immutable decision.
+
 
 ### 7.4 `risk_event.v1`
 
@@ -261,6 +381,27 @@ Exceptions must be logged as events when applied and when expired. An exception
 cannot rewrite the original decision; it can only authorize a downstream
 consumer to proceed despite that decision.
 
+### 7.6 Optional `risk_run.v1`
+
+`risk_run.v1` is an immutable index for one evaluation session. It prevents the
+released `backtest_result.v1` schema from being silently extended.
+
+Required fields:
+
+- `run_scope`: `portfolio_publication` or `order_submission`;
+- `risk_policy_generation_id`;
+- `risk_state_generation_id`, if stateful;
+- ordered `decision_bindings[]`;
+- ordered `event_bindings[]`;
+- consumer binding, such as portfolio definition, target weights, backtest
+  configuration, or future execution request;
+- `consumer_artifact_generation_id`;
+- producer code fingerprint and serialization profile.
+
+The current backtest result contract remains v1 and unchanged. A Phase 2
+integration may bind `risk_run.v1` to the backtest configuration and ordered
+orders; modifying `backtest_result.v1` is deferred to an explicit v2 migration.
+
 ## 8. Governance and Trust Model
 
 1. Risk policy activation requires an external reviewed decision.
@@ -277,6 +418,43 @@ consumer to proceed despite that decision.
 The implementation may initially reuse the repository's reviewed-quality trust
 anchor pattern, but it must not silently extend a released schema version.
 A new risk review contract should be introduced instead.
+
+### 8A. External Risk Review Contract
+
+Policy and exception approval must use a new `risk_review_decision.v1`
+family. The model quality review v2 contract must not be silently reused or
+extended.
+
+`risk_review_decision.v1` is an immutable manifest with these required fields:
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | always `1` in this contract |
+| `review_type` | `risk_policy_activation` or `risk_exception_grant` |
+| `subject_generation_id` | generation of the reviewed policy or exception manifest |
+| `subject_manifest_digest_sha256` | digest of that exact manifest |
+| `review_status` | `approved` or `rejected` only |
+| `reviewer` | stable reviewer identity from a reviewed registry |
+| `key_id` | trust-anchor key identifier |
+| `subject_content_sha256` | canonical JSON content digest reviewed by the reviewer |
+| `review_signature_sha256` | detached signature over the canonical review payload |
+| `reviewed_at_utc` | ISO-8601 UTC time |
+| `policy` | `reject_all` for activation; exceptions require explicit permit scope |
+| `errors` / `warnings` | reviewer findings |
+
+The review decision does not itself establish trust. A separate
+`risk_review_trust_anchor.v1` registry binds `key_id`, public-key fingerprint,
+validity interval, reviewer, and accepted `review_type`. Verification is:
+
+```text
+verify registry -> verify signature -> verify subject generation/digest
+  -> verify time interval -> verify review_type compatibility
+  -> verify no errors -> activation_status=approved / exception grant valid
+```
+
+Failure taxonomy is normative: `missing`, `schema_invalid`, `tampered`,
+`untrusted_key`, `expired`, `wrong_subject`, `wrong_review_type`, `rejected`,
+and `reviewer_mismatch`. Any failure fails closed.
 
 ## 9. Evaluation Contracts
 
@@ -353,7 +531,7 @@ normative and must not be reinterpreted after release.
 | `portfolio_gross_exposure_limit` | portfolio | gross stock exposure | resize | coexists with cash reserve |
 | `portfolio_single_name_limit` | portfolio | instrument weight | resize | portfolio already enforces construction cap |
 | `portfolio_top_n_limit` | portfolio | top-N concentration | block | first version may reject rather than optimize |
-| `portfolio_industry_limit` | portfolio | industry weight | block | requires governed industry membership |
+| `portfolio_industry_limit` | portfolio | industry weight | block | requires `industry_membership.v1`; it is a Phase 0 prerequisite and disabled otherwise |
 | `portfolio_turnover_limit` | portfolio | one-sided target turnover | resize | prior target weights required |
 | `portfolio_cash_reserve_limit` | portfolio | cash reserve | block | fails closed on missing weights |
 | `order_notional_limit` | order | absolute order notional | resize | uses declared execution price basis |
