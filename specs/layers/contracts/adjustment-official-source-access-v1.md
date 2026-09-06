@@ -9,7 +9,7 @@ SZSE archived historical quote API
   `https://www.szse.cn/api/report/ShowReport/data?SHOWTYPE=JSON&CATALOGID=1815_stock&TABKEY=tab1&PAGENO=1&PAGESIZE=30&txtDMorJC=<code>&txtBeginDate=<YYYYMMDD>&txtEndDate=<YYYYMMDD>`
 - Required header: `Referer: https://www.szse.cn/market/trend/archive/index.html`.
 - The response is a JSON array. Its first element has `metadata` and `data`.
-- Relevant fields are `jyrq` (trade date), `zqdm` (instrument code), `qss` (prior close), and `zd` (close).
+- Relevant fields are `jyrq` (trade date), `zqdm` (instrument code), `qss` (prior close), `ss` (close), and `zd` (low).
 - Observed archive cutoff in the 2026-08-24 response metadata was `2025-07-31`; later record dates returned no data.
 - Captured formula-input responses live under `.gate/evidence/szse-<code>-window.json` (record date), official ex-date responses live under `.gate/evidence/szse-<code>-ex-date.json`; provenance fixtures record each response's SHA-256.
 
