@@ -1,8 +1,8 @@
 # Unified Quant Data Architecture
 
-Status: **v0.2 design contract**  
-Review decision: **architecture feasible; conditionally approved for continued implementation; not production-approved**.  
-Implementation status: prototype v0.1 does not satisfy this document and remains prototype-only.  
+Status: **v0.2 design contract**
+Review decision: **architecture feasible; conditionally approved for continued implementation; not production-approved**.
+Implementation status: prototype v0.1 does not satisfy this document and remains prototype-only.
 Release gate: `specs/stable-release-checklist.md`.
 
 ## 1. Goals
@@ -73,9 +73,9 @@ compatible schema range.
 > examples to an implemented research schema or publish an explicit production
 > schema version.
 
-Key: `(instrument, datetime)`  
-Instrument format: `600000.XSHG`, `000001.XSHE`  
-Timezone: Asia/Shanghai  
+Key: `(instrument, datetime)`
+Instrument format: `600000.XSHG`, `000001.XSHE`
+Timezone: Asia/Shanghai
 `datetime`: trading day
 
 Required core fields:
@@ -415,6 +415,22 @@ manifests, quality decisions, immutable publication, or accepted reader APIs.
 The external quality decision provider and its trust root are separate inputs;
 the runner can only look up and verify reviewed decisions, never create or sign
 them.
+
+## 11.7 Risk Control Plane Boundary
+
+The Risk Control Plane is a cross-cutting governance contract, not a pipeline
+layer:
+
+```text
+Layer-owned Data/Factor/Model/Portfolio/Execution gates
+  -> Shared risk_policy / risk_state / risk_decision / risk_event / risk_exception
+  -> Portfolio publication gate / future pre-trade gate
+```
+
+Owning layers retain their native checks. The first scoped slice, when
+activated, is deterministic decision-time risk for portfolio publication and
+backtest orders. Production real-time execution risk remains explicitly
+deferred until an Execution Layer exists.
 
 ## 12. Acceptance Criteria for the Stable Contract
 
