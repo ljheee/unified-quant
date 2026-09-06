@@ -9,7 +9,8 @@
         "evidence/research-chain/phase-2/phase-record.json",
         "evidence/research-chain/phase-3/phase-record.json",
         "evidence/research-chain/phase-4/phase-record.json",
-        "evidence/research-chain/phase-5/phase-record.json"
+        "evidence/research-chain/phase-5/phase-record.json",
+        "evidence/research-chain/release/phase-record.json"
       ],
       "status": "passed"
     },

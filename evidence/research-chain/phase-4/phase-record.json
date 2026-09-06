@@ -24,7 +24,7 @@
       "status": "passed",
       "test_ids": [
         "tests/test_research_chain_phase4.py::test_portfolio_stage_binds_prediction_and_universe",
-        "tests/test_research_chain_phase4.py::test_portfolio_chain_links_previous_target_generation"
+        "tests/test_research_chain_phase4.py::test_portfolio_chain_reads_daily_predictions"
       ]
     },
     {
@@ -44,7 +44,7 @@
         "tests/test_research_chain_phase4.py::test_portfolio_weight_overwrite_fails",
         "tests/test_research_chain_phase4.py::test_wrong_portfolio_quality_decision_fails",
         "tests/test_research_chain_phase4.py::test_backtest_rejects_corporate_action_overlap",
-        "tests/test_research_chain_phase4.py::test_backtest_rejects_tampered_price_panel"
+        "tests/test_research_chain_phase4.py::test_backtest_rejects_tampered_price_data"
       ]
     },
     {
