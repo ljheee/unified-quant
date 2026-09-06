@@ -9,7 +9,7 @@
       "path": "evidence/risk/phase-0/golden/risk-contract-identities.json"
     },
     {
-      "kind": "local_gate_historical_pre_final_head",
+      "kind": "local_gate_final_head",
       "path": "evidence/risk/phase-0/gate-reports/gate-report.json"
     },
     {

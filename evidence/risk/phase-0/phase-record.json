@@ -1,13 +1,11 @@
 {
-  "blocked_by": [
-    "final HEAD gate report generation after commit"
-  ],
+  "blocked_by": [],
   "entry_criteria": "passed",
   "evidence_paths": [
     "evidence/risk/activation.json",
     "evidence/risk/phase-0/gate-reports"
   ],
-  "exit_criteria": "pending_final_head_gate_evidence",
+  "exit_criteria": "passed",
   "fixtures": [
     "config/schemas/fixtures/risk/risk_de_risk_contract-negative.json",
     "config/schemas/fixtures/risk/risk_de_risk_contract-valid.json",
@@ -33,16 +31,18 @@
   ],
   "layer": "risk_control_plane",
   "local_gate": {
-    "commit_bound": "bf823abc929021948794a300fca81f480ff7eb26",
-    "status": "historical_pre_final_head",
+    "commit_bound": "376a7db4843b6e88c71f7254042f49c3772b1233",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "status": "passed",
     "test_result": "passed",
-    "utc_timestamp": "2026-09-06T12:33:49.321137+00:00"
+    "utc_timestamp": "2026-09-06T12:37:54.171557+00:00"
   },
   "phase": "0",
   "remote_matrix": {
     "status": "not_applicable_to_phase_0_contract_exit"
   },
-  "status": "implemented_pending_final_head_gate_evidence",
+  "status": "exited",
   "test_ids": [
     "test_all_risk_contract_fixtures_are_valid",
     "test_all_risk_contract_negative_fixtures_fail",
@@ -59,5 +59,5 @@
     "test_enforceable_de_risk_contract_fails_closed",
     "test_phase0_golden_identities_are_persisted"
   ],
-  "updated_at_utc": "2026-09-06T12:34:29.592353+00:00"
+  "updated_at_utc": "2026-09-06T12:38:11.013729+00:00"
 }

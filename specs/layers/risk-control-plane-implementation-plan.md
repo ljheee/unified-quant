@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.1 final-CR remediated contract plan; Phase 0 implemented draft pending final HEAD gate evidence**
+Status: **v0.2.1 final-CR remediated contract plan; Phase 0 exited with preserved local gate evidence**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
