@@ -28,13 +28,13 @@
     "status": "not_applicable_to_phase_3"
   },
   "local_gate": {
-    "commit_bound": "953843dd1a4c20fc1b3791b256d931e1123d4059",
+    "commit_bound": "44cf0abb366c323c12e8f064f627cc0d99220058",
     "platform": "macOS-26.3-arm64-arm-64bit",
     "python_version": "3.12.13",
     "status": "passed",
     "test_result": "passed",
-    "utc_timestamp": "2026-09-06T15:00:42.283497+00:00"
+    "utc_timestamp": "2026-09-06T15:18:54.121715+00:00"
   },
-  "updated_at_utc": "2026-09-06T15:00:42.283497+00:00",
-  "final_cr": "passed_before_gate_evidence_refresh"
+  "updated_at_utc": "2026-09-06T15:18:54.121715+00:00",
+  "final_cr": "passed"
 }
