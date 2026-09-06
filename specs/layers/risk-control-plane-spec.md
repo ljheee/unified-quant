@@ -54,8 +54,10 @@ Publication / Backtest / future Execution
 
 A consumer may use the engine in advisory mode only for an explicitly
 non-enforceable research scenario. Normative publication and execution paths
-must fail closed on `block`, `halt_new_buy`, `de_risk`, or `flatten` unless a
-valid, unexpired reviewed exception explicitly permits the behavior.
+must fail closed on any `critical` finding or on actions that restrict the
+intended operation unless a valid, unexpired reviewed exception explicitly
+permits that behavior. Restrictive actions include `block`, `block_order`,
+`block_new_buy`, `de_risk`, `flatten`, and `halt_strategy`.
 
 ## 3. Non-Goals for v1
 
@@ -192,7 +194,7 @@ Required semantic fields:
   explicitly enumerated scope;
 - `policy_generation_id`;
 - `policy_manifest_digest_sha256`;
-- `state_generation_id` and digest, where state exists;
+- optional `state_generation_id` and digest;
 - ordered input bindings;
 - `as_of_date` and visibility cutoff;
 - `findings[]`, each with `rule_id`, observed value, threshold, result, severity;
@@ -208,6 +210,7 @@ Allowed first-class actions are:
 | `allow` | no restriction |
 | `warn` | allow but persist warning |
 | `resize` | reduce requested weight, shares, or notional to a declared value |
+| `block` | reject the evaluated portfolio publication or request |
 | `block_order` | reject the candidate order |
 | `block_new_buy` | preserve sell/de-risk capability but reject increases |
 | `de_risk` | reduce exposure according to an executable downstream contract |
@@ -265,8 +268,9 @@ consumer to proceed despite that decision.
 3. The process requesting an exception cannot create its own exception.
 4. Risk decisions are immutable; consumers may retry with new inputs but may not
    rewrite an existing decision.
-5. Missing policy, expired policy, malformed policy, missing state, or
-   tampered state fails closed for enforceable scopes.
+5. Missing or expired policy, malformed policy, or tampered evidence fails
+   closed for enforceable scopes. Missing state fails closed only for a
+   stateful rule or an evaluation scope that declares state required.
 6. Exceptions are narrow, time-bounded, and bound to a specific rule/action.
 7. Risk events are append-only and must not be used as mutable state.
 
@@ -377,19 +381,19 @@ For the same:
 the engine must produce the same decision digest.
 
 Required test classes:
-
 1. valid policy/state/decision schema fixtures;
 2. negative fixtures for malformed or conflicting contracts;
 3. missing/tampered input fails closed;
 4. policy missing, unapproved, retired, or expired fails closed;
-5. decision changes when policy, state, or any bound input changes;
-6. deterministic golden decision vectors;
-7. event ordering and state transitions;
-8. exception expiry and wrong reviewer rejection;
-9. portfolio decision integration;
-10. order decision integration;
-11. no mutation of accepted upstream artifacts;
-12. publication/execution refuses unsupported critical actions.
+5. stateful rules reject missing state while stateless rules may evaluate without it;
+6. decision changes when policy, state, or any bound input changes;
+7. deterministic golden decision vectors;
+8. event ordering and state transitions;
+9. exception expiry and wrong reviewer rejection;
+10. portfolio decision integration;
+11. order decision integration;
+12. no mutation of accepted upstream artifacts;
+13. publication/execution refuses unsupported critical actions.
 
 ## 12. Deferred Real-Time Design Placeholder
 

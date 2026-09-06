@@ -34,7 +34,8 @@ execution routing in this release.
 3. RiskEngine must not mutate accepted upstream artifacts.
 4. All durable artifacts use stable generation identity and manifest digest.
 5. Enforceable paths fail closed on missing, expired, unapproved, or tampered
-   policy/state/exception evidence.
+   policy/exception evidence, and on missing/tampered state when the evaluated
+   rule or scope requires state.
 6. Unsupported `de_risk`, `flatten`, or `halt_strategy` actions fail closed;
    they are not informally mapped to sell-all behavior.
 7. Every phase has focused tests, persisted fixtures/golden vectors where
@@ -128,7 +129,7 @@ Acceptance:
 - identical inputs produce identical decision digest;
 - policy change changes decision identity;
 - concentration violations produce deterministic `block`/`resize`;
-- state and events are immutable and readable;
+- state, when required, is immutable and readable;
 - unsupported portfolio action fails closed.
 
 ## 6. Phase 2 — Backtest Pre-Trade Risk Decision
