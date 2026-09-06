@@ -1,0 +1,61 @@
+{
+  "action": "block",
+  "as_of_date": "2026-01-05",
+  "constraints": [],
+  "contract_version": 1,
+  "decision_digest": "19f2a49c0cfd547dde4be19461541f1f947f5e3300a8acfe4fa2bdd8ba8efeca",
+  "decision_scope": "portfolio_publication",
+  "files": [
+    {
+      "byte_size": 323,
+      "path": "decision.json",
+      "serialization_profile": "json-canonical-v1",
+      "sha256": "f97efd7b78a24faed976142a8a0a7aa9c2920b3f60f1e6f94ecc9c8e1da5fd41"
+    }
+  ],
+  "findings": [
+    {
+      "action": "block",
+      "observed": 0.95,
+      "operator": "less_than_or_equal",
+      "result": "failed",
+      "rule_id": "portfolio_gross_exposure_limit",
+      "severity": "critical",
+      "state_required": false,
+      "threshold": 0.9
+    }
+  ],
+  "generation_id": "76fbf09ee346426377d3b61d796399807cae0447be78fb31763ff0746f225bca",
+  "input_bindings": [
+    {
+      "family": "target_weights_v1",
+      "generation_id": "1e1ca7003789811c994dcc7919c1f2ee216da2295d6bf299fde49a9a475df584",
+      "manifest_digest_sha256": "939b003b879a19f71eea7958ca9dd36e574e0bfb9060946a890bdf9b32105ed6"
+    },
+    {
+      "family": "portfolio_definition_v1",
+      "generation_id": "936daa774bc78abbe35463904965ef51126207e1cdbdfb5c1b8381e4e175a232",
+      "manifest_digest_sha256": "8d0a96fbe2d45a23439a825def1cdcce5a5a67e9d685e2686fd8ab6cdfb348cf"
+    },
+    {
+      "family": "universe_snapshot_v1",
+      "generation_id": "a8cf78fef568c90d7a361b6967bc3e6633fb0eab16f8a2852c436d839a98a280",
+      "manifest_digest_sha256": "a8cf78fef568c90d7a361b6967bc3e6633fb0eab16f8a2852c436d839a98a280"
+    }
+  ],
+  "manifest_digest_sha256": "a2399397f32ee0ed380224aa6d3a216e00c21dc5e61c23a470d515d728eb88e4",
+  "producer": {
+    "created_at": "1970-01-01T00:00:00+00:00",
+    "producer_code_fingerprint": "06d35878c51c40d550086306656242e952f8b6f70f8d9c00e1e96de49ba33581",
+    "run_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "risk_policy_binding": {
+    "family": "risk_policy_v1",
+    "generation_id": "31a32eb484bf51492b437323ab2fc73fb7548074792e3585c16e1a99ffb7cee9",
+    "manifest_digest_sha256": "8589b5331f322212d916dc73bd5bffe880bc1ba765bac12aa90a3860b6eb0ef6"
+  },
+  "risk_state_binding": null,
+  "schema_version": "1.0.0",
+  "serialization_profile": "json-canonical-v1",
+  "visible_through": "2026-01-05T15:00:00+00:00"
+}
