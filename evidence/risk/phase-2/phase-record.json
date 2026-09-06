@@ -1,12 +1,10 @@
 {
-  "blocked_by": [
-    "final HEAD gate report generation after CR remediation commit"
-  ],
+  "blocked_by": [],
   "entry_criteria": "passed",
   "evidence_paths": [
     "evidence/risk/phase-2"
   ],
-  "exit_criteria": "pending_final_head_gate_evidence",
+  "exit_criteria": "passed",
   "fixtures": [
     "tests/test_risk_control_plane_phase2.py"
   ],
@@ -18,7 +16,7 @@
   "remote_matrix": {
     "status": "not_applicable_to_phase_2"
   },
-  "status": "implemented_pending_final_head_gate_evidence",
+  "status": "exited",
   "test_ids": [
     "test_risk_order_missing_context_fails_closed",
     "test_risk_order_rules_are_deterministic",
@@ -30,5 +28,13 @@
     "test_backtest_result_v1_contract_remains_frozen",
     "test_duplicate_order_id_fails_closed"
   ],
-  "updated_at_utc": "2026-09-06T13:49:08.450629+00:00"
+  "updated_at_utc": "2026-09-06T13:59:39.308419+00:00",
+  "local_gate": {
+    "commit_bound": "61828a5c2dfb39f396b56f2f8d844016a8d0465a",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "status": "passed",
+    "test_result": "passed",
+    "utc_timestamp": "2026-09-06T13:59:39.308419+00:00"
+  }
 }
