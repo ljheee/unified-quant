@@ -5,11 +5,11 @@
   "records": [
     {
       "path": "evidence/risk/release/phase-record.json",
-      "sha256": "de9989ac7a17df3a59c0c242c8d6921595b527517302d4e076693dcf6bffde8c"
+      "sha256": "c57fd8a22851987e317afd387441571aa11120f142f326e8bfd3bc2e073d58fb"
     },
     {
       "path": "evidence/risk/release/release-record.json",
-      "sha256": "af7010436e0829efdbdfeca9ee444d0c80b77ac6acb155ea6ec12852bfada3e7"
+      "sha256": "ebb91e8fd2d5453414dc0cb92403d52a228b8b6fa7a1fcbd35ca85b4b62b9597"
     },
     {
       "path": "evidence/risk/release/final-gate-report.json",
@@ -37,11 +37,11 @@
     },
     {
       "path": "evidence/risk/release/final-cr-gate-report.json",
-      "sha256": "4964ec46ae01c366031520bbfbda3b385e9842a4fd17d4347c710e5c1af8b9d5"
+      "sha256": "defdca749ab64e1b0f4ea1b6325822dff7f502ed1d2d832e422c23d19eeb33e3"
     },
     {
       "path": "evidence/risk/phase-4/phase-record.json",
-      "sha256": "259c5a5f66b386b7b3ab4c1d3361d847171a0e331bbfa9cce3c42c0973e1ce55"
+      "sha256": "c9f4e843022c6e67887b25ad571fce195f668cab28fc4644117afb1f37887468"
     }
   ]
 }

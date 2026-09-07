@@ -1,9 +1,9 @@
 {
   "phase": "risk-phase-4",
   "title": "Research Chain Integration",
-  "status": "remediation_in_progress",
-  "gate_exit": "pending_post_final_cr_gate",
-  "implementation_commit": "02992e1ea1ef91f06beee46678df962d64ab3220",
+  "status": "exited_after_final_cr_remediation",
+  "gate_exit": "passed",
+  "implementation_commit": "831c344e2dfa3337b8abe391f431e6627f286bc6",
   "acceptance": [
     {
       "id": "RCP4a",
