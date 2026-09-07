@@ -1,6 +1,6 @@
 {
   "layer": "risk_control_plane",
-  "status": "released",
+  "status": "released_with_production_trust_anchor_guard",
   "release": "v1.0.0",
   "record_version": 2,
   "implementation_commit": "831c344e2dfa3337b8abe391f431e6627f286bc6",
@@ -21,7 +21,8 @@
     "production_execution": false,
     "real_time_streaming": false,
     "broker_connectivity": false,
-    "generic_rules_engine": false
+    "generic_rules_engine": false,
+    "production_trust_anchor_guard": true
   },
   "local_gate": {
     "result": "passed",
@@ -68,7 +69,8 @@
   "notes": [
     "Final CR security remediation verifies signed policy approval reviews before Research Chain v2 execution.",
     "The unified local gate passed 506 tests on remediation commit 831c344e2dfa3337b8abe391f431e6627f286bc6.",
-    "The deterministic Ed25519 anchor is test-mode trust material; production deployment requires an out-of-band reviewer key."
+    "The deterministic Ed25519 anchor is test-mode trust material; production deployment requires an out-of-band reviewer key.",
+    "UQ_RUNTIME_MODE=production mechanically rejects the repository test-mode Ed25519 trust anchor."
   ],
   "evidence_commit": "231b77c6426d4a6ab70c28e15744b61aef909477",
   "release_commit": "afb2e250e8b77fad4e19ea59106df3336ca3c0d7",

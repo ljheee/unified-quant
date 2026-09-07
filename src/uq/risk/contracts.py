@@ -16,6 +16,7 @@ from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from ..errors import ContractError
+from ..runtime import require_production_review_key
 
 _ROOT = Path(__file__).resolve().parents[3]
 _CONTRACT_DIR = _ROOT / "config" / "schemas" / "contracts"
@@ -149,6 +150,9 @@ def _verify_risk_signature(
         review_type=review_type,
         reviewer=unsigned_payload["reviewer"],
         as_of=reviewed_at.date(),
+    )
+    require_production_review_key(
+        anchor["public_key_hex"], context="risk review trust anchor"
     )
     try:
         public_key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(anchor["public_key_hex"]))

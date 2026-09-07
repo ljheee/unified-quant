@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.11 post-final-CR security remediation pending gate**
+Status: **v0.2.12 post-release production trust-anchor hardening pending gate**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -15,8 +15,10 @@ The source spec is approved. Activation condition 5 is recorded in
 evidence: the unified local gate passed 505 tests on the implementation HEAD,
 and remote CI passed the declared base and Qlib runtime environment cells.
 The deterministic Ed25519 reviewer anchor and fixture signer are test-mode
-trust material; production deployment requires an out-of-band reviewer key.
-Production execution remains out of scope.
+trust material. Runtime mode is governed by `UQ_RUNTIME_MODE`; in explicit
+`production` mode all repository test-key trust anchors fail closed. Production
+deployment still requires an out-of-band reviewer key. Production execution,
+real-time streaming, and broker connectivity remain out of scope.
 
 ## 1. Scope
 

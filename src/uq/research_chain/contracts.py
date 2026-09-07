@@ -9,6 +9,7 @@ from typing import Any, Mapping, Protocol
 
 from ..contracts.model_layer import canonical_json
 from ..errors import ContractError
+from ..runtime import require_production_review_key
 
 
 _QUALITY_BINDING_TYPES = {
@@ -257,6 +258,9 @@ def verify_stage_plan_review(review: Mapping[str, Any], *, stage_plan_sha256: st
     anchor = json.loads(anchor_path.read_text(encoding="utf-8"))
     if review["key_id"] != anchor["key_id"] or anchor["review_type"] != review["review_type"]:
         raise ContractError("research stage plan review trust anchor mismatch")
+    require_production_review_key(
+        anchor["public_key_hex"], context="research stage-plan review trust anchor"
+    )
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 

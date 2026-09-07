@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from .canonical_v2 import file_sha256_bytes
 from .gate_contracts import adjustment_snapshot_generation, canonical_json, factor_manifest_identities, sha256_bytes, validate_contract, validate_contract_path
 from ..errors import ContractError
+from ..runtime import require_production_review_key
 
 _SCHEMA_NAMES = {
     "accepted_factor_index_query",
@@ -521,6 +522,9 @@ class ModelQualityReviewTrustAnchor:
         public_key_hex = payload.get("public_key_hex")
         if not isinstance(public_key_hex, str) or not re.fullmatch(r"[0-9a-f]{64}", public_key_hex):
             raise ContractError("model quality trust anchor has an invalid public key")
+        require_production_review_key(
+            public_key_hex, context="model quality trust anchor"
+        )
         if payload.get("registry_sha256") != sha256_bytes_file(self.path.parent / "model-quality-reviews.v1.json"):
             raise ContractError("model quality review registry is not anchored")
         self.key_id = payload.get("key_id")

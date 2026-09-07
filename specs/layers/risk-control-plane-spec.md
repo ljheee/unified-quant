@@ -495,6 +495,10 @@ Failure taxonomy is normative: `missing`, `schema_invalid`, `tampered`,
 `untrusted_key`, `expired`, `wrong_subject`, `wrong_review_type`, `rejected`,
 and `reviewer_mismatch`. Any failure fails closed.
 
+Runtime mode is normative for production: `UQ_RUNTIME_MODE=production` rejects
+any repository test-mode Ed25519 trust anchor before signature verification can
+pass. A production deployment must provision an out-of-band reviewer key.
+
 Signing is normative:
 
 - algorithm: Ed25519;
