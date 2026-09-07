@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.9 released; Phases 0–5 exited**
+Status: **v0.2.10 released; post-release CR remediation recorded**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -11,10 +11,12 @@ does not authorize production execution, real-time streaming, broker
 connectivity, or a generic rules engine.
 
 The source spec is approved. Activation condition 5 is recorded in
-`evidence/risk/activation.json`. Phase 0–4 are exited with preserved gate evidence. Phase 5 release
-reconciliation is complete: the unified local gate passed 505 tests on the
-implementation HEAD, and remote CI passed the declared base and Qlib runtime
-environment cells. Production execution remains out of scope.
+`evidence/risk/activation.json`. Phase 0–5 are exited with preserved gate
+evidence: the unified local gate passed 505 tests on the implementation HEAD,
+and remote CI passed the declared base and Qlib runtime environment cells.
+The deterministic Ed25519 reviewer anchor and fixture signer are test-mode
+trust material; production deployment requires an out-of-band reviewer key.
+Production execution remains out of scope.
 
 ## 1. Scope
 

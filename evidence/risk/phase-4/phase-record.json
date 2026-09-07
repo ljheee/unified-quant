@@ -1,8 +1,8 @@
 {
   "phase": "risk-phase-4",
   "title": "Research Chain Integration",
-  "status": "implemented",
-  "gate_exit": "pending-release-reconciliation",
+  "status": "exited_after_release",
+  "gate_exit": "passed",
   "implementation_commit": "02992e1ea1ef91f06beee46678df962d64ab3220",
   "acceptance": [
     {
@@ -66,5 +66,9 @@
       "path": "evidence/risk/phase-4/research_run_request_v2-valid.json",
       "sha256": "90d7d1ccd082a731aa2d827251d391cf06ebd3ced0b86fab92c14762753f0cdf"
     }
+  ],
+  "notes": [
+    "The deterministic Ed25519 anchor and fixture signer are repository test-mode trust material.",
+    "Production deployment must provision an out-of-band reviewer key and prohibit test-key use."
   ]
 }

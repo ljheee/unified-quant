@@ -5,11 +5,11 @@
   "records": [
     {
       "path": "evidence/risk/release/phase-record.json",
-      "sha256": "9eb3df1bfaaefdd7f9d5868611bb426eeff50eeef74fb6edf4e573abd4874878"
+      "sha256": "de9989ac7a17df3a59c0c242c8d6921595b527517302d4e076693dcf6bffde8c"
     },
     {
       "path": "evidence/risk/release/release-record.json",
-      "sha256": "c3ea20bb190b14b86a770d6136b91927d90ca432edfa7fd9fc174710eacc33fc"
+      "sha256": "af7010436e0829efdbdfeca9ee444d0c80b77ac6acb155ea6ec12852bfada3e7"
     },
     {
       "path": "evidence/risk/release/final-gate-report.json",
@@ -22,6 +22,26 @@
     {
       "path": "evidence/risk/release/requirements.lock.txt.sha256",
       "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/risk/release/remote-matrix/34044714986/aggregated-gates.json",
+      "sha256": "df73f65b3332e93087fced5d02e240d917fe733edf200798a2d711287b609f21"
+    },
+    {
+      "path": "evidence/risk/release/remote-matrix/34044714986/run.json",
+      "sha256": "4cc8e001d9dcb12136d9189d7851dd7824453310572295de5f93abc27b096d00"
+    },
+    {
+      "path": "evidence/risk/activation.json",
+      "sha256": "f30b0a493c46053ca714c037fc17aab5c47416ea70fc8a89435513f702cee6f6"
+    },
+    {
+      "path": "evidence/risk/release/final-cr-gate-report.json",
+      "sha256": "4964ec46ae01c366031520bbfbda3b385e9842a4fd17d4347c710e5c1af8b9d5"
+    },
+    {
+      "path": "evidence/risk/phase-4/phase-record.json",
+      "sha256": "259c5a5f66b386b7b3ab4c1d3361d847171a0e331bbfa9cce3c42c0973e1ce55"
     }
   ]
 }

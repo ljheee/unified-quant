@@ -54,10 +54,14 @@
     "evidence/risk/release/requirements.lock.txt",
     "evidence/risk/release/requirements.lock.txt.sha256",
     "evidence/risk/release/remote-matrix/34044714986/",
-    "evidence/risk/release/release-record.json"
+    "evidence/risk/release/release-record.json",
+    "evidence/risk/release/final-cr-gate-report.json"
   ],
   "notes": [
     "The local gate report is bound to the implementation commit, not the evidence-only release commit.",
-    "The remote matrix preserves ten original per-cell reports and verifies platform and Python distinctness."
-  ]
+    "The remote matrix preserves ten original per-cell reports and verifies platform and Python distinctness.",
+    "The final release CI run 34045148499 passed on afb2e250e8b77fad4e19ea59106df3336ca3c0d7."
+  ],
+  "release_commit": "afb2e250e8b77fad4e19ea59106df3336ca3c0d7",
+  "final_release_ci_run_id": "34045148499"
 }

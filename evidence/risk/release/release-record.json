@@ -68,6 +68,18 @@
   },
   "notes": [
     "Local unified Qlib gate passed 505 tests on implementation commit 02992e1ea1ef91f06beee46678df962d64ab3220.",
-    "Remote CI run 34044714986 passed six distinct base cells and four distinct Qlib runtime cells on evidence commit 231b77c6426d4a6ab70c28e15744b61aef909477."
-  ]
+    "Remote CI run 34044714986 passed six distinct base cells and four distinct Qlib runtime cells on evidence commit 231b77c6426d4a6ab70c28e15744b61aef909477.",
+    "The release records are added in evidence-only commit afb2e250e8b77fad4e19ea59106df3336ca3c0d7 without changing implementation or lockfiles.",
+    "The deterministic Ed25519 anchor is test-mode trust material; production deployment requires an out-of-band reviewer key.",
+    "Post-release CR evidence-only remediation passed 505 tests on afb2e250e8b77fad4e19ea59106df3336ca3c0d7."
+  ],
+  "evidence_commit": "231b77c6426d4a6ab70c28e15744b61aef909477",
+  "release_commit": "afb2e250e8b77fad4e19ea59106df3336ca3c0d7",
+  "final_release_ci_run_id": "34045148499",
+  "final_cr_gate": {
+    "result": "passed",
+    "report_path": "evidence/risk/release/final-cr-gate-report.json",
+    "report_sha256": "4964ec46ae01c366031520bbfbda3b385e9842a4fd17d4347c710e5c1af8b9d5",
+    "commit_bound": "afb2e250e8b77fad4e19ea59106df3336ca3c0d7"
+  }
 }
