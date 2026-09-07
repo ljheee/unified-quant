@@ -4,7 +4,7 @@
   "record_version": 1,
   "status": "exited_after_remote_gate",
   "blocked_by": [],
-  "implementation_commit": "831c344e2dfa3337b8abe391f431e6627f286bc6",
+  "implementation_commit": "2d4eac7761b7f7ef453f76b9b3613d3bbc45d23a",
   "evidence_commit": "231b77c6426d4a6ab70c28e15744b61aef909477",
   "entry_criteria": {
     "phase_4_implemented": true,
@@ -59,7 +59,8 @@
   ],
   "notes": [
     "Final CR security remediation adds signed policy-review verification to Research Chain v2.",
-    "The final remediation gate passed 506 tests on 831c344e2dfa3337b8abe391f431e6627f286bc6."
+    "Production runtime mode rejects the repository test-mode Ed25519 trust anchor.",
+    "The final remediation gate passed 510 tests on 2d4eac7761b7f7ef453f76b9b3613d3bbc45d23a."
   ],
   "release_commit": "afb2e250e8b77fad4e19ea59106df3336ca3c0d7",
   "final_release_ci_run_id": "34045148499"
