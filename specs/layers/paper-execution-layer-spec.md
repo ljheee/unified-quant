@@ -1,6 +1,6 @@
 # Paper Execution Layer Specification
 
-Status: **v0.1 contract draft**
+Status: **v0.1.1 remediation contract draft**
 Governance: contract-first, immutable artifacts, fail-closed accepted reads.
 Runtime mode: paper execution is a deterministic simulation mode, not a broker integration.
 
@@ -22,14 +22,17 @@ must never claim live-market execution.
 
 - Deterministic paper order planning from target weights and executable state.
 - One decision date mapped to one execution session.
-- Order lifecycle states: planned, submitted, filled, rejected, cancelled, expired.
+- Order lifecycle is planned before execution and is reconciled only through the
+  persisted terminal states `filled`, `rejected`, `cancelled`, and `expired`;
+  transient submission is never a durable paper artifact state.
 - Deterministic paper fill policy with explicit price, quantity, cash, fee, and
   quantity-lot semantics.
 - A-share style sell-before-buy, T+1 sellable inventory, price limits, suspension,
   and board-lot handling.
 - Persistent, checksummed order plans, execution results, and paper portfolio
   state manifests.
-- Risk Control Plane pre-trade and post-trade decisions as hard input gates.
+- Risk Control Plane pre-trade decisions as hard input gates; post-trade risk
+  integration is explicitly deferred.
 - Reconciliation of target deltas, orders, fills, rejected quantities, fees, and
   resulting holdings/cash.
 
@@ -87,12 +90,18 @@ quality-report rules as other durable layers.
 - `schema_version`
 - `execution_id`: path-safe stable execution name.
 - `mode`: `paper` in the first release.
+- `state_mode`: `initial` or `continuation`; `initial` requires an explicit
+  `initial_state` object and must not bind a prior published paper state.
 - `market`: `cn_a` in the first release.
 - `decision_date`
 - `execution_date`
 - `target_weights_binding`: family, generation ID, manifest digest, and decision date.
-- `input_state_binding`: prior `paper_portfolio_state.v1` generation, digest, and as-of date.
-- `market_data_binding`: dataset family, schema version, generation ID, manifest digest, visibility timestamp, and price basis.
+- `input_state_binding`: prior `paper_portfolio_state.v1` generation, digest, and
+  as-of date; required when `state_mode=continuation` and null when `initial`.
+- `initial_state`: for `state_mode=initial`, a checksummed initial holdings list,
+  initial cash, valuation price basis, and provenance note; absent otherwise.
+- `market_data_binding`: dataset family, schema version, generation ID, manifest
+  digest, visibility timestamp, price basis, and exact required columns.
 - `calendar_binding`
 - `suspension_binding`
 - `corporate_action_binding`
@@ -102,7 +111,8 @@ quality-report rules as other durable layers.
 - `price_policy`: order pricing basis, limit tolerance, and allowed execution window.
 - `quantity_policy`: sell-before-buy, T+1, board lot, minimum order quantity, and rejection behavior.
 - `serialization_profiles`
-- `quality_report_binding`: reviewed external quality report identity and canonical checksum.
+- `quality_report_binding`: reviewed external quality report identity and canonical
+  checksum; absent from stable-content identity but included in durable publication.
 
 `decision_date` must be a governed trading day on or before `execution_date`.
 For forward paper execution, ordinary decision cutoff is the configured market
@@ -127,7 +137,7 @@ but before fills. Its payload is a Parquet file with fixed columns:
 | `sellable_quantity` | int64 | T+1-sellable input quantity used for sizing |
 | `previous_quantity` | int64 | prior executable quantity |
 | `target_quantity` | int64 | intended post-fill quantity before guards |
-| `order_state` | string enum | `planned` |
+| `order_state` | string enum | `planned`; durable submission is out of scope |
 | `plan_sequence` | int64 | deterministic execution sequence |
 
 The manifest records row count, column schema, checksum, code fingerprint,
@@ -142,7 +152,7 @@ Parquet file with fixed columns:
 
 | Column | Dtype | Semantics |
 |---|---|---|
-| `instrument` | string | canonical instrument ID; empty for cash-only events |
+| `instrument` | string | canonical instrument ID; non-empty for every order-derived event |
 | `side` | string enum | `buy`, `sell`, `none` |
 | `order_state` | string enum | `filled`, `rejected`, `cancelled`, `expired` |
 | `reject_reason` | string enum | `risk_blocked`, `suspended`, `limit_up`, `limit_down`, `insufficient_cash`, `t1_not_sellable`, `no_market_data`, `lot_size`, `quantity`, `price`, `cancelled`, `none` |
@@ -229,19 +239,52 @@ of the comparison satisfy the declared tolerance.
 
 ### 5.3 Quantity and T+1
 
-Sells are planned before buys. A sell quantity may not exceed prior
-`sellable_quantity`. A same-session buy is added to `buy_locked_quantity` and is
-not sellable until the next governed session. Board lots round buys down and
-sells down to the configured lot size. The last board lot may never be sold if
-the configured minimum holding rule is `preserve_one_lot`; otherwise fractional
-residual is cash-settled only when the explicit contract permits it.
+Sells are planned before buys. For a continuation run, sellable quantity is
+derived per execution session, never copied as a mutable balance:
+
+```text
+sellable_quantity =
+    previous_quantity
+    if previous_state_date < execution_date
+    else previous_quantity - previous_buy_locked_quantity
+```
+
+A same-session buy is added to `buy_locked_quantity` in the execution-close
+state and is not sellable until the next governed session. Board lots round buys
+down and sells down to the configured lot size. The last board lot may never be
+sold if the configured minimum holding rule is `preserve_one_lot`; otherwise
+fractional residual is cash-settled only when the explicit contract permits it.
 
 Insufficient cash is evaluated after all planned sells and their fees. A buy that
 cannot be fully funded at its declared price is either rejected or rounded down
 by the configured policy; the exact policy is a required configuration field.
 Partial fills are not supported in the first release.
 
-### 5.4 Fees
+### 5.4 Valuation and NAV
+
+All portfolio valuations use raw governed prices in CNY. For order planning, the
+decision-date valuation is:
+
+```text
+decision_nav = initial_or_prior_cash
+             + Σ(previous_quantity × decision_close_price)
+```
+
+A target quantity is computed from the governed target weight and this
+decision-date NAV:
+
+```text
+target_quantity = floor(target_weight × decision_nav / order_price)
+```
+
+For result reconciliation and next-state publication, execution-date close is
+the valuation price. A missing execution-date close for any surviving holding
+fails closed; it cannot be valued as zero. Opening value is reconstructed from
+the prior state and the same decision-date valuation rule. Closing cash equals
+prior cash plus all signed net cash movements. `closing_portfolio_value` is the
+result's deterministic projection of the next state before that state exists.
+
+### 5.5 Fees
 
 Fees are deterministic functions of gross amount and the fee policy. The first
 release supports explicit buy commission, sell commission, sell stamp tax, and
@@ -249,7 +292,7 @@ transfer fee with optional minimum commission. Fee values are rounded to the
 configured currency precision. Fees belong to their event and are included in
 that event's signed net cash movement.
 
-### 5.5 Cost Basis
+### 5.6 Cost Basis
 
 Buy fees increase the instrument's invested cost basis. The deterministic
 average-cost formula after a buy is:
@@ -268,24 +311,40 @@ change in that average cost. When quantity reaches zero, average cost is reset t
 zero. Corporate actions are excluded by the first release; therefore no
 corporate-action cost-basis adjustment is defined in `v1`.
 
-### 5.6 Risk Gate
+### 5.7 Risk Gate
 
-A paper execution run must receive a reviewed, immutable risk decision. The
-accepted decisions in the first slice are `allow`, `allow_with_actions`, or
-`reject`. `reject` blocks publication of the order plan, result, and next state.
-`allow_with_actions` must declare the exact action set and resulting intended
-weights; the executor may consume those actions only when their binding and
-target generation are valid. Missing, expired, tampered, or mismatched risk
-input fails closed before any artifact publication.
+A paper execution run must receive an immutable `risk_decision.v1` reviewed by
+the Risk Control Plane governance rules. The first release accepts only the
+existing v1 actions `allow` and `warn` as executable; both preserve the bound
+target weights unchanged. `resize` is not consumed by paper v1 because it would
+change investment intent. All `block`, `block_order`, `block_new_buy`,
+`de_risk`, `flatten`, `halt_strategy`, and `escalate_review` decisions block
+publication of the order plan, result, and next state. A future
+`risk_decision.v2` must explicitly define action payloads and effective-weight
+semantics before any automatic action consumption. Missing, expired, tampered,
+or mismatched risk input fails closed before any artifact publication.
 
 ## 6. Identity, Storage, and Readback
 
-Each manifest's stable content generation excludes run-only metadata and the
-quality report binding, while its durable `manifest_digest_sha256` covers the
-published manifest. The quality report binding participates in durable
-publication validation but not in stable content identity.
+Each manifest has three distinct identities:
 
-Storage layout is root-separated by artifact family:
+1. `generation_id` is the SHA-256 of the semantic content excluding run-only
+   metadata, quality report binding, and `manifest_digest_sha256`.
+2. `subject_content_sha256` supplied to an external quality review is the same
+   SHA-256 value as `generation_id`; it is not the final manifest digest.
+3. `manifest_digest_sha256` is the SHA-256 of the canonical published manifest
+   after the reviewed quality report binding is inserted, excluding only the
+   `manifest_digest_sha256` field itself. This final digest is verified on
+   durable readback.
+
+The reviewed report therefore binds the stable semantic subject, while the final
+manifest digest provides tamper evidence for the complete published document.
+This avoids a circular report→manifest→report dependency.
+
+The paper root is an explicitly configured path segment under the environment's
+immutable artifact root. It must not resolve to the repository source tree in
+production and must reject path traversal and symlink traversal. Storage layout
+is root-separated by artifact family:
 
 ```text
 <root>/execution-configs/<execution_id>/<generation>/manifest.json
@@ -300,16 +359,21 @@ Storage layout is root-separated by artifact family:
 Publication must create a partition atomically, reject overwrite, and preserve
 manifests. Accepted readback must verify manifest identity, digest, payload
 checksum, row count, column names, dtypes, serialization profile, key uniqueness,
-and cross-manifest bindings before returning data.Tampering with either the
+and cross-manifest bindings before returning data. Tampering with either the
 manifest or payload must produce a typed `ContractError`.
 
 ## 7. Quality Governance
 
 Every durable publication requires an externally reviewed
-`model_quality_report.v2` decision. The report must bind the exact family,
-generation, manifest digest, configuration, and checks. Publisher-generated
-passed reports are forbidden. The review trust anchor and production runtime-mode
-rules are inherited unchanged from the model and risk layers.
+`model_quality_report.v2` decision. The report's `binding_type` must be one of
+the four new paper families, `bound_generation_id` must equal the subject's
+`generation_id`, and `subject_content_sha256` must equal the same stable
+semantic content digest. The final `manifest_digest_sha256` is verified during
+readback but is not embedded in the pre-publication review. Publisher-generated
+passed reports are forbidden. The review registry must add the four families and
+paper-specific allowed checks; the report schema's existing policy/check shape
+is reused without changing released model families. Review trust-anchor and
+production runtime-mode rules are inherited unchanged.
 
 Minimum review checks are:
 
@@ -349,16 +413,18 @@ None of these capabilities may be silently inferred from the paper engine.
 The paper layer may exit its implementation phase only when:
 
 1. All four required schemas, representative fixtures, negative fixtures, golden
-   vectors, and typed loaders exist and are tested.
+   vectors, and typed loaders exist and are tested; quality registry has all four
+   paper binding types.
 2. Valid target weights plus executable state produce a deterministic order plan,
-   result, and next state.
+   result, and next state for both `initial` and `continuation` state modes.
 3. Missing mandatory market data fails closed with `no_market_data`.
 4. A non-trading instrument produces a typed suspended or excluded rejection.
 5. Limit-up blocks buys and limit-down blocks sells under the configured rule.
 6. A same-session buy cannot be sold in the same paper session.
 7. Board-lot rounding, sell-before-buy, and cash feasibility are deterministic.
 8. Every rejected or unfilled target delta is represented in reconciliation.
-9. State cash, holdings, fees, gross/net amounts, and portfolio value reconcile.
+9. State cash, holdings, fees, gross/net amounts, and portfolio value reconcile
+   using the declared decision/execution valuation bases.
 10. Tampered manifests, payloads, upstream bindings, and quality reports fail
     accepted readback.
 11. Risk rejection prevents every downstream publication.

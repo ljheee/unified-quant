@@ -1,6 +1,6 @@
 # Paper Execution Layer Implementation Plan
 
-Status: **v0.1 all phases paused pending Phase 0 exit**
+Status: **v0.1.1 remediation; all phases paused pending Phase 0 exit**
 
 Source spec: `specs/layers/paper-execution-layer-spec.md`
 
@@ -46,9 +46,10 @@ evidence exist and are independently reviewed.
    all-or-none for the first release.
 4. Missing mandatory inputs, tampered manifests, invalid reviews, rejected risk
    decisions, and reconciliation failures fail closed.
-5. Stable generation excludes run-only metadata and quality report binding.
-   `manifest_digest_sha256` covers the published manifest and is verified on
-   read.
+5. Stable generation and the external review's `subject_content_sha256` are the
+   SHA-256 of semantic content excluding run metadata, quality report binding,
+   and `manifest_digest_sha256`. The final `manifest_digest_sha256` is computed
+   after report binding, excludes only itself, and is verified on read.
 6. Paper artifacts are separate from backtest artifacts. No backtest result may
    be relabeled as paper execution evidence.
 7. Every phase must list exact test IDs, fixture paths, evidence paths, and
@@ -97,10 +98,12 @@ Deliverables:
    `config/schemas/fixtures/paper-execution/`;
 7. deterministic identity golden vectors under
    `evidence/paper-execution/phase-0/`;
-8. explicit storage layout, serialization profiles, canonical JSON identity
-   rules, excluded identity fields, and failure taxonomy;
-9. additions to `model_quality_report.v2` binding types and review registry for
-   the four paper families;
+8. explicit storage root governance, layout, serialization profiles, canonical
+   JSON identity rules, excluded identity fields, `initial`/`continuation` state
+   semantics, T+1 reset rules, and failure taxonomy;
+9. additive registry entries in `config/model-quality-reviews.v1.json` and an
+   additive `binding_type` enum extension in `model_quality_report.v2.json` for
+   the four paper families, without changing released families;
 10. architecture registration for the paper execution boundary;
 11. phase record and evidence index.
 
@@ -121,24 +124,27 @@ Exit criteria:
 Deliverables:
 
 1. `ExecutionConfigStore` for `execution_config.v1`.
-2. `PaperOrderPlanner` consuming accepted target weights, prior paper state,
-   governed market inputs, calendar, suspension, corporate actions, and risk
-   decision.
+2. `PaperOrderPlanner` consuming accepted target weights, prior or explicit
+   initial paper state, governed market inputs, calendar, suspension, corporate
+   actions, and risk decision.
 3. Deterministic cash-residual order ordering.
-4. Board-lot, sell-before-buy, T+1, and cash-budget sizing.
+4. Board-lot, sell-before-buy, per-session T+1 reset, decision-NAV sizing, and
+   deterministic cash-budget sizing after planned sell fees.
 5. `OrderPlanStore` with immutable publication and accepted readback.
 6. Typed errors for missing bindings, unavailable sellable quantity, invalid
    policy values, path traversal, and target-state inconsistency.
 
 Acceptance:
 
-- Identical inputs produce identical plan generation and payload bytes.
+- Identical inputs produce identical plan generation and logical fingerprint;
+   Parquet bytes need not be byte-identical across library versions.
 - Sell orders precede buy orders by configured sequence.
 - T+1-sellable quantity cannot be exceeded.
 - Buy quantities are board-lot-normalized downward and cash-feasible.
 - Rejected risk decisions stop before order-plan publication.
 - Every target instrument is represented by an order or an explicit unfilled
   reconciliation reason.
+- Initial and continuation state modes produce independent deterministic plans.
 - Plan readback rejects payload, manifest, identity, and upstream-binding
   tampering.
 
@@ -164,6 +170,7 @@ Acceptance:
 - Fees match the configured formulas and precision.
 - All-or-none cash feasibility is enforced after planned sells and fees.
 - Result readback rejects tampering and incomplete lineage.
+- Missing execution-close valuation data for a surviving holding fails the run.
 
 ## 7. Phase 3 — State Evolution and Reconciliation
 
@@ -171,17 +178,21 @@ Deliverables:
 
 1. `PaperPortfolioStateStore`.
 2. Deterministic next-state construction from prior state and result.
-3. Cash, holdings, average cost, buy-locked quantity, and sellable quantity
-   evolution.
-4. Aggregate target/order/fill/rejection/cash/value reconciliation.
+3. Cash, holdings, average cost, buy-locked quantity, and per-session
+   sellable-quantity evolution.
+4. Aggregate target/order/fill/rejection/cash/value reconciliation from explicit
+   decision-date and execution-close valuation rules.
 5. Floating-point tolerance and exact currency rounding rules.
 6. Cross-manifest result→plan→target→state resolution.
 
 Acceptance:
 
 - Closing cash is non-negative and equals opening cash plus signed net cash.
+- Opening value is reconstructable from prior/initial state and decision closes;
+  closing value uses execution closes.
 - Filled buys increase quantity and buy-locked quantity.
-- Filled sells reduce sellable quantity first and never sell T+1-locked shares.
+- Filled sells reduce derived sellable quantity first and never sell T+1-locked
+  shares; buy-locked inventory resets on the next governed session.
 - Average cost is deterministic and unaffected by key order.
 - Rejected and unfilled quantities reconcile exactly within tolerance.
 - Empty and fully rejected executions can publish valid state.
@@ -192,8 +203,10 @@ Acceptance:
 Deliverables:
 
 1. Quality-report publication gate for all four families.
-2. Risk Control Plane decision verification before order-plan publication.
-3. Optional deterministic `allow_with_actions` consumption contract.
+2. Risk Control Plane pre-trade decision verification before order-plan
+   publication; post-trade risk integration remains out of scope.
+3. Explicit no-op mapping for executable `allow` and `warn`, explicit rejection
+   of non-executable v1 actions, and documented future `risk_decision.v2` boundary.
 4. Runtime-mode guard confirming paper execution cannot enter a broker path.
 5. Readback governance tests for missing, tampered, forged, expired, and
   mismatched reports and decisions.
@@ -202,7 +215,8 @@ Acceptance:
 
 - A publisher-generated passed report cannot enable publication.
 - Reviewed report family, generation, digest, and checks must match exactly.
-- `reject` risk decisions block plan, result, and state publication.
+- All blocking `risk_decision.v1` actions block plan, result, and state
+  publication; `resize` and other intent-changing actions are never inferred.
 - Research/prod trust-anchor behavior remains unchanged.
 - No production test-key anchor is accepted when
   `UQ_RUNTIME_MODE=production`.
@@ -213,7 +227,8 @@ Deliverables:
 
 1. Final implementation commit.
 2. Local unified gate report.
-3. Remote CI evidence for the declared environment matrix.
+3. Remote CI evidence for the existing unified ten-cell matrix: macOS and Ubuntu
+   × Python 3.11–3.13 for the six base cells, plus the four Qlib runtime cells.
 4. `evidence/paper-execution/release/release-record.json`.
 5. `evidence/paper-execution/release/phase-record.json`.
 6. `evidence/paper-execution/release/evidence-index.json`.
