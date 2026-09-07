@@ -21,6 +21,7 @@ from ..errors import ContractError
 from ..risk.contracts import (
     validate_risk_event_sequence,
     validate_risk_manifest,
+    validate_risk_policy_governance,
 )
 
 
@@ -202,13 +203,25 @@ class ResearchChainRunner:
             raise ContractError("research request v2 requires risk documents")
         binding = plan.request["risk_binding"]
         policy = risk_documents.get("policy")
+        policy_review = risk_documents.get("policy_review")
         state = risk_documents.get("state")
         run = risk_documents.get("run")
         decision = risk_documents.get("decision")
         events = risk_documents.get("events")
-        if any(document is None for document in (policy, state, run, decision)) or not isinstance(events, list):
+        if (
+            any(document is None for document in (policy, policy_review, state, run, decision))
+            or not isinstance(events, list)
+        ):
             raise ContractError("research request v2 risk evidence is incomplete")
         validate_risk_manifest("risk_policy", dict(policy))
+        validate_risk_manifest("risk_review_decision", dict(policy_review))
+        validate_risk_policy_governance(dict(policy), policy_review)
+        if binding["policy_review_binding"] != {
+            "family": "risk_review_decision_v1",
+            "generation_id": policy_review["generation_id"],
+            "manifest_digest_sha256": policy_review["manifest_digest_sha256"],
+        }:
+            raise ContractError("research request v2 risk policy approval review lineage mismatch")
         validate_risk_manifest("risk_state", dict(state))
         validate_risk_manifest("risk_run", dict(run))
         validate_risk_manifest("risk_decision", dict(decision))
@@ -254,7 +267,14 @@ class ResearchChainRunner:
             for event_binding in binding["event_bindings"]
         ):
             raise ContractError("research request v2 risk events are not indexed by risk run")
-        return {"policy": policy, "state": state, "run": run, "decision": decision, "events": events}
+        return {
+            "policy": policy,
+            "policy_review": policy_review,
+            "state": state,
+            "run": run,
+            "decision": decision,
+            "events": events,
+        }
 
     def _enforce_risk_gate(
         self,

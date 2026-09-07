@@ -1,8 +1,8 @@
 {
   "phase": "risk-phase-4",
   "title": "Research Chain Integration",
-  "status": "exited_after_release",
-  "gate_exit": "passed",
+  "status": "remediation_in_progress",
+  "gate_exit": "pending_post_final_cr_gate",
   "implementation_commit": "02992e1ea1ef91f06beee46678df962d64ab3220",
   "acceptance": [
     {
@@ -69,6 +69,7 @@
   ],
   "notes": [
     "The deterministic Ed25519 anchor and fixture signer are repository test-mode trust material.",
-    "Production deployment must provision an out-of-band reviewer key and prohibit test-key use."
+    "Production deployment must provision an out-of-band reviewer key and prohibit test-key use.",
+    "Post-final-CR remediation adds mechanical signed-policy-review verification."
   ]
 }

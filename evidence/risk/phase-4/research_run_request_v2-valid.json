@@ -61,7 +61,7 @@
     "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
   },
-  "manifest_digest_sha256": "af4ab6b1b79c14d2c03c8b2f24885f3f6be442ee75a36df6cde7c169c8041ad4",
+  "manifest_digest_sha256": "3883292fef7eeb2e51eb7c3cc6397216e7f3086541c778f6f46a515a2907d32b",
   "model_definition_template": {
     "algorithm": "qlib_linear",
     "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -118,7 +118,7 @@
     "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "weight_scheme": "top_n_equal_weight"
   },
-  "request_content_generation_id": "571c1bda44d8917beadb63a1297a16e50c8cb054fa8485786ec1a5628cf8f688",
+  "request_content_generation_id": "f7d29458f5b82bc11d2dc6bab381824f00883e00111e21e1ee894d55d494ddc7",
   "research_name": "adjusted_return_baseline",
   "run_id": "00000000-0000-4000-8000-000000000001",
   "run_visible_cutoff": "2026-01-30T15:00:00+08:00",
@@ -136,6 +136,11 @@
       "family": "risk_policy_v1",
       "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
       "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "policy_review_binding": {
+      "family": "risk_review_decision_v1",
+      "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+      "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8"
     },
     "state_binding": {
       "family": "risk_state_v1",
@@ -162,6 +167,24 @@
         "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
       }
     ]
+  },
+  "policy_review": {
+    "contract_version": 1,
+    "schema_version": "1.0.0",
+    "review_type": "risk_policy_activation",
+    "subject_generation_id": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+    "subject_manifest_digest_sha256": "cfd9c82fa8e34fdd350d7673093966cea54a728b827e7381a4f35f3ed625fa72",
+    "subject_content_sha256": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+    "review_status": "approved",
+    "reviewer": "repository-owner",
+    "key_id": "risk-reviewer-v1-2026-09",
+    "policy": "reject_all",
+    "reviewed_at_utc": "2026-09-06T00:00:00Z",
+    "errors": [],
+    "warnings": [],
+    "review_signature_sha256": "7c11a845148bf9ade37547e0366a76a09a9073878382f536d2c65c65e48b2cc6c3a809b2f6b2c85a3ea12fd94075918af99bbe088a958697d54ed64d542b020e",
+    "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+    "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8"
   },
   "stage_plan_review": {
     "review_type": "research_stage_plan_v2_activation",

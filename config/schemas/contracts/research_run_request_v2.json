@@ -7,6 +7,7 @@
     "contract_version",
     "schema_version",
     "risk_binding",
+    "policy_review",
     "research_name",
     "execution_mode",
     "run_visible_cutoff",
@@ -267,11 +268,15 @@
     "dataset_policy_template": {
       "$ref": "dataset_policy_template.v1.json"
     },
+    "policy_review": {
+      "$ref": "risk_review_decision.v1.json"
+    },
     "risk_binding": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "policy_binding",
+        "policy_review_binding",
         "state_binding",
         "run_binding",
         "decision_binding",
@@ -289,6 +294,28 @@
           "properties": {
             "family": {
               "const": "risk_policy_v1"
+            },
+            "generation_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "manifest_digest_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "policy_review_binding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family",
+            "generation_id",
+            "manifest_digest_sha256"
+          ],
+          "properties": {
+            "family": {
+              "const": "risk_review_decision_v1"
             },
             "generation_id": {
               "type": "string",

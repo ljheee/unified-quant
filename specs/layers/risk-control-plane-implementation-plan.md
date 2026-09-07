@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.10 released; post-release CR remediation recorded**
+Status: **v0.2.11 post-final-CR security remediation pending gate**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -238,8 +238,9 @@ Entry criteria:
 
 Deliverables:
 
-1. required risk policy binding in request v2; policy may permit no active
-   state rules, but the enforceable decision reference itself is required;
+1. required risk policy binding and signed policy approval review in
+   request v2; runtime governance must verify the review before executing
+   the affected stage;
 2. a new risk review stage or explicit binding into portfolio/backtest stages;
 3. fail-closed stage behavior on enforceable decisions;
 4. result evidence index entries for risk runs/decisions/events;
@@ -328,6 +329,7 @@ it must become `passed` with evidence before the phase exits.
 | RCP4b | 4 | `test_research_request_v2_requires_risk_decision` | `evidence/risk/phase-4/` | implemented |
 | RCP4c | 4 | `test_research_stage_stops_on_rejected_decision` | `evidence/risk/phase-4/` | implemented |
 | RCP4d | 4 | `test_research_runner_cannot_sign_risk_reviews` | `evidence/risk/phase-4/` | implemented |
+| RCP4e | 4 | `test_research_v2_requires_signed_policy_review` | `tests/test_risk_control_plane_phase4.py`; `evidence/risk/phase-4/research_run_request_v2-valid.json` | implemented pending final gate |
 | RCP5a | 5 | `scripts/run_gate.sh` | `evidence/risk/release/final-gate-report.json`; 505 passed | implemented |
 | RCP5b | 5 | remote unified gate | `evidence/risk/release/remote-matrix/34044714986/`; 10 cells passed | implemented |
 

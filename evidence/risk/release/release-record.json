@@ -1,6 +1,6 @@
 {
   "layer": "risk_control_plane",
-  "status": "released",
+  "status": "post_final_cr_remediation_pending_gate",
   "release": "v1.0.0",
   "record_version": 1,
   "implementation_commit": "02992e1ea1ef91f06beee46678df962d64ab3220",
@@ -77,9 +77,7 @@
   "release_commit": "afb2e250e8b77fad4e19ea59106df3336ca3c0d7",
   "final_release_ci_run_id": "34045148499",
   "final_cr_gate": {
-    "result": "passed",
-    "report_path": "evidence/risk/release/final-cr-gate-report.json",
-    "report_sha256": "4964ec46ae01c366031520bbfbda3b385e9842a4fd17d4347c710e5c1af8b9d5",
-    "commit_bound": "afb2e250e8b77fad4e19ea59106df3336ca3c0d7"
+    "status": "invalidated_by_policy_review_security_remediation",
+    "reason": "Research Chain v2 runtime was found to accept an approved policy without verifying its signed approval review."
   }
 }
