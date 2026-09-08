@@ -1,7 +1,7 @@
 {
   "layer": "paper-execution",
   "phase": 0,
-  "status": "in_progress",
+  "status": "exited",
   "final_head_commit": "8f3b4bec9a047f0e60d5a8fb755ddf73d2d516f1",
   "deliverables": {
     "schemas": [
@@ -61,7 +61,12 @@
       "test_id": "test_paper_contract_negative_fixtures_fail_closed"
     }
   ],
-  "blocked_by": [
-    "final unified gate report at release commit"
-  ]
+  "blocked_by": null,
+  "evidence": {
+    "local_gate": ".gate/gate-report.json",
+    "local_gate_commit_bound": "00f91811e006c128f494e6884cdd754e42cca9fd",
+    "remote_matrix": "evidence/paper-execution/phase-0/final-head-ci/34184448361/aggregated-gates.json",
+    "remote_run": "evidence/paper-execution/phase-0/final-head-ci/34184448361/run.json",
+    "remote_ci_url": "https://github.com/ljheee/unified-quant/actions/runs/34184448361"
+  }
 }

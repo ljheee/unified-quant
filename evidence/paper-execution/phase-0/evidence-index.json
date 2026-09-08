@@ -22,6 +22,21 @@
     {
       "kind": "trust_anchor",
       "path": "config/model-quality-trust-anchor.v1.json"
+    },
+    {
+      "kind": "local_gate",
+      "path": "local: .gate/gate-report.json",
+      "commit": "00f91811e006c128f494e6884cdd754e42cca9fd"
+    },
+    {
+      "kind": "remote_matrix",
+      "path": "evidence/paper-execution/phase-0/final-head-ci/34184448361/aggregated-gates.json",
+      "commit": "00f91811e006c128f494e6884cdd754e42cca9fd"
+    },
+    {
+      "kind": "remote_run",
+      "path": "evidence/paper-execution/phase-0/final-head-ci/34184448361/run.json",
+      "commit": "00f91811e006c128f494e6884cdd754e42cca9fd"
     }
   ]
 }
