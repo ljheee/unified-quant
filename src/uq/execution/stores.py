@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import io
 import shutil
 import uuid
 from pathlib import Path
@@ -215,6 +216,7 @@ class OrderPlanStore(_ImmutablePaperManifestStore):
             fsync_tree(staging)
             os.replace(staging, partition)
             fsync_dir(partition.parent)
+            self._publish_review(report, report_checksum)
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise
@@ -228,7 +230,88 @@ class OrderPlanStore(_ImmutablePaperManifestStore):
         artifact = data_path.read_bytes()
         if file_sha256_bytes(artifact) != manifest["data_checksum_sha256"]:
             raise ContractError("order plan payload checksum mismatch")
-        return manifest, parquet.read_table(artifact).to_pandas()
+        return manifest, parquet.read_table(io.BytesIO(artifact)).to_pandas()
+
+    @staticmethod
+    def _serialize(frame: Any) -> tuple[bytes, str]:
+        ordered = frame.sort_values(["plan_sequence"], kind="mergesort").reset_index(drop=True)
+        table = pa.Table.from_pandas(ordered, preserve_index=False)
+        sink = pa.BufferOutputStream()
+        parquet.write_table(table, sink, compression="snappy")
+        artifact = sink.getvalue().to_pybytes()
+        return artifact, file_sha256_bytes(artifact)
+
+
+class ExecutionResultStore(_ImmutablePaperManifestStore):
+    def __init__(self, root: Path | str) -> None:
+        super().__init__(root, family="execution_result", directory="execution-results")
+
+    def _partition_path(self, manifest: dict[str, Any]) -> Path:
+        return (
+            self.directory / manifest["execution_id"] / manifest["execution_date"]
+            / f"generation={manifest['generation_id']}"
+        )
+
+    def publish(
+        self,
+        manifest: dict[str, Any],
+        frame: Any,
+        *,
+        quality_decision: dict[str, Any],
+    ) -> Path:
+        artifact, payload_checksum = self._serialize(frame)
+        manifest["data_checksum_sha256"] = payload_checksum
+        manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
+            manifest, schema_name=self.family
+        )
+        report, report_checksum = bind_reviewed_quality_decision(
+            quality_decision,
+            binding_type="execution_result_v1",
+            subject_generation_id=manifest["generation_id"],
+            subject_content_sha256=manifest["generation_id"],
+        )
+        manifest["quality_report_checksum_sha256"] = report_checksum
+        manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
+            manifest, schema_name=self.family
+        )
+        ModelContractLoader.validate(self.family, manifest)
+        partition = self._partition_path(manifest)
+        staging = partition.parent / f".staging_{uuid.uuid4().hex}"
+        staging.mkdir(parents=True)
+        try:
+            serialized, checksum = self._serialize(frame)
+            if checksum != payload_checksum:
+                raise ContractError("execution result serialization checksum changed")
+            (staging / manifest["data_file"]).write_bytes(serialized)
+            self._atomic_write_json(staging / "manifest.json", manifest)
+            fsync_tree(staging)
+            os.replace(staging, partition)
+            fsync_dir(partition.parent)
+            self._publish_review(report, report_checksum)
+        except Exception:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
+        return partition
+
+    def read(self, generation_id: str) -> tuple[dict[str, Any], Any]:
+        partition, manifest = self._read_manifest(generation_id)
+        _validate_bound_quality_report(self.root, manifest, "execution_result_v1")
+        data_path = partition / manifest["data_file"]
+        self._safe_resolve(data_path)
+        artifact = data_path.read_bytes()
+        if file_sha256_bytes(artifact) != manifest["data_checksum_sha256"]:
+            raise ContractError("execution result payload checksum mismatch")
+        frame = parquet.read_table(io.BytesIO(artifact)).to_pandas()
+        if len(frame) != int(manifest["row_count"]):
+            raise ContractError("execution result row count mismatch")
+        if set(frame.columns) != set(manifest["columns"]):
+            raise ContractError("execution result column mismatch")
+        for key, value in manifest["dtypes"].items():
+            if str(frame[key].dtype) != value:
+                raise ContractError(f"execution result dtype mismatch for {key}")
+        if frame["plan_sequence"].duplicated().any():
+            raise ContractError("execution result key is not unique")
+        return manifest, frame
 
     @staticmethod
     def _serialize(frame: Any) -> tuple[bytes, str]:
