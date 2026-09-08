@@ -1,6 +1,6 @@
 # Paper Execution Layer Specification
 
-Status: **v0.1.1 remediation contract draft**
+Status: **v0.1.2 review-remediated contract draft**
 Governance: contract-first, immutable artifacts, fail-closed accepted reads.
 Runtime mode: paper execution is a deterministic simulation mode, not a broker integration.
 
@@ -278,9 +278,10 @@ target_quantity = floor(target_weight × decision_nav / order_price)
 ```
 
 For result reconciliation and next-state publication, execution-date close is
-the valuation price. A missing execution-date close for any surviving holding
-fails closed; it cannot be valued as zero. Opening value is reconstructed from
-the prior state and the same decision-date valuation rule. Closing cash equals
+the valuation price. A missing execution-date close for any holding that remains
+in the prior/initial state, including an untraded holding in a zero-order or
+sell-only run, fails closed; it cannot be valued as zero. Opening value is
+reconstructed from the prior state and the same decision-date valuation rule. Closing cash equals
 prior cash plus all signed net cash movements. `closing_portfolio_value` is the
 result's deterministic projection of the next state before that state exists.
 
@@ -317,9 +318,12 @@ A paper execution run must receive an immutable `risk_decision.v1` reviewed by
 the Risk Control Plane governance rules. The first release accepts only the
 existing v1 actions `allow` and `warn` as executable; both preserve the bound
 target weights unchanged. `resize` is not consumed by paper v1 because it would
-change investment intent. All `block`, `block_order`, `block_new_buy`,
-`de_risk`, `flatten`, `halt_strategy`, and `escalate_review` decisions block
-publication of the order plan, result, and next state. A future
+change investment intent. Paper v1 deliberately treats `block_new_buy` as a
+whole-run fail-closed block rather than decomposing it into sell-only execution;
+this avoids changing investment intent through an execution-layer side effect.
+All `block`, `block_order`, `block_new_buy`, `de_risk`, `flatten`,
+`halt_strategy`, and `escalate_review` decisions block publication of the order
+plan, result, and next state. A future
 `risk_decision.v2` must explicitly define action payloads and effective-weight
 semantics before any automatic action consumption. Missing, expired, tampered,
 or mismatched risk input fails closed before any artifact publication.
@@ -372,7 +376,13 @@ semantic content digest. The final `manifest_digest_sha256` is verified during
 readback but is not embedded in the pre-publication review. Publisher-generated
 passed reports are forbidden. The review registry must add the four families and
 paper-specific allowed checks; the report schema's existing policy/check shape
-is reused without changing released model families. Review trust-anchor and
+is reused without changing released model families. Because the registry is
+anchored, a registry change requires an atomic, reviewed registry plus
+trust-anchor digest update; the implementation plan must record the old digest,
+new digest, review evidence, and the associated commit. The Research Chain
+quality provider allowlist in `src/uq/research_chain/contracts.py` must also
+additively include the four paper families, and provider configurations must
+declare only the paper families they actually support. Review trust-anchor and
 production runtime-mode rules are inherited unchanged.
 
 Minimum review checks are:

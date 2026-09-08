@@ -1,6 +1,6 @@
 # Paper Execution Layer Implementation Plan
 
-Status: **v0.1.1 remediation; all phases paused pending Phase 0 exit**
+Status: **v0.1.2 review-remediated; all phases paused pending Phase 0 exit**
 
 Source spec: `specs/layers/paper-execution-layer-spec.md`
 
@@ -101,9 +101,13 @@ Deliverables:
 8. explicit storage root governance, layout, serialization profiles, canonical
    JSON identity rules, excluded identity fields, `initial`/`continuation` state
    semantics, T+1 reset rules, and failure taxonomy;
-9. additive registry entries in `config/model-quality-reviews.v1.json` and an
-   additive `binding_type` enum extension in `model_quality_report.v2.json` for
-   the four paper families, without changing released families;
+9. additive registry entries in `config/model-quality-reviews.v1.json`, an
+   additive `binding_type` enum extension in `model_quality_report.v2.json`, and
+   an additive `_QUALITY_BINDING_TYPES` update in
+   `src/uq/research_chain/contracts.py` for the four paper families, without
+   changing released families; the anchored registry digest in
+   `config/model-quality-trust-anchor.v1.json` must be updated in the same
+   reviewed commit;
 10. architecture registration for the paper execution boundary;
 11. phase record and evidence index.
 
@@ -114,7 +118,9 @@ Exit criteria:
 - Identity golden vectors prove key-order stability and semantic-field
   sensitivity.
 - Storage paths reject traversal and symlink traversal.
-- Quality report binding types and trust-anchor governance tests pass.
+- Quality report binding types pass schema, registry, research-provider, and
+  trust-anchor governance tests; the registry digest rotation is documented and
+  verified.
 - Full test suite and unified gate pass at the final implementation commit.
 - The gate report, lockfile digest, evidence index, and phase record are
   preserved at that commit.
@@ -195,7 +201,8 @@ Acceptance:
   shares; buy-locked inventory resets on the next governed session.
 - Average cost is deterministic and unaffected by key order.
 - Rejected and unfilled quantities reconcile exactly within tolerance.
-- Empty and fully rejected executions can publish valid state.
+- Empty, fully rejected, zero-order, and sell-only executions can publish valid
+  state; every retained input holding has a non-zero fail-closed valuation check.
 - State readback rejects row, dtype, checksum, binding, and identity tampering.
 
 ## 8. Phase 4 — Governance Integration
@@ -216,7 +223,8 @@ Acceptance:
 - A publisher-generated passed report cannot enable publication.
 - Reviewed report family, generation, digest, and checks must match exactly.
 - All blocking `risk_decision.v1` actions block plan, result, and state
-  publication; `resize` and other intent-changing actions are never inferred.
+  publication; `resize` and other intent-changing actions are never inferred;
+  `block_new_buy` intentionally blocks the whole paper run in v1.
 - Research/prod trust-anchor behavior remains unchanged.
 - No production test-key anchor is accepted when
   `UQ_RUNTIME_MODE=production`.
