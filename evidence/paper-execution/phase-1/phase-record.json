@@ -1,0 +1,30 @@
+{
+  "layer": "paper-execution",
+  "phase": 1,
+  "status": "exited",
+  "final_head_commit": "1339c181f5bbf5d0b90b19623255127b7aaa4dee",
+  "deliverables": {
+    "execution_config_store": "src/uq/execution/stores.py",
+    "paper_order_planner": "src/uq/execution/planner.py",
+    "risk_publication_binding": "src/uq/risk/publication.py",
+    "order_plan_store": "src/uq/execution/stores.py",
+    "tests": "tests/test_paper_execution_phase1.py"
+  },
+  "acceptance": [
+    {"id": "PX1a", "description": "deterministic sell-before-buy plan", "status": "implemented", "test_id": "test_order_plan_is_deterministic_sell_before_buy"},
+    {"id": "PX1b", "description": "T+1 locked inventory cannot sell", "status": "implemented", "test_id": "test_t1_locked_inventory_cannot_be_sold_on_same_session"},
+    {"id": "PX1c", "description": "insufficient cash rounds down to lot", "status": "implemented", "test_id": "test_insufficient_cash_rounds_buy_down_to_lot"},
+    {"id": "PX1d", "description": "reject policy fails closed", "status": "implemented", "test_id": "test_insufficient_cash_reject_policy_fails_closed"},
+    {"id": "PX1e", "description": "blocking risk decision stops publication", "status": "implemented", "test_id": "test_risk_rejection_blocks_config_publication"},
+    {"id": "PX1f", "description": "risk decision lineage is verified", "status": "implemented", "test_id": "test_pre_trade_risk_decision_binding_is_verified"},
+    {"id": "PX1g", "description": "plan payload tampering fails readback", "status": "implemented", "test_id": "test_tampered_order_plan_payload_fails_read"}
+  ],
+  "blocked_by": null,
+  "evidence": {
+    "local_gate": "evidence/paper-execution/phase-1/final-head-ci/34192124891/local-gate-report.json",
+    "local_gate_commit_bound": "1339c181f5bbf5d0b90b19623255127b7aaa4dee",
+    "remote_matrix": "evidence/paper-execution/phase-1/final-head-ci/34192124891/aggregated-gates.json",
+    "remote_run": "evidence/paper-execution/phase-1/final-head-ci/34192124891/run.json",
+    "remote_ci_url": "https://github.com/ljheee/unified-quant/actions/runs/34192124891"
+  }
+}
