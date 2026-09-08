@@ -170,6 +170,58 @@
         "warning"
       ],
       "policy": "reject_all"
+    },
+    "execution_config_v1": {
+      "allowed_checks": [
+        "schema_valid",
+        "market_data_binding_resolved",
+        "state_mode_valid",
+        "execution_policy_within_bounds"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "order_plan_v1": {
+      "allowed_checks": [
+        "target_weights_binding_resolved",
+        "row_count_and_keys_valid",
+        "cash_feasible_planning",
+        "t1_quantity_valid"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "execution_result_v1": {
+      "allowed_checks": [
+        "payload_readback_valid",
+        "fee_reconciliation_valid",
+        "lineage_generations_resolved",
+        "reconciliation_complete"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
+    },
+    "paper_portfolio_state_v1": {
+      "allowed_checks": [
+        "holdings_readback_valid",
+        "cash_non_negative",
+        "state_lineage_resolved",
+        "state_reconciliation_complete"
+      ],
+      "allowed_statuses": [
+        "passed",
+        "warning"
+      ],
+      "policy": "reject_all"
     }
   },
   "registry_version": 1,

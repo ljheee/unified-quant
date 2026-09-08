@@ -1,0 +1,56 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "execution_id": "paper-demo",
+  "state_date": "2026-01-06",
+  "state_mode": "continuation",
+  "cash": 99000.25,
+  "data_file": "data.parquet",
+  "data_checksum_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "columns": [
+    "instrument",
+    "quantity",
+    "average_cost",
+    "buy_locked_quantity",
+    "sellable_quantity",
+    "market_value"
+  ],
+  "dtypes": {
+    "instrument": "string",
+    "quantity": "int64",
+    "average_cost": "float64",
+    "buy_locked_quantity": "int64",
+    "sellable_quantity": "int64",
+    "market_value": "float64"
+  },
+  "row_count": 1,
+  "key_uniqueness": "instrument",
+  "logical_fingerprint": "2222222222222222222222222222222222222222222222222222222222222222",
+  "serialization_profile_id": "parquet-v1",
+  "target_weights_binding": {
+    "family": "target_weights_v1",
+    "generation_id": "1111111111111111111111111111111111111111111111111111111111111111",
+    "manifest_digest_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "previous_state_binding": {
+    "family": "paper_portfolio_state_v1",
+    "generation_id": "1111111111111111111111111111111111111111111111111111111111111111",
+    "manifest_digest_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "execution_result_binding": null,
+  "risk_decision_binding": {
+    "family": "risk_decision_v1",
+    "generation_id": "5555555555555555555555555555555555555555555555555555555555555555",
+    "manifest_digest_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+  },
+  "market_data_binding": {
+    "family": "bars_daily",
+    "generation_id": "3333333333333333333333333333333333333333333333333333333333333333",
+    "manifest_digest_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
+  "created_at": "2026-09-08T00:00:00+00:00",
+  "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "manifest_digest_sha256": "250520f68e0288e87d9fb3d5b655eed993ef29ffccd5609c12b366e28c6c6f19",
+  "generation_id": "aab99383e6657b161876a3dc1c68fe61386fac05868f913e3578e1261f236f4e"
+}

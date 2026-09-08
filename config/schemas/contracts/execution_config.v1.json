@@ -1,0 +1,629 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/execution_config.v1.json.json",
+  "title": "Execution Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "schema_version",
+    "execution_id",
+    "mode",
+    "state_mode",
+    "market",
+    "decision_date",
+    "execution_date",
+    "target_weights_binding",
+    "input_state_binding",
+    "initial_state",
+    "market_data_binding",
+    "calendar_binding",
+    "suspension_binding",
+    "corporate_action_binding",
+    "risk_decision_binding",
+    "lot_size",
+    "fee_policy",
+    "price_policy",
+    "quantity_policy",
+    "data_delay_policy",
+    "data_delay_reason",
+    "serialization_profiles",
+    "run_id",
+    "created_at",
+    "quality_report_checksum_sha256",
+    "manifest_digest_sha256",
+    "generation_id"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "execution_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "mode": {
+      "const": "paper"
+    },
+    "state_mode": {
+      "enum": [
+        "initial",
+        "continuation"
+      ]
+    },
+    "market": {
+      "const": "cn_a"
+    },
+    "decision_date": {
+      "$ref": "#/$defs/date"
+    },
+    "execution_date": {
+      "$ref": "#/$defs/date"
+    },
+    "target_weights_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "input_state_binding": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family",
+            "generation_id",
+            "manifest_digest_sha256"
+          ],
+          "properties": {
+            "family": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{2,63}$"
+            },
+            "generation_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "manifest_digest_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "initial_state": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "holdings",
+            "cash",
+            "valuation_price_basis",
+            "provenance_sha256"
+          ],
+          "properties": {
+            "holdings": {
+              "type": "array",
+              "minItems": 0,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "instrument",
+                  "quantity",
+                  "average_cost",
+                  "buy_locked_quantity",
+                  "sellable_quantity"
+                ],
+                "properties": {
+                  "instrument": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9._-]{1,64}$"
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "average_cost": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "buy_locked_quantity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "sellable_quantity": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "cash": {
+              "type": "number",
+              "minimum": 0
+            },
+            "valuation_price_basis": {
+              "enum": [
+                "decision_close_estimate",
+                "execution_open_replay"
+              ]
+            },
+            "provenance_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "market_data_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dataset_family",
+        "schema_version",
+        "generation_id",
+        "manifest_digest_sha256",
+        "visibility_timestamp",
+        "price_basis",
+        "required_columns"
+      ],
+      "properties": {
+        "dataset_family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "schema_version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "visibility_timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "price_basis": {
+          "enum": [
+            "decision_close_estimate",
+            "execution_open_replay"
+          ]
+        },
+        "required_columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "open",
+              "high",
+              "low",
+              "close",
+              "volume",
+              "status",
+              "limit_up",
+              "limit_down"
+            ]
+          }
+        }
+      }
+    },
+    "calendar_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "suspension_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "corporate_action_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "risk_decision_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "lot_size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "fee_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "buy_commission_rate",
+        "sell_commission_rate",
+        "sell_stamp_tax_rate",
+        "transfer_fee_rate",
+        "minimum_commission",
+        "currency_precision"
+      ],
+      "properties": {
+        "buy_commission_rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sell_commission_rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sell_stamp_tax_rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "transfer_fee_rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "minimum_commission": {
+          "type": "number",
+          "minimum": 0
+        },
+        "currency_precision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        }
+      }
+    },
+    "price_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order_pricing_basis",
+        "limit_tolerance_absolute",
+        "limit_tolerance_relative",
+        "execution_window"
+      ],
+      "properties": {
+        "order_pricing_basis": {
+          "enum": [
+            "decision_close_estimate",
+            "execution_open_replay"
+          ]
+        },
+        "limit_tolerance_absolute": {
+          "type": "number",
+          "minimum": 0
+        },
+        "limit_tolerance_relative": {
+          "type": "number",
+          "minimum": 0
+        },
+        "execution_window": {
+          "enum": [
+            "open"
+          ]
+        }
+      }
+    },
+    "quantity_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sell_before_buy",
+        "enforce_t1",
+        "board_lot",
+        "minimum_order_quantity",
+        "minimum_holding_rule",
+        "insufficient_cash_policy",
+        "partial_fills"
+      ],
+      "properties": {
+        "sell_before_buy": {
+          "const": true
+        },
+        "enforce_t1": {
+          "const": true
+        },
+        "board_lot": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minimum_order_quantity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minimum_holding_rule": {
+          "enum": [
+            "preserve_one_lot",
+            "allow_zero"
+          ]
+        },
+        "insufficient_cash_policy": {
+          "enum": [
+            "reject",
+            "round_down_to_lot"
+          ]
+        },
+        "partial_fills": {
+          "const": false
+        }
+      }
+    },
+    "data_delay_policy": {
+      "enum": [
+        "none",
+        "delayed_replay",
+        "synthetic"
+      ]
+    },
+    "data_delay_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "serialization_profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest",
+        "payload"
+      ],
+      "properties": {
+        "manifest": {
+          "const": "json-canonical-v1"
+        },
+        "payload": {
+          "const": "parquet-v1"
+        }
+      }
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "quality_report_checksum_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "manifest_digest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "path_segment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "producer_code_fingerprint",
+        "run_id",
+        "created_at"
+      ],
+      "properties": {
+        "producer_code_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "run_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state_mode": {
+            "const": "continuation"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input_state_binding": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "input_state_binding"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state_mode": {
+            "const": "initial"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input_state_binding": {
+            "type": "null"
+          },
+          "initial_state": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "initial_state"
+        ]
+      }
+    }
+  ]
+}

@@ -41,7 +41,11 @@
         "backtest_result_v1",
         "research_run_request_v1",
         "research_run_state_v1",
-        "research_run_result_v1"
+        "research_run_result_v1",
+        "execution_config_v1",
+        "order_plan_v1",
+        "execution_result_v1",
+        "paper_portfolio_state_v1"
       ]
     },
     "bound_generation_id": {

@@ -18,6 +18,8 @@ _QUALITY_BINDING_TYPES = {
     "qlib_init_receipt_v1", "prediction_set_v1", "portfolio_definition_v1",
     "target_weights_v1", "backtest_config_v1", "backtest_result_v1", "factor_v1",
     "research_run_request_v1", "research_run_state_v1", "research_run_result_v1",
+    "execution_config_v1", "order_plan_v1", "execution_result_v1",
+    "paper_portfolio_state_v1",
 }
 
 

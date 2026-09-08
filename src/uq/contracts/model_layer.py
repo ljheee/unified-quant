@@ -33,6 +33,13 @@ _SCHEMA_NAMES = {
     "target_weights",
     "backtest_config",
     "backtest_result",
+    "execution_config",
+    "order_plan",
+    "execution_result",
+    "paper_portfolio_state",
+}
+_PAPER_EXECUTION_FAMILIES = {
+    "execution_config", "order_plan", "execution_result", "paper_portfolio_state",
 }
 _RUN_LOCAL_FIELDS = {"run_id", "created_at"}
 _QUALITY_BOUND_FIELDS = {
@@ -127,6 +134,79 @@ def model_manifest_identities(
     }
     manifest_digest = sha256_json(digest_document)
     return generation_id, manifest_digest
+
+
+def paper_execution_identities(
+    payload: Mapping[str, Any],
+    *,
+    schema_name: str,
+) -> tuple[str, str]:
+    """Return stable semantic generation and durable paper manifest digest."""
+    if schema_name not in _PAPER_EXECUTION_FAMILIES:
+        raise ContractError(f"unknown paper execution contract family: {schema_name}")
+    document = dict(payload)
+    for key in ("generation_id", "manifest_digest_sha256"):
+        value = document.get(key)
+        if not isinstance(value, str) or not _SHA256.fullmatch(value):
+            raise ContractError(f"{schema_name} missing valid {key}")
+        del document[key]
+    generation_document = {
+        key: value for key, value in document.items()
+        if key not in (*_RUN_LOCAL_FIELDS, "quality_report_checksum_sha256")
+    }
+    generation_id = sha256_json(generation_document)
+    digest_document = {**document, "generation_id": generation_id}
+    manifest_digest = sha256_json(digest_document)
+    return generation_id, manifest_digest
+
+
+def _validate_paper_execution_bindings(payload: dict[str, Any], *, schema_name: str) -> None:
+    required_families = {
+        "target_weights_binding": "target_weights_v1",
+        "risk_decision_binding": "risk_decision_v1",
+    }
+    if schema_name != "execution_config":
+        required_families["calendar_binding"] = "trading_calendar_v1"
+        required_families["suspension_binding"] = "suspension_snapshot_v1"
+        required_families["corporate_action_binding"] = "corporate_action_v1"
+    for field, expected_family in required_families.items():
+        binding = payload.get(field)
+        if isinstance(binding, dict) and binding.get("family") != expected_family:
+            raise ContractError(f"paper {field} must bind {expected_family}")
+    state_binding = payload.get("input_state_binding")
+    if isinstance(state_binding, dict) and state_binding.get("family") != "paper_portfolio_state_v1":
+        raise ContractError("paper input state must bind paper_portfolio_state_v1")
+    previous = payload.get("previous_state_binding")
+    if isinstance(previous, dict) and previous.get("family") != "paper_portfolio_state_v1":
+        raise ContractError("paper previous state must bind paper_portfolio_state_v1")
+    result = payload.get("execution_result_binding")
+    if isinstance(result, dict) and result.get("family") != "execution_result_v1":
+        raise ContractError("paper execution result must bind execution_result_v1")
+
+
+def _validate_paper_execution_state_transition(payload: dict[str, Any]) -> None:
+    if payload["state_mode"] == "continuation":
+        previous = payload["previous_state_binding"]
+        result = payload["execution_result_binding"]
+        if not isinstance(previous, dict) or not isinstance(result, dict):
+            raise ContractError("continuation paper state requires prior state and result bindings")
+        if previous["generation_id"] == payload["generation_id"]:
+            raise ContractError("paper state may not bind itself as previous state")
+        if result["generation_id"] == payload["generation_id"]:
+            raise ContractError("paper state may not bind itself as execution result")
+    elif payload["previous_state_binding"] is not None:
+        raise ContractError("initial paper state must not bind a previous state")
+
+
+def _validate_paper_execution_transition_mode(payload: dict[str, Any]) -> None:
+    if payload["state_mode"] == "continuation":
+        if not isinstance(payload.get("input_state_binding"), dict):
+            raise ContractError("continuation paper transition requires input state binding")
+        if payload.get("initial_state_provenance_sha256") is not None:
+            raise ContractError("continuation paper transition must not carry initial state")
+    elif not isinstance(payload.get("input_state_binding"), dict):
+        if payload.get("initial_state_provenance_sha256") is None:
+            raise ContractError("initial paper transition requires initial state provenance")
 
 
 def validate_quality_decision_owning_report(report: Mapping[str, Any]) -> str:
@@ -472,6 +552,24 @@ class ModelContractLoader:
             raise ContractError(f"unknown model contract family: {schema_name}")
         _reject_non_finite(payload)
         validate_model_contract(schema_name, payload)
+        if schema_name in _PAPER_EXECUTION_FAMILIES:
+            expected_generation, expected_digest = paper_execution_identities(
+                payload, schema_name=schema_name
+            )
+            if payload["generation_id"] != expected_generation:
+                raise ContractError(
+                    f"{schema_name} stable generation mismatch expected={expected_generation} actual={payload['generation_id']}"
+                )
+            if payload["manifest_digest_sha256"] != expected_digest:
+                raise ContractError(
+                    f"{schema_name} manifest digest mismatch expected={expected_digest} actual={payload['manifest_digest_sha256']}"
+                )
+            _validate_paper_execution_bindings(payload, schema_name=schema_name)
+            if schema_name in {"order_plan", "execution_result"}:
+                _validate_paper_execution_transition_mode(payload)
+            if schema_name == "paper_portfolio_state":
+                _validate_paper_execution_state_transition(payload)
+            return
         if schema_name in {"accepted_factor_index_query", "accepted_factor_index_response", "model_quality_report"}:
             if schema_name == "model_quality_report":
                 checksum_payload = {key: value for key, value in payload.items() if key != "report_checksum_sha256"}

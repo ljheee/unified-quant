@@ -1,0 +1,501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/execution_result.v1.json.json",
+  "title": "Execution Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "schema_version",
+    "execution_id",
+    "state_mode",
+    "decision_date",
+    "execution_date",
+    "order_plan_generation_id",
+    "data_file",
+    "data_checksum_sha256",
+    "columns",
+    "dtypes",
+    "row_count",
+    "key_uniqueness",
+    "logical_fingerprint",
+    "serialization_profile_id",
+    "target_weights_binding",
+    "input_state_binding",
+    "initial_state_provenance_sha256",
+    "market_data_binding",
+    "calendar_binding",
+    "suspension_binding",
+    "corporate_action_binding",
+    "risk_decision_binding",
+    "aggregate_reconciliation",
+    "reconciliation_tolerance",
+    "opening_cash",
+    "closing_cash",
+    "opening_portfolio_value",
+    "closing_portfolio_value",
+    "run_id",
+    "created_at",
+    "quality_report_checksum_sha256",
+    "manifest_digest_sha256",
+    "generation_id"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "execution_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "decision_date": {
+      "$ref": "#/$defs/date"
+    },
+    "execution_date": {
+      "$ref": "#/$defs/date"
+    },
+    "order_plan_generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "data_file": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.parquet$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "data_checksum_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "columns": {
+      "type": "array",
+      "minItems": 13,
+      "items": {
+        "type": "string"
+      }
+    },
+    "dtypes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "row_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "key_uniqueness": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "plan_sequence"
+        }
+      ],
+      "items": false,
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "logical_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "serialization_profile_id": {
+      "const": "parquet-v1"
+    },
+    "target_weights_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "input_state_binding": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family",
+            "generation_id",
+            "manifest_digest_sha256"
+          ],
+          "properties": {
+            "family": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{2,63}$"
+            },
+            "generation_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "manifest_digest_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "initial_state_provenance_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "market_data_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "calendar_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "suspension_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "corporate_action_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "risk_decision_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "aggregate_reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_instrument_count",
+        "target_total_stock_weight",
+        "planned_buy_quantity",
+        "planned_sell_quantity",
+        "planned_buy_notional",
+        "planned_sell_notional",
+        "filled_buy_quantity",
+        "filled_sell_quantity",
+        "filled_buy_gross_amount",
+        "filled_sell_gross_amount",
+        "total_fee_amount",
+        "net_cash_movement",
+        "rejected_quantity_by_reason",
+        "unfilled_target_quantity_by_reason"
+      ],
+      "properties": {
+        "target_instrument_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_total_stock_weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "planned_buy_quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "planned_sell_quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "planned_buy_notional": {
+          "type": "number",
+          "minimum": 0
+        },
+        "planned_sell_notional": {
+          "type": "number",
+          "minimum": 0
+        },
+        "filled_buy_quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "filled_sell_quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "filled_buy_gross_amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "filled_sell_gross_amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "total_fee_amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "net_cash_movement": {
+          "type": "number"
+        },
+        "rejected_quantity_by_reason": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "unfilled_target_quantity_by_reason": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "reconciliation_tolerance": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "opening_cash": {
+      "type": "number",
+      "minimum": 0
+    },
+    "closing_cash": {
+      "type": "number",
+      "minimum": 0
+    },
+    "opening_portfolio_value": {
+      "type": "number"
+    },
+    "closing_portfolio_value": {
+      "type": "number"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "quality_report_checksum_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "manifest_digest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "state_mode": {
+      "enum": [
+        "initial",
+        "continuation"
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "path_segment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "producer_code_fingerprint",
+        "run_id",
+        "created_at"
+      ],
+      "properties": {
+        "producer_code_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "run_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

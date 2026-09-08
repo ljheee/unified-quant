@@ -1,0 +1,67 @@
+{
+  "layer": "paper-execution",
+  "phase": 0,
+  "status": "in_progress",
+  "final_head_commit": "8f3b4bec9a047f0e60d5a8fb755ddf73d2d516f1",
+  "deliverables": {
+    "schemas": [
+      "execution_config.v1.json",
+      "order_plan.v1.json",
+      "execution_result.v1.json",
+      "paper_portfolio_state.v1.json"
+    ],
+    "fixture_directory": "config/schemas/fixtures/paper-execution",
+    "golden_vectors": "evidence/paper-execution/phase-0/identity-golden-vectors.json",
+    "loader_module": "src/uq/contracts/model_layer.py",
+    "quality_registry": "config/model-quality-reviews.v1.json",
+    "trust_anchor": "config/model-quality-trust-anchor.v1.json",
+    "architecture": "specs/architecture.md#118-paper-execution-layer-boundary"
+  },
+  "acceptance": [
+    {
+      "id": "PX0a",
+      "description": "representative fixtures load",
+      "status": "implemented",
+      "test_id": "test_representative_paper_contract_loads"
+    },
+    {
+      "id": "PX0b",
+      "description": "negative fixtures fail closed",
+      "status": "implemented",
+      "test_id": "test_paper_contract_negative_fixtures_fail_closed"
+    },
+    {
+      "id": "PX0c",
+      "description": "two negative fixtures per family",
+      "status": "implemented",
+      "test_id": "test_every_paper_family_has_two_distinct_negative_fixtures"
+    },
+    {
+      "id": "PX0d",
+      "description": "identity golden stable and sensitive",
+      "status": "implemented",
+      "test_id": "test_identity_golden_vectors_are_persisted_stable_and_sensitive"
+    },
+    {
+      "id": "PX0e",
+      "description": "quality/provider registration",
+      "status": "implemented",
+      "test_id": "test_paper_families_are_registered_for_quality_and_providers"
+    },
+    {
+      "id": "PX0f",
+      "description": "reviewed quality binding",
+      "status": "implemented",
+      "test_id": "test_paper_config_can_bind_reviewed_quality_decision"
+    },
+    {
+      "id": "PX0g",
+      "description": "transition binding semantics",
+      "status": "implemented",
+      "test_id": "test_paper_contract_negative_fixtures_fail_closed"
+    }
+  ],
+  "blocked_by": [
+    "final unified gate report at release commit"
+  ]
+}

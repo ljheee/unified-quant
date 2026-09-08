@@ -1,0 +1,104 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "execution_id": "paper-demo",
+  "decision_date": "2026-01-05",
+  "execution_date": "2026-01-06",
+  "order_plan_generation_id": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "data_file": "data.parquet",
+  "data_checksum_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "columns": [
+    "instrument",
+    "side",
+    "order_state",
+    "reject_reason",
+    "filled_quantity",
+    "requested_quantity",
+    "price",
+    "gross_amount",
+    "fee_amount",
+    "net_amount",
+    "plan_sequence",
+    "decision_date",
+    "execution_date"
+  ],
+  "dtypes": {
+    "instrument": "string",
+    "side": "string",
+    "order_state": "string",
+    "reject_reason": "string",
+    "filled_quantity": "int64",
+    "requested_quantity": "int64",
+    "price": "float64",
+    "gross_amount": "float64",
+    "fee_amount": "float64",
+    "net_amount": "float64",
+    "plan_sequence": "int64",
+    "decision_date": "datetime64[ns]",
+    "execution_date": "datetime64[ns]"
+  },
+  "row_count": 1,
+  "key_uniqueness": [
+    "plan_sequence"
+  ],
+  "logical_fingerprint": "2222222222222222222222222222222222222222222222222222222222222222",
+  "serialization_profile_id": "parquet-v1",
+  "target_weights_binding": {
+    "family": "target_weights_v1",
+    "generation_id": "1111111111111111111111111111111111111111111111111111111111111111",
+    "manifest_digest_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "input_state_binding": null,
+  "initial_state_provenance_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+  "market_data_binding": {
+    "family": "bars_daily",
+    "generation_id": "3333333333333333333333333333333333333333333333333333333333333333",
+    "manifest_digest_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "calendar_binding": {
+    "family": "trading_calendar_v1",
+    "generation_id": "8888888888888888888888888888888888888888888888888888888888888888",
+    "manifest_digest_sha256": "9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "suspension_binding": {
+    "family": "suspension_snapshot_v1",
+    "generation_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "manifest_digest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "corporate_action_binding": {
+    "family": "corporate_action_v1",
+    "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "manifest_digest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "risk_decision_binding": {
+    "family": "risk_decision_v1",
+    "generation_id": "5555555555555555555555555555555555555555555555555555555555555555",
+    "manifest_digest_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+  },
+  "aggregate_reconciliation": {
+    "target_instrument_count": 1,
+    "target_total_stock_weight": 0.5,
+    "planned_buy_quantity": 100,
+    "planned_sell_quantity": 0,
+    "planned_buy_notional": 1000.0,
+    "planned_sell_notional": 0.0,
+    "filled_buy_quantity": 100,
+    "filled_sell_quantity": 0,
+    "filled_buy_gross_amount": 1000.0,
+    "filled_sell_gross_amount": 0.0,
+    "total_fee_amount": 0.25,
+    "net_cash_movement": -1000.25,
+    "rejected_quantity_by_reason": {},
+    "unfilled_target_quantity_by_reason": {}
+  },
+  "reconciliation_tolerance": 1e-06,
+  "opening_cash": 100000.0,
+  "closing_cash": 99000.25,
+  "opening_portfolio_value": 100000.0,
+  "closing_portfolio_value": 101000.25,
+  "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
+  "created_at": "2026-09-08T00:00:00+00:00",
+  "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "manifest_digest_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "generation_id": "b225e0e4c4ab4b598deb0c3e39602eb8b72a9b4c0ddb7ff70bbfc50b9e16571d"
+}

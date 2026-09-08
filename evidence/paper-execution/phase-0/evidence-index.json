@@ -1,0 +1,27 @@
+{
+  "schema_version": "v1",
+  "layer": "paper-execution",
+  "phase": 0,
+  "entries": [
+    {
+      "kind": "golden_vectors",
+      "path": "evidence/paper-execution/phase-0/identity-golden-vectors.json"
+    },
+    {
+      "kind": "phase_record",
+      "path": "evidence/paper-execution/phase-0/phase-record.json"
+    },
+    {
+      "kind": "fixtures",
+      "path": "config/schemas/fixtures/paper-execution"
+    },
+    {
+      "kind": "quality_registry",
+      "path": "config/model-quality-reviews.v1.json"
+    },
+    {
+      "kind": "trust_anchor",
+      "path": "config/model-quality-trust-anchor.v1.json"
+    }
+  ]
+}

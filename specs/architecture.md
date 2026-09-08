@@ -432,6 +432,24 @@ activated, is deterministic decision-time risk for portfolio publication and
 backtest orders. Production real-time execution risk remains explicitly
 deferred until an Execution Layer exists.
 
+## 11.8 Paper Execution Layer Boundary
+
+```text
+Target Weight Publication
+  -> Paper Portfolio State (initial or continuation)
+  + Governed market/calendar/suspension/corporate-action inputs
+  + Risk Control Plane pre-trade decision
+  -> Paper Order Plan
+  -> Paper Execution Result
+  -> Next Paper Portfolio State
+```
+
+The paper execution layer is a deterministic simulation slice, not a broker
+adapter. It persists immutable orders, fills, rejections, fees, and portfolio
+state under the model-layer governance model. Broker connectivity, live
+market-data streams, credentials, partial fills, and submission-only lifecycle
+records remain explicitly out of scope.
+
 ## 12. Acceptance Criteria for the Stable Contract
 
 The architecture is considered implemented only when all pass:

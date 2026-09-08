@@ -1,0 +1,103 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "execution_id": "paper-demo",
+  "mode": "paper",
+  "state_mode": "initial",
+  "market": "cn_a",
+  "decision_date": "2026-01-05",
+  "execution_date": "2026-01-06",
+  "target_weights_binding": {
+    "family": "target_weights_v1",
+    "generation_id": "1111111111111111111111111111111111111111111111111111111111111111",
+    "manifest_digest_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "input_state_binding": null,
+  "initial_state": {
+    "holdings": [
+      {
+        "instrument": "000001.XSHE",
+        "quantity": 1000,
+        "average_cost": 10.0,
+        "buy_locked_quantity": 0,
+        "sellable_quantity": 1000
+      }
+    ],
+    "cash": 100000.0,
+    "valuation_price_basis": "decision_close_estimate",
+    "provenance_sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+  },
+  "market_data_binding": {
+    "dataset_family": "bars_daily",
+    "schema_version": "research-v1",
+    "generation_id": "3333333333333333333333333333333333333333333333333333333333333333",
+    "manifest_digest_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "visibility_timestamp": "2026-09-08T00:00:00+00:00",
+    "price_basis": "decision_close_estimate",
+    "required_columns": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "status",
+      "limit_up",
+      "limit_down"
+    ]
+  },
+  "calendar_binding": {
+    "family": "trading_calendar_v1",
+    "generation_id": "8888888888888888888888888888888888888888888888888888888888888888",
+    "manifest_digest_sha256": "9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "suspension_binding": {
+    "family": "suspension_snapshot_v1",
+    "generation_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "manifest_digest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "corporate_action_binding": {
+    "family": "corporate_action_v1",
+    "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "manifest_digest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "risk_decision_binding": {
+    "family": "risk_decision_v1",
+    "generation_id": "5555555555555555555555555555555555555555555555555555555555555555",
+    "manifest_digest_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+  },
+  "lot_size": 100,
+  "fee_policy": {
+    "buy_commission_rate": 0.00025,
+    "sell_commission_rate": 0.00025,
+    "sell_stamp_tax_rate": 0.0005,
+    "transfer_fee_rate": 1e-05,
+    "minimum_commission": 5.0,
+    "currency_precision": 2
+  },
+  "price_policy": {
+    "order_pricing_basis": "decision_close_estimate",
+    "limit_tolerance_absolute": 0.0,
+    "limit_tolerance_relative": 0.0,
+    "execution_window": "open"
+  },
+  "quantity_policy": {
+    "sell_before_buy": true,
+    "enforce_t1": true,
+    "board_lot": 100,
+    "minimum_order_quantity": 100,
+    "minimum_holding_rule": "preserve_one_lot",
+    "insufficient_cash_policy": "round_down_to_lot",
+    "partial_fills": false
+  },
+  "data_delay_policy": "delayed_replay",
+  "data_delay_reason": "phase0 contract replay fixture",
+  "serialization_profiles": {
+    "manifest": "json-canonical-v1",
+    "payload": "parquet-v1"
+  },
+  "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
+  "created_at": "2026-09-08T00:00:00+00:00",
+  "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "manifest_digest_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "generation_id": "4bd548c270cf5518525e1735291b85b73e06851f03de0eef2f968d175e23ebf1"
+}

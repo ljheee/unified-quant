@@ -1,0 +1,85 @@
+{
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "execution_id": "paper-demo",
+  "execution_config_generation_id": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "execution_date": "2026-01-06",
+  "decision_date": "2026-01-05",
+  "data_file": "data.parquet",
+  "data_checksum_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "columns": [
+    "instrument",
+    "side",
+    "requested_quantity",
+    "limit_price",
+    "order_type",
+    "reason",
+    "target_delta_shares",
+    "sellable_quantity",
+    "previous_quantity",
+    "target_quantity",
+    "order_state",
+    "plan_sequence"
+  ],
+  "dtypes": {
+    "instrument": "string",
+    "side": "string",
+    "requested_quantity": "int64",
+    "limit_price": "float64",
+    "order_type": "string",
+    "reason": "string",
+    "target_delta_shares": "int64",
+    "sellable_quantity": "int64",
+    "previous_quantity": "int64",
+    "target_quantity": "int64",
+    "order_state": "string",
+    "plan_sequence": "int64"
+  },
+  "row_count": 3,
+  "key_uniqueness": [
+    "plan_sequence"
+  ],
+  "logical_fingerprint": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "serialization_profile_id": "parquet-v1",
+  "target_weights_binding": {
+    "family": "target_weights_v1",
+    "generation_id": "1111111111111111111111111111111111111111111111111111111111111111",
+    "manifest_digest_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "input_state_binding": null,
+  "initial_state_provenance_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+  "market_data_binding": {
+    "family": "bars_daily",
+    "generation_id": "3333333333333333333333333333333333333333333333333333333333333333",
+    "manifest_digest_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "calendar_binding": {
+    "family": "trading_calendar_v1",
+    "generation_id": "8888888888888888888888888888888888888888888888888888888888888888",
+    "manifest_digest_sha256": "9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "suspension_binding": {
+    "family": "suspension_snapshot_v1",
+    "generation_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "manifest_digest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "corporate_action_binding": {
+    "family": "corporate_action_v1",
+    "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "manifest_digest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "risk_decision_binding": {
+    "family": "risk_decision_v1",
+    "generation_id": "5555555555555555555555555555555555555555555555555555555555555555",
+    "manifest_digest_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+  },
+  "ordered_cash_residual_sequence": [
+    1
+  ],
+  "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
+  "created_at": "2026-09-08T00:00:00+00:00",
+  "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "manifest_digest_sha256": "a793f42602cb14a075056b9cd3551882b918521a6bffb268cd3d8ca9d07a56c3",
+  "generation_id": "9e6780bcd3d09dc3c2b8c659f7d5feab557748a6e7e47d44c8fdf24034f87563",
+  "state_mode": "initial"
+}
