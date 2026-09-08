@@ -1,7 +1,7 @@
 {
   "layer": "paper-execution",
   "phase": 1,
-  "status": "exited",
+  "status": "remediation_in_progress",
   "final_head_commit": "1339c181f5bbf5d0b90b19623255127b7aaa4dee",
   "deliverables": {
     "execution_config_store": "src/uq/execution/stores.py",
@@ -19,7 +19,7 @@
     {"id": "PX1f", "description": "risk decision lineage is verified", "status": "implemented", "test_id": "test_pre_trade_risk_decision_binding_is_verified"},
     {"id": "PX1g", "description": "plan payload tampering fails readback", "status": "implemented", "test_id": "test_tampered_order_plan_payload_fails_read"}
   ],
-  "blocked_by": null,
+  "blocked_by": ["final CR: planned-sell cash feasibility and manifest identity readback"],
   "evidence": {
     "local_gate": "evidence/paper-execution/phase-1/final-head-ci/34192124891/local-gate-report.json",
     "local_gate_commit_bound": "1339c181f5bbf5d0b90b19623255127b7aaa4dee",

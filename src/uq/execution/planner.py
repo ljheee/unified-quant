@@ -62,7 +62,7 @@ class PaperOrderPlanner:
                 raise ContractError("opening cash does not match initial state")
             holdings = [dict(row) for row in state["holdings"]]
         else:
-            if not input_holdings:
+            if input_holdings is None:
                 raise ContractError("continuation execution requires input holdings")
             holdings = [dict(row) for row in input_holdings]
         by_instrument = {row["instrument"]: row for row in holdings}
@@ -128,28 +128,24 @@ class PaperOrderPlanner:
             side = "sell" if target_delta < 0 else "buy"
             sellable = int(holding["sellable_quantity"]) if holding else 0
             requested = abs(target_delta) // board_lot * board_lot
-            if reject_insufficient_cash and side == "buy":
-                required_gross = requested * close
-                required_fee = event_fee("buy", required_gross)
-                if required_gross + required_fee > float(opening_cash):
-                    raise ContractError(f"insufficient cash for buy {instrument}")
             if side == "sell":
                 requested = min(requested, max(sellable, 0))
                 remaining = previous - requested
                 if config["quantity_policy"]["minimum_holding_rule"] == "preserve_one_lot":
                     if 0 < remaining < board_lot:
                         requested = max(previous - board_lot, 0)
-                gross = requested * limit_price
-                net_amount = gross - event_fee(side, gross)
-                cash_after_event = opening_cash + net_amount
-                if cash_after_event < 0:
-                    raise ContractError("sell fees create negative cash")
-            if requested == 0:
-                continue
+                if requested > 0:
+                    gross = requested * limit_price
+                    fee = event_fee(side, gross)
+                    if gross - fee < 0:
+                        raise ContractError("sell fees exceed planned sell proceeds")
+            reason = "target_rebalance"
+            if requested == 0 and side == "buy" and target_delta > 0:
+                reason = "cash_residual"
             records.append({
                 "instrument": instrument, "side": side, "requested_quantity": int(requested),
                 "limit_price": limit_price, "order_type": "limit",
-                "reason": "target_rebalance", "target_delta_shares": int(target_delta),
+                "reason": reason, "target_delta_shares": int(target_delta),
                 "sellable_quantity": int(sellable), "previous_quantity": int(previous),
                 "target_quantity": int(target_quantity), "order_state": "planned",
                 "plan_sequence": sequence,
@@ -176,9 +172,9 @@ class PaperOrderPlanner:
                     gross = int(row["requested_quantity"]) * float(row["limit_price"])
                     fee = event_fee("buy", gross)
                 if int(row["requested_quantity"]) <= 0:
-                    raise ContractError(f"insufficient cash for any lot of {row['instrument']}")
+                    row["reason"] = "cash_residual"
+                    continue
             available_cash -= gross + fee
-        ordered = [row for row in ordered if int(row["requested_quantity"]) > 0]
         for new_sequence, row in enumerate(ordered, start=1):
             row["plan_sequence"] = new_sequence
         cash_residual_sequence = [int(row["plan_sequence"]) for row in ordered if row["side"] == "buy"]

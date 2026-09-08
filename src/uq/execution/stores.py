@@ -66,6 +66,27 @@ class _ImmutablePaperManifestStore:
     def _partition_path(self, manifest: dict[str, Any]) -> Path:
         raise NotImplementedError
 
+    def _validate_manifest_identity(self, manifest: dict[str, Any]) -> None:
+        expected_generation, expected_digest = paper_execution_identities(
+            manifest, schema_name=self.family
+        )
+        if (
+            manifest.get("generation_id") != expected_generation
+            or manifest.get("manifest_digest_sha256") != expected_digest
+        ):
+            raise ContractError(f"paper {self.family} manifest identity mismatch")
+
+    def _read_manifest(self, generation_id: str) -> tuple[Path, dict[str, Any]]:
+        candidates = list(self.directory.rglob(f"generation={generation_id}"))
+        if len(candidates) != 1:
+            raise ContractError(f"paper {self.family} partition is missing or ambiguous")
+        manifest_path = candidates[0] / "manifest.json"
+        self._safe_resolve(manifest_path)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        ModelContractLoader.validate(self.family, manifest)
+        self._validate_manifest_identity(manifest)
+        return candidates[0], manifest
+
     def _publish_review(self, report: dict[str, Any], checksum: str) -> None:
         review_path = self.root / "external_quality_reviews" / f"{checksum}.json"
         if review_path.exists():
@@ -100,13 +121,7 @@ class _ImmutablePaperManifestStore:
         return partition
 
     def read(self, generation_id: str) -> dict[str, Any]:
-        candidates = list(self.directory.rglob(f"generation={generation_id}"))
-        if len(candidates) != 1:
-            raise ContractError(f"paper {self.family} partition is missing or ambiguous")
-        manifest_path = candidates[0] / "manifest.json"
-        self._safe_resolve(manifest_path)
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        ModelContractLoader.validate(self.family, manifest)
+        _, manifest = self._read_manifest(generation_id)
         return manifest
 
 
@@ -206,12 +221,7 @@ class OrderPlanStore(_ImmutablePaperManifestStore):
         return partition
 
     def read(self, generation_id: str) -> tuple[dict[str, Any], Any]:
-        candidates = list(self.directory.rglob(f"generation={generation_id}"))
-        if len(candidates) != 1:
-            raise ContractError("paper order plan partition is missing or ambiguous")
-        partition = candidates[0]
-        manifest = json.loads((partition / "manifest.json").read_text(encoding="utf-8"))
-        ModelContractLoader.validate(self.family, manifest)
+        partition, manifest = self._read_manifest(generation_id)
         _validate_bound_quality_report(self.root, manifest, "order_plan_v1")
         data_path = partition / manifest["data_file"]
         self._safe_resolve(data_path)
@@ -269,8 +279,16 @@ def read_verified_quality_report(root: Path, manifest: dict[str, Any]) -> dict[s
     from ..contracts.model_layer import ModelQualityReviewRegistry, verify_reviewed_quality_report_signature
 
     checksum = manifest["quality_report_checksum_sha256"]
-    path = Path(root) / "external_quality_reviews" / f"{checksum}.json"
-    report = json.loads(path.read_text(encoding="utf-8"))
+    review_root = Path(root).resolve(strict=True)
+    path = review_root / "external_quality_reviews" / f"{checksum}.json"
+    resolved = path.resolve(strict=True)
+    if review_root not in resolved.parents:
+        raise ContractError("paper quality report path escapes storage root")
+    if any(item.is_symlink() for item in (path, *path.parents)):
+        raise ContractError("symbolic links are forbidden in paper quality report paths")
+    if not resolved.is_file():
+        raise ContractError("paper quality report is missing")
+    report = json.loads(resolved.read_text(encoding="utf-8"))
     expected = sha256_json({key: value for key, value in report.items() if key != "report_checksum_sha256"})
     if expected != checksum:
         raise ContractError("paper quality report canonical checksum mismatch")

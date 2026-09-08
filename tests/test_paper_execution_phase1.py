@@ -169,8 +169,9 @@ def test_insufficient_cash_rounds_buy_down_to_lot() -> None:
     frame, _ = PaperOrderPlanner().plan(
         config, _target(), None, _prices(), opening_cash=100.0,
     )
-    # With 100 cash and 5 minimum commission no lot is feasible.
-    assert frame.empty
+    # The target delta is represented even when no lot is feasible.
+    assert len(frame) == 1
+    assert frame["requested_quantity"].eq(0).all()
 
 
 def test_insufficient_cash_reject_policy_fails_closed() -> None:
@@ -217,6 +218,65 @@ def test_risk_rejection_blocks_config_publication(tmp_path: Path) -> None:
             config_publication=binding,
         )
     assert list(tmp_path.rglob("manifest.json")) == []
+
+
+def test_continuation_empty_holdings_and_future_as_of_are_supported() -> None:
+    config = _config()
+    config["state_mode"] = "continuation"
+    config["input_state_binding"] = {
+        "family": "paper_portfolio_state_v1", "generation_id": "1" * 64,
+        "manifest_digest_sha256": "2" * 64,
+        "as_of_date": config["decision_date"],
+    }
+    config["initial_state"] = None
+    config = _recompute(config)
+    frame, _ = PaperOrderPlanner().plan(
+        config, pd.DataFrame(columns=["instrument", "weight"]), [], _prices(), opening_cash=100000.0,
+    )
+    assert frame.empty
+
+
+def test_tampered_manifest_identity_fails_read(tmp_path: Path) -> None:
+    config, partition = _publish_config(tmp_path)
+    store = ExecutionConfigStore(tmp_path)
+    manifest = json.loads((partition / "manifest.json").read_text())
+    manifest["execution_date"] = "2026-01-07"
+    (partition / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    with pytest.raises(ContractError, match="stable generation mismatch"):
+        store.read(config["generation_id"])
+
+
+def test_quality_report_symlink_fails_read(tmp_path: Path) -> None:
+    config, _ = _publish_config(tmp_path)
+    store = ExecutionConfigStore(tmp_path)
+    partition = tmp_path / "execution-configs" / config["execution_id"] / f"generation={config['generation_id']}"
+    manifest = json.loads((partition / "manifest.json").read_text())
+    outside = tmp_path / "outside-quality-report.json"
+    outside.write_text("{}")
+    report_path = tmp_path / "external_quality_reviews" / ("b" * 64 + ".json")
+    report_path.symlink_to(outside)
+    manifest["quality_report_checksum_sha256"] = "b" * 64
+    from uq.contracts.model_layer import paper_execution_identities
+    manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
+        manifest, schema_name="execution_config"
+    )
+    (partition / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    with pytest.raises(ContractError, match="symbolic links are forbidden"):
+        store.read(config["generation_id"])
+
+
+def test_zero_quantity_target_residual_is_preserved(tmp_path: Path) -> None:
+    config = _config()
+    config["initial_state"]["cash"] = 100.0
+    config["initial_state"]["holdings"] = []
+    config = _recompute(config)
+    target = pd.DataFrame({"instrument": ["000001.XSHE"], "weight": [1.0]})
+    prices = {"000001.XSHE": {"close": 1.0}}
+    frame, _ = PaperOrderPlanner().plan(config, target, None, prices, opening_cash=100.0)
+    assert len(frame) == 1
+    assert frame["side"].eq("buy").all()
+    assert frame["requested_quantity"].eq(0).all()
+    assert frame["reason"].eq("cash_residual").all()
 
 
 def test_tampered_order_plan_payload_fails_read(tmp_path: Path) -> None:
