@@ -70,8 +70,8 @@
   },
   "risk_decision_binding": {
     "family": "risk_decision_v1",
-    "generation_id": "5555555555555555555555555555555555555555555555555555555555555555",
-    "manifest_digest_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+    "generation_id": "ed905872027c3f79fb6d1cd60490f90865c6479676723ee105ed9da4d6957ac4",
+    "manifest_digest_sha256": "4cb80c4d4c365ef8bc982676dfcb76c13938902c1ccadf0a5798f126a28daf80"
   },
   "ordered_cash_residual_sequence": [
     1
@@ -79,7 +79,7 @@
   "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
   "created_at": "2026-09-08T00:00:00+00:00",
   "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "manifest_digest_sha256": "2c32de2a9b3186dd7b5d1891830187f6c43f46752ee46e2c10a44a6a27218995",
-  "generation_id": "6c8f10121f414a066f11c5c1819ac83593e35766ce76618bae5956ad5c98f38b",
+  "manifest_digest_sha256": "f6c87f523fb576fc6423a6e16487c42659f197b6953016998cbd367fb9872d48",
+  "generation_id": "3b0874aa9059127ab45d7aa910f05c3131dc71c6f2b598492dca093b244b6fed",
   "state_mode": "initial"
 }

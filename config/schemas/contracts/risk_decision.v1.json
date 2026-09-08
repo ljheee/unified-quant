@@ -217,6 +217,9 @@
     },
     "manifest_digest_sha256": {
       "$ref": "#/$defs/sha256"
+    },
+    "binding_config_generation_id": {
+      "$ref": "#/$defs/sha256"
     }
   },
   "$defs": {

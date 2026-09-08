@@ -51,6 +51,6 @@
   "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
   "created_at": "2026-09-08T00:00:00+00:00",
   "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "manifest_digest_sha256": "cc0c1fc00e83e4a356fb05cc81ccd39d8b43ab2f52b1c2b1f29b97b4da5911f1",
-  "generation_id": "c76b429f11b13aa5bae841df0fb90d6ede9dd753ffcedcaca154828af9b116c2"
+  "manifest_digest_sha256": "dda39b5911213448e9564affc1fb17ff70208d8f95d1ef74e4cd82cb28eb785c",
+  "generation_id": "f318e8ab6e9b9417abd07d1e48a27ef9d49dc464b354f27316200dcfc7c43555"
 }

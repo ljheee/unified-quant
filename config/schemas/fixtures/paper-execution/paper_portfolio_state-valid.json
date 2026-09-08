@@ -44,8 +44,8 @@
   },
   "risk_decision_binding": {
     "family": "risk_decision_v1",
-    "generation_id": "5555555555555555555555555555555555555555555555555555555555555555",
-    "manifest_digest_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+    "generation_id": "ed905872027c3f79fb6d1cd60490f90865c6479676723ee105ed9da4d6957ac4",
+    "manifest_digest_sha256": "4cb80c4d4c365ef8bc982676dfcb76c13938902c1ccadf0a5798f126a28daf80"
   },
   "market_data_binding": {
     "family": "bars_daily",
@@ -55,6 +55,6 @@
   "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
   "created_at": "2026-09-08T00:00:00+00:00",
   "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "manifest_digest_sha256": "07f9b9e30a48a2f0562080a9a9297c807d546d42232329477e8d8444015d6c93",
-  "generation_id": "cd0e671276f588223eb70d50070fe389c6e10bc2b5cfec1d2b0ba6169ef80e2e"
+  "manifest_digest_sha256": "21cbad164dab1217d04af3753cc39392408d2f03a32fca48f913a075be68620a",
+  "generation_id": "077e9e59259f302fffef8d401c0719c7d77c27986472b4b829fd12ca1d54de95"
 }

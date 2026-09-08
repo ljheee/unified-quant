@@ -72,8 +72,8 @@
   },
   "risk_decision_binding": {
     "family": "risk_decision_v1",
-    "generation_id": "5555555555555555555555555555555555555555555555555555555555555555",
-    "manifest_digest_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+    "generation_id": "ed905872027c3f79fb6d1cd60490f90865c6479676723ee105ed9da4d6957ac4",
+    "manifest_digest_sha256": "4cb80c4d4c365ef8bc982676dfcb76c13938902c1ccadf0a5798f126a28daf80"
   },
   "aggregate_reconciliation": {
     "target_instrument_count": 1,
@@ -99,7 +99,7 @@
   "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
   "created_at": "2026-09-08T00:00:00+00:00",
   "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "manifest_digest_sha256": "5ad1bde55da526889914b964b2477bb49676b6881c293caf7124fd4bfa8a4c08",
-  "generation_id": "bfff66307e25d0bac272a735743330f4020d38000ad3ee7ccac5ad3c7f06fbfa",
+  "manifest_digest_sha256": "97476864147722a7707112f9866d3d0645616e430e0efa0605345484581af191",
+  "generation_id": "e53d12bbdaa86ebb8c62808dfbe8572dcbe3e3a4da10d118eb90138c84eecd51",
   "state_mode": "initial"
 }

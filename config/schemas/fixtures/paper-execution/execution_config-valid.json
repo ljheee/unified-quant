@@ -62,8 +62,8 @@
   },
   "risk_decision_binding": {
     "family": "risk_decision_v1",
-    "generation_id": "5555555555555555555555555555555555555555555555555555555555555555",
-    "manifest_digest_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+    "generation_id": "ed905872027c3f79fb6d1cd60490f90865c6479676723ee105ed9da4d6957ac4",
+    "manifest_digest_sha256": "4cb80c4d4c365ef8bc982676dfcb76c13938902c1ccadf0a5798f126a28daf80"
   },
   "lot_size": 100,
   "fee_policy": {
@@ -98,6 +98,6 @@
   "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
   "created_at": "2026-09-08T00:00:00+00:00",
   "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "manifest_digest_sha256": "9b89364c5f9ca15b16b78bbc66d2add1a1eabb8a2e0a3dea48918e382407ede7",
-  "generation_id": "4bd548c270cf5518525e1735291b85b73e06851f03de0eef2f968d175e23ebf1"
+  "manifest_digest_sha256": "44e1a10f007c09eb232e9cfee107bb69facd352cfa0e2f37c7929c521e2fd34b",
+  "generation_id": "39da9c4d89c4030fab383467037916abd0083e995506e5d109267e84c18e1334"
 }

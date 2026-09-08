@@ -142,7 +142,8 @@
           "required": [
             "family",
             "generation_id",
-            "manifest_digest_sha256"
+            "manifest_digest_sha256",
+            "as_of_date"
           ],
           "properties": {
             "family": {
@@ -156,6 +157,9 @@
             "manifest_digest_sha256": {
               "type": "string",
               "pattern": "^[0-9a-f]{64}$"
+            },
+            "as_of_date": {
+              "$ref": "#/$defs/date"
             }
           }
         },
@@ -371,6 +375,9 @@
         "manifest_digest_sha256": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
+        },
+        "as_of_date": {
+          "$ref": "#/$defs/date"
         }
       }
     },

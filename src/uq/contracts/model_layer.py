@@ -150,9 +150,15 @@ def paper_execution_identities(
         if not isinstance(value, str) or not _SHA256.fullmatch(value):
             raise ContractError(f"{schema_name} missing valid {key}")
         del document[key]
+    generation_excluded = {
+        *_RUN_LOCAL_FIELDS,
+        "quality_report_checksum_sha256",
+    }
+    if schema_name == "execution_config":
+        generation_excluded.add("risk_decision_binding")
     generation_document = {
         key: value for key, value in document.items()
-        if key not in (*_RUN_LOCAL_FIELDS, "quality_report_checksum_sha256")
+        if key not in generation_excluded
     }
     generation_id = sha256_json(generation_document)
     digest_document = {**document, "generation_id": generation_id}

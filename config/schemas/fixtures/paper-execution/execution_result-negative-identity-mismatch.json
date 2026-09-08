@@ -99,6 +99,6 @@
   "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
   "created_at": "2026-09-08T00:00:00+00:00",
   "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "manifest_digest_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "manifest_digest_sha256": "8ffd51839a0c57e872e553d533d8aa6ae8f6b40af58050292dec5f6a981cd3e1",
   "generation_id": "b225e0e4c4ab4b598deb0c3e39602eb8b72a9b4c0ddb7ff70bbfc50b9e16571d"
 }
