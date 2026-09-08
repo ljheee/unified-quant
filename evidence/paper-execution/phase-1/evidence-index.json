@@ -1,12 +1,32 @@
 {
-  "schema_version": "v1",
+  "entries": [
+    {
+      "commit": "7737b6311071098f0e4936fcb69a694882bcde6b",
+      "kind": "phase_record",
+      "path": "evidence/paper-execution/phase-1/phase-record.json"
+    },
+    {
+      "commit": "7737b6311071098f0e4936fcb69a694882bcde6b",
+      "kind": "local_gate",
+      "path": "evidence/paper-execution/phase-1/final-head-ci/34197900394/local-gate-report.json"
+    },
+    {
+      "commit": "7737b6311071098f0e4936fcb69a694882bcde6b",
+      "kind": "remote_matrix",
+      "path": "evidence/paper-execution/phase-1/final-head-ci/34197900394/aggregated-gates.json"
+    },
+    {
+      "commit": "7737b6311071098f0e4936fcb69a694882bcde6b",
+      "kind": "remote_run",
+      "path": "evidence/paper-execution/phase-1/final-head-ci/34197900394/run.json"
+    },
+    {
+      "commit": "7737b6311071098f0e4936fcb69a694882bcde6b",
+      "kind": "lockfile_digest",
+      "path": "evidence/paper-execution/phase-1/final-head-ci/34197900394/requirements.lock.txt.sha256"
+    }
+  ],
   "layer": "paper-execution",
   "phase": 1,
-  "entries": [
-    {"kind": "phase_record", "path": "evidence/paper-execution/phase-1/phase-record.json", "commit": "1339c181f5bbf5d0b90b19623255127b7aaa4dee"},
-    {"kind": "local_gate", "path": "evidence/paper-execution/phase-1/final-head-ci/34192124891/local-gate-report.json", "commit": "1339c181f5bbf5d0b90b19623255127b7aaa4dee"},
-    {"kind": "remote_matrix", "path": "evidence/paper-execution/phase-1/final-head-ci/34192124891/aggregated-gates.json", "commit": "1339c181f5bbf5d0b90b19623255127b7aaa4dee"},
-    {"kind": "remote_run", "path": "evidence/paper-execution/phase-1/final-head-ci/34192124891/run.json", "commit": "1339c181f5bbf5d0b90b19623255127b7aaa4dee"},
-    {"kind": "lockfile_digest", "path": "evidence/paper-execution/phase-1/final-head-ci/34192124891/requirements.lock.txt.sha256", "commit": "1339c181f5bbf5d0b90b19623255127b7aaa4dee"}
-  ]
+  "schema_version": "v1"
 }
