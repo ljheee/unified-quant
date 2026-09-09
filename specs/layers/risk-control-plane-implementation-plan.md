@@ -1,6 +1,6 @@
 # Risk Control Plane Implementation Plan
 
-Status: **v0.2.12 post-release production trust-anchor hardening pending gate**
+Status: **v0.2.13 released; production trust-anchor hardening passed final CR and release gates**
 
 Source spec: `specs/layers/risk-control-plane-spec.md`
 
@@ -12,7 +12,7 @@ connectivity, or a generic rules engine.
 
 The source spec is approved. Activation condition 5 is recorded in
 `evidence/risk/activation.json`. Phase 0–5 are exited with preserved gate
-evidence: the unified local gate passed 505 tests on the implementation HEAD,
+evidence: the unified local CR gate passed 510 tests on the implementation HEAD,
 and remote CI passed the declared base and Qlib runtime environment cells.
 The deterministic Ed25519 reviewer anchor and fixture signer are test-mode
 trust material. Runtime mode is governed by `UQ_RUNTIME_MODE`; in explicit
@@ -331,8 +331,8 @@ it must become `passed` with evidence before the phase exits.
 | RCP4b | 4 | `test_research_request_v2_requires_risk_decision` | `evidence/risk/phase-4/` | implemented |
 | RCP4c | 4 | `test_research_stage_stops_on_rejected_decision` | `evidence/risk/phase-4/` | implemented |
 | RCP4d | 4 | `test_research_runner_cannot_sign_risk_reviews` | `evidence/risk/phase-4/` | implemented |
-| RCP4e | 4 | `test_research_v2_requires_signed_policy_review` | `tests/test_risk_control_plane_phase4.py`; `evidence/risk/phase-4/research_run_request_v2-valid.json` | implemented pending final gate |
-| RCP5a | 5 | `scripts/run_gate.sh` | `evidence/risk/release/final-gate-report.json`; 505 passed | implemented |
+| RCP4e | 4 | `test_research_v2_requires_signed_policy_review` | `tests/test_risk_control_plane_phase4.py`; `evidence/risk/phase-4/research_run_request_v2-valid.json` | implemented |
+| RCP5a | 5 | `scripts/run_gate.sh` | `evidence/risk/release/final-cr-gate-report.json`; 510 passed | implemented |
 | RCP5b | 5 | remote unified gate | `evidence/risk/release/remote-matrix/34044714986/`; 10 cells passed | implemented |
 
 The plan is not executable until every relevant phase's rows are expanded or
