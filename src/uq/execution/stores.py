@@ -157,8 +157,9 @@ class ExecutionConfigStore(_ImmutablePaperManifestStore):
             manifest, schema_name=self.family
         )
         ModelContractLoader.validate(self.family, manifest)
+        partition = self._publish_json(manifest)
         self._publish_review(report, checksum)
-        return self._publish_json(manifest)
+        return partition
 
     def read(self, generation_id: str) -> dict[str, Any]:
         manifest = super().read(generation_id)

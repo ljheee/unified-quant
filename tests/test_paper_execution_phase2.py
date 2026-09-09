@@ -209,6 +209,17 @@ def test_execution_fills_all_or_none_and_records_fees(tmp_path: Path) -> None:
     assert manifest["closing_portfolio_value"] == pytest.approx(manifest["opening_portfolio_value"] - manifest["aggregate_reconciliation"]["total_fee_amount"])
 
 
+def test_zero_quantity_order_is_rejected_fail_closed(tmp_path: Path) -> None:
+    config, _ = _publish_config(tmp_path)
+    target = _target()
+    plan_manifest, plan_frame = _publish_plan(tmp_path, config, target)
+    plan_frame["requested_quantity"] = 0
+    result, manifest = _execute(config, plan_manifest, plan_frame, target)
+    assert result["order_state"].eq("rejected").all()
+    assert result["reject_reason"].eq("quantity").all()
+    assert manifest["closing_cash"] == manifest["opening_cash"]
+
+
 def test_decision_close_estimate_fills_at_plan_limit_price(tmp_path: Path) -> None:
     config, _ = _publish_config(tmp_path)
     target = _target()

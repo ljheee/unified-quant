@@ -259,6 +259,8 @@ class PaperExecutionEngine:
         instrument = str(row["instrument"])
         requested = int(row["requested_quantity"])
         reason = "none"
+        if requested <= 0:
+            reason = "quantity"
         market = execution_market.get(instrument)
         if instrument in corporate_excluded or instrument in suspended or (market or {}).get("status") != "trading":
             reason = "suspended"
@@ -273,7 +275,6 @@ class PaperExecutionEngine:
             limit_down, valid_limit_down = self._numeric(market.get("limit_down"))
             high, valid_high = self._numeric(market.get("high"))
             low, valid_low = self._numeric(market.get("low"))
-            volume, valid_volume = self._numeric(market.get("volume"))
             if not all((valid_price, valid_limit_up, valid_limit_down, valid_high, valid_low)):
                 reason = "no_market_data"
             elif price <= 0 or high <= 0 or low <= 0 or limit_up <= 0 or limit_down <= 0:
