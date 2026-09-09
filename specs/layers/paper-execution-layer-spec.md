@@ -1,5 +1,5 @@
 # Paper Execution Layer Specification
-Status: **v0.1.8 released; Phases 0–5 exited; deterministic paper replay only**
+Status: **v0.1.9 released after CR remediation; Phases 0–5 exited; deterministic paper replay only**
 Governance: contract-first, immutable artifacts, fail-closed accepted reads.
 Runtime mode: paper execution is a deterministic simulation mode, not a broker integration.
 

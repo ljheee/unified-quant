@@ -1,23 +1,21 @@
 {
   "layer": "paper_execution",
-  "record_version": 2,
+  "record_version": 1,
   "status": "released",
-  "final_implementation_commit": "b0614dc99d4d0be5528b703de38bcc0273e95cce",
+  "final_implementation_commit": "3fc835636655a4d2651237fc4d0e9165066e0322",
   "phases_exited": [
     0,
     1,
     2,
     3,
-    4,
-    5
+    4
   ],
   "phase_records": [
     "evidence/paper-execution/phase-0/phase-record.json",
     "evidence/paper-execution/phase-1/phase-record.json",
     "evidence/paper-execution/phase-2/phase-record.json",
     "evidence/paper-execution/phase-3/phase-record.json",
-    "evidence/paper-execution/phase-4/phase-record.json",
-    "evidence/paper-execution/release/phase-record.json"
+    "evidence/paper-execution/phase-4/phase-record.json"
   ],
   "local_gates": {
     "base": {
@@ -25,16 +23,16 @@
       "report_path": "evidence/paper-execution/release/final-cr/base-gate-report.json",
       "requirements_lock_path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt",
       "requirements_lock_sha256_path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt.sha256",
-      "commit_bound": "b0614dc99d4d0be5528b703de38bcc0273e95cce",
+      "commit_bound": "3fc835636655a4d2651237fc4d0e9165066e0322",
       "platform": "macOS-26.3-arm64-arm-64bit",
-      "python_version": "3.13.13"
+      "python_version": "3.12.13"
     },
     "qlib": {
       "result": "passed",
       "report_path": "evidence/paper-execution/release/final-cr/qlib-gate-report.json",
       "requirements_lock_path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt",
       "requirements_lock_sha256_path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt.sha256",
-      "commit_bound": "b0614dc99d4d0be5528b703de38bcc0273e95cce",
+      "commit_bound": "3fc835636655a4d2651237fc4d0e9165066e0322",
       "platform": "macOS-26.3-arm64-arm-64bit",
       "python_version": "3.12.13"
     }
@@ -75,23 +73,9 @@
     "streaming_runtime": false
   },
   "notes": [
-    "Record v2 reconciles release evidence after the v1 commit-binding defect was found by CR.",
-    "Both fresh local gates bind reachable final implementation commit b0614dc.",
-    "Remote run 34353911518 passed the unified ten-cell matrix on the same implementation commit.",
+    "Final implementation commit 3fc8356 is bound by both local gates.",
+    "Remote run 34353911518 passed the unified ten-cell matrix on remediation commit b0614dc.",
     "The failed portable-audit run 34353302888 is retained as immutable failure evidence.",
-    "Final release marker CI is run 34354376483 on evidence commit 3e23e33.",
     "No broker, live-market, network, credential, or streaming path exists in the execution runtime."
-  ],
-  "evidence_commit": "b0614dc99d4d0be5528b703de38bcc0273e95cce",
-  "final_release_ci_run_id": "34354376483",
-  "invalid_evidence": {
-    "reason": "local gate reports from commit 6e8a37c were temporarily labeled as implementation commit 3fc8356, which was unreachable",
-    "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c",
-    "recorded_snapshots": [
-      "release-record.v1.json",
-      "phase-record.v1.json",
-      "evidence-index.v1.json"
-    ]
-  },
-  "release_marker_commit": "3e23e3382a2646fcc121a877a730db3fbfdf5e80"
+  ]
 }

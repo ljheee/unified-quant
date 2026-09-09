@@ -2,7 +2,6 @@
   "layer": "paper_execution",
   "status": "released",
   "remote_ci_run_id": "34353911518",
-  "final_release_ci_run_id": "34354376483",
   "records": [
     {
       "path": "evidence/paper-execution/phase-0/phase-record.json",
@@ -26,15 +25,15 @@
     },
     {
       "path": "evidence/paper-execution/release/phase-record.json",
-      "sha256": "0a27e24c4594fcbd350aae9dd7012dd14b80371d5a366aeeb94efe693bf806b4"
+      "sha256": "a3d321a7684211f133cddad4b54dee6bac80eeee5a8fb27845fba0556ad083b9"
     },
     {
       "path": "evidence/paper-execution/release/release-record.json",
-      "sha256": "e952916c357af63f0c9d3ce2903929e0343aa1061e3678e258ff3bca6d1cd140"
+      "sha256": "1cf5ffec0b31e3f710dc0ac244088e9fee59c79a2f9ec1df599632d597d6705c"
     },
     {
       "path": "evidence/paper-execution/release/final-cr/base-gate-report.json",
-      "sha256": "0188377ccb7d320ebee019ba6239b819440dd360789b408906c264bdd0cf0b13"
+      "sha256": "0f64998d6765a8c6cb75fbfdb27039fc4b958743baa26d10611a571d1e9c5a78"
     },
     {
       "path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt",
@@ -46,7 +45,7 @@
     },
     {
       "path": "evidence/paper-execution/release/final-cr/qlib-gate-report.json",
-      "sha256": "385a0af2c223f1d12dd1ea685a09e45fb5fa1f6da9a453532b1e6756a8033b8b"
+      "sha256": "b9e2818718bada097c49be9c3c78b1c4f2c2439060490f0210dada7fa31a0c5b"
     },
     {
       "path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt",
@@ -69,60 +68,24 @@
       "sha256": "91416e62000f6e35267aa9116dcc0f224a2793cdaa8cc820b5a51104f04d6163"
     },
     {
-      "path": "evidence/paper-execution/release/MARKER.md",
-      "sha256": "b708fa3aff999b2ac705a5bbdfea3752afba69344e5f19d96aff7188ac4d3583"
-    },
-    {
       "path": "specs/architecture.md",
       "sha256": "34673ad2075bbf9aa75911c79944270a536c388f4df7580094d6afb493aa99aa"
     },
     {
       "path": "specs/layers/paper-execution-layer-spec.md",
-      "sha256": "0699f86c032521e56955fbef876cfb24437475aa9da11774e8d69ef8b45dc9be"
+      "sha256": "9d80dd58ea19494b8292a43b5f052bbf65ae98af2ba7544cf9ded07300524d1b"
     },
     {
       "path": "specs/layers/paper-execution-layer-implementation-plan.md",
-      "sha256": "9ca3a23ae32540641a8aad1cdf56e84e9ad92187e6c0f9beb711ea8f31257877"
+      "sha256": "d320e5127ae6056ef34a70ac3cd0d7688b9cd21539824cf524facefb14f3ccd2"
     },
     {
       "path": "tests/test_paper_execution_phase5.py",
-      "sha256": "e3cb7cc00e50992f2e13e35b16b429d476f904831d27219b2e2cac265d3282a4"
+      "sha256": "b9c3163706a5df1dc2dfb9448321d97e4d34d8070e73dea37e53e8c7533ab2ae"
     },
     {
-      "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c/base-gate-report.json",
-      "sha256": "0f64998d6765a8c6cb75fbfdb27039fc4b958743baa26d10611a571d1e9c5a78"
-    },
-    {
-      "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c/base-requirements.lock.txt",
-      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
-    },
-    {
-      "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c/base-requirements.lock.txt.sha256",
-      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
-    },
-    {
-      "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c/qlib-gate-report.json",
-      "sha256": "b9e2818718bada097c49be9c3c78b1c4f2c2439060490f0210dada7fa31a0c5b"
-    },
-    {
-      "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c/qlib-requirements.lock.txt",
-      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
-    },
-    {
-      "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c/qlib-requirements.lock.txt.sha256",
-      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
-    },
-    {
-      "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c/evidence-index.v1.json",
-      "sha256": "54147d8c7a408961eca2f8d36ba523e3ce485abd5420c411600e2f40fe750754"
-    },
-    {
-      "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c/phase-record.v1.json",
-      "sha256": "a3d321a7684211f133cddad4b54dee6bac80eeee5a8fb27845fba0556ad083b9"
-    },
-    {
-      "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c/release-record.v1.json",
-      "sha256": "1cf5ffec0b31e3f710dc0ac244088e9fee59c79a2f9ec1df599632d597d6705c"
+      "path": "evidence/paper-execution/release/MARKER.md",
+      "sha256": "705305a049401203b2f186462108cd81b72812336ef09abfd656a418437f57f8"
     }
   ]
 }

@@ -1,5 +1,5 @@
 # Paper Execution Layer Implementation Plan
-Status: **v0.1.9 released; Phases 0–5 exited; local base and Qlib gates plus remote ten-cell matrix passed**
+Status: **v0.1.10 released after CR remediation; Phases 0–5 exited; local base and Qlib gates plus remote ten-cell matrix passed**
 
 Source spec: `specs/layers/paper-execution-layer-spec.md`
 

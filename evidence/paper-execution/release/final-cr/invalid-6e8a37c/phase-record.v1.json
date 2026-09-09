@@ -1,10 +1,10 @@
 {
   "layer": "paper_execution",
   "phase": 5,
-  "record_version": 2,
+  "record_version": 1,
   "status": "exited_after_remote_gate",
   "blocked_by": [],
-  "implementation_commit": "b0614dc99d4d0be5528b703de38bcc0273e95cce",
+  "implementation_commit": "3fc835636655a4d2651237fc4d0e9165066e0322",
   "entry_criteria": {
     "phase_4_exited": true,
     "status": "passed"
@@ -78,10 +78,9 @@
   ],
   "evidence_paths": [
     "evidence/paper-execution/release/final-cr",
-    "evidence/paper-execution/release/final-head-ci/34353911518",
     "evidence/paper-execution/release/release-record.json",
-    "evidence/paper-execution/release/MARKER.md",
-    "tests/test_paper_execution_phase5.py"
+    "tests/test_paper_execution_phase5.py",
+    "evidence/paper-execution/release/final-cr/remote-failed-run-34353302888.json"
   ],
-  "evidence_commit": "3e23e3382a2646fcc121a877a730db3fbfdf5e80"
+  "evidence_commit": "b0614dc99d4d0be5528b703de38bcc0273e95cce"
 }
