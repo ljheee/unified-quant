@@ -47,6 +47,18 @@
       "id": "PX3h",
       "status": "implemented",
       "test_id": "test_zero_order_retained_holding_publishes_state"
+    },
+    {
+      "description": "state builder independently rejects a sell exceeding same-session sellable quantity",
+      "id": "PX3i",
+      "status": "implemented",
+      "test_id": "test_state_rejects_t1_locked_sell_plan"
+    },
+    {
+      "description": "state manifest tampering cannot bypass identity or external review binding",
+      "id": "PX3j",
+      "status": "implemented",
+      "test_id": "test_state_store_rejects_tampered_manifest_identity"
     }
   ],
   "blocked_by": null,

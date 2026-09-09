@@ -364,6 +364,21 @@ def test_continuation_state_resets_prior_buy_lock(tmp_path: Path) -> None:
     )
     next_result_store.publish(next_result_manifest, next_result, quality_decision=next_result_quality)
     next_result_manifest, next_result = next_result_store.read(next_result_manifest["generation_id"])
+    with pytest.raises(ContractError, match="prior state payload"):
+        PaperPortfolioStateBuilder().build(
+            continuation_config,
+            result_manifest=next_result_manifest,
+            result_frame=next_result,
+            plan_manifest=plan_manifest,
+            plan_frame=plan_frame,
+            target_weights_manifest=target_manifest,
+            target_weights_frame=target,
+            execution_market=_execution_market(),
+            decision_prices=_decision_prices(),
+            input_holdings=prior_frame.to_dict(orient="records"),
+            opening_cash=CONTINUATION_OPENING_CASH,
+            previous_state_manifest=previous_state_manifest,
+        )
     state_frame, next_state = PaperPortfolioStateBuilder().build(
         continuation_config,
         result_manifest=next_result_manifest,
@@ -377,10 +392,40 @@ def test_continuation_state_resets_prior_buy_lock(tmp_path: Path) -> None:
         input_holdings=prior_frame.to_dict(orient="records"),
         opening_cash=CONTINUATION_OPENING_CASH,
         previous_state_manifest=previous_state_manifest,
+        previous_state_frame=prior_frame,
     )
     assert int(state_frame["buy_locked_quantity"].iloc[0]) == 0
     assert int(state_frame["sellable_quantity"].iloc[0]) == int(state_frame["quantity"].iloc[0])
     assert next_state["previous_state_binding"]["generation_id"] == previous_state_manifest["generation_id"]
+
+
+def test_state_rejects_t1_locked_sell_plan(tmp_path: Path) -> None:
+    config, _frame, _manifest, plan_manifest, plan_frame, result_manifest, _result = _publish_initial_state(tmp_path)
+    plan_frame.loc[0, "side"] = "sell"
+    plan_frame.loc[0, "requested_quantity"] = 4500
+    plan_frame.loc[0, "target_delta_shares"] = -4500
+    plan_manifest["logical_fingerprint"] = "7" * 64
+    plan_manifest["generation_id"], plan_manifest["manifest_digest_sha256"] = paper_execution_identities(
+        plan_manifest, schema_name="order_plan"
+    )
+    result_manifest["order_plan_generation_id"] = plan_manifest["generation_id"]
+    result_manifest["generation_id"], result_manifest["manifest_digest_sha256"] = paper_execution_identities(
+        result_manifest, schema_name="execution_result"
+    )
+    with pytest.raises(ContractError, match="sell exceeds sellable quantity"):
+        PaperPortfolioStateBuilder().build(
+            config,
+            result_manifest=result_manifest,
+            result_frame=_result,
+            plan_manifest=plan_manifest,
+            plan_frame=plan_frame,
+            target_weights_manifest=_target_manifest(_target(), config),
+            target_weights_frame=_target(),
+            execution_market=_execution_market(),
+            decision_prices=_decision_prices(),
+            input_holdings=config["initial_state"]["holdings"],
+            opening_cash=config["initial_state"]["cash"],
+        )
 
 
 def test_state_evolution_updates_quantity_cost_and_t1_lock(tmp_path: Path) -> None:
@@ -417,6 +462,32 @@ def test_state_store_publish_read_and_tamper_detection(tmp_path: Path) -> None:
     data_path.write_bytes(data_path.read_bytes()[:-1])
     with pytest.raises(ContractError, match="payload checksum"):
         store.read(published_manifest["generation_id"])
+
+
+def test_state_store_rejects_tampered_manifest_identity(tmp_path: Path) -> None:
+    config, frame, manifest, _, _, _, _ = _publish_initial_state(tmp_path)
+    store = PaperPortfolioStateStore(tmp_path)
+    unsigned = {
+        "binding_type": "paper_portfolio_state_v1",
+        "checks": [
+            {"name": name, "threshold": True, "observed": True, "level": "error", "result": "passed"}
+            for name in _STATE_QUALITY_CHECKS
+        ],
+        "errors": [], "warnings": [], "key_id": "model-quality-reviewer-v1-2026-09",
+        "policy": "reject_all", "producer_code_fingerprint": "a" * 64,
+        "reviewer": "external-model-quality-reviewer-v1", "report_version": 2,
+        "status": "passed",
+    }
+    decision = _decision_for_review(unsigned, "paper_portfolio_state_v1", manifest["generation_id"])
+    partition = store.publish(manifest, frame, quality_decision=decision)
+    tampered_manifest = json.loads((partition / "manifest.json").read_text())
+    tampered_manifest["row_count"] += 1
+    tampered_manifest["generation_id"], tampered_manifest["manifest_digest_sha256"] = paper_execution_identities(
+        tampered_manifest, schema_name="paper_portfolio_state"
+    )
+    (partition / "manifest.json").write_text(json.dumps(tampered_manifest, sort_keys=True) + "\n")
+    with pytest.raises(ContractError, match="bound to another generation"):
+        store.read(manifest["generation_id"])
 
 
 def test_state_rejects_mismatched_result_lineage(tmp_path: Path) -> None:

@@ -45,6 +45,7 @@ class PaperPortfolioStateBuilder:
         input_holdings: list[Mapping[str, Any]],
         opening_cash: float,
         previous_state_manifest: Mapping[str, Any] | None = None,
+        previous_state_frame: pd.DataFrame | None = None,
     ) -> tuple[pd.DataFrame, dict[str, Any]]:
         self._validate_config(config, previous_state_manifest)
         self._validate_lineage(
@@ -72,6 +73,7 @@ class PaperPortfolioStateBuilder:
         self._validate_target_frame(
             result_manifest, target_weights_manifest, target_weights_frame
         )
+        self._validate_plan_frame(plan_manifest, plan_frame)
         self._validate_result_payload(result_manifest, result_frame, plan_frame)
         self._validate_plan_mapping(plan_frame, result_frame)
         self._validate_reconciliation(plan_frame, result_frame, result_manifest)
@@ -79,8 +81,18 @@ class PaperPortfolioStateBuilder:
             config["state_mode"] == "continuation"
             and config["input_state_binding"]["as_of_date"] >= config["execution_date"]
         )
+        if previous_state_manifest is not None:
+            self._validate_previous_state_frame(
+                previous_state_manifest,
+                previous_state_frame,
+                input_holdings,
+            )
         holdings = self._closing_holdings(
-            input_holdings, result_frame, same_session_prior_state=same_session
+            input_holdings,
+            result_frame,
+            same_session_prior_state=same_session,
+            previous_state_frame=previous_state_frame,
+            previous_state_manifest=previous_state_manifest,
         )
         frame = self._state_frame(closing_cash, holdings, execution_market)
         self._validate_valuation(
@@ -192,8 +204,8 @@ class PaperPortfolioStateBuilder:
             raise ContractError("order plan does not bind previous paper state")
 
 
-    @staticmethod
     def _validate_target_frame(
+        self,
         result_manifest: Mapping[str, Any],
         target_weights_manifest: Mapping[str, Any],
         target_weights_frame: pd.DataFrame,
@@ -202,6 +214,19 @@ class PaperPortfolioStateBuilder:
             raise ContractError("target weights row count mismatch")
         if target_weights_frame["instrument"].duplicated().any():
             raise ContractError("duplicate target instruments")
+        if list(target_weights_frame.columns) != list(target_weights_manifest["columns"]):
+            raise ContractError("target weights column mismatch")
+        for key, expected_dtype in target_weights_manifest["dtypes"].items():
+            if not self._dtype_matches(target_weights_frame[key].dtype, expected_dtype):
+                raise ContractError(f"target weights dtype mismatch for {key}")
+        if target_weights_frame["instrument"].tolist() != sorted(
+            target_weights_frame["instrument"].tolist()
+        ):
+            raise ContractError("target weights payload ordering mismatch")
+        if not target_weights_frame["weight"].map(math.isfinite).all() or (
+            target_weights_frame["weight"] < 0
+        ).any():
+            raise ContractError("target weights contain an invalid weight")
         aggregate = result_manifest["aggregate_reconciliation"]
         if int(aggregate["target_instrument_count"]) != len(target_weights_frame):
             raise ContractError("target instrument count does not reconcile")
@@ -284,7 +309,98 @@ class PaperPortfolioStateBuilder:
                 str(plan.loc[sequence, "instrument"]) != str(result.loc[sequence, "instrument"])
                 or str(plan.loc[sequence, "side"]) != str(result.loc[sequence, "side"])
             ):
-                raise ContractError("execution result plan mapping mismatch")
+                    raise ContractError("execution result plan mapping mismatch")
+
+    def _validate_previous_state_frame(
+        self,
+        previous_state_manifest: Mapping[str, Any],
+        previous_state_frame: pd.DataFrame | None,
+        input_holdings: list[Mapping[str, Any]],
+    ) -> None:
+        if previous_state_frame is None:
+            raise ContractError("continuation paper state requires prior state payload")
+        if int(previous_state_manifest["row_count"]) != len(previous_state_frame):
+            raise ContractError("previous paper state row count mismatch")
+        if list(previous_state_frame.columns) != list(previous_state_manifest["columns"]):
+            raise ContractError("previous paper state column mismatch")
+        for key, expected_dtype in previous_state_manifest["dtypes"].items():
+            if not self._dtype_matches(previous_state_frame[key].dtype, expected_dtype):
+                raise ContractError(f"previous paper state dtype mismatch for {key}")
+        if previous_state_frame["instrument"].duplicated().any():
+            raise ContractError("previous paper state contains duplicate instruments")
+        if previous_state_frame["instrument"].tolist() != sorted(
+            previous_state_frame["instrument"].tolist()
+        ):
+            raise ContractError("previous paper state payload ordering mismatch")
+        for row in previous_state_frame.to_dict(orient="records"):
+            quantity = int(row["quantity"])
+            buy_locked = int(row["buy_locked_quantity"])
+            average_cost = float(row["average_cost"])
+            market_value = float(row["market_value"])
+            if (
+                quantity <= 0
+                or buy_locked < 0
+                or buy_locked > quantity
+                or not math.isfinite(average_cost)
+                or average_cost < 0
+                or not math.isfinite(market_value)
+                or market_value <= 0
+                or int(row["sellable_quantity"]) != quantity - buy_locked
+            ):
+                raise ContractError("previous paper state contains an invalid holding")
+        if int(previous_state_manifest["row_count"]) > 0:
+            self._validate_input_holdings_match_frame(
+                previous_state_frame, input_holdings
+            )
+
+    def _validate_input_holdings_match_frame(
+        self,
+        previous_state_frame: pd.DataFrame,
+        input_holdings: list[Mapping[str, Any]],
+    ) -> None:
+        expected = previous_state_frame[
+            ["instrument", "quantity", "average_cost", "buy_locked_quantity"]
+        ].sort_values("instrument").to_dict(orient="records")
+        actual = [
+            {
+                "instrument": str(row["instrument"]),
+                "quantity": int(row["quantity"]),
+                "average_cost": float(row["average_cost"]),
+                "buy_locked_quantity": int(row["buy_locked_quantity"]),
+            }
+            for row in sorted(input_holdings, key=lambda row: str(row["instrument"]))
+            if int(row["quantity"]) > 0
+        ]
+        if actual != expected:
+            raise ContractError("input holdings do not match previous state payload")
+
+    def _validate_plan_frame(
+        self,
+        plan_manifest: Mapping[str, Any],
+        plan_frame: pd.DataFrame,
+    ) -> None:
+        if int(plan_manifest["row_count"]) != len(plan_frame):
+            raise ContractError("order plan row count mismatch")
+        if list(plan_frame.columns) != list(plan_manifest["columns"]):
+            raise ContractError("order plan column mismatch")
+        for key, expected_dtype in plan_manifest["dtypes"].items():
+            if not self._dtype_matches(plan_frame[key].dtype, expected_dtype):
+                raise ContractError(f"order plan dtype mismatch for {key}")
+        if plan_frame["plan_sequence"].duplicated().any():
+            raise ContractError("order plan sequence is not unique")
+        if plan_frame["plan_sequence"].tolist() != list(range(1, len(plan_frame) + 1)):
+            raise ContractError("order plan sequence is not contiguous")
+        sides = plan_frame["side"].tolist()
+        if sides != sorted(sides, key=lambda side: 0 if side == "sell" else 1):
+            raise ContractError("order plan does not sequence sells before buys")
+        for row in plan_frame.to_dict(orient="records"):
+            instrument = str(row["instrument"])
+            if row["side"] == "sell" and int(row["requested_quantity"]) > int(row["sellable_quantity"]):
+                raise ContractError(f"order plan sell exceeds sellable quantity for {instrument}")
+
+    @staticmethod
+    def _dtype_matches(actual: Any, expected: str) -> bool:
+        return str(actual) == expected or (expected == "string" and str(actual) == "object")
 
     @staticmethod
     def _validate_result_payload(
@@ -350,6 +466,8 @@ class PaperPortfolioStateBuilder:
         result_frame: pd.DataFrame,
         *,
         same_session_prior_state: bool,
+        previous_state_frame: pd.DataFrame | None,
+        previous_state_manifest: Mapping[str, Any] | None,
     ) -> dict[str, dict[str, Any]]:
         holdings = {str(row["instrument"]): dict(row) for row in input_holdings}
         if len(holdings) != len(input_holdings):
@@ -357,11 +475,32 @@ class PaperPortfolioStateBuilder:
         for holding in holdings.values():
             quantity = int(holding["quantity"])
             buy_locked = int(holding["buy_locked_quantity"])
+            average_cost = float(holding["average_cost"])
             if (
                 quantity < 0 or buy_locked < 0 or buy_locked > quantity
-                or float(holding["average_cost"]) < 0
+                or not math.isfinite(average_cost) or average_cost < 0
             ):
                 raise ContractError("input holdings contain invalid quantities")
+            if (
+                previous_state_frame is not None
+                and previous_state_manifest is not None
+                and int(previous_state_manifest["row_count"]) > 0
+            ):
+                expected = previous_state_frame[
+                    ["instrument", "quantity", "average_cost", "buy_locked_quantity"]
+                ].sort_values("instrument").to_dict(orient="records")
+                actual = [
+                    {
+                        "instrument": str(row["instrument"]),
+                        "quantity": int(row["quantity"]),
+                        "average_cost": float(row["average_cost"]),
+                        "buy_locked_quantity": int(row["buy_locked_quantity"]),
+                    }
+                    for row in sorted(holdings.values(), key=lambda row: str(row["instrument"]))
+                    if int(row["quantity"]) > 0
+                ]
+                if actual != expected:
+                    raise ContractError("input holdings do not match previous state payload")
             if not same_session_prior_state:
                 holding["buy_locked_quantity"] = 0
         for event in result_frame.to_dict(orient="records"):
@@ -390,6 +529,11 @@ class PaperPortfolioStateBuilder:
                 )
             else:
                 holdings[instrument]["quantity"] -= filled
+                sellable_quantity = int(holdings[instrument]["quantity"]) + filled - int(
+                    holdings[instrument]["buy_locked_quantity"]
+                )
+                if filled > sellable_quantity:
+                    raise ContractError(f"execution sells T+1-locked inventory for {instrument}")
             if int(holdings[instrument]["quantity"]) < 0:
                 raise ContractError(f"execution sells more than held quantity for {instrument}")
         return {key: value for key, value in holdings.items() if int(value["quantity"]) > 0}

@@ -1,6 +1,6 @@
 # Paper Execution Layer Implementation Plan
 
-Status: **v0.1.2 review-remediated; all phases paused pending Phase 0 exit**
+Status: **v0.1.3 review-remediated; Phases 0–3 exited; Phase 4 pending**
 
 Source spec: `specs/layers/paper-execution-layer-spec.md`
 
