@@ -1,0 +1,75 @@
+{
+  "layer": "paper_execution",
+  "status": "remote_gate_pending",
+  "records": [
+    {
+      "path": "evidence/paper-execution/phase-0/phase-record.json",
+      "sha256": "350f0970b31283af258956ab85232f4c4f83d0b55ebd1feb10ecb448f3acb764"
+    },
+    {
+      "path": "evidence/paper-execution/phase-1/phase-record.json",
+      "sha256": "bede16a8d6fd969359169eade6048db4c7132e8d076440331e15e044a83f52ba"
+    },
+    {
+      "path": "evidence/paper-execution/phase-2/phase-record.json",
+      "sha256": "91bd351875bd00ecc8446595cd3122521d5f2d4ac47997c45a9ff2ace07cca1a"
+    },
+    {
+      "path": "evidence/paper-execution/phase-3/phase-record.json",
+      "sha256": "004a90423f290ff9c77917de12f212561adeeb367a5e6b4cb7a776fd59e12396"
+    },
+    {
+      "path": "evidence/paper-execution/phase-4/phase-record.json",
+      "sha256": "baed9d44aa38d591d69dd003e81815af185bcbeb569dd82b37afc5ec649a77b5"
+    },
+    {
+      "path": "evidence/paper-execution/release/release-record.json",
+      "sha256": "bb07dbf8c293160cdb755dddfbe02723971918c6a83e5acabc3873588b234191"
+    },
+    {
+      "path": "evidence/paper-execution/release/phase-record.json",
+      "sha256": "bdb885b801c89c489540471912279876242acab350e1042e63639651b61746dc"
+    },
+    {
+      "path": "evidence/paper-execution/release/final-cr/base-gate-report.json",
+      "sha256": "0cb3de1dfd15febe35901e44fc2477c1ae23f0dc7af55a5d1de79e122e8220f4"
+    },
+    {
+      "path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution/release/final-cr/qlib-gate-report.json",
+      "sha256": "ab0dc323bfa4f1c5dbefd0776e6efb5c8438ff115efb9f0361b2d8ce3e13647a"
+    },
+    {
+      "path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "tests/test_paper_execution_phase5.py",
+      "sha256": "2c305242cc1f6f25eb576e4e6f52ecf2e7395c5db97c996fe14948befccf4775"
+    },
+    {
+      "path": "specs/architecture.md",
+      "sha256": "f22f5c122480a0b4ede38330c8c7bba15fb4a1aebe5fa61b337e06a282fadda9"
+    },
+    {
+      "path": "specs/layers/paper-execution-layer-spec.md",
+      "sha256": "400d0e6e609a278e5d88910ef5bdc16bd26e44caeb3f97e42d40d4cc1ba11292"
+    },
+    {
+      "path": "specs/layers/paper-execution-layer-implementation-plan.md",
+      "sha256": "4b4b99aa015c8f208b45c4243af85db6eb8b09ad3981f3996c1495d0bb5cc3f6"
+    }
+  ],
+  "remote_ci_run_id": null
+}

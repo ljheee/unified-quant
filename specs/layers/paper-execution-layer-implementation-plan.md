@@ -1,5 +1,5 @@
 # Paper Execution Layer Implementation Plan
-Status: **v0.1.7 review-remediated; Phases 0–4 exited; Phase 5 pending**
+Status: **v0.1.8 review-remediated; Phases 0–4 exited; Phase 5 local gates passed, remote ten-cell evidence pending**
 
 Source spec: `specs/layers/paper-execution-layer-spec.md`
 

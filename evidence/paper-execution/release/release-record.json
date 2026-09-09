@@ -1,0 +1,61 @@
+{
+  "layer": "paper_execution",
+  "record_version": 1,
+  "status": "remote_gate_pending",
+  "final_implementation_commit": "37e99f8e6634cd89e92a530e0635ffa94ce63b12",
+  "phases_exited": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "phase_records": [
+    "evidence/paper-execution/phase-0/phase-record.json",
+    "evidence/paper-execution/phase-1/phase-record.json",
+    "evidence/paper-execution/phase-2/phase-record.json",
+    "evidence/paper-execution/phase-3/phase-record.json",
+    "evidence/paper-execution/phase-4/phase-record.json"
+  ],
+  "local_gates": {
+    "base": {
+      "result": "passed",
+      "report_path": "evidence/paper-execution/release/final-cr/base-gate-report.json",
+      "requirements_lock_path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt",
+      "requirements_lock_sha256_path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt.sha256",
+      "commit_bound": "37e99f8e6634cd89e92a530e0635ffa94ce63b12",
+      "platform": "macOS-26.3-arm64-arm-64bit",
+      "python_version": "3.12.13"
+    },
+    "qlib": {
+      "result": "passed",
+      "report_path": "evidence/paper-execution/release/final-cr/qlib-gate-report.json",
+      "requirements_lock_path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt",
+      "requirements_lock_sha256_path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt.sha256",
+      "commit_bound": "37e99f8e6634cd89e92a530e0635ffa94ce63b12",
+      "platform": "macOS-26.3-arm64-arm-64bit",
+      "python_version": "3.12.13"
+    }
+  },
+  "remote_gate": {
+    "result": "pending",
+    "run_id": null,
+    "commit_bound": null,
+    "cells_root": null,
+    "summary": null
+  },
+  "scope": {
+    "paper_replay_execution": true,
+    "risk_publication_gates": true,
+    "state_reconciliation": true,
+    "broker_connectivity": false,
+    "live_market_data": false,
+    "network_calls": false,
+    "credentials_or_secrets": false,
+    "streaming_runtime": false
+  },
+  "notes": [
+    "Local base and Qlib unified gates passed on final implementation commit 37e99f8.",
+    "Remote evidence is pending for the same implementation commit before release."
+  ]
+}

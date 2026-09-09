@@ -34,7 +34,7 @@
       "description": "risk decision lineage is verified",
       "id": "PX1f",
       "status": "implemented",
-      "test_id": "test_pre_trade_risk_decision_binding_is_verified"
+      "test_id": "test_risk_rejection_blocks_config_publication"
     },
     {
       "description": "manifest identity tampering fails readback",

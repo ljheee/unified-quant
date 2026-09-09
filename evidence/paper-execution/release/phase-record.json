@@ -1,0 +1,83 @@
+{
+  "layer": "paper_execution",
+  "phase": 5,
+  "record_version": 1,
+  "status": "in_progress",
+  "blocked_by": [
+    "remote ten-cell CI evidence"
+  ],
+  "implementation_commit": "37e99f8e6634cd89e92a530e0635ffa94ce63b12",
+  "entry_criteria": {
+    "phase_4_exited": true,
+    "status": "passed"
+  },
+  "exit_criteria": [
+    {
+      "id": "PX5a",
+      "description": "all phase records are exited and acceptance mappings resolve",
+      "status": "passed",
+      "test_ids": [
+        "test_phase_5_all_phase_records_exited"
+      ],
+      "evidence_paths": [
+        "evidence/paper-execution/phase-0/phase-record.json",
+        "evidence/paper-execution/phase-1/phase-record.json",
+        "evidence/paper-execution/phase-2/phase-record.json",
+        "evidence/paper-execution/phase-3/phase-record.json",
+        "evidence/paper-execution/phase-4/phase-record.json"
+      ]
+    },
+    {
+      "id": "PX5b",
+      "description": "no broker/live/network/credential/streaming path exists",
+      "status": "passed",
+      "test_ids": [
+        "test_phase_5_no_broker_live_network_path"
+      ],
+      "evidence_paths": [
+        "src/uq/execution",
+        "src/uq/runtime.py"
+      ]
+    },
+    {
+      "id": "PX5c",
+      "description": "local base and Qlib unified gates pass on the final implementation commit",
+      "status": "passed",
+      "test_ids": [
+        "scripts/run_gate.sh"
+      ],
+      "evidence_paths": [
+        "evidence/paper-execution/release/final-cr/base-gate-report.json",
+        "evidence/paper-execution/release/final-cr/qlib-gate-report.json"
+      ]
+    },
+    {
+      "id": "PX5d",
+      "description": "remote unified ten-cell matrix passes on the final implementation commit",
+      "status": "blocked",
+      "test_ids": [
+        "github-actions:ci",
+        "github-actions:f4-certification"
+      ],
+      "evidence_paths": []
+    },
+    {
+      "id": "PX5e",
+      "description": "spec, plan, architecture, release record, and evidence index reconcile",
+      "status": "blocked",
+      "test_ids": [],
+      "evidence_paths": [
+        "specs/layers/paper-execution-layer-spec.md",
+        "specs/layers/paper-execution-layer-implementation-plan.md",
+        "specs/architecture.md",
+        "evidence/paper-execution/release/release-record.json",
+        "evidence/paper-execution/release/evidence-index.json"
+      ]
+    }
+  ],
+  "evidence_paths": [
+    "evidence/paper-execution/release/final-cr",
+    "evidence/paper-execution/release/release-record.json",
+    "tests/test_paper_execution_phase5.py"
+  ]
+}
