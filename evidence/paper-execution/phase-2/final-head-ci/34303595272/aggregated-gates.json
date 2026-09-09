@@ -9,14 +9,14 @@
         "dev",
         "real"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "macOS-26.6.2-arm64-arm-64bit",
       "python_version": "3.11.9",
       "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:56:49.443621+00:00"
+      "utc_timestamp": "2026-09-09T02:32:43.891644+00:00"
     },
     {
       "artifact": "gate-report-macos-latest-3.12",
@@ -26,14 +26,14 @@
         "dev",
         "real"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "macOS-26.6.2-arm64-arm-64bit",
       "python_version": "3.12.10",
       "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:56:40.370335+00:00"
+      "utc_timestamp": "2026-09-09T02:32:46.659756+00:00"
     },
     {
       "artifact": "gate-report-macos-latest-3.13",
@@ -43,14 +43,14 @@
         "dev",
         "real"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "macOS-26.6.2-arm64-arm-64bit",
       "python_version": "3.13.15",
       "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:56:43.466542+00:00"
+      "utc_timestamp": "2026-09-09T02:32:35.129329+00:00"
     },
     {
       "artifact": "gate-report-ubuntu-latest-3.11",
@@ -60,14 +60,14 @@
         "dev",
         "real"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
       "python_version": "3.11.16",
       "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:56:46.366299+00:00"
+      "utc_timestamp": "2026-09-09T02:32:38.445566+00:00"
     },
     {
       "artifact": "gate-report-ubuntu-latest-3.12",
@@ -77,14 +77,14 @@
         "dev",
         "real"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
       "python_version": "3.12.14",
       "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:56:39.177707+00:00"
+      "utc_timestamp": "2026-09-09T02:32:48.638119+00:00"
     },
     {
       "artifact": "gate-report-ubuntu-latest-3.13",
@@ -94,14 +94,14 @@
         "dev",
         "real"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
       "python_version": "3.13.15",
       "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:56:41.349296+00:00"
+      "utc_timestamp": "2026-09-09T02:32:40.855657+00:00"
     },
     {
       "artifact": "qlib-gate-report-macos-latest-3.11",
@@ -112,14 +112,14 @@
         "real",
         "qlib"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "macOS-26.6.2-arm64-arm-64bit",
       "python_version": "3.11.9",
       "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:57:16.286781+00:00"
+      "utc_timestamp": "2026-09-09T02:33:47.798645+00:00"
     },
     {
       "artifact": "qlib-gate-report-macos-latest-3.12",
@@ -130,14 +130,14 @@
         "real",
         "qlib"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "macOS-26.6.2-arm64-arm-64bit",
       "python_version": "3.12.10",
       "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:58:01.837248+00:00"
+      "utc_timestamp": "2026-09-09T02:33:28.973889+00:00"
     },
     {
       "artifact": "qlib-gate-report-ubuntu-latest-3.11",
@@ -148,14 +148,14 @@
         "real",
         "qlib"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
       "python_version": "3.11.16",
       "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:57:29.596941+00:00"
+      "utc_timestamp": "2026-09-09T02:33:44.598567+00:00"
     },
     {
       "artifact": "qlib-gate-report-ubuntu-latest-3.12",
@@ -166,14 +166,14 @@
         "real",
         "qlib"
       ],
-      "git_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+      "git_commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
       "lockfile_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
       "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
       "python_version": "3.12.14",
       "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
       "runner": "uv",
       "test_result": "passed",
-      "utc_timestamp": "2026-09-08T16:57:39.158551+00:00"
+      "utc_timestamp": "2026-09-09T02:33:39.253126+00:00"
     }
   ]
 }
