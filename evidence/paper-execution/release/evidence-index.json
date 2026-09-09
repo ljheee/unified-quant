@@ -1,6 +1,7 @@
 {
   "layer": "paper_execution",
-  "status": "remote_gate_failed",
+  "status": "released",
+  "remote_ci_run_id": "34353911518",
   "records": [
     {
       "path": "evidence/paper-execution/phase-0/phase-record.json",
@@ -23,12 +24,12 @@
       "sha256": "baed9d44aa38d591d69dd003e81815af185bcbeb569dd82b37afc5ec649a77b5"
     },
     {
-      "path": "evidence/paper-execution/release/release-record.json",
-      "sha256": "3703b78d4f9ed2b9decbe7cbdbb69139c95434721434b99df282aacf26ebaf96"
+      "path": "evidence/paper-execution/release/phase-record.json",
+      "sha256": "a3d321a7684211f133cddad4b54dee6bac80eeee5a8fb27845fba0556ad083b9"
     },
     {
-      "path": "evidence/paper-execution/release/phase-record.json",
-      "sha256": "ce4ef40b9769ef2400b1496ac7385c2c1fac5ec9f44a747fec2f5e9e84175778"
+      "path": "evidence/paper-execution/release/release-record.json",
+      "sha256": "1cf5ffec0b31e3f710dc0ac244088e9fee59c79a2f9ec1df599632d597d6705c"
     },
     {
       "path": "evidence/paper-execution/release/final-cr/base-gate-report.json",
@@ -55,25 +56,36 @@
       "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
     },
     {
+      "path": "evidence/paper-execution/release/final-cr/remote-failed-run-34353302888.json",
+      "sha256": "0c342ca120a691e51131661bae3ef8b1f9b36011b227b2503e5a5dd51c2e9a58"
+    },
+    {
+      "path": "evidence/paper-execution/release/final-head-ci/34353911518/aggregated-gates.json",
+      "sha256": "286318848f781dbe79d1340f46cefc0b84f0720e262ad91c5ef338e541f38785"
+    },
+    {
+      "path": "evidence/paper-execution/release/final-head-ci/34353911518/run.json",
+      "sha256": "91416e62000f6e35267aa9116dcc0f224a2793cdaa8cc820b5a51104f04d6163"
+    },
+    {
+      "path": "specs/architecture.md",
+      "sha256": "34673ad2075bbf9aa75911c79944270a536c388f4df7580094d6afb493aa99aa"
+    },
+    {
+      "path": "specs/layers/paper-execution-layer-spec.md",
+      "sha256": "9d80dd58ea19494b8292a43b5f052bbf65ae98af2ba7544cf9ded07300524d1b"
+    },
+    {
+      "path": "specs/layers/paper-execution-layer-implementation-plan.md",
+      "sha256": "d320e5127ae6056ef34a70ac3cd0d7688b9cd21539824cf524facefb14f3ccd2"
+    },
+    {
       "path": "tests/test_paper_execution_phase5.py",
       "sha256": "b9c3163706a5df1dc2dfb9448321d97e4d34d8070e73dea37e53e8c7533ab2ae"
     },
     {
-      "path": "specs/architecture.md",
-      "sha256": "f22f5c122480a0b4ede38330c8c7bba15fb4a1aebe5fa61b337e06a282fadda9"
-    },
-    {
-      "path": "specs/layers/paper-execution-layer-spec.md",
-      "sha256": "400d0e6e609a278e5d88910ef5bdc16bd26e44caeb3f97e42d40d4cc1ba11292"
-    },
-    {
-      "path": "specs/layers/paper-execution-layer-implementation-plan.md",
-      "sha256": "4b4b99aa015c8f208b45c4243af85db6eb8b09ad3981f3996c1495d0bb5cc3f6"
-    },
-    {
-      "path": "evidence/paper-execution/release/final-cr/remote-failed-run-34353302888.json",
-      "sha256": "0c342ca120a691e51131661bae3ef8b1f9b36011b227b2503e5a5dd51c2e9a58"
+      "path": "evidence/paper-execution/release/MARKER.md",
+      "sha256": "705305a049401203b2f186462108cd81b72812336ef09abfd656a418437f57f8"
     }
-  ],
-  "remote_ci_run_id": "34353302888"
+  ]
 }

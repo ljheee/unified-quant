@@ -1,7 +1,7 @@
 {
   "layer": "paper_execution",
   "record_version": 1,
-  "status": "remote_gate_failed",
+  "status": "released",
   "final_implementation_commit": "3fc835636655a4d2651237fc4d0e9165066e0322",
   "phases_exited": [
     0,
@@ -38,11 +38,29 @@
     }
   },
   "remote_gate": {
-    "result": "failed",
-    "run_id": "34353302888",
-    "commit_bound": "6e8a37c1343aab5cb2354e53ba7ecd05c0019bd3",
-    "failure_evidence": "evidence/paper-execution/release/final-cr/remote-failed-run-34353302888.json",
-    "failure_summary": "Phase 5 audit invoked external rg, absent in CI; all ten runtime cells failed on the test dependency."
+    "result": "passed",
+    "run_id": "34353911518",
+    "commit_bound": "b0614dc99d4d0be5528b703de38bcc0273e95cce",
+    "cells_root": "evidence/paper-execution/release/final-head-ci/34353911518",
+    "aggregated_path": "evidence/paper-execution/release/final-head-ci/34353911518/aggregated-gates.json",
+    "run_path": "evidence/paper-execution/release/final-head-ci/34353911518/run.json",
+    "summary": {
+      "failed": 0,
+      "passed": 10,
+      "total": 10
+    },
+    "covered_cells": [
+      "macos-latest/3.11",
+      "macos-latest/3.12",
+      "macos-latest/3.13",
+      "ubuntu-latest/3.11",
+      "ubuntu-latest/3.12",
+      "ubuntu-latest/3.13",
+      "macos-latest/3.11/qlib",
+      "macos-latest/3.12/qlib",
+      "ubuntu-latest/3.11/qlib",
+      "ubuntu-latest/3.12/qlib"
+    ]
   },
   "scope": {
     "paper_replay_execution": true,
@@ -55,7 +73,9 @@
     "streaming_runtime": false
   },
   "notes": [
-    "Local base and Qlib unified gates passed on final implementation commit 3fc8356.",
-    "Remote run 34353302888 failed on a test-only dependency; the portable audit is fixed and a fresh matrix is required."
+    "Final implementation commit 3fc8356 is bound by both local gates.",
+    "Remote run 34353911518 passed the unified ten-cell matrix on remediation commit b0614dc.",
+    "The failed portable-audit run 34353302888 is retained as immutable failure evidence.",
+    "No broker, live-market, network, credential, or streaming path exists in the execution runtime."
   ]
 }

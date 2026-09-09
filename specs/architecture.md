@@ -3,7 +3,7 @@
 Status: **v0.2 design contract**
 Review decision: **architecture feasible; conditionally approved for continued implementation; not production-approved**.
 Implementation status: prototype v0.1 does not satisfy this document and remains prototype-only.
-Paper execution status: deterministic paper replay is implemented under the §11.8 boundary; broker/live/network paths remain prohibited.
+Paper execution status: deterministic paper replay is released under the §11.8 boundary; broker/live/network paths remain prohibited.
 Release gate: `specs/stable-release-checklist.md`.
 
 ## 1. Goals
