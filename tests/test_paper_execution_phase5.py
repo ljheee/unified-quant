@@ -6,7 +6,10 @@ import subprocess
 from pathlib import Path
 
 
-SOURCE = "\n".join(path.read_text(encoding="utf-8") for path in sorted(Path("tests").glob("test_paper_execution*.py")))
+SOURCE = "\n".join(
+    path.read_text(encoding="utf-8")
+    for path in sorted(Path("tests").glob("test_paper_execution*.py"))
+)
 
 
 def test_phase_5_all_phase_records_exited() -> None:
@@ -24,17 +27,18 @@ def test_phase_5_all_phase_records_exited() -> None:
 
 
 def test_phase_5_no_broker_live_network_path() -> None:
-    completed = subprocess.run(
-        [
-            "rg",
-            "-l",
-            "-i",
-            "broker|live|network|credential|streaming|websocket|secret",
-            "src/uq/execution",
-            "src/uq/runtime.py",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
+    forbidden = re.compile(
+        r"broker|live|network|credential|streaming|websocket|secret",
+        re.IGNORECASE,
     )
-    assert completed.returncode == 1, completed.stdout
+    paths = list(Path("src/uq/execution").glob("**/*.py"))
+    paths.append(Path("src/uq/runtime.py"))
+    matches = [
+        path
+        for path in paths
+        if any(
+            forbidden.search(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+        )
+    ]
+    assert matches == []

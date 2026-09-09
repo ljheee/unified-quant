@@ -1,8 +1,8 @@
 {
   "layer": "paper_execution",
   "record_version": 1,
-  "status": "remote_gate_pending",
-  "final_implementation_commit": "37e99f8e6634cd89e92a530e0635ffa94ce63b12",
+  "status": "remote_gate_failed",
+  "final_implementation_commit": "3fc835636655a4d2651237fc4d0e9165066e0322",
   "phases_exited": [
     0,
     1,
@@ -23,7 +23,7 @@
       "report_path": "evidence/paper-execution/release/final-cr/base-gate-report.json",
       "requirements_lock_path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt",
       "requirements_lock_sha256_path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt.sha256",
-      "commit_bound": "37e99f8e6634cd89e92a530e0635ffa94ce63b12",
+      "commit_bound": "3fc835636655a4d2651237fc4d0e9165066e0322",
       "platform": "macOS-26.3-arm64-arm-64bit",
       "python_version": "3.12.13"
     },
@@ -32,17 +32,17 @@
       "report_path": "evidence/paper-execution/release/final-cr/qlib-gate-report.json",
       "requirements_lock_path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt",
       "requirements_lock_sha256_path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt.sha256",
-      "commit_bound": "37e99f8e6634cd89e92a530e0635ffa94ce63b12",
+      "commit_bound": "3fc835636655a4d2651237fc4d0e9165066e0322",
       "platform": "macOS-26.3-arm64-arm-64bit",
       "python_version": "3.12.13"
     }
   },
   "remote_gate": {
-    "result": "pending",
-    "run_id": null,
-    "commit_bound": null,
-    "cells_root": null,
-    "summary": null
+    "result": "failed",
+    "run_id": "34353302888",
+    "commit_bound": "6e8a37c1343aab5cb2354e53ba7ecd05c0019bd3",
+    "failure_evidence": "evidence/paper-execution/release/final-cr/remote-failed-run-34353302888.json",
+    "failure_summary": "Phase 5 audit invoked external rg, absent in CI; all ten runtime cells failed on the test dependency."
   },
   "scope": {
     "paper_replay_execution": true,
@@ -55,7 +55,7 @@
     "streaming_runtime": false
   },
   "notes": [
-    "Local base and Qlib unified gates passed on final implementation commit 37e99f8.",
-    "Remote evidence is pending for the same implementation commit before release."
+    "Local base and Qlib unified gates passed on final implementation commit 3fc8356.",
+    "Remote run 34353302888 failed on a test-only dependency; the portable audit is fixed and a fresh matrix is required."
   ]
 }

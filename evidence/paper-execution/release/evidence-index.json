@@ -1,6 +1,6 @@
 {
   "layer": "paper_execution",
-  "status": "remote_gate_pending",
+  "status": "remote_gate_failed",
   "records": [
     {
       "path": "evidence/paper-execution/phase-0/phase-record.json",
@@ -24,15 +24,15 @@
     },
     {
       "path": "evidence/paper-execution/release/release-record.json",
-      "sha256": "bb07dbf8c293160cdb755dddfbe02723971918c6a83e5acabc3873588b234191"
+      "sha256": "3703b78d4f9ed2b9decbe7cbdbb69139c95434721434b99df282aacf26ebaf96"
     },
     {
       "path": "evidence/paper-execution/release/phase-record.json",
-      "sha256": "bdb885b801c89c489540471912279876242acab350e1042e63639651b61746dc"
+      "sha256": "ce4ef40b9769ef2400b1496ac7385c2c1fac5ec9f44a747fec2f5e9e84175778"
     },
     {
       "path": "evidence/paper-execution/release/final-cr/base-gate-report.json",
-      "sha256": "0cb3de1dfd15febe35901e44fc2477c1ae23f0dc7af55a5d1de79e122e8220f4"
+      "sha256": "0f64998d6765a8c6cb75fbfdb27039fc4b958743baa26d10611a571d1e9c5a78"
     },
     {
       "path": "evidence/paper-execution/release/final-cr/base-requirements.lock.txt",
@@ -44,7 +44,7 @@
     },
     {
       "path": "evidence/paper-execution/release/final-cr/qlib-gate-report.json",
-      "sha256": "ab0dc323bfa4f1c5dbefd0776e6efb5c8438ff115efb9f0361b2d8ce3e13647a"
+      "sha256": "b9e2818718bada097c49be9c3c78b1c4f2c2439060490f0210dada7fa31a0c5b"
     },
     {
       "path": "evidence/paper-execution/release/final-cr/qlib-requirements.lock.txt",
@@ -56,7 +56,7 @@
     },
     {
       "path": "tests/test_paper_execution_phase5.py",
-      "sha256": "2c305242cc1f6f25eb576e4e6f52ecf2e7395c5db97c996fe14948befccf4775"
+      "sha256": "b9c3163706a5df1dc2dfb9448321d97e4d34d8070e73dea37e53e8c7533ab2ae"
     },
     {
       "path": "specs/architecture.md",
@@ -69,7 +69,11 @@
     {
       "path": "specs/layers/paper-execution-layer-implementation-plan.md",
       "sha256": "4b4b99aa015c8f208b45c4243af85db6eb8b09ad3981f3996c1495d0bb5cc3f6"
+    },
+    {
+      "path": "evidence/paper-execution/release/final-cr/remote-failed-run-34353302888.json",
+      "sha256": "0c342ca120a691e51131661bae3ef8b1f9b36011b227b2503e5a5dd51c2e9a58"
     }
   ],
-  "remote_ci_run_id": null
+  "remote_ci_run_id": "34353302888"
 }
