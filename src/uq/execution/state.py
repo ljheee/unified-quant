@@ -348,10 +348,9 @@ class PaperPortfolioStateBuilder:
                 or int(row["sellable_quantity"]) != quantity - buy_locked
             ):
                 raise ContractError("previous paper state contains an invalid holding")
-        if int(previous_state_manifest["row_count"]) > 0:
-            self._validate_input_holdings_match_frame(
-                previous_state_frame, input_holdings
-            )
+        self._validate_input_holdings_match_frame(
+            previous_state_frame, input_holdings
+        )
 
     def _validate_input_holdings_match_frame(
         self,
