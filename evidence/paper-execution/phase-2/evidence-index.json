@@ -1,82 +1,79 @@
 {
   "entries": [
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "phase_record",
       "path": "evidence/paper-execution/phase-2/phase-record.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "local_gate",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/local-gate-report.json"
+      "path": "evidence/paper-execution/phase-2/final-head-ci/34305822665/local-gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_matrix",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/aggregated-gates.json"
+      "path": "evidence/paper-execution/phase-2/final-head-ci/34305822665/aggregated-gates.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_run",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/run.json"
+      "path": "evidence/paper-execution/phase-2/final-head-ci/34305822665/run.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "lockfile_digest",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/requirements.lock.txt.sha256"
+      "path": "evidence/paper-execution/phase-2/final-head-ci/34305822665/requirements.lock.txt.sha256"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/gate-report-macos-latest-3.11/gate-report.json"
+      "path": "final-head-ci/34305822665/gate-report-macos-latest-3.11/gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/gate-report-macos-latest-3.12/gate-report.json"
+      "path": "final-head-ci/34305822665/gate-report-macos-latest-3.12/gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/gate-report-macos-latest-3.13/gate-report.json"
+      "path": "final-head-ci/34305822665/gate-report-macos-latest-3.13/gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/gate-report-ubuntu-latest-3.11/gate-report.json"
+      "path": "final-head-ci/34305822665/gate-report-ubuntu-latest-3.11/gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/gate-report-ubuntu-latest-3.12/gate-report.json"
+      "path": "final-head-ci/34305822665/gate-report-ubuntu-latest-3.12/gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/gate-report-ubuntu-latest-3.13/gate-report.json"
+      "path": "final-head-ci/34305822665/gate-report-ubuntu-latest-3.13/gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/qlib-gate-report-macos-latest-3.11/gate-report.json"
+      "path": "final-head-ci/34305822665/qlib-gate-report-macos-latest-3.11/gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/qlib-gate-report-macos-latest-3.12/gate-report.json"
+      "path": "final-head-ci/34305822665/qlib-gate-report-macos-latest-3.12/gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/qlib-gate-report-ubuntu-latest-3.11/gate-report.json"
+      "path": "final-head-ci/34305822665/qlib-gate-report-ubuntu-latest-3.11/gate-report.json"
     },
     {
-      "commit": "213492b671908546fb3634e8ebc8ac92667bf01d",
+      "commit": "0736ccdf3ef7f5c68b8d2714e6049782c1d94e6f",
       "kind": "remote_cell",
-      "path": "evidence/paper-execution/phase-2/final-head-ci/34303595272/qlib-gate-report-ubuntu-latest-3.12/gate-report.json"
+      "path": "final-head-ci/34305822665/qlib-gate-report-ubuntu-latest-3.12/gate-report.json"
     }
-  ],
-  "layer": "paper-execution",
-  "phase": 2,
-  "schema_version": "v1"
+  ]
 }
