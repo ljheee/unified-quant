@@ -36,7 +36,7 @@ from tests.test_paper_execution_phase2 import (
     _unsigned,
 )
 
-RISK_FIXTURE = Path("config/schemas/fixtures/risk/risk_decision-valid.json")
+RISK_FIXTURE = Path("config/schemas/fixtures/paper-execution/risk_decision-valid.json")
 CONTINUATION_OPENING_CASH = 54988.3
 _STATE_QUALITY_CHECKS = [
     "holdings_readback_valid", "cash_non_negative",

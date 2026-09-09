@@ -22,7 +22,7 @@ from tests.review_key import REVIEWER_PRIVATE_KEY
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = ROOT / "config/schemas/fixtures/paper-execution"
-RISK_FIXTURE = ROOT / "config/schemas/fixtures/risk/risk_decision-valid.json"
+RISK_FIXTURE = ROOT / "config/schemas/fixtures/paper-execution/risk_decision-valid.json"
 
 
 def _config() -> dict:

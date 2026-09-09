@@ -161,8 +161,11 @@ class ExecutionConfigStore(_ImmutablePaperManifestStore):
             manifest, schema_name=self.family
         )
         ModelContractLoader.validate(self.family, manifest)
-        partition = self._publish_json(manifest)
+        partition = self._partition_path(manifest)
+        if partition.exists():
+            raise ContractError(f"paper {self.family} partition already exists: {partition}")
         self._publish_review(report, checksum)
+        self._publish_json(manifest)
         return partition
 
     def read(self, generation_id: str) -> dict[str, Any]:
@@ -300,6 +303,9 @@ class ExecutionResultStore(_ImmutablePaperManifestStore):
         )
         ModelContractLoader.validate(self.family, manifest)
         partition = self._partition_path(manifest)
+        if partition.exists():
+            raise ContractError(f"paper {self.family} partition already exists: {partition}")
+        self._publish_review(report, report_checksum)
         staging = partition.parent / f".staging_{uuid.uuid4().hex}"
         staging.mkdir(parents=True)
         try:
@@ -311,7 +317,6 @@ class ExecutionResultStore(_ImmutablePaperManifestStore):
             fsync_tree(staging)
             os.replace(staging, partition)
             fsync_dir(partition.parent)
-            self._publish_review(report, report_checksum)
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise
@@ -392,6 +397,9 @@ class PaperPortfolioStateStore(_ImmutablePaperManifestStore):
         )
         ModelContractLoader.validate(self.family, manifest)
         partition = self._partition_path(manifest)
+        if partition.exists():
+            raise ContractError(f"paper {self.family} partition already exists: {partition}")
+        self._publish_review(report, report_checksum)
         staging = partition.parent / f".staging_{uuid.uuid4().hex}"
         staging.mkdir(parents=True)
         try:
@@ -403,7 +411,6 @@ class PaperPortfolioStateStore(_ImmutablePaperManifestStore):
             fsync_tree(staging)
             os.replace(staging, partition)
             fsync_dir(partition.parent)
-            self._publish_review(report, report_checksum)
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise

@@ -41,7 +41,7 @@ from tests.test_paper_execution_phase3 import (
     _STATE_QUALITY_CHECKS,
 )
 
-RISK_FIXTURE = Path("config/schemas/fixtures/risk/risk_decision-valid.json")
+RISK_FIXTURE = Path("config/schemas/fixtures/paper-execution/risk_decision-valid.json")
 
 
 def _risk(config: dict, action: str = "allow") -> dict:
@@ -320,11 +320,15 @@ def test_forged_report_readback_fails(tmp_path: Path) -> None:
     ))
     report["review_signature_sha256"] = review_signature(unsigned, private_key_pem=key_path)
     from uq.contracts.model_layer import sha256_json
-    checksum = sha256_json(report)
+    checksum = sha256_json({
+        key: value for key, value in report.items()
+        if key != "report_checksum_sha256"
+    })
+    report["report_checksum_sha256"] = checksum
     forged_path = report_path.parent / f"{checksum}.json"
     forged_path.write_text(json.dumps(report, sort_keys=True) + "\n")
     manifest = {"quality_report_checksum_sha256": checksum}
-    with pytest.raises(ContractError, match="canonical checksum mismatch"):
+    with pytest.raises(ContractError, match="review signature mismatch"):
         read_verified_quality_report(root, manifest)
 
 
@@ -355,6 +359,27 @@ def test_expired_risk_decision_blocks_publication(tmp_path: Path) -> None:
             ),
         )
 
+
+def test_failed_review_publish_leaves_no_partition(tmp_path: Path, monkeypatch) -> None:
+    config, risk = _blocked_config_risk("allow")
+    unsigned = _unsigned("execution_config_v1", config["generation_id"])
+    quality = _decision_for_review(unsigned, "execution_config_v1", config["generation_id"])
+    store = ExecutionConfigStore(tmp_path)
+
+    def fail_review(_report, _checksum):
+        raise ContractError("review publication unavailable")
+
+    monkeypatch.setattr(store, "_publish_review", fail_review)
+    with pytest.raises(ContractError, match="review publication unavailable"):
+        store.publish(
+            config,
+            quality_decision=quality,
+            risk_decision=risk,
+            config_publication=ConfigPublicationBinding(
+                decision=risk, config_generation_id=config["generation_id"]
+            ),
+        )
+    assert list(tmp_path.rglob("manifest.json")) == []
 
 def test_mismatched_report_generation_blocks_publication(tmp_path: Path) -> None:
     from uq.contracts.model_layer import bind_reviewed_quality_decision, sha256_json
@@ -394,22 +419,20 @@ def test_mismatched_report_generation_blocks_publication(tmp_path: Path) -> None
 
 
 def test_production_rejects_test_key_anchor(monkeypatch) -> None:
-    from uq.runtime import require_production_review_key
+    from uq.contracts.model_layer import ModelQualityReviewTrustAnchor
 
     monkeypatch.setenv("UQ_RUNTIME_MODE", "production")
     with pytest.raises(ContractError, match="test-mode Ed25519 trust anchor"):
-        require_production_review_key(
-            "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
-            context="paper execution",
-        )
+        ModelQualityReviewTrustAnchor()
 
 
-def test_paper_runtime_cannot_enter_broker_path() -> None:
-    from uq.runtime import current_runtime_mode
+def test_paper_runtime_cannot_enter_broker_path(monkeypatch) -> None:
+    from uq.execution.stores import _require_paper_runtime
 
-    assert current_runtime_mode() != "broker"
     assert not Path("src/uq/execution/broker.py").exists()
-    assert "broker" not in Path("src/uq/runtime.py").read_text().split("mode not in {", 1)[1].split("}", 1)[0]
+    monkeypatch.setenv("UQ_RUNTIME_MODE", "broker")
+    with pytest.raises(ContractError, match="UQ_RUNTIME_MODE"):
+        _require_paper_runtime()
 
 
 def test_research_prod_trust_anchor_unchanged(monkeypatch) -> None:
