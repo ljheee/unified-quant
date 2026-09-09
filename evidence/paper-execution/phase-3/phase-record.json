@@ -57,13 +57,13 @@
     "tests": "tests/test_paper_execution_phase3.py"
   },
   "evidence": {
-    "local_gate": "evidence/paper-execution/phase-3/final-head-ci/34310674146/local-gate-report.json",
-    "local_gate_commit_bound": "f997b124f339a158d4d7cd89ca776d705ca92dde",
-    "remote_ci_url": "https://github.com/ljheee/unified-quant/actions/runs/34310674146",
-    "remote_matrix": "evidence/paper-execution/phase-3/final-head-ci/34310674146/aggregated-gates.json",
-    "remote_run": "evidence/paper-execution/phase-3/final-head-ci/34310674146/run.json"
+    "local_gate": "evidence/paper-execution/phase-3/final-head-ci/34310949199/local-gate-report.json",
+    "local_gate_commit_bound": "b9b261bb197ea5b9c176b965b80de384dd9e9693",
+    "remote_ci_url": "https://github.com/ljheee/unified-quant/actions/runs/34310949199",
+    "remote_matrix": "evidence/paper-execution/phase-3/final-head-ci/34310949199/aggregated-gates.json",
+    "remote_run": "evidence/paper-execution/phase-3/final-head-ci/34310949199/run.json"
   },
-  "final_head_commit": "f997b124f339a158d4d7cd89ca776d705ca92dde",
+  "final_head_commit": "b9b261bb197ea5b9c176b965b80de384dd9e9693",
   "layer": "paper-execution",
   "phase": 3,
   "status": "exited"
