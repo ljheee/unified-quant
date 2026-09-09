@@ -344,7 +344,7 @@ test node IDs before their owning phase exits.
 | Stage adapters may duplicate layer logic | Blocks implementation | Adapters may translate and validate only; computation/publication stays in owning stores |
 | Partial failure leaves immutable downstream outputs | Cannot be undone | Keep outputs immutable, mark run failed, exclude them from successful result |
 | Cross-platform bytes differ | Cannot be solved by runner | Compare logical fingerprints cross-platform; byte checks only in locked cells |
-| Factor layer provenance remains pending | Blocks factor release claim | Research Chain may exercise governed slices but cannot certify the unresolved official reference prices |
+| Factor layer provenance was historically pending | Was a factor release blocker | Resolved by factor-layer v1.0, which certified four adjusted reference prices from direct SZSE ex-date prior-close evidence; Research Chain still validates the governed bindings it consumes |
 
 ## 11. Immediate Next Actions
 
