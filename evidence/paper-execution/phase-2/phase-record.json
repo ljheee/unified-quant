@@ -1,0 +1,75 @@
+{
+  "acceptance": [
+    {
+      "description": "trading instrument fills at configured basis and quantity",
+      "id": "PX2a",
+      "status": "implemented",
+      "test_id": "test_execution_fills_all_or_none_and_records_fees"
+    },
+    {
+      "description": "non-trading, suspension, and corporate-action exclusions use typed rejection",
+      "id": "PX2b",
+      "status": "implemented",
+      "test_id": "test_non_trading_suspension_and_corporate_action_reject"
+    },
+    {
+      "description": "limit-up blocks buys and limit-down blocks sells",
+      "id": "PX2c",
+      "status": "implemented",
+      "test_id": "test_limit_up_blocks_buy_and_limit_down_blocks_sell"
+    },
+    {
+      "description": "missing mandatory market data rejects without zero valuation",
+      "id": "PX2d",
+      "status": "implemented",
+      "test_id": "test_missing_mandatory_market_data_is_typed"
+    },
+    {
+      "description": "configured fee formula and precision reconcile",
+      "id": "PX2e",
+      "status": "implemented",
+      "test_id": "test_execution_fills_all_or_none_and_records_fees"
+    },
+    {
+      "description": "all-or-none cash feasibility after planned sells",
+      "id": "PX2f",
+      "status": "implemented",
+      "test_id": "test_all_or_none_cash_after_planned_sells"
+    },
+    {
+      "description": "missing execution close for surviving holding fails closed",
+      "id": "PX2g",
+      "status": "implemented",
+      "test_id": "test_missing_execution_close_for_surviving_holding_fails"
+    },
+    {
+      "description": "incomplete plan lineage fails execution",
+      "id": "PX2h",
+      "status": "implemented",
+      "test_id": "test_incomplete_plan_lineage_fails"
+    },
+    {
+      "description": "result payload tampering fails accepted readback",
+      "id": "PX2i",
+      "status": "implemented",
+      "test_id": "test_result_store_readback_rejects_payload_tampering"
+    }
+  ],
+  "blocked_by": null,
+  "deliverables": {
+    "execution_result_store": "src/uq/execution/stores.py",
+    "paper_execution_engine": "src/uq/execution/engine.py",
+    "tests": "tests/test_paper_execution_phase2.py"
+  },
+  "evidence": {
+    "local_gate": "evidence/paper-execution/phase-2/final-head-ci/34254063297/local-gate-report.json",
+    "local_gate_commit_bound": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+    "remote_ci_url": "https://github.com/ljheee/unified-quant/actions/runs/34254063297",
+    "remote_matrix": "evidence/paper-execution/phase-2/final-head-ci/34254063297/aggregated-gates.json",
+    "remote_run": "evidence/paper-execution/phase-2/final-head-ci/34254063297/run.json"
+  },
+  "final_head_commit": "046edfe61cf2ef982f2b16899f6219c1ee3445e7",
+  "layer": "paper-execution",
+  "phase": 2,
+  "status": "implemented_evidence_recorded"
+}
