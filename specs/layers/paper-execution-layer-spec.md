@@ -1,6 +1,5 @@
 # Paper Execution Layer Specification
-
-Status: **v0.1.5 review-remediated; Phases 0–3 exited; Phase 4 final remediation awaiting remote CI**
+Status: **v0.1.6 review-remediated; Phases 0–4 exited; release reconciliation pending**
 Governance: contract-first, immutable artifacts, fail-closed accepted reads.
 Runtime mode: paper execution is a deterministic simulation mode, not a broker integration.
 

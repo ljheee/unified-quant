@@ -73,9 +73,7 @@
       "test_id": "test_paper_runtime_cannot_enter_broker_path"
     }
   ],
-  "blocked_by": [
-    "fresh remote CI for publish-ordering remediation commit"
-  ],
+  "blocked_by": null,
   "deliverables": {
     "quality_publication_gate": "src/uq/execution/stores.py",
     "risk_publication_gate": "src/uq/execution/stores.py",
@@ -85,12 +83,12 @@
   "evidence": {
     "local_gate": "evidence/paper-execution/phase-4/final-cr/local-gate-report.json",
     "local_gate_commit_bound": "50daac29159f3092966cad3d29fb410cd6627bd7",
-    "remote_ci_url": "https://github.com/ljheee/unified-quant/actions/runs/34342435759",
-    "remote_matrix": "evidence/paper-execution/phase-4/final-head-ci/34342435759/aggregated-gates.json",
-    "remote_run": "evidence/paper-execution/phase-4/final-head-ci/34342435759/run.json"
+    "remote_ci_url": "https://github.com/ljheee/unified-quant/actions/runs/34343199904",
+    "remote_matrix": "evidence/paper-execution/phase-4/final-head-ci/34343199904/aggregated-gates.json",
+    "remote_run": "evidence/paper-execution/phase-4/final-head-ci/34343199904/run.json"
   },
-  "final_head_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+  "final_head_commit": "fbdf519baf5483dc9fe66564683b287368b6db67",
   "layer": "paper-execution",
   "phase": 4,
-  "status": "in_progress"
+  "status": "exited"
 }
