@@ -72,3 +72,20 @@ def test_phase_5_release_records_reconcile_gate_evidence() -> None:
     for record in index["records"]:
         path = Path(record["path"])
         assert hashlib.sha256(path.read_bytes()).hexdigest() == record["sha256"]
+
+    assert release["record_version"] >= 3
+    assert release["evidence_commit"] == "9aababa3c475f53858ce9b0c6881b2ddc5967e48"
+    assert release["initial_release_ci_run_id"] == "34354376483"
+    assert release["final_release_ci_run_id"] == "34356489780"
+
+    marker = (RELEASE_ROOT / "MARKER.md").read_text()
+    marker_sections = marker.split("## ")
+    assert len(marker_sections) >= 4
+    assert "## v1 — superseded by final CR" in marker
+    assert "## v2 — evidence reconciliation" in marker
+    assert "## v3 — current final CR evidence" in marker
+    assert marker.index("## v1") < marker.index("## v2") < marker.index("## v3")
+    current_marker = marker_sections[-1]
+    assert release["final_implementation_commit"] in current_marker
+    assert release["evidence_commit"] in current_marker
+    assert release["final_release_ci_run_id"] in current_marker

@@ -250,11 +250,9 @@ Acceptance:
 - Full test suite and both gate commands pass.
 - The release marker is immutable and append-only.
 
-## 10. Immediate Next Actions
+## 10. Release Follow-Up
 
-1. Implement Phase 0 contracts, fixtures, golden vectors, typed loaders, and
-   evidence.
-2. Run the unified gate at the final Phase 0 commit.
-3. Preserve and index the successful report and lockfile digest.
-4. Conduct a separate review of the Phase 0 exit evidence.
-5. Only after that review passes, open Phase 1 runtime work.
+1. Paper execution v1.0 is released at implementation commit `b0614dc`.
+2. Future semantic changes require a new contract version and phase record.
+3. Never reuse this release evidence for a different implementation HEAD.
+4. The next roadmap slice starts a new plan rather than reopening this release.

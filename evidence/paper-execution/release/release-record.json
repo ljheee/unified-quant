@@ -1,6 +1,6 @@
 {
   "layer": "paper_execution",
-  "record_version": 2,
+  "record_version": 3,
   "status": "released",
   "final_implementation_commit": "b0614dc99d4d0be5528b703de38bcc0273e95cce",
   "phases_exited": [
@@ -75,23 +75,34 @@
     "streaming_runtime": false
   },
   "notes": [
-    "Record v2 reconciles release evidence after the v1 commit-binding defect was found by CR.",
+    "Final CR base gate passed 561 tests, 22 skipped on the current CR revision.",
+    "Record v2 reconciled the v1 commit-binding defect.",
+    "Record v3 preserves the v1 marker in append-only form and binds evidence to remediation commit 9aababa.",
     "Both fresh local gates bind reachable final implementation commit b0614dc.",
     "Remote run 34353911518 passed the unified ten-cell matrix on the same implementation commit.",
+    "Remote run 34356489780 validated the reconciled evidence commit 9aababa.",
     "The failed portable-audit run 34353302888 is retained as immutable failure evidence.",
-    "Final release marker CI is run 34354376483 on evidence commit 3e23e33.",
     "No broker, live-market, network, credential, or streaming path exists in the execution runtime."
   ],
-  "evidence_commit": "b0614dc99d4d0be5528b703de38bcc0273e95cce",
-  "final_release_ci_run_id": "34354376483",
+  "evidence_commit": "9aababa3c475f53858ce9b0c6881b2ddc5967e48",
+  "final_release_ci_run_id": "34356489780",
   "invalid_evidence": {
     "reason": "local gate reports from commit 6e8a37c were temporarily labeled as implementation commit 3fc8356, which was unreachable",
     "path": "evidence/paper-execution/release/final-cr/invalid-6e8a37c",
     "recorded_snapshots": [
       "release-record.v1.json",
       "phase-record.v1.json",
-      "evidence-index.v1.json"
+      "evidence-index.v1.json",
+      "MARKER.v1.md"
     ]
   },
-  "release_marker_commit": "3e23e3382a2646fcc121a877a730db3fbfdf5e80"
+  "release_marker_commit": "9aababa3c475f53858ce9b0c6881b2ddc5967e48",
+  "initial_release_ci_run_id": "34354376483",
+  "final_cr_local_gate": {
+    "result": "passed",
+    "report_path": "evidence/paper-execution/release/final-cr/final-cr-base-gate-report.json",
+    "requirements_lock_path": "evidence/paper-execution/release/final-cr/final-cr-base-requirements.lock.txt",
+    "requirements_lock_sha256_path": "evidence/paper-execution/release/final-cr/final-cr-base-requirements.lock.txt.sha256",
+    "commit_bound": "b0614dc99d4d0be5528b703de38bcc0273e95cce"
+  }
 }

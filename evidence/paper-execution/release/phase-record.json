@@ -1,7 +1,7 @@
 {
   "layer": "paper_execution",
   "phase": 5,
-  "record_version": 2,
+  "record_version": 3,
   "status": "exited_after_remote_gate",
   "blocked_by": [],
   "implementation_commit": "b0614dc99d4d0be5528b703de38bcc0273e95cce",
@@ -66,7 +66,9 @@
       "id": "PX5e",
       "description": "spec, plan, architecture, release record, and evidence index reconcile",
       "status": "passed",
-      "test_ids": [],
+      "test_ids": [
+        "test_phase_5_release_records_reconcile_gate_evidence"
+      ],
       "evidence_paths": [
         "specs/layers/paper-execution-layer-spec.md",
         "specs/layers/paper-execution-layer-implementation-plan.md",
@@ -83,5 +85,6 @@
     "evidence/paper-execution/release/MARKER.md",
     "tests/test_paper_execution_phase5.py"
   ],
-  "evidence_commit": "3e23e3382a2646fcc121a877a730db3fbfdf5e80"
+  "evidence_commit": "9aababa3c475f53858ce9b0c6881b2ddc5967e48",
+  "final_release_ci_run_id": "34356489780"
 }
