@@ -1,0 +1,67 @@
+{
+  "layer": "paper_execution_research_integration",
+  "status": "in_progress",
+  "record_version": 1,
+  "records": [
+    {
+      "path": "config/research-stage-plan-review-anchor.v1.json",
+      "sha256": "0231b8fdb1862830e9e4963aa36cba62fcc2bdbc359f8ccc586cb54a2dc5d934"
+    },
+    {
+      "path": "config/research-stage-plan-review-anchor.v3.json",
+      "sha256": "a307ca19eb4acfc0ca156e67cb8f15c74ee6e7cbf46b93ffe5068cafb2d426f0"
+    },
+    {
+      "path": "config/schemas/contracts/paper_execution_template.v1.json",
+      "sha256": "59d6a65958b4a55a84eb9911e27c6837d8544ddd689942ec6d9bc5fb5383e1b9"
+    },
+    {
+      "path": "config/schemas/contracts/research_run_request_v3.json",
+      "sha256": "bde91b6e06e8b5e9d6fa0b0b7c55ddc47c116ebe09b2430e2d1e1a0233a746a1"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-valid.json",
+      "sha256": "1094f0e5c8344e9052008633af315d6ff1d2c7883167018841addc03bf263a4d"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/gate-reports/gate-report.json",
+      "sha256": "e2efab5422a374fb0bd11bf5a8bda87801a41e57f6836813c27c069e46f62e3c"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/phase-record.json",
+      "sha256": "2c151121a8eb162219396eec62e159244614080acbe1b6b3d5e870d0f592b6f6"
+    },
+    {
+      "path": "specs/layers/paper-execution-research-integration-plan.md",
+      "sha256": "7f5f09a5b152152fb05711db6aac2f00d294cd42dc9fb79e923e57aa2d2a1ac1"
+    },
+    {
+      "path": "src/uq/contracts/model_layer.py",
+      "sha256": "fd1acb5200e493c96877d212332dcfbc985815c5fff37672c426855a61befff5"
+    },
+    {
+      "path": "src/uq/research_chain/contracts.py",
+      "sha256": "e5eaf3da4c12ae87e4ceb9b3680e11fa7d9d7519f15cc36a6d5b98272cbf2450"
+    },
+    {
+      "path": "src/uq/research_chain/resolver.py",
+      "sha256": "911fd07c6615e21bff5cf192dc936265cabda2bbd32987e1c07113f20eabefc3"
+    },
+    {
+      "path": "src/uq/research_chain/runner.py",
+      "sha256": "a1c9f65c24c8ee7ed6e60608a49e5e96e1896a31533a9fe3e09e1b5813f574e3"
+    },
+    {
+      "path": "tests/test_paper_execution_research_integration_phase0.py",
+      "sha256": "be5ead6d6e6343a476885a858645c6b92dd83dfbce00ab7829c8b550a4183dc7"
+    }
+  ]
+}

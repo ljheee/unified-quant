@@ -1,0 +1,267 @@
+{
+  "adjusted_price_binding": {
+    "data_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "backtest_config_binding": {
+    "family": "backtest_config",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "contract_version": 3,
+  "created_at": "2026-01-30T07:00:00+00:00",
+  "dataset_policy_template": {
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "contract_version": 1,
+    "dataset_name": "research_baseline",
+    "missing_policy": "fail_closed",
+    "semantic_version": "1.0.0",
+    "split_policy": {
+      "embargo_trading_days": 2,
+      "purge_trading_days": 5,
+      "splits": [
+        {
+          "end_date": "2026-01-12",
+          "name": "train",
+          "start_date": "2026-01-05"
+        },
+        {
+          "end_date": "2026-01-26",
+          "name": "validation",
+          "start_date": "2026-01-23"
+        }
+      ]
+    },
+    "status": "reviewed",
+    "template_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "template_manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "template_version": "1.0.0"
+  },
+  "decision_timezone": "Asia/Shanghai",
+  "environment": {
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "environment_lock_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "seed": 7,
+    "serialization_profile_id": "uq-parquet-v1",
+    "thread_count": 1
+  },
+  "execution_mode": "full_research_run",
+  "factor_binding": {
+    "family": "factor_partition",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "feature_preprocessing_binding": {
+    "family": "feature_preprocessing",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "label_binding": {
+    "family": "label_set",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "model_definition_template": {
+    "algorithm": "qlib_linear",
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "compatible_dataset_versions": [
+      "1.0.0"
+    ],
+    "contract_version": 1,
+    "hyperparameters": {
+      "alpha": 0.5
+    },
+    "metrics": [
+      {
+        "direction": "maximize",
+        "name": "ic"
+      }
+    ],
+    "model_set": "baseline",
+    "model_version": "1.0.0",
+    "quality_policy": "reject_all",
+    "seed_policy": {
+      "base_seed": 7,
+      "derivation": "fixed"
+    },
+    "selection_rule": "maximum validation ic",
+    "serializer_version": "json-numpy-v1",
+    "status": "reviewed",
+    "template_generation_id": "1ebc548c2702a1cf941a4d5673ed582e7d94a5c2be6fd76e4d4cebec17c9233d",
+    "template_manifest_digest_sha256": "0231f1c3fc612e38eeb9eeaede55e70ad34bfafadcf168dfa973277f5380484c",
+    "template_version": "1.0.0"
+  },
+  "portfolio_definition_template": {
+    "constraints": {
+      "cash_reserve": 0.05,
+      "max_industry_weight": null,
+      "max_single_weight": 0.1,
+      "max_turnover": null
+    },
+    "contract_version": 1,
+    "industry_source_binding": null,
+    "portfolio_name": "top20",
+    "rebalance_schedule": "daily",
+    "scheme_parameters": {
+      "n": 20
+    },
+    "score_policy": {
+      "direction": "descending",
+      "nan_policy": "exclude",
+      "tie_policy": "first_by_instrument_id"
+    },
+    "status": "reviewed",
+    "template_generation_id": "6d72056d696c3d1c51c6303a65814027a046c4f5be32ea8216c6ec4b73512519",
+    "template_manifest_digest_sha256": "71c354dfa1dc8424800de5b25ee491d686e85984cb16014a86978b83a1d847fa",
+    "template_version": "1.0.0",
+    "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "weight_scheme": "top_n_equal_weight"
+  },
+  "request_content_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "research_name": "adjusted_return_baseline",
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "run_visible_cutoff": "2026-01-30T15:00:00+08:00",
+  "schema_version": "3.0.0",
+  "stage_plan_sha256": "6d8b3e3d358a2989fc298e9612ec23bfd95000e31a7c2b0620be99a3394eaa81",
+  "universe_snapshot_binding": {
+    "family": "universe_snapshot",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "window_end_date": "2026-01-29",
+  "window_start_date": "2025-12-01",
+  "risk_binding": {
+    "policy_binding": {
+      "family": "risk_policy_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "policy_review_binding": {
+      "family": "risk_review_decision_v1",
+      "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+      "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8"
+    },
+    "state_binding": {
+      "family": "risk_state_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "run_binding": {
+      "family": "risk_run_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "decision_binding": {
+      "family": "risk_decision_v1",
+      "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "action": "allow",
+      "decision_scope": "portfolio_publication",
+      "decision_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "event_bindings": [
+      {
+        "family": "risk_event_v1",
+        "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "policy_review": {
+    "contract_version": 1,
+    "schema_version": "1.0.0",
+    "review_type": "risk_policy_activation",
+    "subject_generation_id": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+    "subject_manifest_digest_sha256": "cfd9c82fa8e34fdd350d7673093966cea54a728b827e7381a4f35f3ed625fa72",
+    "subject_content_sha256": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+    "review_status": "approved",
+    "reviewer": "repository-owner",
+    "key_id": "risk-reviewer-v1-2026-09",
+    "policy": "reject_all",
+    "reviewed_at_utc": "2026-09-06T00:00:00Z",
+    "errors": [],
+    "warnings": [],
+    "review_signature_sha256": "7c11a845148bf9ade37547e0366a76a09a9073878382f536d2c65c65e48b2cc6c3a809b2f6b2c85a3ea12fd94075918af99bbe088a958697d54ed64d542b020e",
+    "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+    "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8"
+  },
+  "stage_plan_review": {
+    "review_type": "research_stage_plan_v3_activation",
+    "subject_generation_id": "6d8b3e3d358a2989fc298e9612ec23bfd95000e31a7c2b0620be99a3394eaa81",
+    "subject_manifest_digest_sha256": "6d8b3e3d358a2989fc298e9612ec23bfd95000e31a7c2b0620be99a3394eaa81",
+    "review_status": "approved",
+    "reviewer": "repository-owner",
+    "key_id": "research-stage-plan-reviewer-v1-2026-09",
+    "review_signature_sha256": "282e85ed122e0a102a0369a24906150415ee68960a4b34bdf680c9e2955e7bd230544b67fbc502d3db82767714a2d24e0c23637b638aa86e06766f0c4c784505"
+  },
+  "paper_execution_template": {
+    "template_version": "1.0.0",
+    "status": "reviewed",
+    "state_mode_policy": "initial_then_continuation",
+    "lot_size": 100,
+    "quantity_policy": {
+      "board_lot": 100,
+      "minimum_order_quantity": 100,
+      "partial_fills": false,
+      "sell_before_buy": true,
+      "enforce_t1": true,
+      "minimum_holding_rule": "preserve_one_lot",
+      "insufficient_cash_policy": "round_down_to_lot"
+    },
+    "fee_policy": {
+      "buy_commission_rate": 0.00025,
+      "sell_commission_rate": 0.00025,
+      "sell_stamp_tax_rate": 0.0005,
+      "transfer_fee_rate": 1e-05,
+      "minimum_commission": 5.0,
+      "currency_precision": 2
+    },
+    "price_policy": {
+      "order_pricing_basis": "decision_close_estimate",
+      "limit_tolerance_absolute": 0.0,
+      "limit_tolerance_relative": 0.0,
+      "execution_window": "open"
+    },
+    "market_data_binding": {
+      "dataset_family": "bars_daily",
+      "schema_version": "research-v1",
+      "generation_id": "3333333333333333333333333333333333333333333333333333333333333333",
+      "manifest_digest_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "visibility_timestamp": "2026-01-29T15:00:00+08:00",
+      "price_basis": "decision_close_estimate",
+      "required_columns": [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "status",
+        "limit_up",
+        "limit_down"
+      ]
+    },
+    "calendar_binding": null,
+    "suspension_binding": {
+      "family": "suspension_snapshot_v1",
+      "generation_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "manifest_digest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "corporate_action_binding": {
+      "family": "corporate_action_v1",
+      "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "manifest_digest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "risk_decision_binding": {
+      "family": "risk_decision_v1",
+      "generation_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "manifest_digest_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "data_delay_policy": "delayed_replay",
+    "data_delay_reason": "research chain paper execution fixture",
+    "serialization_profiles": {
+      "manifest": "json-canonical-v1",
+      "payload": "parquet-v1"
+    }
+  }
+}

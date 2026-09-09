@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Research chain paper execution template v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "template_version",
+    "status",
+    "state_mode_policy",
+    "lot_size",
+    "quantity_policy",
+    "fee_policy",
+    "price_policy",
+    "market_data_binding",
+    "calendar_binding",
+    "suspension_binding",
+    "corporate_action_binding",
+    "risk_decision_binding",
+    "data_delay_policy",
+    "data_delay_reason",
+    "serialization_profiles"
+  ],
+  "properties": {
+    "template_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "status": {
+      "const": "reviewed"
+    },
+    "state_mode_policy": {
+      "const": "initial_then_continuation"
+    },
+    "lot_size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "quantity_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "board_lot",
+        "minimum_order_quantity",
+        "partial_fills",
+        "sell_before_buy",
+        "enforce_t1",
+        "minimum_holding_rule",
+        "insufficient_cash_policy"
+      ],
+      "properties": {
+        "board_lot": {"type": "integer", "minimum": 1},
+        "minimum_order_quantity": {"type": "integer", "minimum": 1},
+        "partial_fills": {"const": false},
+        "sell_before_buy": {"const": true},
+        "enforce_t1": {"const": true},
+        "minimum_holding_rule": {"const": "preserve_one_lot"},
+        "insufficient_cash_policy": {"const": "round_down_to_lot"}
+      }
+    },
+    "fee_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "buy_commission_rate",
+        "sell_commission_rate",
+        "sell_stamp_tax_rate",
+        "transfer_fee_rate",
+        "minimum_commission",
+        "currency_precision"
+      ],
+      "properties": {
+        "buy_commission_rate": {"type": "number", "minimum": 0},
+        "sell_commission_rate": {"type": "number", "minimum": 0},
+        "sell_stamp_tax_rate": {"type": "number", "minimum": 0},
+        "transfer_fee_rate": {"type": "number", "minimum": 0},
+        "minimum_commission": {"type": "number", "minimum": 0},
+        "currency_precision": {"type": "integer", "minimum": 0, "maximum": 8}
+      }
+    },
+    "price_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order_pricing_basis",
+        "limit_tolerance_absolute",
+        "limit_tolerance_relative",
+        "execution_window"
+      ],
+      "properties": {
+        "order_pricing_basis": {"enum": ["decision_close_estimate", "execution_open_replay"]},
+        "limit_tolerance_absolute": {"type": "number", "minimum": 0},
+        "limit_tolerance_relative": {"type": "number", "minimum": 0},
+        "execution_window": {"const": "open"}
+      }
+    },
+    "market_data_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dataset_family", "schema_version", "generation_id", "manifest_digest_sha256", "visibility_timestamp", "price_basis", "required_columns"],
+      "properties": {
+        "dataset_family": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+        "schema_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$"},
+        "generation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "manifest_digest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "visibility_timestamp": {"type": "string", "format": "date-time"},
+        "price_basis": {"enum": ["decision_close_estimate", "execution_open_replay"]},
+        "required_columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": ["open", "high", "low", "close", "volume", "status", "limit_up", "limit_down"]
+          }
+        }
+      }
+    },
+    "calendar_binding": {"$ref": "#/$defs/governed_binding"},
+    "suspension_binding": {"$ref": "#/$defs/governed_binding"},
+    "corporate_action_binding": {"$ref": "#/$defs/governed_binding"},
+    "risk_decision_binding": {"$ref": "#/$defs/governed_binding"},
+    "data_delay_policy": {"type": "string", "minLength": 1},
+    "data_delay_reason": {"type": "string", "minLength": 1},
+    "serialization_profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "payload"],
+      "properties": {
+        "manifest": {"type": "string", "minLength": 1},
+        "payload": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "governed_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "generation_id", "manifest_digest_sha256"],
+      "properties": {
+        "family": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+        "generation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "manifest_digest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

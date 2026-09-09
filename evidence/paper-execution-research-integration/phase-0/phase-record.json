@@ -1,0 +1,42 @@
+{
+  "layer": "paper_execution_research_integration",
+  "phase": 0,
+  "status": "in_progress",
+  "blocked_by": ["final HEAD gate evidence after commit"],
+  "acceptance_rows": [
+    {
+      "id": "PE1",
+      "status": "passed",
+      "test_ids": [
+        "test_v3_request_contract_and_fixtures_validate",
+        "test_v3_request_rejects_schema_version_2_review_type"
+      ],
+      "evidence_paths": [
+        "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-valid.json",
+        "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-unknown-template-field.json",
+        "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-missing-calendar-binding.json"
+      ]
+    },
+    {
+      "id": "PE2",
+      "status": "passed",
+      "test_ids": ["test_v3_stage_plan_digest_is_stable_and_sensitive"],
+      "evidence_paths": []
+    },
+    {
+      "id": "PE3",
+      "status": "passed",
+      "test_ids": [
+        "test_v3_activation_review_is_verified_and_sensitive",
+        "test_v3_request_rejects_v2_stage_plan_digest"
+      ],
+      "evidence_paths": [
+        "config/research-stage-plan-review-anchor.v3.json",
+        "config/research-stage-plan-review-anchor.v1.json"
+      ]
+    }
+  ],
+  "gate_report_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/gate-report.json",
+  "requirements_lock_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt",
+  "requirements_lock_sha256_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt.sha256"
+}

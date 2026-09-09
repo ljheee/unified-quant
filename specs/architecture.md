@@ -433,7 +433,21 @@ activated, is deterministic decision-time risk for portfolio publication and
 backtest orders. Production real-time execution risk remains explicitly
 deferred until an Execution Layer exists.
 
-## 11.8 Paper Execution Layer Boundary
+## 11.9 Research Chain Paper Execution Extension
+
+```text
+Research Chain Stage Plan v3
+  -> Portfolio Stage
+  -> Backtest Stage
+  -> Paper Execution Stage (published orders, fills, next state)
+  -> Result Reconciliation
+```
+
+This extension adds a new `research_run_request_v3` and stage-plan digest; it
+does not alter the released v1/v2 chain. The runner invokes only the owning
+paper order planner, engine, stores, and external reviewed risk decision.
+
+## 11.10 Paper Execution Layer Boundary
 
 ```text
 Target Weight Publication

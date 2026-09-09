@@ -1,6 +1,6 @@
 {
   "layer": "paper_execution",
-  "status": "released",
+  "status": "superseded_by_record_version_4",
   "remote_ci_run_id": "34353911518",
   "final_release_ci_run_id": "34356489780",
   "records": [
@@ -74,7 +74,7 @@
     },
     {
       "path": "specs/architecture.md",
-      "sha256": "42a6b63c1256352e2e0e6627c9e423ac493fd1a8e287e39149ec11e5d1c424c1"
+      "sha256": "34673ad2075bbf9aa75911c79944270a536c388f4df7580094d6afb493aa99aa"
     },
     {
       "path": "specs/layers/paper-execution-layer-spec.md",
@@ -141,10 +141,8 @@
       "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
     }
   ],
-  "record_version": 4,
+  "record_version": 3,
   "initial_release_ci_run_id": "34354376483",
-  "invalidated_evidence_versions": [
-    "v3"
-  ],
-  "invalidation_reason": "architecture.md changed after v3 evidence; index v4 refreshes the affected spec hash and preserves v3 evidence."
+  "invalidated_reason": "architecture.md changed after v3 evidence; hash index no longer matches release scope.",
+  "invalidated_at_commit": "working_tree"
 }

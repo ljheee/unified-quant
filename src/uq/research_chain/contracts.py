@@ -239,15 +239,19 @@ _STAGE_PLAN_REVIEW_FIELDS = (
     "review_type", "subject_generation_id", "subject_manifest_digest_sha256",
     "review_status", "reviewer", "key_id",
 )
+_STAGE_PLAN_REVIEW_TYPES = {
+    "research_stage_plan_v2_activation",
+    "research_stage_plan_v3_activation",
+}
 
 
 def verify_stage_plan_review(review: Mapping[str, Any], *, stage_plan_sha256: str) -> None:
-    """Verify the externally signed v2 stage-plan activation review."""
+    """Verify the externally signed stage-plan activation review."""
     if not isinstance(review, Mapping):
         raise ContractError("research stage plan review is invalid")
     if set(review) != set(_STAGE_PLAN_REVIEW_FIELDS) | {"review_signature_sha256"}:
         raise ContractError("research stage plan review fields mismatch")
-    if review["review_type"] != "research_stage_plan_v2_activation":
+    if review["review_type"] not in _STAGE_PLAN_REVIEW_TYPES:
         raise ContractError("research stage plan review type mismatch")
     if review["review_status"] != "approved":
         raise ContractError("research stage plan is not approved")
@@ -256,7 +260,8 @@ def verify_stage_plan_review(review: Mapping[str, Any], *, stage_plan_sha256: st
         or review["subject_manifest_digest_sha256"] != stage_plan_sha256
     ):
         raise ContractError("research stage plan review subject mismatch")
-    anchor_path = Path(__file__).parents[3] / "config/research-stage-plan-review-anchor.v1.json"
+    anchor_suffix = "v3" if review["review_type"] == "research_stage_plan_v3_activation" else "v1"
+    anchor_path = Path(__file__).parents[3] / f"config/research-stage-plan-review-anchor.{anchor_suffix}.json"
     anchor = json.loads(anchor_path.read_text(encoding="utf-8"))
     if review["key_id"] != anchor["key_id"] or anchor["review_type"] != review["review_type"]:
         raise ContractError("research stage plan review trust anchor mismatch")
@@ -280,4 +285,6 @@ def research_request_schema_name(request: Mapping[str, Any]) -> str:
         return "research_run_request"
     if version == 2:
         return "research_run_request_v2"
+    if version == 3:
+        return "research_run_request_v3"
     raise ContractError(f"unsupported research request contract version: {version}")

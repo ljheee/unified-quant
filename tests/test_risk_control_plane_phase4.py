@@ -73,9 +73,12 @@ def _risk_binding(action: str = "allow") -> dict:
     }
 
 
-def _signed_review(stage_plan_sha256: str, *, signature: str | None = None) -> dict:
+def _signed_review(
+    stage_plan_sha256: str, *, signature: str | None = None,
+    review_type: str = "research_stage_plan_v2_activation",
+) -> dict:
     unsigned = {
-        "review_type": "research_stage_plan_v2_activation",
+        "review_type": review_type,
         "subject_generation_id": stage_plan_sha256,
         "subject_manifest_digest_sha256": stage_plan_sha256,
         "review_status": "approved",
