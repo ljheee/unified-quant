@@ -7,7 +7,11 @@ from typing import Any
 
 import pandas as pd
 
-from ..contracts.model_layer import ModelContractLoader, paper_execution_identities, sha256_json
+from ..contracts.model_layer import (
+    ModelContractLoader,
+    paper_execution_identities,
+    sha256_json,
+)
 from ..errors import ContractError
 
 
@@ -69,7 +73,13 @@ class PaperExecutionEngine:
         events = self._execute_orders(
             config, plan_frame, execution_market, suspended, corporate_excluded, opening_cash
         )
-        closing_holdings = self._closing_holdings(holdings, events)
+        same_session_prior_state = (
+            config["state_mode"] == "continuation"
+            and config["input_state_binding"]["as_of_date"] >= config["execution_date"]
+        )
+        closing_holdings = self._closing_holdings(
+            holdings, events, same_session_prior_state=same_session_prior_state
+        )
         closing_cash = opening_cash + sum(float(row["net_amount"]) for row in events)
         if closing_cash < -1e-9:
             raise ContractError("execution creates negative closing cash")
@@ -81,7 +91,7 @@ class PaperExecutionEngine:
         )
         frame = pd.DataFrame(events, columns=self.COLUMNS).astype(self.DTYPES)
         aggregate = self._aggregate_reconciliation(
-            config, target_weights, plan_frame, frame, decision_nav
+            config, target_weights, plan_frame, frame, decision_nav, input_holdings
         )
         manifest = self._manifest(
             config,
@@ -354,6 +364,7 @@ class PaperExecutionEngine:
         plan_frame: pd.DataFrame,
         result_frame: pd.DataFrame,
         decision_nav: float,
+        input_holdings: list[Mapping[str, Any]],
     ) -> dict[str, Any]:
         target = target_weights.copy()
         target["instrument"] = target["instrument"].map(str)
@@ -362,6 +373,9 @@ class PaperExecutionEngine:
         for row in target.to_dict("records"):
             instrument = str(row["instrument"])
             if float(row["weight"]) > 0 and instrument not in plan_by_instrument:
+                retained = {str(holding["instrument"]) for holding in input_holdings}
+                if instrument in retained:
+                    continue
                 raise ContractError(f"order plan is missing target instrument {instrument}")
         events_by_sequence = {int(row["plan_sequence"]): row for _, row in result_frame.iterrows()}
         unfilled: dict[str, int] = defaultdict(int)
@@ -467,24 +481,47 @@ class PaperExecutionEngine:
         return value
 
     def _closing_holdings(
-        self, holdings: Mapping[str, Mapping[str, Any]], events: list[dict[str, Any]]
+        self,
+        holdings: Mapping[str, Mapping[str, Any]],
+        events: list[dict[str, Any]],
+        *,
+        same_session_prior_state: bool,
     ) -> dict[str, dict[str, Any]]:
         closing = {key: dict(value) for key, value in holdings.items()}
+        for holding in closing.values():
+            holding["buy_locked_quantity"] = (
+                int(holding["buy_locked_quantity"]) if same_session_prior_state else 0
+            )
         for event in events:
             instrument = str(event["instrument"])
+            filled = int(event["filled_quantity"])
+            side = str(event["side"])
             if instrument not in closing:
-                if int(event["filled_quantity"]) == 0:
+                if filled == 0:
                     continue
-                if event["side"] != "buy":
+                if side != "buy":
                     raise ContractError(f"execution event references unknown holding {instrument}")
                 closing[instrument] = {
                     "instrument": instrument, "quantity": 0, "average_cost": 0.0,
                     "buy_locked_quantity": 0,
                 }
-            if event["side"] == "buy":
-                closing[instrument]["quantity"] += int(event["filled_quantity"])
+            if filled == 0:
+                continue
+            if side == "buy":
+                previous_quantity = int(closing[instrument]["quantity"])
+                previous_cost = float(closing[instrument]["average_cost"])
+                new_quantity = previous_quantity + filled
+                closing[instrument]["average_cost"] = (
+                    previous_quantity * previous_cost
+                    + filled * float(event["price"])
+                    + float(event["fee_amount"])
+                ) / new_quantity
+                closing[instrument]["quantity"] = new_quantity
+                closing[instrument]["buy_locked_quantity"] = (
+                    int(closing[instrument]["buy_locked_quantity"]) + filled
+                )
             else:
-                closing[instrument]["quantity"] -= int(event["filled_quantity"])
+                closing[instrument]["quantity"] -= filled
             if int(closing[instrument]["quantity"]) < 0:
                 raise ContractError(f"execution sells more than held quantity for {instrument}")
         return {key: value for key, value in closing.items() if int(value["quantity"]) > 0}

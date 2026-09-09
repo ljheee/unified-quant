@@ -1,0 +1,70 @@
+{
+  "acceptance": [
+    {
+      "description": "filled buys evolve quantity, buy-locked quantity, and average cost",
+      "id": "PX3a",
+      "status": "implemented",
+      "test_id": "test_state_evolution_updates_quantity_cost_and_t1_lock"
+    },
+    {
+      "description": "prior buy-locked inventory resets on the next governed session",
+      "id": "PX3b",
+      "status": "implemented",
+      "test_id": "test_continuation_state_resets_prior_buy_lock"
+    },
+    {
+      "description": "state store readback verifies payload and rejects tampering",
+      "id": "PX3c",
+      "status": "implemented",
+      "test_id": "test_state_store_publish_read_and_tamper_detection"
+    },
+    {
+      "description": "state lineage resolves result, plan, target, and previous state",
+      "id": "PX3d",
+      "status": "implemented",
+      "test_id": "test_state_rejects_mismatched_result_lineage"
+    },
+    {
+      "description": "surviving holdings require positive execution close valuation",
+      "id": "PX3e",
+      "status": "implemented",
+      "test_id": "test_state_requires_execution_close_for_surviving_holding"
+    },
+    {
+      "description": "opening and closing portfolio values reconcile independently",
+      "id": "PX3f",
+      "status": "implemented",
+      "test_id": "test_state_rejects_valuation_reconciliation_mismatch"
+    },
+    {
+      "description": "target, order, fill, rejection, and unfilled aggregates reconcile",
+      "id": "PX3g",
+      "status": "implemented",
+      "test_id": "test_state_rejects_aggregate_reconciliation_mismatch"
+    },
+    {
+      "description": "zero-order execution publishes valid retained-holding state",
+      "id": "PX3h",
+      "status": "implemented",
+      "test_id": "test_zero_order_retained_holding_publishes_state"
+    }
+  ],
+  "blocked_by": null,
+  "deliverables": {
+    "paper_portfolio_state_builder": "src/uq/execution/state.py",
+    "paper_portfolio_state_store": "src/uq/execution/stores.py",
+    "stateful_execution_engine": "src/uq/execution/engine.py",
+    "tests": "tests/test_paper_execution_phase3.py"
+  },
+  "evidence": {
+    "local_gate": null,
+    "local_gate_commit_bound": null,
+    "remote_ci_url": null,
+    "remote_matrix": null,
+    "remote_run": null
+  },
+  "final_head_commit": null,
+  "layer": "paper-execution",
+  "phase": 3,
+  "status": "implemented"
+}
