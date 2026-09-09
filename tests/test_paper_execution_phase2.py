@@ -209,6 +209,18 @@ def test_execution_fills_all_or_none_and_records_fees(tmp_path: Path) -> None:
     assert manifest["closing_portfolio_value"] == pytest.approx(manifest["opening_portfolio_value"] - manifest["aggregate_reconciliation"]["total_fee_amount"])
 
 
+def test_decision_close_estimate_fills_at_plan_limit_price(tmp_path: Path) -> None:
+    config, _ = _publish_config(tmp_path)
+    target = _target()
+    plan_manifest, plan_frame = _publish_plan(tmp_path, config, target)
+    market = _execution_market()
+    market["000001.XSHE"]["close"] = 10.5
+    result, manifest = _execute(config, plan_manifest, plan_frame, target, execution_market=market)
+    filled = result.loc[result["side"] == "buy"].iloc[0]
+    assert result["order_state"].eq("filled").all()
+    assert filled["price"] == float(plan_frame.loc[plan_frame["side"] == "buy", "limit_price"].iloc[0])
+
+
 def test_non_trading_suspension_and_corporate_action_reject(tmp_path: Path) -> None:
     config, _ = _publish_config(tmp_path)
     target = _target()
@@ -292,32 +304,47 @@ def test_all_or_none_cash_after_planned_sells(tmp_path: Path) -> None:
     buy_row = frame["side"].eq("buy")
     frame.loc[buy_row, "requested_quantity"] = 100
     frame.loc[buy_row, "reason"] = "target_rebalance"
+    plan_manifest = {
+        "generation_id": "3" * 64,
+        "contract_version": 1,
+        "schema_version": "1.0.0",
+        "quality_report_checksum_sha256": "e" * 64,
+        "execution_id": config["execution_id"],
+        "state_mode": config["state_mode"],
+        "execution_config_generation_id": config["generation_id"],
+        "execution_date": config["execution_date"],
+        "decision_date": config["decision_date"],
+        "target_weights_binding": config["target_weights_binding"],
+        "input_state_binding": config["input_state_binding"],
+        "initial_state_provenance_sha256": None,
+        "market_data_binding": {
+            "family": config["market_data_binding"]["dataset_family"],
+            "generation_id": config["market_data_binding"]["generation_id"],
+            "manifest_digest_sha256": config["market_data_binding"]["manifest_digest_sha256"],
+        },
+        "calendar_binding": config["calendar_binding"],
+        "suspension_binding": config["suspension_binding"],
+        "corporate_action_binding": config["corporate_action_binding"],
+        "risk_decision_binding": config["risk_decision_binding"],
+        "ordered_cash_residual_sequence": [],
+        "run_id": config["run_id"],
+        "created_at": config["created_at"],
+        "columns": PaperOrderPlanner.COLUMNS,
+        "dtypes": PaperOrderPlanner.DTYPES,
+        "row_count": len(frame),
+        "key_uniqueness": ["plan_sequence"],
+        "logical_fingerprint": "e" * 64,
+        "serialization_profile_id": "parquet-v1",
+        "data_file": "data.parquet",
+        "data_checksum_sha256": "f" * 64,
+        "manifest_digest_sha256": "0" * 64,
+    }
+    plan_manifest["generation_id"], plan_manifest["manifest_digest_sha256"] = paper_execution_identities(
+        plan_manifest, schema_name="order_plan"
+    )
     result, manifest = PaperExecutionEngine().execute(
         config,
-        {
-            "generation_id": "3" * 64,
-            "execution_id": config["execution_id"],
-            "state_mode": config["state_mode"],
-            "execution_config_generation_id": config["generation_id"],
-            "execution_date": config["execution_date"],
-            "decision_date": config["decision_date"],
-            "target_weights_binding": config["target_weights_binding"],
-            "input_state_binding": config["input_state_binding"],
-            "initial_state_provenance_sha256": None,
-            "market_data_binding": {
-                "family": config["market_data_binding"]["dataset_family"],
-                "generation_id": config["market_data_binding"]["generation_id"],
-                "manifest_digest_sha256": config["market_data_binding"]["manifest_digest_sha256"],
-            },
-            "calendar_binding": config["calendar_binding"],
-            "suspension_binding": config["suspension_binding"],
-            "corporate_action_binding": config["corporate_action_binding"],
-            "risk_decision_binding": config["risk_decision_binding"],
-            "columns": PaperOrderPlanner.COLUMNS,
-            "dtypes": PaperOrderPlanner.DTYPES,
-            "row_count": len(frame),
-            "key_uniqueness": ["plan_sequence"],
-        },
+        plan_manifest,
         frame,
         target,
         holdings,
@@ -338,7 +365,7 @@ def test_incomplete_plan_lineage_fails(tmp_path: Path) -> None:
     target = _target()
     plan_manifest, plan_frame = _publish_plan(tmp_path, config, target)
     plan_manifest["risk_decision_binding"]["generation_id"] = "f" * 64
-    with pytest.raises(ContractError, match="risk_decision_binding mismatch"):
+    with pytest.raises(ContractError, match="order_plan stable generation mismatch"):
         _execute(config, plan_manifest, plan_frame, target)
 
 

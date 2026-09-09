@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from ..contracts.model_layer import ModelContractLoader, sha256_json
+from ..contracts.model_layer import ModelContractLoader, paper_execution_identities, sha256_json
 from ..errors import ContractError
 
 
@@ -127,10 +127,23 @@ class PaperExecutionEngine:
             "decision_date", "target_weights_binding", "input_state_binding",
             "initial_state_provenance_sha256", "market_data_binding", "calendar_binding",
             "suspension_binding", "corporate_action_binding", "risk_decision_binding",
-            "generation_id",
+            "generation_id", "manifest_digest_sha256",
         }
         if not required.issubset(plan_manifest):
             raise ContractError("order plan manifest has incomplete lineage")
+        ModelContractLoader.validate("order_plan", dict(plan_manifest))
+        expected_plan_generation, expected_plan_digest = paper_execution_identities(
+            plan_manifest, schema_name="order_plan"
+        )
+        if (
+            plan_manifest["generation_id"] != expected_plan_generation
+            or plan_manifest["manifest_digest_sha256"] != expected_plan_digest
+        ):
+            raise ContractError("order plan manifest identity mismatch")
+        if int(plan_manifest["row_count"]) != len(plan_frame):
+            raise ContractError("order plan row count mismatch")
+        if plan_manifest["key_uniqueness"] != ["plan_sequence"]:
+            raise ContractError("order plan key uniqueness mismatch")
         if plan_manifest["execution_id"] != config["execution_id"]:
             raise ContractError("order plan execution id mismatch")
         if plan_manifest["state_mode"] != config["state_mode"]:
@@ -252,15 +265,18 @@ class PaperExecutionEngine:
         elif market is None or not self.REQUIRED_MARKET_COLUMNS.issubset(market):
             reason = "no_market_data"
         else:
-            price, valid_price = self._numeric(market.get("open" if config["price_policy"]["order_pricing_basis"] == "execution_open_replay" else "close"))
+            if config["price_policy"]["order_pricing_basis"] == "execution_open_replay":
+                price, valid_price = self._numeric(market.get("open"))
+            else:
+                price, valid_price = self._numeric(row.get("limit_price"))
             limit_up, valid_limit_up = self._numeric(market.get("limit_up"))
             limit_down, valid_limit_down = self._numeric(market.get("limit_down"))
             high, valid_high = self._numeric(market.get("high"))
             low, valid_low = self._numeric(market.get("low"))
             volume, valid_volume = self._numeric(market.get("volume"))
-            if not all((valid_price, valid_limit_up, valid_limit_down, valid_high, valid_low, valid_volume)):
+            if not all((valid_price, valid_limit_up, valid_limit_down, valid_high, valid_low)):
                 reason = "no_market_data"
-            elif price <= 0 or high <= 0 or low <= 0 or limit_up <= 0 or limit_down <= 0 or volume < 0:
+            elif price <= 0 or high <= 0 or low <= 0 or limit_up <= 0 or limit_down <= 0:
                 reason = "no_market_data"
             elif limit_down > limit_up or low > high:
                 reason = "price"
@@ -277,7 +293,11 @@ class PaperExecutionEngine:
             price = 0.0
         else:
             filled = requested
-            price = float(execution_market[instrument]["open" if config["price_policy"]["order_pricing_basis"] == "execution_open_replay" else "close"])
+            price = (
+                float(execution_market[instrument]["open"])
+                if config["price_policy"]["order_pricing_basis"] == "execution_open_replay"
+                else float(row["limit_price"])
+            )
         gross = filled * price
         fee = self._event_fee(config, row["side"], gross) if filled > 0 else 0.0
         if reason == "none" and row["side"] == "buy" and available_cash is not None and gross + fee > available_cash + 1e-9:
@@ -334,7 +354,6 @@ class PaperExecutionEngine:
         result_frame: pd.DataFrame,
         decision_nav: float,
     ) -> dict[str, Any]:
-        board_lot = int(config["quantity_policy"]["board_lot"])
         target = target_weights.copy()
         target["instrument"] = target["instrument"].map(str)
         plan = plan_frame.astype({"instrument": "string", "plan_sequence": "int64", "target_delta_shares": "int64"})
@@ -455,8 +474,12 @@ class PaperExecutionEngine:
             if instrument not in closing:
                 if int(event["filled_quantity"]) == 0:
                     continue
-                raise ContractError(f"execution event references unknown holding {instrument}")
-                closing[instrument] = {"quantity": 0, "average_cost": 0.0, "buy_locked_quantity": 0}
+                if event["side"] != "buy":
+                    raise ContractError(f"execution event references unknown holding {instrument}")
+                closing[instrument] = {
+                    "instrument": instrument, "quantity": 0, "average_cost": 0.0,
+                    "buy_locked_quantity": 0,
+                }
             if event["side"] == "buy":
                 closing[instrument]["quantity"] += int(event["filled_quantity"])
             else:
