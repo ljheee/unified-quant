@@ -16,7 +16,9 @@ def test_phase_0_evidence_index_hashes_are_complete() -> None:
     assert record["phase"] == 0
     assert record["acceptance_rows"]
     assert all(row["status"] == "passed" for row in record["acceptance_rows"])
-    assert record["blocked_by"]
+    assert record["blocked_by"] == []
+    assert record["remote_gate"]["result"] == "passed"
+    assert record["remote_gate"]["commit_bound"] == "b10bd1ee1bd4a9b4faf94e46f78fc267e432355d"
     paths = {item["path"] for item in index["records"]}
     assert str(PHASE_ROOT.relative_to(ROOT) / "phase-record.json") in paths
     assert str(PHASE_ROOT.relative_to(ROOT) / "gate-reports/gate-report.json") in paths
@@ -24,7 +26,8 @@ def test_phase_0_evidence_index_hashes_are_complete() -> None:
     for item in index["records"]:
         path = Path(item["path"])
         assert path.is_file(), item["path"]
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == item["sha256"]
+        if item["path"] != str((PHASE_ROOT / "evidence-index.json").relative_to(ROOT)):
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == item["sha256"]
 
 
 def test_phase_0_valid_fixture_remains_loadable() -> None:

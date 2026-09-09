@@ -1,8 +1,8 @@
 {
   "layer": "paper_execution_research_integration",
   "phase": 0,
-  "status": "in_progress",
-  "blocked_by": ["final HEAD gate evidence after commit"],
+  "status": "exited_after_remote_gate",
+  "blocked_by": [],
   "acceptance_rows": [
     {
       "id": "PE1",
@@ -20,7 +20,9 @@
     {
       "id": "PE2",
       "status": "passed",
-      "test_ids": ["test_v3_stage_plan_digest_is_stable_and_sensitive"],
+      "test_ids": [
+        "test_v3_stage_plan_digest_is_stable_and_sensitive"
+      ],
       "evidence_paths": []
     },
     {
@@ -38,5 +40,17 @@
   ],
   "gate_report_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/gate-report.json",
   "requirements_lock_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt",
-  "requirements_lock_sha256_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt.sha256"
+  "requirements_lock_sha256_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt.sha256",
+  "remote_gate": {
+    "result": "passed",
+    "run_id": "34373842986",
+    "commit_bound": "b10bd1ee1bd4a9b4faf94e46f78fc267e432355d",
+    "summary": {
+      "failed": 0,
+      "passed": 10,
+      "total": 10
+    },
+    "url": "https://github.com/ljheee/unified-quant/actions/runs/34373842986"
+  },
+  "evidence_commit": null
 }

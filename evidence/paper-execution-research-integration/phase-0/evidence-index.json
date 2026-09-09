@@ -20,6 +20,18 @@
       "sha256": "bde91b6e06e8b5e9d6fa0b0b7c55ddc47c116ebe09b2430e2d1e1a0233a746a1"
     },
     {
+      "path": "evidence/paper-execution-research-integration/phase-0/evidence-index.json",
+      "sha256": "82ae47887b72f8edca616d84349d92aaa9f9df388ada30422329736d75106d0d"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-missing-calendar-binding.json",
+      "sha256": "652f17b8ff7657bd1fd76c6eb004f33329107ba94a68f62c4124c80422a3452f"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-unknown-template-field.json",
+      "sha256": "b692f85277ed990b97dfbd2df376fda12983c47dc78969d519eecabf3d4e2799"
+    },
+    {
       "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-valid.json",
       "sha256": "1094f0e5c8344e9052008633af315d6ff1d2c7883167018841addc03bf263a4d"
     },
@@ -37,7 +49,7 @@
     },
     {
       "path": "evidence/paper-execution-research-integration/phase-0/phase-record.json",
-      "sha256": "2c151121a8eb162219396eec62e159244614080acbe1b6b3d5e870d0f592b6f6"
+      "sha256": "50b4815349a1c51d764ae6724346de4703437b796adbb62d7383d0a13b0dd216"
     },
     {
       "path": "specs/layers/paper-execution-research-integration-plan.md",
