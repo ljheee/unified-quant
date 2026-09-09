@@ -216,12 +216,10 @@ class OrderPlanStore(_ImmutablePaperManifestStore):
             manifest, schema_name=self.family
         )
         ModelContractLoader.validate(self.family, manifest)
-        self._publish_review(report, report_checksum)
         partition = self._partition_path(manifest)
-        data_path = partition / manifest["data_file"]
-        manifest_path = partition / "manifest.json"
-        if data_path.exists() or manifest_path.exists() or partition.exists():
+        if partition.exists():
             raise ContractError(f"paper {self.family} partition already exists: {partition}")
+        self._publish_review(report, report_checksum)
         staging = partition.parent / f".staging_{uuid.uuid4().hex}"
         staging.mkdir(parents=True)
         try:
@@ -233,7 +231,6 @@ class OrderPlanStore(_ImmutablePaperManifestStore):
             fsync_tree(staging)
             os.replace(staging, partition)
             fsync_dir(partition.parent)
-            self._publish_review(report, report_checksum)
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise

@@ -1,0 +1,106 @@
+{
+  "cells": [
+    {
+      "cell": "macos/latest/3.11",
+      "environment": "macos-latest/3.11",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/gate-report-macos-latest-3.11/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.11.9",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "test_result": "passed"
+    },
+    {
+      "cell": "macos/latest/3.12",
+      "environment": "macos-latest/3.12",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/gate-report-macos-latest-3.12/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.12.10",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "test_result": "passed"
+    },
+    {
+      "cell": "macos/latest/3.13",
+      "environment": "macos-latest/3.13",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/gate-report-macos-latest-3.13/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.13.15",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "test_result": "passed"
+    },
+    {
+      "cell": "ubuntu/latest/3.11",
+      "environment": "ubuntu-latest/3.11",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/gate-report-ubuntu-latest-3.11/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.16",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "test_result": "passed"
+    },
+    {
+      "cell": "ubuntu/latest/3.12",
+      "environment": "ubuntu-latest/3.12",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/gate-report-ubuntu-latest-3.12/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.14",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "test_result": "passed"
+    },
+    {
+      "cell": "ubuntu/latest/3.13",
+      "environment": "ubuntu-latest/3.13",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/gate-report-ubuntu-latest-3.13/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.13.15",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "test_result": "passed"
+    },
+    {
+      "cell": "qlib/macos/latest/3.11",
+      "environment": "macos-latest/3.11/qlib",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/qlib-gate-report-macos-latest-3.11/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.11.9",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "test_result": "passed"
+    },
+    {
+      "cell": "qlib/macos/latest/3.12",
+      "environment": "macos-latest/3.12/qlib",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/qlib-gate-report-macos-latest-3.12/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.12.10",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "test_result": "passed"
+    },
+    {
+      "cell": "qlib/ubuntu/latest/3.11",
+      "environment": "ubuntu-latest/3.11/qlib",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/qlib-gate-report-ubuntu-latest-3.11/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.16",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "test_result": "passed"
+    },
+    {
+      "cell": "qlib/ubuntu/latest/3.12",
+      "environment": "ubuntu-latest/3.12/qlib",
+      "gate_report": "evidence/paper-execution/phase-4/final-head-ci/34342435759/qlib-gate-report-ubuntu-latest-3.12/gate-report.json",
+      "git_commit": "50daac29159f3092966cad3d29fb410cd6627bd7",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.14",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "test_result": "passed"
+    }
+  ],
+  "ci_run_id": "34342435759",
+  "ci_run_url": "https://github.com/ljheee/unified-quant/actions/runs/34342435759"
+}
