@@ -1,0 +1,91 @@
+{
+  "acceptance": [
+    {
+      "description": "publisher-generated passed reports cannot enable paper publication",
+      "id": "PX4a",
+      "status": "implemented",
+      "test_id": "test_publisher_generated_passed_report_cannot_enable_publication"
+    },
+    {
+      "description": "reviewed report checks exactly match the registered family policy",
+      "id": "PX4b",
+      "status": "implemented",
+      "test_id": "test_reviewed_report_exact_checks_required"
+    },
+    {
+      "description": "every non-executable v1 risk action blocks the publication chain",
+      "id": "PX4c",
+      "status": "implemented",
+      "test_id": "test_all_blocking_risk_actions_block_publication_chain"
+    },
+    {
+      "description": "allow and warn are explicit executable no-op decisions",
+      "id": "PX4d",
+      "status": "implemented",
+      "test_id": "test_allow_and_warn_are_executable_noop"
+    },
+    {
+      "description": "research and production trust-anchor behavior remains unchanged",
+      "id": "PX4e",
+      "status": "implemented",
+      "test_id": "test_research_prod_trust_anchor_unchanged"
+    },
+    {
+      "description": "production rejects the repository test-key anchor",
+      "id": "PX4f",
+      "status": "implemented",
+      "test_id": "test_production_rejects_test_key_anchor"
+    },
+    {
+      "description": "missing external quality reports fail accepted readback",
+      "id": "PX4g",
+      "status": "implemented",
+      "test_id": "test_missing_report_readback_fails"
+    },
+    {
+      "description": "tampered external quality reports fail accepted readback",
+      "id": "PX4h",
+      "status": "implemented",
+      "test_id": "test_tampered_report_readback_fails"
+    },
+    {
+      "description": "forged reviewer signatures fail report verification",
+      "id": "PX4i",
+      "status": "implemented",
+      "test_id": "test_forged_report_readback_fails"
+    },
+    {
+      "description": "expired risk decisions fail publication",
+      "id": "PX4j",
+      "status": "implemented",
+      "test_id": "test_expired_risk_decision_blocks_publication"
+    },
+    {
+      "description": "mismatched report subject generations fail bound readback",
+      "id": "PX4k",
+      "status": "implemented",
+      "test_id": "test_mismatched_report_generation_blocks_publication"
+    },
+    {
+      "description": "paper runtime has no broker mode or broker adapter path",
+      "id": "PX4l",
+      "status": "implemented",
+      "test_id": "test_paper_runtime_cannot_enter_broker_path"
+    }
+  ],
+  "blocked_by": null,
+  "deliverables": {
+    "runtime_guard": "src/uq/execution/stores.py",
+    "risk_publication_gate": "src/uq/execution/stores.py",
+    "quality_publication_gate": "src/uq/execution/stores.py",
+    "tests": "tests/test_paper_execution_phase4.py"
+  },
+  "evidence": {
+    "local_gate": "evidence/paper-execution/phase-4/final-cr/local-gate-report.json",
+    "local_gate_commit_bound": "4fc70da8b62339d4d7e8408cbcf241a0f04bc38b"
+  },
+  "final_head_commit": null,
+  "layer": "paper-execution",
+  "phase": 4,
+  "status": "in_progress"
+}

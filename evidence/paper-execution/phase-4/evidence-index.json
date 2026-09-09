@@ -1,0 +1,18 @@
+{
+  "entries": [
+    {
+      "commit": "4fc70da8b62339d4d7e8408cbcf241a0f04bc38b",
+      "kind": "local_gate",
+      "path": "evidence/paper-execution/phase-4/final-cr/local-gate-report.json"
+    },
+    {
+      "commit": "4fc70da8b62339d4d7e8408cbcf241a0f04bc38b",
+      "kind": "lockfile_digest",
+      "path": "evidence/paper-execution/phase-4/final-cr/requirements.lock.txt.sha256"
+    },
+    {
+      "kind": "phase_record",
+      "path": "evidence/paper-execution/phase-4/phase-record.json"
+    }
+  ]
+}

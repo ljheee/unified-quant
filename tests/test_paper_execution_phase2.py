@@ -52,7 +52,6 @@ def _execution_market(status: str = "trading", open_price: float = 10.2) -> dict
         "limit_up": 11.0, "limit_down": 9.0,
     }}
 
-
 _QUALITY_CHECKS_BY_FAMILY = {
     "execution_config_v1": [
         "schema_valid", "market_data_binding_resolved", "state_mode_valid",
@@ -94,22 +93,33 @@ def _decision_for_review(unsigned: dict, family: str, generation: str) -> dict:
     return unsigned
 
 
-def _publish_config(tmp_path: Path) -> tuple[dict, Path]:
-    store = ExecutionConfigStore(tmp_path)
-    config = _config()
+def _converged_risk(config: dict) -> dict:
     risk = json.loads(RISK_FIXTURE.read_text())
     risk["decision_scope"] = "order_submission"
     risk["action"] = "allow"
-    risk["binding_config_generation_id"] = config["generation_id"]
-    risk["generation_id"], risk["manifest_digest_sha256"] = risk_contract_identities(
-        risk, schema_name="risk_decision"
-    )
-    config["risk_decision_binding"] = {
-        "family": "risk_decision_v1",
-        "generation_id": risk["generation_id"],
-        "manifest_digest_sha256": risk["manifest_digest_sha256"],
-    }
+    for _ in range(8):
+        risk["binding_config_generation_id"] = config["generation_id"]
+        risk["generation_id"], risk["manifest_digest_sha256"] = risk_contract_identities(
+            risk, schema_name="risk_decision"
+        )
+        binding = {
+            "family": "risk_decision_v1",
+            "generation_id": risk["generation_id"],
+            "manifest_digest_sha256": risk["manifest_digest_sha256"],
+        }
+        if config.get("risk_decision_binding") == binding:
+            return risk
+        config["risk_decision_binding"] = binding
+        config = _recompute(config)
+    raise AssertionError("risk decision did not converge")
+
+
+def _publish_config(tmp_path: Path) -> tuple[dict, Path]:
+    store = ExecutionConfigStore(tmp_path)
+    config = _config()
+    config["risk_decision_binding"] = None
     config = _recompute(config)
+    risk = _converged_risk(config)
     generation = config["generation_id"]
     unsigned = _unsigned("execution_config_v1", generation)
     quality = _decision_for_review(unsigned, "execution_config_v1", generation)
@@ -119,8 +129,8 @@ def _publish_config(tmp_path: Path) -> tuple[dict, Path]:
     )
     return store.read(generation), store.directory / config["execution_id"] / f"generation={generation}"
 
-
 def _publish_plan(tmp_path: Path, config: dict, target: pd.DataFrame) -> tuple[dict, pd.DataFrame]:
+    risk = _converged_risk(config)
     holdings = config["initial_state"]["holdings"]
     frame, residual = PaperOrderPlanner().plan(
         config, target, None, _decision_prices(), opening_cash=config["initial_state"]["cash"]
@@ -164,7 +174,7 @@ def _publish_plan(tmp_path: Path, config: dict, target: pd.DataFrame) -> tuple[d
     generation = config["generation_id"]
     unsigned = _unsigned("order_plan_v1", generation)
     decision = _decision_for_review(unsigned, "order_plan_v1", generation)
-    store.publish(manifest, frame, quality_decision=decision)
+    store.publish(manifest, frame, quality_decision=decision, risk_decision=risk)
     published, published_frame = store.read(json.loads((store.directory / config["execution_id"] / config["execution_date"] / f"generation={manifest['generation_id']}" / "manifest.json").read_text())["generation_id"])
     return published, published_frame
 

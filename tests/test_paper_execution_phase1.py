@@ -106,7 +106,6 @@ def _publish_config(tmp_path: Path) -> tuple[dict, Path]:
     return readback, store.directory / config["execution_id"] / f"generation={generation}"
 
 
-
 def test_order_plan_is_deterministic_sell_before_buy(tmp_path: Path) -> None:
     config = _config()
     config["state_mode"] = "continuation"
@@ -312,7 +311,7 @@ def test_tampered_order_plan_payload_fails_read(tmp_path: Path) -> None:
         "quality_report_checksum_sha256": "0" * 64,
         "manifest_digest_sha256": "0" * 64, "generation_id": "0" * 64,
     }
-    partition = store.publish(manifest, frame, quality_decision=decision)
+    partition = store.publish(manifest, frame, quality_decision=decision, risk_decision=_decision(config))
     generation_id = json.loads((partition / "manifest.json").read_text())["generation_id"]
     data_path = partition / "data.parquet"
     data_path.write_bytes(data_path.read_bytes()[:-1])

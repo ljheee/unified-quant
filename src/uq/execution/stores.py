@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import io
+from datetime import date, datetime
 import shutil
 import uuid
 from pathlib import Path
@@ -19,6 +20,7 @@ from ..contracts.model_layer import (
     sha256_json,
 )
 from ..errors import ContractError
+from ..runtime import current_runtime_mode
 
 if TYPE_CHECKING:
     from ..risk.publication import ConfigPublicationBinding
@@ -141,6 +143,7 @@ class ExecutionConfigStore(_ImmutablePaperManifestStore):
         risk_decision: dict[str, Any],
         config_publication: "ConfigPublicationBinding",
     ) -> Path:
+        _require_paper_runtime()
         config_publication.assert_can_publish_config()
         _validate_executable_risk_decision(risk_decision, manifest)
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
@@ -152,6 +155,7 @@ class ExecutionConfigStore(_ImmutablePaperManifestStore):
             subject_generation_id=manifest["generation_id"],
             subject_content_sha256=manifest["generation_id"],
         )
+        _validate_exact_quality_checks(report, "execution_config_v1")
         manifest["quality_report_checksum_sha256"] = checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
             manifest, schema_name=self.family
@@ -183,7 +187,15 @@ class OrderPlanStore(_ImmutablePaperManifestStore):
         frame: Any,
         *,
         quality_decision: dict[str, Any],
+        risk_decision: dict[str, Any],
     ) -> Path:
+        _require_paper_runtime()
+        config_store = ExecutionConfigStore(self.root)
+        config = config_store.read(manifest["execution_config_generation_id"])
+        _validate_executable_risk_decision(risk_decision, config)
+        expected_risk_binding = config["risk_decision_binding"]
+        if manifest["risk_decision_binding"] != expected_risk_binding:
+            raise ContractError("order plan risk decision binding mismatch")
         artifact, payload_checksum = self._serialize(frame)
         manifest["data_checksum_sha256"] = payload_checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
@@ -195,6 +207,7 @@ class OrderPlanStore(_ImmutablePaperManifestStore):
             subject_generation_id=manifest["generation_id"],
             subject_content_sha256=manifest["generation_id"],
         )
+        _validate_exact_quality_checks(report, "order_plan_v1")
         manifest["quality_report_checksum_sha256"] = report_checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
             manifest, schema_name=self.family
@@ -260,6 +273,15 @@ class ExecutionResultStore(_ImmutablePaperManifestStore):
         *,
         quality_decision: dict[str, Any],
     ) -> Path:
+        _require_paper_runtime()
+        plan_store = OrderPlanStore(self.root)
+        plan_manifest, _plan_frame = plan_store.read(manifest["order_plan_generation_id"])
+        for field in ("execution_id", "state_mode", "decision_date", "execution_date"):
+            if plan_manifest[field] != manifest[field]:
+                raise ContractError("execution result does not bind the published order plan config")
+        for field in ("target_weights_binding", "input_state_binding", "risk_decision_binding"):
+            if plan_manifest[field] != manifest[field]:
+                raise ContractError(f"execution result does not bind the published order plan {field}")
         artifact, payload_checksum = self._serialize(frame)
         manifest["data_checksum_sha256"] = payload_checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
@@ -271,6 +293,7 @@ class ExecutionResultStore(_ImmutablePaperManifestStore):
             subject_generation_id=manifest["generation_id"],
             subject_content_sha256=manifest["generation_id"],
         )
+        _validate_exact_quality_checks(report, "execution_result_v1")
         manifest["quality_report_checksum_sha256"] = report_checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
             manifest, schema_name=self.family
@@ -324,8 +347,6 @@ class ExecutionResultStore(_ImmutablePaperManifestStore):
         return artifact, file_sha256_bytes(artifact)
 
 
-
-
 class PaperPortfolioStateStore(_ImmutablePaperManifestStore):
     """Publish and read immutable next paper portfolio state partitions."""
 
@@ -345,6 +366,14 @@ class PaperPortfolioStateStore(_ImmutablePaperManifestStore):
         *,
         quality_decision: dict[str, Any],
     ) -> Path:
+        _require_paper_runtime()
+        result_manifest, _result_frame = ExecutionResultStore(self.root).read(
+            manifest["execution_result_binding"]["generation_id"]
+        )
+        if manifest["risk_decision_binding"] != result_manifest["risk_decision_binding"]:
+            raise ContractError("paper state does not bind the execution result risk decision")
+        if result_manifest["execution_id"] != manifest["execution_id"]:
+            raise ContractError("paper state result execution id mismatch")
         artifact, payload_checksum = self._serialize(frame)
         manifest["data_checksum_sha256"] = payload_checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
@@ -356,6 +385,7 @@ class PaperPortfolioStateStore(_ImmutablePaperManifestStore):
             subject_generation_id=manifest["generation_id"],
             subject_content_sha256=manifest["generation_id"],
         )
+        _validate_exact_quality_checks(report, "paper_portfolio_state_v1")
         manifest["quality_report_checksum_sha256"] = report_checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
             manifest, schema_name=self.family
@@ -413,6 +443,35 @@ class PaperPortfolioStateStore(_ImmutablePaperManifestStore):
         return artifact, file_sha256_bytes(artifact)
 
 
+def _require_paper_runtime() -> None:
+    if current_runtime_mode() not in {"research", "production"}:
+        raise ContractError("paper execution requires research or production runtime mode")
+
+
+def _validate_exact_quality_checks(report: dict[str, Any], binding_type: str) -> None:
+    from ..contracts.model_layer import ModelQualityReviewRegistry
+
+    binding = ModelQualityReviewRegistry().bindings.get(binding_type)
+    if not isinstance(binding, dict):
+        raise ContractError(f"no reviewed quality policy for {binding_type}")
+    expected = list(binding.get("allowed_checks", []))
+    checks = report.get("checks")
+    actual = [check.get("name") for check in checks or []]
+    if sorted(actual) != sorted(expected) or len(actual) != len(set(actual)):
+        raise ContractError(f"quality report checks do not exactly match reviewed policy for {binding_type}")
+
+
+def _validate_decision_visibility(decision: dict[str, Any], config: dict[str, Any]) -> None:
+    as_of = date.fromisoformat(decision["as_of_date"])
+    visible_through = datetime.fromisoformat(decision["visible_through"])
+    if visible_through.tzinfo is None:
+        raise ContractError("risk decision visibility timestamp is not timezone-aware")
+    if as_of != date.fromisoformat(config["decision_date"]):
+        raise ContractError("risk decision as-of date does not match execution decision date")
+    if visible_through.date() < as_of:
+        raise ContractError("risk decision is expired for paper execution")
+
+
 def _validate_executable_risk_decision(
     decision: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -420,6 +479,9 @@ def _validate_executable_risk_decision(
     from ..risk.contracts import risk_contract_identities
 
     validate_contract("risk_decision.v1.json", decision)
+    if decision.get("binding_config_generation_id") != manifest.get("generation_id"):
+        raise ContractError("risk decision is not bound to this execution config generation")
+    _validate_decision_visibility(decision, manifest)
     decision_generation, decision_digest = risk_contract_identities(
         decision, schema_name="risk_decision"
     )
@@ -445,6 +507,7 @@ def _validate_bound_quality_report(root: Path, manifest: dict[str, Any], binding
         raise ContractError("paper quality report is bound to another generation")
     if report["subject_content_sha256"] != manifest["generation_id"]:
         raise ContractError("paper quality report subject digest mismatch")
+    _validate_exact_quality_checks(report, binding_type)
     return report
 
 
@@ -454,7 +517,10 @@ def read_verified_quality_report(root: Path, manifest: dict[str, Any]) -> dict[s
     checksum = manifest["quality_report_checksum_sha256"]
     review_root = Path(root).resolve(strict=True)
     path = review_root / "external_quality_reviews" / f"{checksum}.json"
-    resolved = path.resolve(strict=True)
+    try:
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ContractError("paper quality report is missing or inaccessible") from exc
     if review_root not in resolved.parents:
         raise ContractError("paper quality report path escapes storage root")
     if any(item.is_symlink() for item in (path, *path.parents)):

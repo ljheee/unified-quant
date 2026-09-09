@@ -1,6 +1,6 @@
 {
   "action": "allow",
-  "as_of_date": "2026-09-05",
+  "as_of_date": "2026-01-05",
   "constraints": [],
   "contract_version": 1,
   "decision_digest": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -18,7 +18,7 @@
       "threshold": 0.95
     }
   ],
-  "generation_id": "ed905872027c3f79fb6d1cd60490f90865c6479676723ee105ed9da4d6957ac4",
+  "generation_id": "88ef14a412a4c7add3879f44835da2f1fafec900ca8815d1455939438ae93c5a",
   "input_bindings": [
     {
       "family": "target_weights_v1",
@@ -26,7 +26,7 @@
       "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   ],
-  "manifest_digest_sha256": "4cb80c4d4c365ef8bc982676dfcb76c13938902c1ccadf0a5798f126a28daf80",
+  "manifest_digest_sha256": "f40e5ffd15c38f00ea62fd7738407b852bfb6011e53061c8aeaca8f59a97a6cf",
   "producer": {
     "created_at": "2026-09-06T00:00:00Z",
     "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -40,5 +40,5 @@
   "risk_state_binding": null,
   "schema_version": "1.0.0",
   "serialization_profile": "json-canonical-v1",
-  "visible_through": "2026-09-05T15:00:00+08:00"
+  "visible_through": "2026-01-06T15:00:00+08:00"
 }

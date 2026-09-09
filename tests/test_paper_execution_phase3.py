@@ -44,13 +44,12 @@ _STATE_QUALITY_CHECKS = [
 ]
 
 
-def _publish_continuation_config(tmp_path: Path, previous_state_manifest: dict) -> dict:
+def _publish_continuation_config(
+    tmp_path: Path, previous_state_manifest: dict, target: pd.DataFrame | None = None
+) -> tuple[dict, dict]:
     config, _ = _publish_config(tmp_path)
     config["decision_date"] = "2026-01-07"
     config["execution_date"] = "2026-01-08"
-    risk = json.loads(RISK_FIXTURE.read_text())
-    risk["decision_scope"] = "order_submission"
-    risk["action"] = "allow"
     config["state_mode"] = "continuation"
     config["initial_state"] = None
     config["input_state_binding"] = {
@@ -59,17 +58,16 @@ def _publish_continuation_config(tmp_path: Path, previous_state_manifest: dict) 
         "manifest_digest_sha256": previous_state_manifest["manifest_digest_sha256"],
         "as_of_date": previous_state_manifest["state_date"],
     }
-    config = _recompute(config)
-    risk["binding_config_generation_id"] = config["generation_id"]
-    risk["generation_id"], risk["manifest_digest_sha256"] = risk_contract_identities(
-        risk, schema_name="risk_decision"
-    )
-    config["risk_decision_binding"] = {
-        "family": "risk_decision_v1",
-        "generation_id": risk["generation_id"],
-        "manifest_digest_sha256": risk["manifest_digest_sha256"],
+    if target is None:
+        target = _target()
+    target_manifest = _target_manifest(target, config)
+    config["target_weights_binding"] = {
+        "family": "target_weights_v1",
+        "generation_id": target_manifest["generation_id"],
+        "manifest_digest_sha256": target_manifest["manifest_digest_sha256"],
     }
     config = _recompute(config)
+    risk = _converged_risk(config)
     unsigned = _unsigned("execution_config_v1", config["generation_id"])
     decision = _decision_for_review(unsigned, "execution_config_v1", config["generation_id"])
     store = ExecutionConfigStore(tmp_path)
@@ -81,7 +79,32 @@ def _publish_continuation_config(tmp_path: Path, previous_state_manifest: dict) 
             decision=risk, config_generation_id=config["generation_id"]
         ),
     )
-    return store.read(config["generation_id"])
+    return store.read(config["generation_id"]), target_manifest
+
+
+def _converged_risk(config: dict) -> dict:
+    risk = json.loads(RISK_FIXTURE.read_text())
+    risk["decision_scope"] = "order_submission"
+    risk["action"] = "allow"
+    risk["as_of_date"] = config["decision_date"]
+    risk["visible_through"] = f"{config['execution_date']}T15:00:00+08:00"
+    for _ in range(8):
+        risk["binding_config_generation_id"] = config["generation_id"]
+        risk["generation_id"], risk["manifest_digest_sha256"] = risk_contract_identities(
+            risk, schema_name="risk_decision"
+        )
+        binding = {
+            "family": "risk_decision_v1",
+            "generation_id": risk["generation_id"],
+            "manifest_digest_sha256": risk["manifest_digest_sha256"],
+        }
+        if config.get("risk_decision_binding") == binding:
+            return risk
+        config["risk_decision_binding"] = binding
+        config["generation_id"], config["manifest_digest_sha256"] = paper_execution_identities(
+            config, schema_name="execution_config"
+        )
+    raise AssertionError("risk decision did not converge")
 
 
 def _publish_continuation_plan(
@@ -92,6 +115,7 @@ def _publish_continuation_plan(
     *,
     opening_cash: float,
 ) -> tuple[dict, pd.DataFrame]:
+    risk = _converged_risk(config)
     frame, residual = PaperOrderPlanner().plan(
         config,
         target,
@@ -137,9 +161,32 @@ def _publish_continuation_plan(
     store = OrderPlanStore(root)
     unsigned = _unsigned("order_plan_v1", config["generation_id"])
     decision = _decision_for_review(unsigned, "order_plan_v1", config["generation_id"])
-    store.publish(manifest, frame, quality_decision=decision)
+    store.publish(manifest, frame, quality_decision=decision, risk_decision=risk)
     return store.read(manifest["generation_id"])
 
+
+def _publish_initial_config(root: Path, target: pd.DataFrame) -> tuple[dict, dict]:
+    config = _config()
+    target_manifest = _target_manifest(target, config)
+    config["target_weights_binding"] = {
+        "family": "target_weights_v1",
+        "generation_id": target_manifest["generation_id"],
+        "manifest_digest_sha256": target_manifest["manifest_digest_sha256"],
+    }
+    risk = _converged_risk(config)
+    generation = config["generation_id"]
+    unsigned = _unsigned("execution_config_v1", generation)
+    decision = _decision_for_review(unsigned, "execution_config_v1", generation)
+    store = ExecutionConfigStore(root)
+    store.publish(
+        config,
+        quality_decision=decision,
+        risk_decision=risk,
+        config_publication=ConfigPublicationBinding(
+            decision=risk, config_generation_id=generation
+        ),
+    )
+    return store.read(generation), target_manifest
 
 
 def _publish_initial_state(
@@ -149,16 +196,9 @@ def _publish_initial_state(
 ) -> tuple[dict, pd.DataFrame, dict, dict, pd.DataFrame, dict]:
     root = tmp_path / "initial"
     root.mkdir()
-    config, _ = _publish_config(root)
     if target is None:
         target = _target()
-    target_manifest = _target_manifest(target, config)
-    config["target_weights_binding"] = {
-        "family": "target_weights_v1",
-        "generation_id": target_manifest["generation_id"],
-        "manifest_digest_sha256": target_manifest["manifest_digest_sha256"],
-    }
-    config = _recompute(config)
+    config, target_manifest = _publish_initial_config(root, target)
     plan_manifest, plan_frame = _publish_plan(root, config, target)
     result, result_manifest = PaperExecutionEngine().execute(
         config,
@@ -331,15 +371,10 @@ def test_continuation_state_resets_prior_buy_lock(tmp_path: Path) -> None:
     config, prior_frame, previous_state_manifest, _, _, result_manifest, result = _publish_initial_state(tmp_path)
     continuation_root = tmp_path / "continuation"
     continuation_root.mkdir()
-    continuation_config = _publish_continuation_config(continuation_root, previous_state_manifest)
     target = _target()
-    target_manifest = _target_manifest(target, continuation_config)
-    continuation_config["target_weights_binding"] = {
-        "family": "target_weights_v1",
-        "generation_id": target_manifest["generation_id"],
-        "manifest_digest_sha256": target_manifest["manifest_digest_sha256"],
-    }
-    continuation_config = _recompute(continuation_config)
+    continuation_config, target_manifest = _publish_continuation_config(
+        continuation_root, previous_state_manifest, target
+    )
     plan_manifest, plan_frame = _publish_continuation_plan(
         continuation_root,
         continuation_config,
@@ -439,8 +474,9 @@ def test_state_evolution_updates_quantity_cost_and_t1_lock(tmp_path: Path) -> No
 
 
 def test_state_store_publish_read_and_tamper_detection(tmp_path: Path) -> None:
+    root = tmp_path / "initial"
     config, frame, manifest, _, _, _, _ = _publish_initial_state(tmp_path)
-    store = PaperPortfolioStateStore(tmp_path)
+    store = PaperPortfolioStateStore(root)
     unsigned = {
         "binding_type": "paper_portfolio_state_v1",
         "checks": [
@@ -465,8 +501,9 @@ def test_state_store_publish_read_and_tamper_detection(tmp_path: Path) -> None:
 
 
 def test_state_store_rejects_tampered_manifest_identity(tmp_path: Path) -> None:
+    root = tmp_path / "initial"
     config, frame, manifest, _, _, _, _ = _publish_initial_state(tmp_path)
-    store = PaperPortfolioStateStore(tmp_path)
+    store = PaperPortfolioStateStore(root)
     unsigned = {
         "binding_type": "paper_portfolio_state_v1",
         "checks": [
