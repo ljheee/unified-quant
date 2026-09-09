@@ -6,9 +6,9 @@
       "path": "evidence/paper-execution/phase-3/phase-record.json"
     },
     {
-      "commit": "333d8684529acad90b8f30bf1d040065daa6ed7b",
+      "commit": "6bef9ea6e105c8be29078cbffb3328c5f0a6ffa2",
       "kind": "local_gate",
-      "path": "evidence/paper-execution/phase-3/final-head-ci/34312827076/local-gate-report.json"
+      "path": "evidence/paper-execution/phase-3/final-cr/local-gate-report.json"
     },
     {
       "commit": "333d8684529acad90b8f30bf1d040065daa6ed7b",

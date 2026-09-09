@@ -69,8 +69,8 @@
     "tests": "tests/test_paper_execution_phase3.py"
   },
   "evidence": {
-    "local_gate": "evidence/paper-execution/phase-3/final-head-ci/34312827076/local-gate-report.json",
-    "local_gate_commit_bound": "333d8684529acad90b8f30bf1d040065daa6ed7b",
+    "local_gate": "evidence/paper-execution/phase-3/final-cr/local-gate-report.json",
+    "local_gate_commit_bound": "6bef9ea6e105c8be29078cbffb3328c5f0a6ffa2",
     "remote_ci_url": "https://github.com/ljheee/unified-quant/actions/runs/34312827076",
     "remote_matrix": "evidence/paper-execution/phase-3/final-head-ci/34312827076/aggregated-gates.json",
     "remote_run": "evidence/paper-execution/phase-3/final-head-ci/34312827076/run.json"
