@@ -36,19 +36,20 @@
   ],
   "blocked_by": [],
   "evidence_commit": null,
+  "evidence_commit_bound": "HEAD_evidence_only",
   "gate_report_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/gate-report.json",
   "layer": "paper_execution_research_integration",
   "phase": 0,
   "remote_gate": {
-    "commit_bound": "e4d7e452de6b8606fc88e5e96af74bca5b83699a",
+    "commit_bound": "de26458f15b17c07ed2785296d16c4ae5a1d1a34",
     "result": "passed",
-    "run_id": "34431441352",
+    "run_id": "34431785558",
     "summary": {
       "failed": 0,
       "passed": 10,
       "total": 10
     },
-    "url": "https://github.com/ljheee/unified-quant/actions/runs/34431441352"
+    "url": "https://github.com/ljheee/unified-quant/actions/runs/34431785558"
   },
   "requirements_lock_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt",
   "requirements_lock_sha256_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt.sha256",
