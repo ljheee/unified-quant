@@ -64,11 +64,11 @@
     },
     {
       "path": "src/uq/research_chain/resolver.py",
-      "sha256": "63dc1e86cfd12cf30b3767bbe19372312d6cab978edf1d91f84c9c96c7084e17"
+      "sha256": "08ad52a7ee8755749203bfbd7adc1e178dd33fbc15594d4fa33866159d20ed19"
     },
     {
       "path": "src/uq/research_chain/runner.py",
-      "sha256": "fb33905538a9b0d14997e3b8469b881e4dd1ba3d561f061770e2a23b231c2f6e"
+      "sha256": "7218c70b29a44718793ea5ea80588b97f4f3b1825df7d600f7a1eddf09a4f238"
     },
     {
       "path": "tests/test_paper_execution_research_integration_phase0.py",

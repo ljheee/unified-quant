@@ -60,7 +60,7 @@ from .adapters import (
 )
 from ..models.definition import ModelDefinitionBuilder
 from .contracts import research_request_schema_name, verify_stage_plan_review
-from .resolver import FileResearchRunStore, ResolvedExecutionPlan, ResolvedStageBinding, build_dry_run_state, stage_plan_for_request
+from .resolver import FileResearchRunStore, ResolvedExecutionPlan, ResolvedStageBinding, _DEFAULT_STAGE_PLAN, build_dry_run_state, stage_plan_for_request
 
 
 @dataclass(frozen=True)
@@ -888,7 +888,7 @@ class ResearchChainRunner:
 
     @staticmethod
     def _state_relative_path(request_generation_id: str, run_id: str, stage: str) -> str:
-        stage_number = f"{stage_plan_for_request({"contract_version": 1}).index(stage):02d}"
+        stage_number = f"{_DEFAULT_STAGE_PLAN.index(stage):02d}"
         return (
             f"research_runs/states/request={request_generation_id}"
             f"/run={run_id}/stage={stage_number}/manifest.json"

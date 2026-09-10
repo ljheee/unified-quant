@@ -57,6 +57,7 @@ _EXPECTED_STAGE_PLAN_SHA256 = research_stage_plan_sha256()
 def stage_plan_for_request(request: Mapping[str, Any]) -> tuple[str, ...]:
     """Return the reviewed stage order for the request contract version."""
     return _STAGE_PLAN_V3 if request.get("contract_version") == 3 else tuple(_STAGE_PLAN)
+_DEFAULT_STAGE_PLAN = tuple(_STAGE_PLAN)
 
 
 class ResearchResolutionError(Exception):
@@ -632,7 +633,7 @@ def _request_relative_path(request_generation_id: str, run_id: str) -> Path:
 
 
 def _state_relative_path(request_generation_id: str, run_id: str, stage: str) -> Path:
-    stage_number = f"{stage_plan_for_request({"contract_version": 1}).index(stage):02d}"
+    stage_number = f"{_DEFAULT_STAGE_PLAN.index(stage):02d}"
     return (
         Path("research_runs") / "states" / f"request={request_generation_id}"
         / f"run={run_id}" / f"stage={stage_number}" / "manifest.json"
