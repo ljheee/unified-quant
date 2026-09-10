@@ -18,7 +18,7 @@ def test_phase_0_evidence_index_hashes_are_complete() -> None:
     assert all(row["status"] == "passed" for row in record["acceptance_rows"])
     assert record["blocked_by"] == []
     assert record["remote_gate"]["result"] == "passed"
-    assert record["remote_gate"]["commit_bound"] == "b10bd1ee1bd4a9b4faf94e46f78fc267e432355d"
+    assert record["remote_gate"]["commit_bound"] == "e4d7e452de6b8606fc88e5e96af74bca5b83699a"
     paths = {item["path"] for item in index["records"]}
     assert str(PHASE_ROOT.relative_to(ROOT) / "phase-record.json") in paths
     assert str(PHASE_ROOT.relative_to(ROOT) / "gate-reports/gate-report.json") in paths

@@ -1,56 +1,56 @@
 {
-  "layer": "paper_execution_research_integration",
-  "phase": 0,
-  "status": "exited_after_remote_gate",
-  "blocked_by": [],
   "acceptance_rows": [
     {
+      "evidence_paths": [
+        "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-valid.json",
+        "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-unknown-template-field.json",
+        "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-missing-calendar-binding.json"
+      ],
       "id": "PE1",
       "status": "passed",
       "test_ids": [
         "test_v3_request_contract_and_fixtures_validate",
         "test_v3_request_rejects_schema_version_2_review_type"
-      ],
-      "evidence_paths": [
-        "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-valid.json",
-        "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-unknown-template-field.json",
-        "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-missing-calendar-binding.json"
       ]
     },
     {
+      "evidence_paths": [],
       "id": "PE2",
       "status": "passed",
       "test_ids": [
         "test_v3_stage_plan_digest_is_stable_and_sensitive"
-      ],
-      "evidence_paths": []
+      ]
     },
     {
+      "evidence_paths": [
+        "config/research-stage-plan-review-anchor.v3.json",
+        "config/research-stage-plan-review-anchor.v1.json"
+      ],
       "id": "PE3",
       "status": "passed",
       "test_ids": [
         "test_v3_activation_review_is_verified_and_sensitive",
         "test_v3_request_rejects_v2_stage_plan_digest"
-      ],
-      "evidence_paths": [
-        "config/research-stage-plan-review-anchor.v3.json",
-        "config/research-stage-plan-review-anchor.v1.json"
       ]
     }
   ],
+  "blocked_by": [],
+  "evidence_commit": null,
   "gate_report_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/gate-report.json",
-  "requirements_lock_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt",
-  "requirements_lock_sha256_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt.sha256",
+  "layer": "paper_execution_research_integration",
+  "phase": 0,
   "remote_gate": {
+    "commit_bound": "e4d7e452de6b8606fc88e5e96af74bca5b83699a",
     "result": "passed",
-    "run_id": "34373842986",
-    "commit_bound": "b10bd1ee1bd4a9b4faf94e46f78fc267e432355d",
+    "run_id": "34431441352",
     "summary": {
       "failed": 0,
       "passed": 10,
       "total": 10
     },
-    "url": "https://github.com/ljheee/unified-quant/actions/runs/34373842986"
+    "url": "https://github.com/ljheee/unified-quant/actions/runs/34431441352"
   },
-  "evidence_commit": null
+  "requirements_lock_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt",
+  "requirements_lock_sha256_path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt.sha256",
+  "status": "exited_after_remote_gate"
 }

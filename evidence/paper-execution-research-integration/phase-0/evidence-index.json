@@ -48,11 +48,131 @@
     },
     {
       "path": "evidence/paper-execution-research-integration/phase-0/phase-record.json",
-      "sha256": "50b4815349a1c51d764ae6724346de4703437b796adbb62d7383d0a13b0dd216"
+      "sha256": "537a90cfa447539599b0fdabf61e7b70dde3e98f7dbf6a1eb08a5dee01195fc6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.11/gate-report.json",
+      "sha256": "62604b8440b8dfdb4cab882e4b15b8b16d7c428840d0cb70653a5443156e115d"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.11/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.11/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.12/gate-report.json",
+      "sha256": "38cf3af8b67cdec1e5882decc4c2eb97328079c9c5d02ddbc56e95aba3663068"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.12/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.12/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.13/gate-report.json",
+      "sha256": "ffcecc427b942d7faeede0dbbf4604cc61732e8593a998468e1f5145d94622b7"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.13/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.13/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.11/gate-report.json",
+      "sha256": "080550224bd40fcf736dd13705246a44e49cd294b1edc3156ce6f6e421571803"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.11/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.11/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.12/gate-report.json",
+      "sha256": "7ebbc23fd787b8a49606d264ed18f024860828b64f20546bf94d783730f7e1f5"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.12/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.12/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.13/gate-report.json",
+      "sha256": "a2bb5b6fba081b722d02ad1296c5a89c6e647afff4d9264042683f404181d1b0"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.13/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.13/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.11/gate-report.json",
+      "sha256": "d5c92e94b58554479912e6a23c89656dd5bece42005b02aa88cbed1e05d66693"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.11/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.11/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.12/gate-report.json",
+      "sha256": "885e24c0a8b8366699c4f5e1ce9c3cec4823ff43c04a2f1f6d7f7b0229248284"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.12/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.12/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.11/gate-report.json",
+      "sha256": "e3308d7562fb7591b564e769c80e5b69d00c86d6772f4fbb7d11de1dd74ab02f"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.11/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.11/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.12/gate-report.json",
+      "sha256": "7e1e73d1819672a669295684612f95588d132567d97bce7c54f0e42f4c5b3321"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.12/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.12/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
     },
     {
       "path": "specs/layers/paper-execution-research-integration-plan.md",
-      "sha256": "7f5f09a5b152152fb05711db6aac2f00d294cd42dc9fb79e923e57aa2d2a1ac1"
+      "sha256": "deca2df52ef98f603fe5ffee7692607ceb36e6570ecfb644943253da4404c23a"
     },
     {
       "path": "src/uq/contracts/model_layer.py",

@@ -164,6 +164,9 @@ Exit criteria:
 
 1. All prior phases exited.
 2. Remote matrix passes on the final implementation HEAD.
+3. Remote cell reports are archived under the phase evidence directory.
+4. Evidence-index self-hash is excluded from its own checksum verification.
+5. A plan-only documentation update is remediated by refreshing the evidence index before gate exit.
 3. Release evidence is indexed with SHA-256 digests.
 4. No acceptance row is `TBD` or unimplemented.
 
