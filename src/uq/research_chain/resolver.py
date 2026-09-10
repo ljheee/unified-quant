@@ -46,7 +46,17 @@ _STAGE_PLAN = [
     "model_training", "prediction_publication", "portfolio_construction",
     "backtest_execution", "result_reconciliation",
 ]
+_STAGE_PLAN_V3 = [
+    "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
+    "model_training", "prediction_publication", "portfolio_construction",
+    "backtest_execution", "paper_execution", "result_reconciliation",
+]
 _EXPECTED_STAGE_PLAN_SHA256 = research_stage_plan_sha256()
+
+
+def stage_plan_for_request(request: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return the reviewed stage order for the request contract version."""
+    return _STAGE_PLAN_V3 if request.get("contract_version") == 3 else tuple(_STAGE_PLAN)
 
 
 class ResearchResolutionError(Exception):
@@ -308,9 +318,8 @@ class FileResearchRunStore:
         stage_record = state["stage_records"][-1]
         if stage_record["stage"] != stage:
             raise ContractError("state stage does not match publication stage")
-        relative_path = _state_relative_path(
-            state["request_content_generation_id"], state["run_id"], stage
-        )
+        stage_number = stage_plan_for_request(state).index(stage)
+        relative_path = Path("research_runs") / "states" / f"request={state['request_content_generation_id']}" / f"run={state['run_id']}" / f"stage={stage_number:02d}" / "manifest.json"
         path = self._atomic_write(relative_path, state)
         return PublishedState(
             manifest_path=path,
@@ -388,8 +397,9 @@ class FileResearchRunStore:
                 manifest_digest_sha256=state["manifest_digest_sha256"],
                 status=state["final_status"],
             ))
-        order = {stage: index for index, stage in enumerate(_STAGE_PLAN)}
-        return sorted(summaries, key=lambda item: order[item.stage])
+        order = stage_plan_for_request({"contract_version": 1})
+        summaries_by_stage = {item.stage: item for item in summaries}
+        return [summaries_by_stage[stage] for stage in order if stage in summaries_by_stage]
 
     def publish_result(self, manifest: Mapping[str, Any], *, path_policy: str) -> PublishedResult:
         if path_policy != "strict_v1":
@@ -446,7 +456,8 @@ class FileResearchRunStore:
         if result_binding["manifest_digest_sha256"] != manifest_digest_sha256:
             raise ContractError("research result reconciliation digest mismatch")
         runtime_stage_records = result["stage_records"][1:-1]
-        if [record.get("stage") for record in runtime_stage_records] != _STAGE_PLAN[1:-1]:
+        expected_runtime_stages = list(stage_plan_for_request({"contract_version": 1}))[1:-1]
+        if [record.get("stage") for record in runtime_stage_records] != expected_runtime_stages:
             raise ContractError("research result stage closure is incomplete")
         if any(record.get("status") != "passed" for record in runtime_stage_records):
             raise ContractError("research result contains failed stages")
@@ -505,7 +516,7 @@ def build_dry_run_state(
 ) -> dict[str, Any]:
     request = plan.request
     state: dict[str, Any] = {
-        "contract_version": 1,
+        "contract_version": request.get("contract_version", 1),
         "schema_version": "1.0.0",
         "request_content_generation_id": request["request_content_generation_id"],
         "request_manifest_digest_sha256": plan.request_manifest_digest_sha256,
@@ -621,7 +632,7 @@ def _request_relative_path(request_generation_id: str, run_id: str) -> Path:
 
 
 def _state_relative_path(request_generation_id: str, run_id: str, stage: str) -> Path:
-    stage_number = f"{_STAGE_PLAN.index(stage):02d}"
+    stage_number = f"{stage_plan_for_request({"contract_version": 1}).index(stage):02d}"
     return (
         Path("research_runs") / "states" / f"request={request_generation_id}"
         / f"run={run_id}" / f"stage={stage_number}" / "manifest.json"

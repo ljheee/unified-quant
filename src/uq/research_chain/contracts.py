@@ -130,7 +130,7 @@ def validate_research_layout(
     stage_order = [
         "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
         "model_training", "prediction_publication", "portfolio_construction",
-        "backtest_execution", "result_reconciliation",
+        "backtest_execution", "paper_execution", "result_reconciliation",
     ]
     if not isinstance(request_generation_id, str) or not _SHA256_PATTERN.fullmatch(request_generation_id):
         raise ContractError("invalid request generation in research path")

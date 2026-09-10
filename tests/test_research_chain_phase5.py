@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 from tests.review_key import REVIEWER_PRIVATE_KEY
 from uq.contracts.model_layer import bind_reviewed_quality_decision, create_reviewed_quality_decision, research_contract_identities
+from uq.research_chain.resolver import stage_plan_for_request
 from uq.models.qlib_export import QlibDatasetExporter
 from uq.models.predictions import PredictionBuilder
 from uq.models.trainer import ArtifactStore
@@ -44,17 +45,7 @@ requires_qlib = pytest.mark.skipif(
 REQUEST = ROOT / "evidence/research-chain/phase-0/fixtures/research_run_request-valid.json"
 DIGEST = "0" * 64
 RUNNER = {"code_fingerprint": DIGEST, "environment_profile": "locked-test", "lock_digest_sha256": DIGEST}
-STAGES = [
-    "resolve_request",
-    "factor_computation",
-    "dataset_preparation",
-    "qlib_export",
-    "model_training",
-    "prediction_publication",
-    "portfolio_construction",
-    "backtest_execution",
-    "result_reconciliation",
-]
+STAGES = list(stage_plan_for_request({"contract_version": 1}))
 
 
 def _binding(stage: str, family: str, seed: str = "1") -> ResolvedStageBinding:

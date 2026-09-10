@@ -85,6 +85,45 @@ def test_v3_stage_plan_digest_is_stable_and_sensitive() -> None:
     assert expected not in {"0" * 64, research_stage_plan_v3_sha256.__doc__}
 
 
+def test_v3_stage_plan_and_contract_version_are_aligned() -> None:
+    from uq.research_chain.resolver import stage_plan_for_request
+
+    expected = [
+        "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
+        "model_training", "prediction_publication", "portfolio_construction",
+        "backtest_execution", "paper_execution", "result_reconciliation",
+    ]
+    assert stage_plan_for_request({"contract_version": 3}) == expected
+    assert list(stage_plan_for_request({"contract_version": 1})) == expected[:8] + expected[-1:]
+
+    required = {
+        "schema_version": "1.0.0",
+        "request_content_generation_id": "a" * 64,
+        "request_manifest_digest_sha256": "b" * 64,
+        "run_id": "00000000-0000-4000-8000-000000000003",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "runner_identity": {"code_fingerprint": "c" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "d" * 64},
+        "stage_records": [{"stage": stage, "status": "passed", "output_bindings": [], "failure_reason": None} for stage in expected],
+    }
+    state = {"contract_version": 3, "intent": "execute", "final_status": "passed", "state_content_generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64, **required}
+    result = {"contract_version": 3, "readback_status": {"research_run_request": "passed"}, "overall_logical_fingerprint": "0" * 64, "final_status": "passed", "result_content_generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64, **required}
+    state["state_content_generation_id"], state["manifest_digest_sha256"] = research_contract_identities(state, schema_name="research_run_state")
+    result["result_content_generation_id"], result["manifest_digest_sha256"] = research_contract_identities(result, schema_name="research_run_result")
+    ModelContractLoader.validate("research_run_state", state)
+    ModelContractLoader.validate("research_run_result", result)
+
+    v1_required = {**required, "stage_records": required["stage_records"][:8] + [required["stage_records"][-1]]}
+    invalid = {"contract_version": 1, "intent": "execute", "final_status": "passed", "state_content_generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64, **v1_required}
+    invalid["state_content_generation_id"], invalid["manifest_digest_sha256"] = research_contract_identities(invalid, schema_name="research_run_state")
+    ModelContractLoader.validate("research_run_state", invalid)
+
+    v3_required = {**required, "stage_records": required["stage_records"][:8] + [required["stage_records"][-1]]}
+    invalid_v3 = {"contract_version": 3, "intent": "execute", "final_status": "passed", "state_content_generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64, **v3_required}
+    invalid_v3["state_content_generation_id"], invalid_v3["manifest_digest_sha256"] = research_contract_identities(invalid_v3, schema_name="research_run_state")
+    with pytest.raises(ContractError, match="gaps"):
+        ModelContractLoader.validate("research_run_state", invalid_v3)
+
+
 def test_v3_activation_review_is_verified_and_sensitive() -> None:
     stage_plan = research_stage_plan_v3_sha256()
     review = _sign_v3_review(stage_plan)

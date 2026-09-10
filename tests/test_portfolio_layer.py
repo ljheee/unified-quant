@@ -236,20 +236,18 @@ class TestTargetWeightStore:
 
 
 class TestPB1NegativeTests:
-    def test_industry_cap_scaling(self):
+    def test_industry_cap_requires_governed_runtime(self):
         builder = PortfolioBuilder(tempfile.mkdtemp())
         definition = _make_definition()
         definition["constraints"]["max_industry_weight"] = 0.4
         definition["industry_source_binding"] = {"source_type": "governed_industry_manifest", "industry_column": "industry"}
-        definition["_industry_mapping"] = {"A": "tech", "B": "tech", "C": "finance"}
         scores = pd.Series({"A": 5.0, "B": 4.0, "C": 3.0})
-        _, frame = builder.build(
-            definition=definition, prediction_generation_id=GEN_B,
-            decision_date="2026-01-05", scores=scores,
-            universe_instruments=["A", "B", "C"],
-        )
-        tech_total = sum(w for inst, w in zip(frame["instrument"], frame["weight"]) if inst in ("A", "B"))
-        assert tech_total <= 0.4 + 1e-8
+        with pytest.raises(ContractError, match="governed industry membership runtime"):
+            builder.build(
+                definition=definition, prediction_generation_id=GEN_B,
+                decision_date="2026-01-05", scores=scores,
+                universe_instruments=["A", "B", "C"],
+            )
 
     def test_industry_cap_requires_binding(self):
         builder = PortfolioBuilder(tempfile.mkdtemp())

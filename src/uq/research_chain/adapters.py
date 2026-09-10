@@ -30,7 +30,7 @@ from .owning_contracts import (
     FeatureSchemaStore,
     LabelStore,
 )
-from .resolver import FileResearchRunStore, ResolvedExecutionPlan, _STAGE_PLAN
+from .resolver import FileResearchRunStore, ResolvedExecutionPlan, stage_plan_for_request
 
 
 _STAGE_BINDING_KEYS = {
@@ -58,7 +58,8 @@ def build_stage_state(
     runner_identity: Mapping[str, str],
     created_at: str | None = None,
 ) -> dict[str, Any]:
-    if stage not in _STAGE_PLAN or stage == "resolve_request":
+    stage_plan = stage_plan_for_request(plan.request)
+    if stage not in stage_plan or stage == "resolve_request":
         raise ContractError("invalid research runtime stage")
     if any(
         set(binding) != _STAGE_BINDING_KEYS | {
@@ -67,7 +68,7 @@ def build_stage_state(
         for binding in output_bindings
     ):
         raise ContractError("invalid stage output binding fields")
-    current_index = _STAGE_PLAN.index(stage)
+    current_index = stage_plan.index(stage)
     stage_records: list[dict[str, Any]] = [
         {
             "stage": current_stage,
@@ -75,7 +76,7 @@ def build_stage_state(
             "output_bindings": [],
             "failure_reason": None,
         }
-        for current_stage in _STAGE_PLAN[:current_index]
+        for current_stage in stage_plan[:current_index]
     ]
     stage_records.append({
         "stage": stage,
@@ -84,7 +85,7 @@ def build_stage_state(
         "failure_reason": None,
     })
     state: dict[str, Any] = {
-        "contract_version": 1,
+        "contract_version": plan.request.get("contract_version", 1),
         "schema_version": "1.0.0",
         "request_content_generation_id": plan.request["request_content_generation_id"],
         "request_manifest_digest_sha256": plan.request_manifest_digest_sha256,

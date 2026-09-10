@@ -93,6 +93,14 @@ _RESEARCH_STATUS_REASONS = {
     "failed": _RESEARCH_FAILURE_REASONS,
 }
 _FACTOR_TRUST_ANCHOR_IDS = {"factor-review-key-v1"}
+_RESEARCH_STAGE_ORDER_V1 = [
+    "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
+    "model_training", "prediction_publication", "portfolio_construction",
+    "backtest_execution", "result_reconciliation",
+]
+_RESEARCH_STAGE_ORDER_V3 = [
+    *_RESEARCH_STAGE_ORDER_V1[:-1], "paper_execution", *_RESEARCH_STAGE_ORDER_V1[-1:],
+]
 
 
 def _reject_non_finite(value: Any) -> None:
@@ -402,11 +410,9 @@ def research_contract_identities(
 def _validate_stage_record_order(
     stages: list[dict[str, Any]], *, require_complete: bool, payload: dict[str, Any] | None = None
 ) -> None:
-    stage_order = [
-        "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
-        "model_training", "prediction_publication", "portfolio_construction",
-        "backtest_execution", "result_reconciliation",
-    ]
+    stage_order = (
+        _RESEARCH_STAGE_ORDER_V3 if payload.get("contract_version") == 3 else _RESEARCH_STAGE_ORDER_V1
+    )
     stages_seen: list[str] = []
     for record in stages:
         stage = record.get("stage")

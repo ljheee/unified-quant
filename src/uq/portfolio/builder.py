@@ -106,34 +106,16 @@ class PortfolioBuilder:
 
         weights_map = {inst: capped_weight for inst in selected}
 
-        # Industry cap: requires industry_source_binding and per-instrument industry mapping
+        # Industry cap requires a governed manifest runtime; private field bypass is forbidden.
         if max_industry is not None and max_industry < 1.0:
             industry_binding = definition.get("industry_source_binding")
             if not industry_binding or industry_binding.get("source_type") != "governed_industry_manifest":
                 raise ContractError(
                     "max_industry_weight requires a governed_industry_manifest binding"
                 )
-            if not isinstance(definition.get("_industry_mapping"), dict):
-                raise ContractError(
-                    "industry mapping must be provided as _industry_mapping {instrument: industry_id}"
-                )
-            industry_mapping: dict[str, str] = definition["_industry_mapping"]
-            # Compute industry totals
-            industry_totals: dict[str, float] = {}
-            for inst, w in weights_map.items():
-                ind = industry_mapping.get(inst)
-                if ind is None:
-                    continue
-                industry_totals[ind] = industry_totals.get(ind, 0.0) + w
-            # Scale down over-cap industries proportionally (residual to cash)
-            for ind, total in sorted(industry_totals.items()):
-                if total > max_industry + _WEIGHT_TOLERANCE:
-                    scale = max_industry / total
-                    for inst in list(weights_map.keys()):
-                        if industry_mapping.get(inst) == ind:
-                            weights_map[inst] *= scale
-                    residual_reduction = total - total * scale
-                    total_stock -= residual_reduction
+            raise ContractError(
+                "industry cap requires a governed industry membership runtime, which is not enabled"
+            )
 
         # Turnover cap
         if max_turnover is not None:

@@ -55,13 +55,12 @@ from .adapters import (
     PortfolioStageAdapter,
     PredictionStageAdapter,
     QlibExportStageAdapter,
-    _STAGE_PLAN,
     _synthesized_portfolio_definition,
     build_stage_state,
 )
 from ..models.definition import ModelDefinitionBuilder
 from .contracts import research_request_schema_name, verify_stage_plan_review
-from .resolver import FileResearchRunStore, ResolvedExecutionPlan, ResolvedStageBinding, build_dry_run_state
+from .resolver import FileResearchRunStore, ResolvedExecutionPlan, ResolvedStageBinding, build_dry_run_state, stage_plan_for_request
 
 
 @dataclass(frozen=True)
@@ -289,6 +288,8 @@ class ResearchChainRunner:
             raise ContractError("research portfolio stage stopped by rejected risk decision")
 
     def _validate_plan(self, plan: ResolvedExecutionPlan) -> None:
+        if plan.request.get("contract_version") == 3:
+            raise ContractError("research request v3 paper-execution runtime is not enabled")
         request_schema = research_request_schema_name(plan.request)
         if request_schema in {"research_run_request_v2", "research_run_request_v3"}:
             verify_stage_plan_review(
@@ -668,7 +669,8 @@ class ResearchChainRunner:
             ),
         )
         stage_records.append(resolution_state["stage_records"][-1])
-        for stage in _STAGE_PLAN[1:-1]:
+        stage_plan = stage_plan_for_request(plan.request)
+        for stage in stage_plan[1:-1]:
             bindings = self._stage_bindings(plan, stage)
             if not bindings:
                 raise ContractError(f"research stage output is missing: {stage}")
@@ -708,7 +710,7 @@ class ResearchChainRunner:
             "failure_reason": None,
         })
         result = {
-            "contract_version": 1,
+            "contract_version": plan.request.get("contract_version", 1),
             "schema_version": "1.0.0",
             "request_content_generation_id": plan.request["request_content_generation_id"],
             "request_manifest_digest_sha256": plan.request_manifest_digest_sha256,
@@ -803,11 +805,12 @@ class ResearchChainRunner:
                 "output_bindings": bindings,
                 "failure_reason": None,
             })
+        stage_plan = stage_plan_for_request(plan.request)
         last_passed_index = max(
-            (_STAGE_PLAN.index(record["stage"]) for record in stage_records),
+            (stage_plan.index(record["stage"]) for record in stage_records),
             default=-1,
         )
-        failed_stage = _STAGE_PLAN[min(last_passed_index + 1, len(_STAGE_PLAN) - 1)]
+        failed_stage = stage_plan[min(last_passed_index + 1, len(stage_plan) - 1)]
         stage_records.append({
             "stage": failed_stage,
             "status": "failed",
@@ -815,7 +818,7 @@ class ResearchChainRunner:
             "failure_reason": "stage_failed",
         })
         state = {
-            "contract_version": 1,
+            "contract_version": plan.request.get("contract_version", 1),
             "schema_version": "1.0.0",
             "request_content_generation_id": request_generation_id,
             "request_manifest_digest_sha256": plan.request_manifest_digest_sha256,
@@ -885,7 +888,7 @@ class ResearchChainRunner:
 
     @staticmethod
     def _state_relative_path(request_generation_id: str, run_id: str, stage: str) -> str:
-        stage_number = f"{_STAGE_PLAN.index(stage):02d}"
+        stage_number = f"{stage_plan_for_request({"contract_version": 1}).index(stage):02d}"
         return (
             f"research_runs/states/request={request_generation_id}"
             f"/run={run_id}/stage={stage_number}/manifest.json"
