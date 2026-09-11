@@ -134,11 +134,16 @@ mkdir -p "$DATA_ROOT"
 }
 ```
 
-输出里的 `manifest_path` 就是初始状态文件位置。一般类似：
+输出里的 `manifest_path` 指向本次 dry-run 的 `stage=00` 状态 manifest，类似：
+
+```text
+/tmp/unified-quant-data/research_runs/states/request=.../run=.../stage=00/manifest.json
+```
+
+同一个 run 的 request manifest 会另外保存在：
 
 ```text
 /tmp/unified-quant-data/research_runs/requests/request=.../run=.../manifest.json
-/tmp/unified-quant-data/research_runs/states/request=.../run=.../stage=00/manifest.json
 ```
 
 > 注意：当前 CLI 的 dry-run 使用的是 v1 示例请求。仓库里也有更严格的 v2/v3 契约，但不要把 v3 fixture 直接复制进这个 CLI dry-run；它目前不会被 CLI 的 dry-run 按 v3 路由。
