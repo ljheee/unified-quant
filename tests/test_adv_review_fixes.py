@@ -1118,6 +1118,31 @@ def test_evidence_indexes_are_fresh_and_never_index_themselves():
         assert hashlib.sha256(target.read_bytes()).hexdigest() == digest, path
 
 
+def test_reject_all_read_paths_reject_warning_reports_behaviorally():
+    # cr.md 8.4 (behavioral lock): the source scan in
+    # test_reviewed_status_policy_has_a_single_source cannot prove the read
+    # paths reject a warning report. Registry validation is the shared decision
+    # point they all call, so a warning report that is otherwise well formed
+    # must be refused for both families that were hardcoded to passed+warning.
+    from uq.contracts.model_layer import ModelQualityReviewRegistry
+
+    registry = ModelQualityReviewRegistry()
+    for binding_type in ("qlib_dataset_export_v1", "research_run_result_v1"):
+        report = {
+            "binding_type": binding_type,
+            "policy": "reject_all",
+            "status": "warning",
+            "checks": [{
+                "name": registry.bindings[binding_type]["allowed_checks"][0],
+                "result": "passed", "level": "error",
+            }],
+        }
+        with pytest.raises(StoreContractError, match="not approved by reviewed registry"):
+            registry.validate_report(report)
+        report["status"] = "passed"
+        registry.validate_report(report)
+
+
 def test_reviewed_status_policy_has_a_single_source():
     # cr.md 8.4 (R1 follow-up): read paths carried their own
     # {"passed", "warning"} sets, so they kept admitting warning reports for
