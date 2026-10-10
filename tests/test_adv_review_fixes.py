@@ -4,6 +4,7 @@ Each test names the finding it locks (U-numbering from
 docs/adversarial/2026-10-10-cr35c4e1b-regression-review/REPORT.md).
 """
 
+import hashlib
 import json
 from datetime import date, datetime
 from pathlib import Path
@@ -1038,3 +1039,70 @@ def test_v3_state_snapshots_list_in_v3_order_without_drops(tmp_path):
     store.publish_state(v3_state(prefix), stage="paper_execution")
     snapshots = store.list_state_snapshots("a" * 64, run_id)
     assert [item.stage for item in snapshots] == ["resolve_request", "paper_execution"]
+
+
+def test_evidence_indexes_are_fresh_and_never_index_themselves():
+    # cr.md 8.4: an evidence index that records its own digest can never
+    # verify (writing the record changes the file), and the old test carve-out
+    # hid that stale pin. Index shapes differ per layer, so the check walks the
+    # whole document: every {"path", "sha256"} pair must exist and match, and no
+    # entry may point at the index containing it.
+    def walk(node, index_relative, pairs, self_references):
+        if isinstance(node, dict):
+            path = node.get("path")
+            if isinstance(path, str):
+                if path == index_relative:
+                    self_references.append(index_relative)
+                digest = node.get("sha256")
+                if isinstance(digest, str) and len(digest) == 64:
+                    pairs.append((index_relative, path, digest))
+            for value in node.values():
+                walk(value, index_relative, pairs, self_references)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value, index_relative, pairs, self_references)
+
+    indexes = sorted(ROOT.glob("evidence/**/evidence-index.json"))
+    assert len(indexes) >= 20, f"expected the full evidence index set, found {len(indexes)}"
+    pairs: list[tuple[str, str, str]] = []
+    self_references: list[str] = []
+    for index_path in indexes:
+        document = json.loads(index_path.read_text())
+        walk(document, index_path.relative_to(ROOT).as_posix(), pairs, self_references)
+    assert pairs, "no digest-bearing evidence records found"
+    assert self_references == [], f"evidence index records itself: {sorted(set(self_references))}"
+    for index_relative, path, digest in pairs:
+        target = ROOT / path
+        assert target.is_file(), f"missing evidence record: {path} ({index_relative})"
+        assert hashlib.sha256(target.read_bytes()).hexdigest() == digest, path
+
+
+def test_reviewed_status_policy_has_a_single_source():
+    # cr.md 8.4 (R1 follow-up): read paths carried their own
+    # {"passed", "warning"} sets, so they kept admitting warning reports for
+    # reject_all families after the registry tightened to passed-only.
+    from uq.contracts.model_layer import reviewed_allowed_statuses
+    from uq.errors import ContractError as StoreContractError
+
+    assert reviewed_allowed_statuses("model_artifact_v1") == ["passed"]
+    assert reviewed_allowed_statuses("prediction_set_v1") == ["passed"]
+    assert reviewed_allowed_statuses("target_weights_v1") == ["passed"]
+    assert reviewed_allowed_statuses("backtest_result_v1") == ["passed"]
+    assert reviewed_allowed_statuses("model_dataset_v1") == ["passed"]
+    # The only non-reject_all family keeps its warning state.
+    assert reviewed_allowed_statuses("feature_preprocessing_v1") == ["passed", "warning"]
+    with pytest.raises(StoreContractError, match="no reviewed quality policy"):
+        reviewed_allowed_statuses("unregistered_family_v1")
+
+    # Lock the single source: the store read paths must not re-hardcode the
+    # accepted status set.
+    for module in (
+        "src/uq/models/dataset_writer.py", "src/uq/models/trainer.py",
+        "src/uq/models/predictions.py", "src/uq/portfolio/builder.py",
+        "src/uq/backtest/engine.py",
+    ):
+        source = (ROOT / module).read_text()
+        assert '{"passed", "warning"}' not in source, module
+        assert '{"passed","warning"}' not in source, module
+        assert '("passed", "warning")' not in source, module
+        assert "reviewed_allowed_statuses(" in source, module

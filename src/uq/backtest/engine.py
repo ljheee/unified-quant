@@ -21,6 +21,7 @@ from ..contracts.model_layer import (
     bind_reviewed_quality_decision,
     model_manifest_identities,
     resolve_subject_quality_decision,
+    reviewed_allowed_statuses,
 )
 from ..errors import ContractError
 
@@ -596,7 +597,7 @@ class BacktestResultStore:
         ModelContractLoader.validate("model_quality_report", report)
         if report.get("binding_type") != "backtest_result_v1":
             raise ContractError("quality report binding type mismatch")
-        if report.get("status") not in ("passed", "warning"):
+        if report.get("status") not in reviewed_allowed_statuses("backtest_result_v1"):
             raise ContractError("quality report rejects read")
 
         prov_gen, _ = model_manifest_identities(

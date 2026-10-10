@@ -16,7 +16,7 @@ import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
-from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, sha256_json
+from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, reviewed_allowed_statuses, sha256_json
 from ..errors import ContractError
 from .dataset import SplitValidator
 from .feature_preprocessing import FeaturePreprocessorBuilder
@@ -323,7 +323,7 @@ class DatasetWriter:
             checksum != actual_checksum
             or report["binding_type"] != "model_dataset_v1"
             or report["bound_generation_id"] != manifest["generation_id"]
-            or report["status"] not in {"passed", "warning"}
+            or report["status"] not in reviewed_allowed_statuses("model_dataset_v1")
             or report.get("report_version") != 2
             or not report.get("reviewer")
             or report.get("subject_content_sha256") != manifest["generation_id"]
@@ -449,6 +449,6 @@ class DatasetWriter:
             or report["binding_type"] != "feature_preprocessing_v1"
             or report["bound_generation_id"] != preprocessing_manifest["generation_id"]
             or report["subject_content_sha256"] != preprocessing_manifest["generation_id"]
-            or report["status"] not in {"passed", "warning"}
+            or report["status"] not in reviewed_allowed_statuses("feature_preprocessing_v1")
         ):
             raise ContractError("preprocessing quality report rejects read")

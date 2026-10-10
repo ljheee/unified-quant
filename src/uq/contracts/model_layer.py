@@ -777,6 +777,23 @@ _MODEL_QUALITY_REVIEW_REGISTRY = ModelQualityReviewRegistry()
 _MODEL_QUALITY_TRUST_ANCHOR = ModelQualityReviewTrustAnchor()
 
 
+def reviewed_allowed_statuses(binding_type: str) -> list[str]:
+    """Return the review statuses the governed registry admits for a family.
+
+    cr.md 8.4 (R1 follow-up): read paths used to carry their own hardcoded
+    {"passed", "warning"} set, so they kept admitting warning reports after the
+    registry tightened every reject_all binding to passed only. Status
+    acceptance has exactly one source: the reviewed registry.
+    """
+    binding = _MODEL_QUALITY_REVIEW_REGISTRY.bindings.get(binding_type)
+    if not isinstance(binding, dict):
+        raise ContractError(f"no reviewed quality policy for {binding_type}")
+    allowed = binding.get("allowed_statuses")
+    if not isinstance(allowed, list) or not allowed:
+        raise ContractError(f"reviewed quality policy for {binding_type} declares no statuses")
+    return list(allowed)
+
+
 def verify_reviewed_quality_report_signature(report: Mapping[str, Any]) -> None:
     """Verify that the reviewer-signed decision fields remain unchanged."""
     signed_fields = {

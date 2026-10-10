@@ -21,6 +21,7 @@ from ..contracts.model_layer import (
     bind_reviewed_quality_decision,
     model_manifest_identities,
     resolve_subject_quality_decision,
+    reviewed_allowed_statuses,
     sha256_json,
     validate_quality_decision_owning_report,
 )
@@ -340,7 +341,7 @@ class TargetWeightStore:
         )
         if report.get("bound_generation_id") != prov_gen:
             raise ContractError("quality report does not bind this generation")
-        if report.get("status") not in ("passed", "warning"):
+        if report.get("status") not in reviewed_allowed_statuses("target_weights_v1"):
             raise ContractError("quality report rejects read")
 
         actual_checksum = file_sha256_bytes(data_path.read_bytes())

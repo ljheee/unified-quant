@@ -330,3 +330,17 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 - **已修复：V3 状态快照列表静默丢弃**。`list_state_snapshots` 仍按硬编码 V1 序排序——D2 修好后 V3 状态可经 store 直接发布（runner 虽禁 V3 执行，store 是公开 API），paper_execution 快照会从列表中消失。改为从状态文档自身的 contract_version 派生排序（同一次 run 的状态共享请求版本）。回归锁：test_v3_state_snapshots_list_in_v3_order_without_drops。
 - **有意保留：publish_result 闭包校验的 V1 硬编码**。与 runner._validate_plan 的 V3 执行禁用一致——V3 result 不可能合法存在，从 payload 派生只会为伪造文档松闸。已加注释防止下轮评审再标。
 - 复核通过的疑点：execution/stores.py 直读 registry bindings 但仅消费 allowed_checks（无 allowed_statuses 旁路）；R4 严格 arity 下 cli 两参带默认包装、functools.partial、bound method、__call__ 实例的路由均保持；R9 的 NaN 语义未受有限性禁令影响；R2 provenance 增补不破坏既有重放证据。
+
+### 8.4 外部 CR 复评修补（2026-10-10，覆盖 844acc4 + 9a91cd2 + 8d3db60）
+
+外部复评确认三条残留，本批全部处理（含一处比原报更精确的定位）：
+
+| 残留 | 处置 | 回归测试 |
+|---|---|---|
+| 证据索引自我引用 | `paper-execution-research-integration/phase-0` 索引把自己登记成一条记录，其 sha256 逻辑上永不可验；测试用「跳过自身路径」的豁免掩盖而非删除。已删除自指记录并取消测试豁免 | test_evidence_indexes_are_fresh_and_never_index_themselves；test_paper_execution_research_integration_evidence 无条件验摘要 |
+| 读侧状态集合未随 R1 收紧（定位修正） | 原报为「重复策略口径」；实测更严重——prediction/target_weights/backtest_result 读路径**根本未查 registry**，只比硬编码 {passed, warning}，registry 收紧后仍会接受 warning 报告。新增单一来源 `reviewed_allowed_statuses(binding_type)`，替换 7 处硬编码（dataset_writer ×2、trainer、predictions ×2、portfolio/builder、backtest/engine）；feature_preprocessing_v1（非 reject_all）仍合法接受 warning | test_reviewed_status_policy_has_a_single_source |
+| 证据索引新鲜度无守护 | 22 个索引结构各异（records/entries/items，仅 2 个带摘要），故按递归遍历任意 `{"path","sha256"}` 配对做全量校验：当前 96 对全部匹配、零自指。索引结构统一属后续治理项 | test_evidence_indexes_are_fresh_and_never_index_themselves |
+
+未改动项与理由：`research_chain/adapters.py:435`、`runner.py:813` 的 `{passed, warning}` 作用于 **factor_v1 owning report**——该族不走模型评审 registry（无 binding_type 条目），其状态语义由因子侧 quality_policy 决定（factors/store.py:161/:560 已按策略区分 passed/双态）。把模型 registry 套上去会误拒因子报告；因子侧「策略→状态」映射与模型 registry 统一为单一治理口径，登记为后续项，非本批缺陷。
+
+`src/uq/contracts/model_layer.py` 变更后按约定重钉 `paper-execution-research-integration/phase-0` 索引记录。全量测试 654 passed / 22 skipped（qlib 门控）。

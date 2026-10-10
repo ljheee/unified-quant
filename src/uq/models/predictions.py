@@ -16,7 +16,7 @@ import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
-from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, sha256_json
+from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, reviewed_allowed_statuses, sha256_json
 from ..errors import ContractError
 from .trainer import ArtifactStore
 
@@ -169,7 +169,7 @@ class PredictionBuilder:
         if (
             quality_report["binding_type"] != "prediction_set_v1"
             or quality_report["bound_generation_id"] != manifest["generation_id"]
-            or quality_report["status"] not in {"passed", "warning"}
+            or quality_report["status"] not in reviewed_allowed_statuses("prediction_set_v1")
         ):
             raise ContractError("prediction quality report rejects publication")
         partition = (
@@ -231,7 +231,7 @@ class PredictionBuilder:
         except (OSError,json.JSONDecodeError) as exc: raise ContractError("prediction quality report unavailable") from exc
         ModelContractLoader.validate("model_quality_report",report)
         actual=sha256_json({k:v for k,v in report.items() if k!="report_checksum_sha256"})
-        if checksum!=actual or report["binding_type"]!="prediction_set_v1" or report["bound_generation_id"]!=manifest["generation_id"] or report["status"] not in {"passed","warning"}:
+        if checksum!=actual or report["binding_type"]!="prediction_set_v1" or report["bound_generation_id"]!=manifest["generation_id"] or report["status"] not in reviewed_allowed_statuses("prediction_set_v1"):
             raise ContractError("prediction quality report rejects read")
         self.artifact_store.read(
             manifest["model_run_generation_id"], manifest["model_artifact_generation_id"]

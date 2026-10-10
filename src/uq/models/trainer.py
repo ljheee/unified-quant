@@ -13,7 +13,7 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
-from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, sha256_json
+from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, reviewed_allowed_statuses, sha256_json
 from ..errors import ContractError
 
 
@@ -111,7 +111,7 @@ class ArtifactStore:
         if (
             quality_report.get("report_version") != 2
             or quality_report["binding_type"] != "model_artifact_v1"
-            or quality_report["status"] not in {"passed", "warning"}
+            or quality_report["status"] not in reviewed_allowed_statuses("model_artifact_v1")
             or not quality_report.get("reviewer")
             or not quality_report.get("subject_content_sha256")
             or not quality_report.get("review_signature_sha256")

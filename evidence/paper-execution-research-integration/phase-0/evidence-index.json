@@ -19,10 +19,6 @@
       "sha256": "bde91b6e06e8b5e9d6fa0b0b7c55ddc47c116ebe09b2430e2d1e1a0233a746a1"
     },
     {
-      "path": "evidence/paper-execution-research-integration/phase-0/evidence-index.json",
-      "sha256": "82ae47887b72f8edca616d84349d92aaa9f9df388ada30422329736d75106d0d"
-    },
-    {
       "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-missing-calendar-binding.json",
       "sha256": "652f17b8ff7657bd1fd76c6eb004f33329107ba94a68f62c4124c80422a3452f"
     },
@@ -176,7 +172,7 @@
     },
     {
       "path": "src/uq/contracts/model_layer.py",
-      "sha256": "8f4f59cbcafe6bfabd2888fc87f6bfeb29907cbc9ed75d4973a9ad62a44bcce2"
+      "sha256": "e8a9a02cbb7f87562002c3f2988b9692bcb599a2c3b9e26f2e44c068b03c2b85"
     },
     {
       "path": "src/uq/research_chain/contracts.py",

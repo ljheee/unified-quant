@@ -26,8 +26,9 @@ def test_phase_0_evidence_index_hashes_are_complete() -> None:
     for item in index["records"]:
         path = Path(item["path"])
         assert path.is_file(), item["path"]
-        if item["path"] != str((PHASE_ROOT / "evidence-index.json").relative_to(ROOT)):
-            assert hashlib.sha256(path.read_bytes()).hexdigest() == item["sha256"]
+        # cr.md 8.4: the index no longer records itself, so no carve-out is
+        # needed and every recorded digest is verifiable.
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == item["sha256"]
 
 
 def test_phase_0_valid_fixture_remains_loadable() -> None:
