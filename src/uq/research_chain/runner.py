@@ -121,7 +121,7 @@ class ResearchChainRunner:
         cache_root: Path | str | None = None,
         export_layout_root: Path | str | None = None,
         artifact_decision_provider: Callable[[str], Mapping[str, Any]] | None = None,
-        definition_decision_provider: Callable[[str], Mapping[str, Any]] | None = None,
+        definition_decision_provider: Callable[..., Mapping[str, Any]] | None = None,
         risk_documents: Mapping[str, Any] | None = None,
         created_at: str | None = None,
     ) -> ResearchRunOutcome:
@@ -357,6 +357,7 @@ class ResearchChainRunner:
         quality_decisions: Mapping[str, Any],
         key: str,
         subject_generation_id: str | None = None,
+        subject_content_sha256: str | None = None,
     ) -> Mapping[str, Any]:
         decision = quality_decisions.get(key)
         if decision is None:
@@ -367,7 +368,7 @@ class ResearchChainRunner:
             decision = resolve_subject_quality_decision(
                 decision,
                 subject_generation_id=subject_generation_id,
-                subject_content_sha256=subject_generation_id,
+                subject_content_sha256=subject_content_sha256 or subject_generation_id,
             )
         if not isinstance(decision, Mapping):
             raise ContractError(f"invalid research chain quality decision: {key}")
@@ -380,11 +381,14 @@ class ResearchChainRunner:
     ) -> Any:
         """Pass a per-subject decision through to the stage flow unresolved.
 
-        cr.md U14: stages whose subject content digest differs from the subject
-        generation id (model_run, qlib export/receipt) or that attest one
-        subject per decision date (prediction_set, target_weights) cannot be
+        cr.md U14: stage-owned outputs whose subject is derived inside the
+        flow itself (model_dataset, model_run, prediction_set,
+        backtest_config/result) and flows whose subject content digest differs
+        from the generation id (qlib export/receipt, target_weights) cannot be
         resolved eagerly by the runner — the flow derives the subject and
         resolves provider callables / verifies resolver envelopes itself.
+        (portfolio_definition is the exception: the runner synthesizes it, so
+        _run_portfolio resolves eagerly with the manifest digest.)
         """
         decision = quality_decisions.get(key)
         if decision is None:
@@ -602,7 +606,7 @@ class ResearchChainRunner:
         runner_identity: Mapping[str, str],
         quality_decisions: Mapping[str, Any],
         created_at: str,
-        definition_decision_provider: Callable[[str], Mapping[str, Any]] | None,
+        definition_decision_provider: Callable[..., Mapping[str, Any]] | None,
     ) -> None:
         first_prediction = self._binding(plan, "prediction_set")
         universe_binding = self._binding(plan, "universe_snapshot")
@@ -621,10 +625,21 @@ class ResearchChainRunner:
             plan,
             prediction_stage_result=self.prediction_adapter.last_result,
             decision_dates=decision_dates,
+            # cr.md U15: the runner synthesizes the definition, so it can hand
+            # providers the true subject content (the manifest digest) —
+            # PortfolioDefinitionBinding.bind requires raw signed decisions to
+            # commit to it, and resolving with content=generation made that
+            # documented shape unreachable. One-argument providers keep the
+            # legacy generation-only resolution and remain envelope-only.
             definition_quality_decision=(
-                definition_decision_provider(definition["generation_id"])
+                resolve_subject_quality_decision(
+                    definition_decision_provider,
+                    subject_generation_id=definition["generation_id"],
+                    subject_content_sha256=definition["manifest_digest_sha256"],
+                )
                 if definition_decision_provider else self._decision(
-                    quality_decisions, "portfolio_definition", definition["generation_id"]
+                    quality_decisions, "portfolio_definition", definition["generation_id"],
+                    subject_content_sha256=definition["manifest_digest_sha256"],
                 )
             ),
             weights_quality_decision=self._subject_decision(

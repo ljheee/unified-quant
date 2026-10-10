@@ -126,8 +126,8 @@ class PredictionBuilder:
         )
         # cr.md U9: with provider-form decisions the checks are inspectable
         # only after the subject is derived and the provider resolved, so this
-        # gate moved here from the top of build (manifest construction between
-        # is pure, no I/O is wasted on a rejected decision).
+        # gate can no longer sit at the top of build — the artifact store read
+        # and the scores serialization above necessarily precede it.
         eligibility_checks = [
             check for check in quality_decision.get("checks", [])
             if check.get("name") == "eligibility_coverage"

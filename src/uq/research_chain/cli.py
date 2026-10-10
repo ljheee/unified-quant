@@ -203,10 +203,11 @@ class _CommandDecisionProvider:
 def _decision_provider_for_family(provider: Any, output_family: str):
     binding_type = _BINDING_TYPE_BY_FAMILY[output_family]
 
-    # cr.md U14: two-argument so content≠generation stage flows (model_run,
-    # qlib export/receipt, prediction_set, target_weights) forward the subject
-    # digest to the external provider; one-argument legacy callables would
-    # fail closed at those stages.
+    # cr.md U14: two-argument so flows whose subject content digest differs
+    # from the generation id (qlib export/receipt, target_weights) forward the
+    # subject digest to the external provider; one-argument legacy callables
+    # default the digest to the generation id, so they fail closed only at
+    # those genuinely content-differing flows (elsewhere content==generation).
     def resolve(
         subject_generation_id: str,
         subject_manifest_digest_sha256: str | None = None,

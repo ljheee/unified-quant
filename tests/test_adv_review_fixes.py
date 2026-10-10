@@ -578,11 +578,14 @@ def test_execution_config_initial_state_provenance_commits_to_content():
 
 
 def test_cli_decision_provider_forwards_subject_digest():
-    # X1/U14: provider-json mode used to wrap the external provider in a
-    # one-argument callable that always passed subject_manifest_digest_sha256=
-    # None — so content≠generation stage flows (model_run, qlib export/receipt,
-    # prediction_set, target_weights) could never complete an execute. The
-    # wrapper is now two-argument and forwards the digest end to end.
+    # X1/U14: provider-json mode wraps the external provider in a callable.
+    # The old one-argument wrapper could never complete an execute — the
+    # runner fetched stage-owned decisions without a subject and raised
+    # "quality decision provider requires a subject" before any digest
+    # comparison. The wrapper is now two-argument and forwards the digest end
+    # to end — which genuinely matters only where content differs from the
+    # generation id (qlib export/receipt, target_weights); elsewhere
+    # content==generation.
     from uq.research_chain.cli import _decision_provider_for_family
 
     calls = []
@@ -635,3 +638,64 @@ def test_cli_provider_wrapper_compose_with_runner_resolution():
         eager, subject_generation_id="g" * 4, subject_content_sha256="g" * 4
     ) == {"ok": True}
     assert calls[-1] == ("g" * 4, "g" * 4)
+
+
+def test_portfolio_definition_raw_decision_binds_with_manifest_digest():
+    # 12d44af review follow-up (U15 residual): the runner synthesizes the
+    # portfolio definition and now resolves providers with the true subject
+    # content (the manifest digest), so an honest two-argument provider
+    # returning a raw signed decision — the shape U15 legitimizes — binds
+    # end to end. A one-argument provider's decision defaults its content
+    # digest to the generation id and still fails closed at the raw branch
+    # (envelope-only), matching the documented protocol.
+    from uq.contracts.model_layer import (
+        bind_reviewed_quality_decision,
+        create_reviewed_quality_decision,
+        model_manifest_identities,
+    )
+    from uq.portfolio.builder import PortfolioDefinitionBinding
+    from uq.research_chain import ResearchChainRunner
+    from tests.review_key import REVIEWER_PRIVATE_KEY
+
+    fixture = json.loads(
+        (ROOT / "evidence/portfolio-backtest/phase-0/fixtures/valid_portfolio_definition.json").read_text()
+    )
+    fixture["quality_report_checksum_sha256"] = "0" * 64
+    fixture["generation_id"], fixture["manifest_digest_sha256"] = model_manifest_identities(
+        {**fixture, "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
+        schema_name="portfolio_definition",
+    )
+    checks = [
+        {"name": "weight_scheme_valid", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+        {"name": "constraints_within_bounds", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+        {"name": "universe_binding_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+    ]
+
+    def raw_provider(generation_id: str, content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="portfolio_definition_v1", policy="reject_all", status="passed",
+            checks=checks, errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=generation_id, subject_content_sha256=content_sha256,
+        )
+
+    # _decision carries no instance state — exercise the runner resolution
+    # seam directly without wiring the full adapter set.
+    runner = ResearchChainRunner.__new__(ResearchChainRunner)
+    decision = runner._decision(
+        {"portfolio_definition": raw_provider}, "portfolio_definition",
+        fixture["generation_id"], subject_content_sha256=fixture["manifest_digest_sha256"],
+    )
+    _, bound = PortfolioDefinitionBinding.bind(definition=dict(fixture), quality_decision=dict(decision))
+    assert bound["bound_generation_id"] == fixture["generation_id"]
+    assert bound["subject_content_sha256"] == fixture["manifest_digest_sha256"]
+
+    def legacy_provider(generation_id: str) -> dict:
+        return raw_provider(generation_id, generation_id)
+
+    rejected = runner._decision(
+        {"portfolio_definition": legacy_provider}, "portfolio_definition",
+        fixture["generation_id"], subject_content_sha256=fixture["manifest_digest_sha256"],
+    )
+    with pytest.raises(StoreContractError, match="different subject content"):
+        PortfolioDefinitionBinding.bind(definition=dict(fixture), quality_decision=dict(rejected))

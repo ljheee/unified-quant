@@ -273,7 +273,7 @@
 
 1. **质量决定签名覆盖 subject（U9）**：`create_reviewed_quality_decision` 新增必填 `subject_generation_id`（content≠generation 的 flow 另需 `subject_content_sha256`）；缺 subject 的 11 字段旧形态决定在 bind 处一律 fail closed。
 2. **label/backtest 决定必填（U8，H5 影响面登记）**：`DatasetStageAdapter.run` / `BacktestStageAdapter.run` 新增必填 quality decision 参数（label_set_v1/backtest_config_v1 两族）；绕过 CLI 的程序化 execute 调用方若持最小 decision 映射（缺此两族）将在执行期被拒。
-3. **provider 决策通道协议（U14/U15）**：runner 对 content==generation 的 flow（model_dataset/feature_preprocessing/label_set/backtest_config/backtest_result/execution 系/portfolio_definition）eager 解析 provider(g)；对 content≠generation 及 per-date flow（model_run/qlib_dataset_export/qlib_init_receipt/prediction_set/target_weights）原样透传，stage flow 以 (generation, content) 两参解析——一参 legacy provider 在这些 flow 上 fail closed。静态决策可为签名裸决策或 quality_decision.v1 信封（含 owning_report）。
+3. **provider 决策通道协议（U14/U15）**：runner 仅对 subject 可知的 flow eager 解析——输入绑定族（factor_partition/label_set/feature_preprocessing，content=generation）与 runner 合成的 portfolio_definition（content=manifest_digest，一参 provider 退化为 provider(g)、raw 形态 fail closed、信封形态可用）；stage 自有 subject 的 flow（model_dataset/model_run/prediction_set/backtest_config/backtest_result/qlib export/receipt/target_weights）原样透传，由 stage flow 以 (generation, content) 两参解析——其中 model_run/prediction_set/backtest_* 的 content==generation（一参 provider 可用），真正 content≠generation 的只有 qlib export/receipt 与 target_weights（一参 legacy provider 仅在这两族 fail closed）。静态决策可为签名裸决策或 quality_decision.v1 信封（含 owning_report）。
 4. **行业规则须绑 membership artifact（U10）**：policy 启用 industry_weight 规则时，`evaluate_portfolio`/gate 必须提供 policy `industry_membership_binding` 绑定的 industry_membership_v1 artifact；裸 industry_mapping 降为信息参考，与绑定 artifact 冲突即拒。
 5. **initial_state provenance 内容承诺（U13）**：execution_config initial 模式的 `initial_state.provenance_sha256` 必须是 {cash, holdings, valuation_price_basis} 的 canonical sha256 承诺（`initial_state_provenance_sha256`），自撰 64hex 在校验期即拒；paper-execution fixture 与 identity golden vectors 已重钉。
 6. **universe_id schema 收紧（U4）**：universe_snapshot.v1 的 universe_id 收紧为 `^[a-z][a-z0-9_-]{1,63}$`，与 H12 运行时白名单一致；此前 schema 期可过、运行期才拒的 id 现在 schema 期即拒。
@@ -284,7 +284,7 @@
 
 | ID | 修复要点 | 回归测试 |
 |---|---|---|
-| U1（BLOCKER） | 文档默认 `uq-ingest daily`（不带 --cross-validate）不再可发布：默认路径必过参照源比对 | test_default_tdx_pipeline_publishes_without_comparator、test_requested_cross_validation_stays_fail_closed |
+| U1（BLOCKER） | 修复前文档默认 `uq-ingest daily`（不带 --cross-validate）因强制参照源比对而每次必拒；修复后默认路径免比对可发布，显式请求比对仍 fail closed | test_default_tdx_pipeline_publishes_without_comparator、test_requested_cross_validation_stays_fail_closed |
 | U2+U18 | 指纹算法版本化（v1 fillna / v2 null_mask 前置）+ 读取路径全版本兼容；±inf 指纹互异 | test_fingerprint_distinguishes_signed_infinities、test_fingerprint_read_path_accepts_all_known_versions |
 | U3+U6+U17 | 复权快照 schema v1/v2 并存（v1 可读不可消费，未知版本 fail closed）；_LINEAGE_VERSION 单一来源成活 | test_snapshot_store_writes_v2_and_reader_roundtrips、test_legacy_v1_snapshot_stays_readable_but_is_not_consumable、test_unknown_snapshot_version_is_rejected、test_v1_snapshot_reexports_through_current_deriver、test_lineage_constant_is_single_sourced |
 | U4 | universe_id schema pattern 与 H12 运行时白名单对齐 | test_universe_id_schema_pattern_matches_runtime_whitelist；contract-negative-cases 补三例 |
