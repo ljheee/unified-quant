@@ -31,6 +31,7 @@ from uq.models.trainer import ArtifactStore, ModelRunBuilder
 from tests.test_research_chain_phase2 import (
     RUN_ID,
     _dataset_quality_decision,
+    _label_quality_decision,
     _preprocessing_quality_decision,
     _prepare_dataset_store,
 )
@@ -100,6 +101,7 @@ def _prepare_model_stage(tmp_path: Path):
         runner_identity={"code_fingerprint": DIGEST, "environment_profile": "locked-test", "lock_digest_sha256": DIGEST},
         quality_decision=_dataset_quality_decision(),
         preprocessing_quality_decision=_preprocessing_quality_decision(),
+        label_quality_decision=_label_quality_decision(),
         created_at="2026-01-30T07:00:00+00:00",
     )
     dataset_generation_id = dataset_result.manifest["generation_id"]

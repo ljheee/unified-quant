@@ -314,6 +314,11 @@ def evaluate_strategy_state(
     _validate_calendar_binding(calendar_binding)
     if not isinstance(observations, list) or not observations:
         raise ContractError("strategy state observations must be a non-empty list")
+    # cr.md H8: prior_payload is consumed below only after its signed manifest
+    # has verified it; accepting a payload without its manifest would let a
+    # forged cooldown/active flag suppress loss-control actions.
+    if (prior_state is None) != (prior_payload is None):
+        raise ContractError("prior risk state and payload must be provided together")
     if prior_payload is not None:
         expected_sequence = prior_payload.get("last_event_sequence_number")
         if event_sequence is None:
@@ -329,7 +334,7 @@ def evaluate_strategy_state(
         _validate_exception(exception, exception_review, policy)
     if prior_state is not None:
         validate_risk_manifest("risk_state", dict(prior_state))
-        if prior_payload is None or not isinstance(prior_payload, Mapping):
+        if not isinstance(prior_payload, Mapping):
             raise ContractError("prior risk state payload is required")
         if prior_state["state_scope_type"] != "strategy":
             raise ContractError("prior risk state scope mismatch")

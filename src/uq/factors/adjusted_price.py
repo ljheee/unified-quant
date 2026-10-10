@@ -10,7 +10,7 @@ from ..errors import ContractError
 
 
 _REQUIRED = ["instrument", "datetime", "close", "adj_factor"]
-_LINEAGE_VERSION = "adj_factor.exchange_v1"
+_LINEAGE_VERSION = "adj_factor.exchange_v2"
 _FACTOR_FORMULAS = {
     "return_1d": {"operation": "pct_change", "periods": 1},
     "return_5d": {"operation": "pct_change", "periods": 5},
@@ -23,7 +23,9 @@ def _validate_binding(frame: pd.DataFrame, adjustment_snapshot_id: str, effectiv
     missing = sorted(set(_REQUIRED) - set(frame.columns))
     if missing:
         raise ContractError(f"adjusted dependency absent: {missing}")
-    if frame[["instrument", "datetime", "adj_factor"]].isna().any().any():
+    # cr.md H7: close must be null-free too — a NaN close used to be pad-filled
+    # inside pct_change, fabricating returns across missing sessions.
+    if frame[["instrument", "datetime", "close", "adj_factor"]].isna().any().any():
         raise ContractError("adjusted dependency contains null values")
     if frame.duplicated(["instrument", "datetime"]).any():
         raise ContractError("duplicate canonical keys reject adjusted factor calculation")
@@ -54,8 +56,10 @@ def calculate_adjusted_factors(
     adjusted_close = ordered["close"].astype(float) * ordered["adj_factor"].astype(float)
 
     def per_instrument(series: pd.Series, periods: int, operation: str = "return") -> pd.Series:
+        # cr.md H7: fill_method=None — the pandas default pad-fills NaN closes
+        # before differencing, fabricating returns across gaps.
         return series.groupby(ordered["instrument"], sort=False).transform(
-            lambda values: values.pct_change(periods) if operation == "return" else values.rolling(periods, min_periods=periods).std(ddof=1)
+            lambda values: values.pct_change(periods, fill_method=None) if operation == "return" else values.rolling(periods, min_periods=periods).std(ddof=1)
         )
 
     output["return_1d"] = per_instrument(adjusted_close, 1)
@@ -69,5 +73,5 @@ def calculate_adjusted_factors(
 
 
 def assert_not_raw_close(frame: pd.DataFrame, result: pd.DataFrame) -> None:
-    if np.allclose(result["return_1d"].dropna(), frame.sort_values(["instrument","datetime"])["close"].pct_change().dropna(), atol=1e-15, equal_nan=True):
+    if np.allclose(result["return_1d"].dropna(), frame.sort_values(["instrument","datetime"])["close"].pct_change(fill_method=None).dropna(), atol=1e-15, equal_nan=True):
         raise ContractError("raw close substituted for adjusted close")

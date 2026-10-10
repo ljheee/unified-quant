@@ -53,6 +53,18 @@ def test_future_delisted_date_stays_unknown():
     assert result["600001.XSHG"] == "unknown_requires_review"
 
 
+def test_gap_before_delist_date_is_not_excused_as_unlisted():
+    # Regression for cr.md H1: a stock listed 2020 and delisted 2025-06 has a
+    # data gap on 2024-01-05. It is absent from today's listed roster, and used
+    # to be misclassified as not_listed_expected_missing, letting a gapped
+    # partition publish as verified.
+    provider = _FakeLifecycle({"600000"}, {"600001": date(2025, 6, 30)})
+    result = provider.classify_missing(
+        date(2024, 1, 5), ["600001.XSHG"], ("akshare",)
+    )
+    assert result["600001.XSHG"] == "unknown_requires_review"
+
+
 def test_lifecycle_requires_enabled_auxiliary_source():
     provider = AkShareLifecycleProvider()
     result = provider.classify_missing(date(2026, 8, 21), ["600000.XSHG"], ("adata",))

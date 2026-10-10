@@ -38,14 +38,21 @@ class AkShareLifecycleProvider:
             prefix_ok = (suffix == "XSHG" and symbol.startswith(("60", "68"))) or (
                 suffix == "XSHE" and symbol.startswith(("00", "30"))
             )
-            result[instrument] = (
-                "delisted_expected_missing"
-                if symbol in delisted_codes and trade_date >= delisted_codes[symbol]
-                else
-                "not_listed_expected_missing"
-                if exchange_ok and prefix_ok and symbol not in listed_codes
-                else "unknown_requires_review"
-            )
+            # cr.md H1: delisted instruments are absent from the *current*
+            # listed roster, so membership in delisted_codes must be checked
+            # first. A gap before the delist date is inside the listing window
+            # and must stay unexplained (fail closed), not be excused as
+            # "not listed yet".
+            if symbol in delisted_codes:
+                result[instrument] = (
+                    "delisted_expected_missing"
+                    if trade_date >= delisted_codes[symbol]
+                    else "unknown_requires_review"
+                )
+            elif exchange_ok and prefix_ok and symbol not in listed_codes:
+                result[instrument] = "not_listed_expected_missing"
+            else:
+                result[instrument] = "unknown_requires_review"
         return result
 
     def _listed_codes(self) -> set[str]:

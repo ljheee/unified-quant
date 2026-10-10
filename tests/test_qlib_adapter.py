@@ -435,3 +435,31 @@ def test_qlib_compute_timeout_is_mechanical():
     from uq.factors import qlib_adapter
 
     assert qlib_adapter._QLIB_COMPUTE_TIMEOUT_SECONDS > 0
+
+
+def test_partition_frames_preserves_datetime64():
+    # cr.md H9 regression: the worker stringified result datetimes; downstream
+    # consumers require the canonical datetime64 dtype.
+    adapter = _adapter()
+    result = pd.DataFrame({
+        "instrument": ["600000.XSHG", "600000.XSHG"],
+        "datetime": pd.to_datetime(["2024-01-02", "2024-01-03"]),
+        "KLEN": [0.1, 0.2],
+    })
+    partitions = adapter.partition_frames(result)
+    assert [label for label, _ in partitions] == ["2024-01-02", "2024-01-03"]
+    assert all(pd.api.types.is_datetime64_any_dtype(partition["datetime"]) for _, partition in partitions)
+
+
+def test_reconcile_result_accepts_datetime64_results():
+    # cr.md H9 regression companion: key reconciliation compares normalized
+    # date strings, so datetime64 results reconcile against the input panel.
+    adapter = _adapter()
+    panel, dates, instruments = _synthetic_panel(days=3, instruments=("600000.XSHG",))
+    names = adapter.factor_names
+    result = pd.DataFrame([
+        {"instrument": instrument, "datetime": timestamp, **{name: 0.0 for name in names}}
+        for instrument in instruments
+        for timestamp in dates
+    ])
+    adapter._reconcile_result(result, panel, list(instruments), str(dates[0].date()), str(dates[-1].date()))

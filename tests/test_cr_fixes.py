@@ -132,8 +132,10 @@ def test_xdxr_deriver_handles_bonus_share_event():
         pd.to_datetime(["2026-08-20", "2026-08-21"]),
         pd.Series([10.0], index=pd.to_datetime(["2026-08-21"])),
     )
-    assert derivation.version == "adj_factor.exchange_v1"
-    assert derivation.frame["adj_factor"].tolist() == pytest.approx([2.0, 1.0])
+    assert derivation.version == "adj_factor.exchange_v2"
+    # Multiply-basis (exchange_v2): 10送10 halves the ex-right price, so the
+    # pre-event session factor is 0.5 and close * adj_factor stays continuous.
+    assert derivation.frame["adj_factor"].tolist() == pytest.approx([0.5, 1.0])
 
 
 def test_quality_checksum_includes_inputs_and_policy():
@@ -149,3 +151,88 @@ def test_quality_checksum_includes_inputs_and_policy():
     assert first.checksum == second.checksum
     assert first.checksum != changed.checksum
     assert first.input_fingerprints["tdx"]
+
+
+def _gate_frames(close_p=10.1, close_s=10.1, vol_p=100.0, vol_s=100.0):
+    primary = pd.DataFrame({
+        "instrument": ["600000.XSHG"], "datetime": pd.to_datetime(["2026-08-21"]),
+        "close": [close_p], "volume": [vol_p],
+    })
+    secondary = pd.DataFrame({
+        "instrument": ["600000.XSHG"], "datetime": pd.to_datetime(["2026-08-21"]),
+        "close": [close_s], "volume": [vol_s],
+    })
+    rules = {
+        "close": {"compare_with": "tushare", "max_abs_diff_pct": 0.001},
+        "volume": {"compare_with": "tushare", "max_rel_diff_pct": 0.01},
+    }
+    return primary, secondary, rules
+
+
+def test_quality_gate_fails_closed_when_comparator_cannot_run():
+    # cr.md H2 regression: a configured comparison that cannot run used to be
+    # skipped silently, publishing unvalidated fields.
+    primary, secondary, rules = _gate_frames()
+    gate = CrossSourceGate("tdx", rules)
+    # comparator source absent entirely
+    report = gate.merge({"tdx": primary}, ["instrument", "datetime"])
+    assert not report.accepted
+    assert any("comparator tushare unavailable" in e for e in report.errors)
+    # comparator present but missing the field
+    report = gate.merge(
+        {"tdx": primary, "tushare": secondary.drop(columns=["volume"])},
+        ["instrument", "datetime"],
+    )
+    assert not report.accepted
+    assert any("lacks field volume" in e for e in report.errors)
+
+
+def test_quality_gate_zero_primary_relative_diff_is_a_conflict():
+    # cr.md H2 regression: primary volume 0 vs comparator 500 produced a NaN
+    # relative difference and used to pass the max_rel_diff_pct rule.
+    primary, secondary, rules = _gate_frames(vol_p=0.0, vol_s=500.0)
+    gate = CrossSourceGate("tdx", rules)
+    report = gate.merge({"tdx": primary, "tushare": secondary}, ["instrument", "datetime"])
+    assert not report.accepted
+    assert any(c["field"] == "volume" for c in report.conflicts)
+    # zero vs zero stays clean
+    primary, secondary, rules = _gate_frames(vol_p=0.0, vol_s=0.0)
+    report = CrossSourceGate("tdx", rules).merge(
+        {"tdx": primary, "tushare": secondary}, ["instrument", "datetime"]
+    )
+    assert report.accepted
+
+
+def test_quality_gate_rejects_zero_overlap_and_enforces_minimum_coverage():
+    # cr.md H2 regression: zero comparable rows and under-coverage used to be
+    # accepted while minimum_coverage only fed a lineage label.
+    primary, secondary, rules = _gate_frames()
+    disjoint = secondary.copy()
+    disjoint["datetime"] = pd.to_datetime(["2026-08-22"])
+    gate = CrossSourceGate("tdx", rules)
+    report = gate.merge({"tdx": primary, "tushare": disjoint}, ["instrument", "datetime"])
+    assert not report.accepted
+    assert any("compared zero rows" in e for e in report.errors)
+    # minimum_coverage enforced: 1 of 2 rows comparable < 0.9
+    primary2 = pd.concat([primary, primary.assign(datetime=pd.to_datetime(["2026-08-22"]))])
+    gate = CrossSourceGate("tdx", rules, minimum_coverage=0.9)
+    report = gate.merge({"tdx": primary2, "tushare": secondary}, ["instrument", "datetime"])
+    assert not report.accepted
+    assert any("below minimum" in e for e in report.errors)
+
+
+def test_quality_gate_rejects_duplicate_keys_and_empty_primary():
+    # cr.md H2 regression: duplicate comparator keys escaped as a bare
+    # ValueError from reindex, and an empty primary was accepted vacuously.
+    primary, secondary, rules = _gate_frames()
+    from uq.errors import ContractError as GateContractError
+    dup = pd.concat([secondary, secondary])
+    gate = CrossSourceGate("tdx", rules)
+    with pytest.raises(GateContractError, match="duplicate keys"):
+        gate.merge({"tdx": primary, "tushare": dup}, ["instrument", "datetime"])
+    with pytest.raises(GateContractError, match="duplicate keys in primary"):
+        gate.merge({"tdx": pd.concat([primary, primary]), "tushare": secondary}, ["instrument", "datetime"])
+    empty = primary.iloc[0:0]
+    report = gate.merge({"tdx": empty, "tushare": secondary}, ["instrument", "datetime"])
+    assert not report.accepted
+    assert any("primary frame is empty" in e for e in report.errors)

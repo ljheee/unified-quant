@@ -270,6 +270,7 @@ def _run_full_chain(tmp_path: Path):
     from tests.test_research_chain_phase2 import (
         _dataset_quality_decision,
         _factor_quality_decision,
+        _label_quality_decision,
         _preprocessing_quality_decision,
         _prepare_dataset_store,
     )
@@ -281,6 +282,7 @@ def _run_full_chain(tmp_path: Path):
         run_decision,
     )
     from tests.test_research_chain_phase4 import (
+        _config_decision,
         _definition_decision,
         _publish_market_inputs,
         _replace_backtest_config,
@@ -317,6 +319,7 @@ def _run_full_chain(tmp_path: Path):
         runner_identity=RUNNER,
         quality_decisions={
             "factor_partition": _factor_quality_decision(factor_manifest),
+            "label_set": _label_quality_decision(),
             "feature_preprocessing": _preprocessing_quality_decision(),
             "model_dataset": _dataset_quality_decision(),
             "qlib_dataset_export": export_decision(),
@@ -326,6 +329,7 @@ def _run_full_chain(tmp_path: Path):
             "prediction_set": prediction_decision(),
             "portfolio_definition": _definition_decision,
             "target_weights": _weights_decision(),
+            "backtest_config": _config_decision(),
             "backtest_result": _result_decision(),
             "research_run_result": _research_result_decision,
         },

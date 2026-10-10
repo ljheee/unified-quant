@@ -24,7 +24,7 @@ def test_exchange_formula_golden_cases():
         derivation = deriver.derive("600000.XSHG", events, pd.to_datetime(["2026-08-20", "2026-08-21"]), pre_close)
         multiplier = float(derivation.frame.iloc[0]["adj_factor"])
         assert multiplier == pytest.approx(case["expected_backward_multiplier"], abs=case["tolerance_abs"])
-        ex_right = case["pre_close"] / multiplier
+        ex_right = case["pre_close"] * multiplier
         assert ex_right == pytest.approx(case["expected_ex_right_price"], abs=case["tolerance_abs"])
 
 
@@ -55,9 +55,42 @@ def test_official_exchange_reference_prices():
             pre_close,
         )
         pre_ex_multiplier = float(derivation.frame.iloc[0]["adj_factor"])
-        calculated_ex_price = inputs["pre_close"] / pre_ex_multiplier
+        calculated_ex_price = inputs["pre_close"] * pre_ex_multiplier
         assert calculated_ex_price == pytest.approx(
             case["expected_ex_right_price"], abs=case["tolerance_abs"]
+        )
+
+
+def test_multiply_consumption_yields_zero_economic_return_across_ex_date():
+    # Regression for cr.md C1: divide-basis factor consumed with multiply made a
+    # pure dividend event look like a -8.8% crash. With multiply-basis factors
+    # (exchange_v2), adjusted_close = close * adj_factor must be continuous.
+    events = pd.DataFrame([event(day=21, cash=5.0)])  # 10派5 -> cash 0.5/share
+    pre_close = pd.Series([11.0], index=pd.to_datetime(["2026-08-21"]))
+    derivation = XdxrAdjustmentDeriver().derive(
+        "600000.XSHG", events, pd.to_datetime(["2026-08-20", "2026-08-21"]), pre_close
+    )
+    factors = derivation.frame["adj_factor"].tolist()
+    assert factors[1] == pytest.approx(1.0)
+    closes = [11.0, 10.5]  # ex-date close equals the ex-right reference price
+    adjusted = [close * factor for close, factor in zip(closes, factors)]
+    assert adjusted[0] == pytest.approx(adjusted[1], abs=1e-12)
+    assert adjusted[1] / adjusted[0] - 1.0 == pytest.approx(0.0, abs=1e-12)
+
+
+def test_deriver_rejects_non_finite_event_fields_and_pre_close():
+    events = pd.DataFrame([event(day=21, cash=float("nan"))])
+    pre_close = pd.Series([11.0], index=pd.to_datetime(["2026-08-21"]))
+    with pytest.raises(ValueError, match="non-finite"):
+        XdxrAdjustmentDeriver().derive(
+            "600000.XSHG", events, pd.to_datetime(["2026-08-20", "2026-08-21"]), pre_close
+        )
+    with pytest.raises(ValueError, match="positive numeric"):
+        XdxrAdjustmentDeriver().derive(
+            "600000.XSHG",
+            pd.DataFrame([event(day=21, cash=5.0)]),
+            pd.to_datetime(["2026-08-20", "2026-08-21"]),
+            pd.Series([float("nan")], index=pd.to_datetime(["2026-08-21"])),
         )
 
 
@@ -92,7 +125,7 @@ def test_snapshot_persistence_checksums_visibility_and_typed_reader(tmp_path):
     generation_id = directory.name
     reader = AdjustmentSnapshotReader(tmp_path)
     manifest = reader.read_manifest("600000.XSHG", generation_id)
-    assert manifest["formula_version"] == "adj_factor.exchange_v1"
+    assert manifest["formula_version"] == "adj_factor.exchange_v2"
     assert list(reader.read_events("600000.XSHG", generation_id).columns)[0] == "year"
     assert reader.read_effective_dates("600000.XSHG", generation_id).shape[0] == 2
     selected = reader.select_visible_generation(

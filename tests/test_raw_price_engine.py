@@ -79,3 +79,23 @@ def test_raw_price_factors_do_not_consume_adjustment_data():
     right = calculate_raw_price_factors(polluted)
     pd.testing.assert_frame_equal(left, right)
     assert "adj_factor" not in right.columns
+
+
+def test_logical_fingerprint_distinguishes_nan_from_zero_and_infinity():
+    # cr.md H11 regression: NaN used to be masked to -0.0 before hashing, so
+    # missing values collided with genuine -0.0; the null mask is now hashed
+    # independently and infinity stays distinct from a true NaN.
+    def frame_with(value):
+        return pd.DataFrame({
+            "instrument": ["A"],
+            "datetime": [pd.Timestamp(2026, 8, 21)],
+            "factor": [value],
+        })
+
+    negative_zero = logical_fingerprint(frame_with(-0.0))
+    missing = logical_fingerprint(frame_with(float("nan")))
+    infinite = logical_fingerprint(frame_with(float("inf")))
+    assert negative_zero != missing
+    assert negative_zero != infinite
+    assert missing != infinite
+    assert negative_zero == logical_fingerprint(frame_with(-0.0))

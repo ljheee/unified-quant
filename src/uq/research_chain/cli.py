@@ -150,6 +150,13 @@ class _MappingDecisionProvider:
         decision = self.decisions.get(output_family)
         if decision is None:
             raise ContractError(f"missing research chain quality decision: {output_family}")
+        # cr.md H6: provider mode stores per-family callables in this mapping;
+        # invoke them with the resolved subject instead of dict()-ing the
+        # callable (aligned with Runner._decision).
+        if callable(decision):
+            decision = decision(subject_generation_id)
+        if not isinstance(decision, Mapping):
+            raise ContractError(f"invalid research chain quality decision: {output_family}")
         return decision
 
 

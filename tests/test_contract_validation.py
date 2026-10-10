@@ -84,7 +84,10 @@ def test_owner_merge_and_structured_quality_report():
     contract = load_dataset_contract(ROOT / "config/datasets/bars_daily.v2.yaml", schema)
     rows = production_rows()
     rows["adj_factor"] = [1.0, 1.0]
-    tushare_rows = rows[["instrument", "session_date", "adj_factor"]]
+    # The contract cross-validates close/volume against tushare, so the
+    # comparator frame must carry those fields (production fetches full
+    # fields); the gate now fails closed on a comparator that lacks them.
+    tushare_rows = rows[["instrument", "session_date", "adj_factor", "close", "volume"]]
     tdx = DeterministicDemoAdapter("tdx", rows)
     tushare = DeterministicDemoAdapter("tushare", rows)
     gate = CrossSourceGate(contract.primary_source, contract.cross_validation, contract.owners)

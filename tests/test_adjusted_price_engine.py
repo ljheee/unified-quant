@@ -50,3 +50,16 @@ def test_raw_close_substitution_detected():
     adjusted=calculate_adjusted_factors(bars,adjustment_snapshot_ids=[SNAPSHOT,SNAPSHOT],effective_date_table_checksums=[TABLE,TABLE])
     with pytest.raises(ContractError,match="raw close substituted"):
         assert_not_raw_close(raw,adjusted)
+
+
+def test_nan_close_is_rejected_before_return_calculation():
+    # cr.md H7 regression: a NaN close used to pass validation and get
+    # pad-filled inside pct_change, fabricating returns across the gap.
+    bad = frame()
+    bad.loc[5, "close"] = float("nan")
+    with pytest.raises(ContractError, match="null values"):
+        calculate_adjusted_factors(
+            bad,
+            adjustment_snapshot_ids=[SNAPSHOT, SNAPSHOT],
+            effective_date_table_checksums=[TABLE, TABLE],
+        )

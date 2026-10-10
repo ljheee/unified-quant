@@ -176,7 +176,7 @@
     },
     {
       "path": "src/uq/contracts/model_layer.py",
-      "sha256": "f744d285048da0b8ac1fe899432b18b744408cb36ea6a04d100fecdfa86f1afd"
+      "sha256": "7c5be87bc722bd8a19e27eca713127a0016d8219ac0238c6e4b8bd1a58bcef09"
     },
     {
       "path": "src/uq/research_chain/contracts.py",
@@ -188,7 +188,7 @@
     },
     {
       "path": "src/uq/research_chain/runner.py",
-      "sha256": "7218c70b29a44718793ea5ea80588b97f4f3b1825df7d600f7a1eddf09a4f238"
+      "sha256": "727247626eed0544ba36267d7e65a180ca1acc3c5e85846f8ad0b0ed0f8c9cc2"
     },
     {
       "path": "tests/test_paper_execution_research_integration_phase0.py",

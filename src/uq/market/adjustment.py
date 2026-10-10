@@ -3,12 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 from datetime import date
 
 import pandas as pd
 
 
-DERIVATION_VERSION = "adj_factor.exchange_v1"
+DERIVATION_VERSION = "adj_factor.exchange_v2"
 
 
 @dataclass(frozen=True)
@@ -21,9 +22,19 @@ class AdjustmentDerivation:
 
 
 class XdxrAdjustmentDeriver:
-    """Derive backward cumulative adjustment factors from exchange XDXR events.
+    """Derive backward (pre-adjusted) cumulative factors from exchange XDXR events.
 
-    The multiplier uses the exchange-style ex-right reference price:
+    Semantics (``adj_factor.exchange_v2``): factors are **multiply-basis** and
+    anchored at ``1.0`` on the latest session. ``adjusted_close = close *
+    adj_factor`` yields a return-continuous series: an event with ex-date ``E``
+    multiplies the factor of every session strictly before ``E`` by
+    ``ex_right_price / pre_close`` (< 1), so the pre-event adjusted close equals
+    the ex-date adjusted close and the measured return across the event is the
+    true economic return. This matches the Tushare cumulative-factor convention
+    and the downstream consumers (``factors/adjusted_price.py``,
+    ``models/labels.py``), which multiply.
+
+    The exchange-style ex-right reference price is:
 
     ``(pre_close - cash_per_share + rights_price * rights_ratio)
        / (1 + bonus_ratio + rights_ratio)``.
@@ -108,19 +119,25 @@ class XdxrAdjustmentDeriver:
     def _event_multiplier(event: pd.Series, pre_close: float | None = None) -> float:
         if int(event.get("category", -1)) != 1:
             return 1.0
-        cash = float(event.get("fenhong") or 0.0) / 10.0
-        bonus = float(event.get("songzhuangu") or 0.0) / 10.0
-        rights = float(event.get("peigu") or 0.0) / 10.0
-        rights_price = float(event.get("peigujia") or 0.0)
+        fields = {
+            name: float(event.get(name) or 0.0)
+            for name in ("fenhong", "songzhuangu", "peigu", "peigujia")
+        }
+        if not all(math.isfinite(value) for value in fields.values()):
+            raise ValueError("xdxr event contains non-finite amount fields")
+        cash = fields["fenhong"] / 10.0
+        bonus = fields["songzhuangu"] / 10.0
+        rights = fields["peigu"] / 10.0
+        rights_price = fields["peigujia"]
         denominator = 1.0 + bonus + rights
-        if pre_close is None or pre_close <= 0:
+        if pre_close is None or not math.isfinite(pre_close) or pre_close <= 0:
             raise ValueError("exchange formula requires positive pre_close")
         if denominator <= 0:
             raise ValueError("invalid xdxr denominator")
         ex_right_price = (float(pre_close) - cash + rights_price * rights) / denominator
-        if ex_right_price <= 0:
+        if not math.isfinite(ex_right_price) or ex_right_price <= 0:
             raise ValueError("non-positive ex-right reference price")
-        return float(pre_close) / ex_right_price
+        return ex_right_price / float(pre_close)
 
     @staticmethod
     def _pre_close_by_date(pre_close: pd.Series | None) -> dict[pd.Timestamp, float]:

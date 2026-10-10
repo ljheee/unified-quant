@@ -157,12 +157,17 @@ class PaperOrderPlanner:
 
         available_cash = float(opening_cash)
         for row in (item for item in ordered if item["side"] == "sell"):
+            # cr.md H4: zero-quantity rows trade nothing, so the minimum
+            # commission inside event_fee must not distort the cash simulation
+            # (aligned with engine.py, which charges fees only when filled > 0).
+            if int(row["requested_quantity"]) <= 0:
+                continue
             gross = int(row["requested_quantity"]) * float(row["limit_price"])
             available_cash += gross - event_fee("sell", gross)
         buys = [row for row in ordered if row["side"] == "buy"]
         for row in buys:
             gross = int(row["requested_quantity"]) * float(row["limit_price"])
-            fee = event_fee("buy", gross)
+            fee = event_fee("buy", gross) if gross > 0 else 0.0
             if gross + fee > available_cash:
                 if config["quantity_policy"]["insufficient_cash_policy"] == "reject":
                     raise ContractError(f"insufficient cash for buy {row['instrument']}")

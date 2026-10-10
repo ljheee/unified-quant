@@ -220,9 +220,13 @@ def _validate_paper_execution_transition_mode(payload: dict[str, Any]) -> None:
             raise ContractError("continuation paper transition requires input state binding")
         if payload.get("initial_state_provenance_sha256") is not None:
             raise ContractError("continuation paper transition must not carry initial state")
-    elif not isinstance(payload.get("input_state_binding"), dict):
-        if payload.get("initial_state_provenance_sha256") is None:
-            raise ContractError("initial paper transition requires initial state provenance")
+        return
+    # cr.md H13: an initial transition must always carry lineage for the first
+    # state; carrying an input state binding used to waive the provenance check.
+    if payload.get("initial_state_provenance_sha256") is None:
+        raise ContractError("initial paper transition requires initial state provenance")
+    if isinstance(payload.get("input_state_binding"), dict):
+        raise ContractError("initial paper transition must not bind an input state")
 
 
 def validate_quality_decision_owning_report(report: Mapping[str, Any]) -> str:

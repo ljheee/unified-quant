@@ -238,6 +238,8 @@ def _metrics(
     definition: Mapping[str, Any],
     industry_mapping: Mapping[str, str],
     previous_weights: Mapping[str, float],
+    *,
+    require_industry_membership: bool = False,
 ) -> dict[str, float]:
     weights = dict(zip(frame["instrument"].astype(str), frame["weight"].astype(float), strict=True))
     gross = sum(value for value in weights.values() if value > 0.0)
@@ -246,11 +248,24 @@ def _metrics(
         abs(weights.get(key, 0.0) - previous_weights.get(key, 0.0))
         for key in all_instruments
     )
+    # industry_weight is aggregated from the actual target weights, never from
+    # caller-supplied per-industry numbers: industry_mapping maps instrument ->
+    # industry name. When an industry_weight rule is being evaluated, any
+    # positively weighted instrument without membership fails closed (cr.md H3);
+    # otherwise the metric is informational and unknown memberships are skipped.
+    industry_totals: dict[str, float] = {}
+    for instrument, weight in weights.items():
+        industry = industry_mapping.get(instrument)
+        if industry is None:
+            if require_industry_membership and weight > _WEIGHT_TOLERANCE:
+                raise ContractError(f"missing industry membership for {instrument}")
+            continue
+        industry_totals[industry] = industry_totals.get(industry, 0.0) + weight
     return {
         "gross_stock_exposure": round(gross, 12),
         "max_single_weight": round(max(weights.values(), default=0.0), 12),
         "instrument_count": float(len(weights)),
-        "industry_weight": round(max(industry_mapping.values(), default=0.0), 12),
+        "industry_weight": round(max(industry_totals.values(), default=0.0), 12),
         "turnover": round(turnover, 12),
         "cash_reserve": round(max(0.0, 1.0 - gross), 12),
     }
@@ -540,7 +555,11 @@ class RiskEngine:
         mapping = dict(industry_mapping or {})
         previous = dict(previous_target_weights or {})
         rules = sorted(policy["rules"], key=lambda rule: (rule["priority"], rule["rule_id"]))
-        known_metrics = _metrics(target_weights_frame, definition, mapping, previous)
+        industry_rule_active = any(rule["metric"] == "industry_weight" for rule in rules)
+        known_metrics = _metrics(
+            target_weights_frame, definition, mapping, previous,
+            require_industry_membership=industry_rule_active,
+        )
         findings: list[dict[str, Any]] = []
         for rule in rules:
             if rule["rule_scope"] != "portfolio":

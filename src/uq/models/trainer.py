@@ -30,12 +30,26 @@ class ModelTrainer:
         dataset_frame: pd.DataFrame,
         feature_columns: list[str],
         label_column: str,
+        train_period: tuple[str, str] | None = None,
     ) -> tuple[dict[str, Any], bytes]:
         ModelContractLoader.validate("model_definition", definition)
         if definition.get("status") != "reviewed":
             raise ContractError("training requires an externally reviewed model definition")
         if definition["algorithm"] != "regularized_linear":
             raise ContractError(f"trainer only supports regularized_linear, got {definition['algorithm']}")
+
+        # cr.md C2: the dataset frame spans every split with labels attached, so
+        # the training window must be declared explicitly; fitting on the full
+        # frame leaks validation/test labels into the artifact.
+        if train_period is None:
+            raise ContractError("training requires an explicit train_period (start_date, end_date) from the dataset split policy")
+        start_date, end_date = train_period
+        if start_date > end_date:
+            raise ContractError("train_period start exceeds end")
+        if "datetime" not in dataset_frame.columns:
+            raise ContractError("split-aware training requires a datetime column in the dataset frame")
+        row_dates = pd.to_datetime(dataset_frame["datetime"]).dt.strftime("%Y-%m-%d")
+        dataset_frame = dataset_frame.loc[(row_dates >= start_date) & (row_dates <= end_date)]
 
         seed = definition["seed_policy"]["base_seed"]
         alpha = float(definition["hyperparameters"].get("alpha", 1.0))

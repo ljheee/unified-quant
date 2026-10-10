@@ -70,7 +70,7 @@ class AdjustmentSnapshotStore:
         unsigned = {
             "snapshot_version": 1,
             "instrument": instrument,
-            "formula_version": "adj_factor.exchange_v1",
+            "formula_version": "adj_factor.exchange_v2",
             "visibility_time": visibility_time.isoformat(),
             "event_artifact": {"path": "events.csv", "checksum_sha256": event_checksum},
             "effective_date_table": {"path": "effective_dates.csv", "checksum_sha256": effective_checksum},

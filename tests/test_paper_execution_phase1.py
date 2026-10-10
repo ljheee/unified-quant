@@ -278,19 +278,35 @@ def test_zero_quantity_target_residual_is_preserved(tmp_path: Path) -> None:
     assert frame["reason"].eq("cash_residual").all()
 
 
-def test_tampered_order_plan_payload_fails_read(tmp_path: Path) -> None:
-    config, _ = _publish_config(tmp_path)
-    store = OrderPlanStore(tmp_path)
-    frame, residual = PaperOrderPlanner().plan(
-        config, _target(), None, _prices(), opening_cash=config["initial_state"]["cash"]
-    )
-    generation = config["generation_id"]
-    unsigned = _unsigned("order_plan_v1", [
-        "target_weights_binding_resolved", "row_count_and_keys_valid",
-        "cash_feasible_planning", "t1_quantity_valid",
-    ], generation)
-    decision = _decision_for_review(unsigned, "order_plan_v1", generation)
-    manifest = {
+def test_zero_quantity_rows_do_not_incur_minimum_commission(tmp_path: Path) -> None:
+    # cr.md H4 regression: the planner cash simulation charged event_fee's
+    # minimum commission on zero-quantity rows, so a 5.0 phantom fee on an
+    # odd-lot sell row clipped a feasible buy (engine.py only charges fees
+    # when filled > 0).
+    config = _config()
+    config["initial_state"]["cash"] = 105.0
+    config["initial_state"]["holdings"] = [{
+        "instrument": "600000.XSHG", "quantity": 50, "average_cost": 1.0,
+        "buy_locked_quantity": 0, "sellable_quantity": 50,
+    }]
+    config = _recompute(config)
+    prices = {
+        "600000.XSHG": {"close": 1.0},
+        "000001.XSHE": {"close": 1.0},
+    }
+    target = pd.DataFrame({"instrument": ["000001.XSHE"], "weight": [1.0]})
+    frame, _ = PaperOrderPlanner().plan(config, target, None, prices, opening_cash=105.0)
+    sell = frame[frame["side"] == "sell"].iloc[0]
+    assert sell["requested_quantity"] == 0  # odd-lot residual, nothing tradeable
+    buy = frame[frame["side"] == "buy"].iloc[0]
+    # decision_nav 155 -> target 155 shares -> one 100 lot at gross 100 + fee 5
+    # is exactly affordable with 105 cash once the phantom fee is gone.
+    assert buy["requested_quantity"] == 100
+    assert buy["reason"] == "target_rebalance"
+
+
+def _order_plan_manifest(config: dict, frame: pd.DataFrame, residual: list) -> dict:
+    return {
         "contract_version": 1, "schema_version": "1.0.0", "execution_id": config["execution_id"],
         "state_mode": config["state_mode"], "execution_config_generation_id": config["generation_id"],
         "execution_date": config["execution_date"], "decision_date": config["decision_date"],
@@ -311,9 +327,60 @@ def test_tampered_order_plan_payload_fails_read(tmp_path: Path) -> None:
         "quality_report_checksum_sha256": "0" * 64,
         "manifest_digest_sha256": "0" * 64, "generation_id": "0" * 64,
     }
+
+
+def test_tampered_order_plan_payload_fails_read(tmp_path: Path) -> None:
+    config, _ = _publish_config(tmp_path)
+    store = OrderPlanStore(tmp_path)
+    frame, residual = PaperOrderPlanner().plan(
+        config, _target(), None, _prices(), opening_cash=config["initial_state"]["cash"]
+    )
+    generation = config["generation_id"]
+    unsigned = _unsigned("order_plan_v1", [
+        "target_weights_binding_resolved", "row_count_and_keys_valid",
+        "cash_feasible_planning", "t1_quantity_valid",
+    ], generation)
+    decision = _decision_for_review(unsigned, "order_plan_v1", generation)
+    manifest = _order_plan_manifest(config, frame, residual)
     partition = store.publish(manifest, frame, quality_decision=decision, risk_decision=_decision(config))
     generation_id = json.loads((partition / "manifest.json").read_text())["generation_id"]
     data_path = partition / "data.parquet"
     data_path.write_bytes(data_path.read_bytes()[:-1])
     with pytest.raises(ContractError, match="payload checksum"):
         store.read(generation_id)
+
+
+def test_initial_transition_cannot_waive_provenance_with_input_binding(tmp_path: Path) -> None:
+    # cr.md H13: an initial transition carrying an input state binding used to
+    # skip the provenance requirement, letting a first artifact publish with no lineage.
+    from uq.contracts.model_layer import paper_execution_identities
+
+    config, _ = _publish_config(tmp_path)
+    frame, residual = PaperOrderPlanner().plan(
+        config, _target(), None, _prices(), opening_cash=config["initial_state"]["cash"]
+    )
+    manifest = _order_plan_manifest(config, frame, residual)
+    manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
+        manifest, schema_name="order_plan"
+    )
+    ModelContractLoader.validate("order_plan", dict(manifest))
+
+    fake_binding = {
+        "family": "paper_portfolio_state_v1",
+        "generation_id": "8" * 64,
+        "manifest_digest_sha256": "9" * 64,
+        "as_of_date": "2026-08-20",
+    }
+    waived = {**manifest, "input_state_binding": fake_binding, "initial_state_provenance_sha256": None}
+    waived["generation_id"], waived["manifest_digest_sha256"] = paper_execution_identities(
+        waived, schema_name="order_plan"
+    )
+    with pytest.raises(ContractError, match="initial paper transition requires initial state provenance"):
+        ModelContractLoader.validate("order_plan", dict(waived))
+
+    bound = {**manifest, "input_state_binding": fake_binding}
+    bound["generation_id"], bound["manifest_digest_sha256"] = paper_execution_identities(
+        bound, schema_name="order_plan"
+    )
+    with pytest.raises(ContractError, match="initial paper transition must not bind an input state"):
+        ModelContractLoader.validate("order_plan", dict(bound))

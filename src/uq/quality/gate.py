@@ -78,11 +78,23 @@ class CrossSourceGate:
             for source, frame in frames.items()
             if source != self.primary_source
         }
+        # cr.md H2: duplicate keys make reindex() raise a bare ValueError
+        # downstream, escaping the ContractError taxonomy; reject them here.
+        for source, frame in indexed.items():
+            if frame.index.has_duplicates:
+                raise ContractError(f"duplicate keys in source frame: {source}")
         accepted = primary.sort_values(key).reset_index(drop=True)
         primary_indexed = accepted.set_index(key)
+        if primary_indexed.index.has_duplicates:
+            raise ContractError(f"duplicate keys in primary source: {self.primary_source}")
         conflicts: list[dict[str, Any]] = []
         errors: list[str] = []
         coverage: dict[str, FieldCoverage] = {}
+        # cr.md H2: an empty primary validates vacuously and would publish an
+        # empty partition; refuse it at the gate (daily.py adds its own
+        # instrument-context message on top of this).
+        if accepted.empty:
+            errors.append("primary frame is empty; refusing an empty publication")
         input_fingerprints = {
             source: hashlib.sha256(frame.to_csv(index=True).encode()).hexdigest()
             for source, frame in frames.items()
@@ -109,15 +121,29 @@ class CrossSourceGate:
 
         for field_name, rules in self.cross_validation.items():
             comparator = str(rules.get("compare_with", ""))
-            if field_name not in accepted.columns or comparator not in indexed or field_name not in indexed[comparator].columns:
+            if field_name not in accepted.columns:
+                continue  # rule targets a field the primary does not carry
+            # cr.md H2: a configured comparison that cannot run must not be
+            # skipped silently — the contract's validation intent is unmet.
+            if comparator not in indexed:
+                errors.append(f"cross-validation comparator {comparator} unavailable for {field_name}")
+                continue
+            if field_name not in indexed[comparator].columns:
+                errors.append(f"cross-validation comparator {comparator} lacks field {field_name}")
                 continue
             secondary = indexed[comparator][field_name].reindex(primary_indexed.index)
             primary_values = primary_indexed[field_name]
             valid = secondary.notna() & primary_values.notna()
             absolute = (primary_values - secondary).abs()
-            relative = absolute / primary_values.abs().replace(0, np.nan)
             tolerance_pct = float(rules.get("max_abs_diff_pct", rules.get("max_rel_diff_pct", 0)))
-            mismatch = valid & ((relative > tolerance_pct) if "max_rel_diff_pct" in rules else (absolute > primary_values.abs() * tolerance_pct))
+            if "max_rel_diff_pct" in rules:
+                # cr.md H2: a zero primary makes the relative difference NaN and
+                # used to excuse any nonzero comparator value; zero-vs-nonzero
+                # is an unbounded relative divergence and must conflict.
+                relative = absolute / primary_values.abs().replace(0, np.nan)
+                mismatch = valid & ((relative > tolerance_pct) | ((primary_values.abs() == 0) & (absolute > 0)))
+            else:
+                mismatch = valid & (absolute > primary_values.abs() * tolerance_pct)
             for index_value in primary_indexed.index[mismatch]:
                 key_value = index_value if isinstance(index_value, tuple) else (index_value,)
                 conflicts.append({
@@ -129,7 +155,16 @@ class CrossSourceGate:
                 })
             compared_rows = int(valid.sum())
             total_rows = len(primary_indexed)
-            meets_coverage = total_rows > 0 and compared_rows / total_rows >= self.minimum_coverage
+            coverage_ratio = compared_rows / total_rows if total_rows > 0 else 0.0
+            meets_coverage = total_rows > 0 and coverage_ratio >= self.minimum_coverage
+            # cr.md H2: a rule that compared zero rows validated nothing, and a
+            # declared minimum_coverage must actually reject under-coverage.
+            if total_rows > 0 and compared_rows == 0:
+                errors.append(f"cross-validation for {field_name} compared zero rows")
+            elif self.minimum_coverage > 0 and not meets_coverage:
+                errors.append(
+                    f"cross-validation coverage for {field_name} is {coverage_ratio:.4f}, below minimum {self.minimum_coverage}"
+                )
             coverage[field_name] = FieldCoverage(
                 source=self.primary_source, owner=None,
                 validated_by=[comparator] if meets_coverage and not mismatch.any() else [],

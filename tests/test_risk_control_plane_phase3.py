@@ -227,6 +227,25 @@ def test_risk_state_transition_is_deterministic():
     GOLDEN.write_text(json.dumps(first, sort_keys=True, indent=2) + "\n")
 
 
+def test_prior_payload_without_signed_manifest_is_rejected():
+    # Regression for cr.md H8: prior_payload used to be consumed with no
+    # integrity check whenever prior_state was None, so a forged cooldown could
+    # suppress loss-control actions.
+    forged = {
+        "active": False,
+        "consecutive_trigger_days": 0,
+        "last_trigger_date": None,
+        "cooldown_until_date": "2099-01-01",
+        "calendar_binding": CALENDAR,
+        "last_event_sequence_number": 0,
+    }
+    with pytest.raises(ContractError, match="provided together"):
+        _evaluate(
+            [_observation("2026-01-05", 0.25, "2026-01-05T16:00:00+00:00")],
+            prior_payload=forged,
+        )
+
+
 def test_risk_hysteresis_and_cooldown_are_exact():
     observations = [
         _observation("2026-01-05", 0.25, "2026-01-05T16:00:00+00:00"),

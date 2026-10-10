@@ -195,7 +195,12 @@ def verify_risk_review_decision(
         raise ContractError("risk review subject manifest digest mismatch")
     if payload["subject_content_sha256"] != expected_subject_content_sha256:
         raise ContractError("risk review subject content digest mismatch")
-    if payload["review_status"] == "approved" and payload["errors"]:
+    # Governance gates must fail closed: a well-formed, validly signed review
+    # that is anything other than an approval (e.g. "rejected") is a refusal,
+    # not an approval. Spec 8A failure taxonomy requires rejected -> fail.
+    if payload["review_status"] != "approved":
+        raise ContractError("risk review decision is not approved")
+    if payload["errors"]:
         raise ContractError("approved risk review contains errors")
     signed = {key: payload[key] for key in _SIGNED_REVIEW_FIELDS}
     _verify_risk_signature(

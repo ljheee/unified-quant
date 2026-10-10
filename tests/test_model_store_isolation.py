@@ -113,6 +113,7 @@ def _train_and_publish_artifact(root: Path) -> tuple[ArtifactStore, str, str]:
     manifest, artifact_bytes = ModelTrainer(root).train(
         definition=definition, dataset_frame=frame,
         feature_columns=["feature"], label_column="label",
+        train_period=("2026-01-01", "2026-12-31"),
     )
     candidate = {**manifest, "generation_id": DIGEST, "manifest_digest_sha256": DIGEST}
     generation, _ = model_manifest_identities(

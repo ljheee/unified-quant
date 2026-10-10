@@ -44,7 +44,7 @@ def test_adjustment_derivation_binds_snapshot_and_effective_dates():
     )
     assert derivation.snapshot_id
     assert derivation.effective_date_table_checksum
-    assert derivation.frame.iloc[0]["adj_factor"] == pytest.approx(2.0)
+    assert derivation.frame.iloc[0]["adj_factor"] == pytest.approx(0.5)
     assert derivation.frame.iloc[-1]["adj_factor"] == pytest.approx(1.0)
 
 

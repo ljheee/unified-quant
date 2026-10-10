@@ -220,6 +220,7 @@ class DatasetStageAdapter:
         runner_identity: Mapping[str, str],
         quality_decision: Mapping[str, Any],
         preprocessing_quality_decision: Mapping[str, Any],
+        label_quality_decision: Mapping[str, Any],
         created_at: str | None = None,
     ) -> DatasetStageResult:
         template = plan.request.get("dataset_policy_template")
@@ -265,6 +266,17 @@ class DatasetStageAdapter:
             raise ContractError("label binding manifest digest mismatch")
         if label_manifest["data_checksum_sha256"] != label_binding.data_checksum_sha256:
             raise ContractError("label binding data checksum mismatch")
+        # cr.md H5: the label-set review decision must be retrieved and verified
+        # at execute time (aligned with the factor stage), not trusted from
+        # resolve-time envelope checks alone.
+        label_report, _ = bind_reviewed_quality_decision(
+            dict(label_quality_decision),
+            binding_type="label_set_v1",
+            subject_generation_id=label_manifest["generation_id"],
+            subject_content_sha256=label_manifest["generation_id"],
+        )
+        if label_report["status"] not in {"passed", "warning"}:
+            raise ContractError("label set quality decision is not approved")
         preprocessing = self.preprocessing_store.read_manifest(preprocessing_binding.generation_id)
         if preprocessing["manifest_digest_sha256"] != preprocessing_binding.manifest_digest_sha256:
             raise ContractError("preprocessing binding manifest digest mismatch")
@@ -689,6 +701,7 @@ class BacktestStageAdapter:
         *,
         portfolio_stage_result: PortfolioStageResult,
         quality_decision: Mapping[str, Any],
+        config_quality_decision: Mapping[str, Any],
         runner_identity: Mapping[str, str],
         created_at: str | None = None,
     ) -> BacktestStageResult:
@@ -700,6 +713,17 @@ class BacktestStageAdapter:
         )
         if config["manifest_digest_sha256"] != config_binding.manifest_digest_sha256:
             raise ContractError("backtest config manifest digest mismatch")
+        # cr.md H5: the backtest-config review decision must be retrieved and
+        # verified at execute time (aligned with the factor stage), not trusted
+        # from resolve-time envelope checks alone.
+        config_report, _ = bind_reviewed_quality_decision(
+            dict(config_quality_decision),
+            binding_type="backtest_config_v1",
+            subject_generation_id=config["generation_id"],
+            subject_content_sha256=config["generation_id"],
+        )
+        if config_report["status"] not in {"passed", "warning"}:
+            raise ContractError("backtest config quality decision is not approved")
         state = self.run_store.read_state(
             plan.request["request_content_generation_id"],
             plan.request["run_id"],

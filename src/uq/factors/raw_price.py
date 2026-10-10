@@ -47,7 +47,11 @@ def calculate_raw_price_factors(frame: pd.DataFrame) -> pd.DataFrame:
 
 def logical_fingerprint(frame: pd.DataFrame, *, tolerance: float = 1e-12) -> str:
     columns = [column for column in frame.columns if column not in {"instrument", "datetime"}]
-    normalized = frame[columns].round(12).fillna(-0.0).replace([np.inf, -np.inf], np.nan).round(12)
+    # cr.md H11: masking NaN to -0.0 used to make missing values collide with
+    # genuine -0.0 in the fingerprint; hash the null mask independently and
+    # keep NaN distinct from both -0.0 and masked infinities.
+    null_mask = frame[columns].isna().to_numpy(dtype=bool)
+    normalized = frame[columns].round(12).replace([np.inf, -np.inf], np.nan).round(12)
     keys = frame[["instrument", "datetime"]].to_numpy()
     values = normalized.to_numpy()
     rows = []
@@ -65,5 +69,5 @@ def logical_fingerprint(frame: pd.DataFrame, *, tolerance: float = 1e-12) -> str
     for key_row, value_row in zip(keys, values):
         timestamp = pd.Timestamp(key_row[1]).isoformat()
         rows.append([str(key_row[0]), timestamp, *[canonical_value(value) for value in value_row]])
-    payload = {"columns": columns, "rows": rows, "tolerance": tolerance}
+    payload = {"columns": columns, "rows": rows, "tolerance": tolerance, "null_mask": null_mask.tolist()}
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()

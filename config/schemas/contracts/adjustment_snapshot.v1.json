@@ -23,7 +23,7 @@
       "pattern": "^[0-9]{6}\\.(XSHG|XSHE)$"
     },
     "formula_version": {
-      "const": "adj_factor.exchange_v1"
+      "const": "adj_factor.exchange_v2"
     },
     "visibility_time": {
       "type": "string",

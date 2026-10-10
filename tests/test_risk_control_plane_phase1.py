@@ -316,6 +316,58 @@ def test_risk_industry_limit_disabled_without_contract():
         _evaluate(policy=policy)
 
 
+def _industry_policy(threshold: float = 0.5) -> dict:
+    policy = _policy()
+    policy.pop("approval_binding")
+    policy["rules"][0]["rule_id"] = "portfolio_industry_limit"
+    policy["rules"][0]["metric"] = "industry_weight"
+    policy["rules"][0]["threshold"] = threshold
+    policy["industry_membership_binding"] = {
+        "family": "industry_membership_v1",
+        "generation_id": "d" * 64,
+        "manifest_digest_sha256": "e" * 64,
+    }
+    review = _policy_review(policy)
+    policy["approval_binding"] = {
+        "family": "risk_review_decision_v1",
+        "review_generation_id": review["generation_id"],
+        "review_manifest_digest_sha256": review["manifest_digest_sha256"],
+    }
+    return _sign_policy(policy)
+
+
+def test_risk_industry_weight_aggregates_actual_frame_weights():
+    # Regression for cr.md H3: industry_weight used to be max() of unverified
+    # caller-supplied values, so a 60% single-industry book could pass a 25%
+    # limit by declaring {"tech": 0.10}.
+    decision = _evaluate(
+        policy=_industry_policy(threshold=0.5),
+        industry_mapping={"A": "tech", "B": "finance"},
+    )
+    industry_finding = next(
+        item for item in decision["findings"] if item["rule_id"] == "portfolio_industry_limit"
+    )
+    assert industry_finding["observed"] == pytest.approx(0.6)
+    assert industry_finding["result"] == "failed"
+
+    decision = _evaluate(
+        policy=_industry_policy(threshold=0.5),
+        industry_mapping={"A": "tech", "B": "tech"},
+    )
+    industry_finding = next(
+        item for item in decision["findings"] if item["rule_id"] == "portfolio_industry_limit"
+    )
+    assert industry_finding["observed"] == pytest.approx(0.95)
+
+
+def test_risk_industry_rule_fails_closed_on_missing_membership():
+    with pytest.raises(ContractError, match="missing industry membership"):
+        _evaluate(
+            policy=_industry_policy(threshold=0.5),
+            industry_mapping={"A": "tech"},
+        )
+
+
 def test_risk_stores_are_immutable_and_readable(tmp_path: Path):
     policy = _policy()
     policy_partition = RiskPolicyStore(tmp_path).publish(policy)

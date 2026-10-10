@@ -161,6 +161,36 @@ def test_risk_review_decision_requires_external_trust_anchor():
         )
 
 
+def test_validly_signed_rejected_review_is_not_an_approval():
+    # Regression for cr.md C3: verify_risk_review_decision used to accept any
+    # well-formed signed review regardless of review_status, so a rejected
+    # decision passed policy/exception/de-risk governance.
+    payload = _family_payload("risk_policy")
+    subject = risk_policy_draft_subject(payload)
+    rejected = build_risk_review_decision(
+        review_type="risk_policy_activation",
+        subject=subject,
+        schema_name="risk_policy",
+        review_status="rejected",
+        reviewer="repository-owner",
+        errors=["formula direction rejected by reviewer"],
+        warnings=[],
+        private_key_pem=REVIEWER_PRIVATE_KEY,
+    )
+    with pytest.raises(ContractError, match="not approved"):
+        verify_risk_review_decision(
+            rejected,
+            expected_review_type="risk_policy_activation",
+            expected_subject_generation_id=subject["generation_id"],
+            expected_subject_manifest_digest_sha256=subject["manifest_digest_sha256"],
+            expected_subject_content_sha256=risk_stable_content_id(
+                subject, schema_name="risk_policy"
+            ),
+        )
+    with pytest.raises(ContractError, match="not approved"):
+        validate_risk_policy_governance(payload, rejected)
+
+
 def test_approved_policy_binds_verified_external_review_decision():
     policy = _family_payload("risk_policy")
     review = build_risk_review_decision(

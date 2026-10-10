@@ -73,6 +73,9 @@ class FactorStore:
             "adjustment_snapshot_id": adjustment_snapshot_id,
             "effective_date_table_checksum": effective_date_table_checksum,
             "upstream_created_at": _iso_datetime(upstream_created_at),
+            # cr.md H10: honor the registry injected into this store instead of
+            # silently rebuilding one from the module path.
+            "registry": self.registry,
         }
         definition = self.registry.get(factor_set, factor_version)
         if definition.factor_set == "alpha360" or not definition.factors:
@@ -226,7 +229,7 @@ class FactorStore:
             factor_version=manifest["factor_version"],
             partition_date=date.fromisoformat(manifest["partition_date"]),
         )
-        return manifest, read_factor_partition(partition)
+        return manifest, read_factor_partition(partition, registry=self.registry)
 
 
 def factor_generation(
@@ -243,9 +246,12 @@ def factor_generation(
     adjustment_snapshot_id: str | None = None,
     effective_date_table_checksum: str | None = None,
     upstream_created_at: str | datetime,
+    registry: FactorRegistry | None = None,
 ) -> str:
     _, data_checksum = serialize_factor_frame(frame)
-    definition = FactorRegistry(Path(__file__).resolve().parents[3]).get(factor_set, factor_version)
+    # cr.md H10: callers with an injected registry must not be re-validated
+    # against a registry rebuilt from this module's location.
+    definition = (registry or FactorRegistry(Path(__file__).resolve().parents[3])).get(factor_set, factor_version)
     unsigned = _manifest_without_identities(
         local_quality=_validate_factor_frame(frame, definition),
         frame=frame,
@@ -513,11 +519,13 @@ def _read_verified_factor_manifest(partition: Path) -> dict[str, Any]:
     return manifest
 
 
-def read_factor_partition(partition: Path) -> pd.DataFrame:
+def read_factor_partition(partition: Path, *, registry: FactorRegistry | None = None) -> pd.DataFrame:
     manifest = _read_verified_factor_manifest(partition)
     data_path = partition / "data.parquet"
 
-    registry = FactorRegistry(Path(__file__).resolve().parents[3])
+    # cr.md H10: same injection point as factor_generation — a store with a
+    # custom registry must read through it, not through the live tree.
+    registry = registry or FactorRegistry(Path(__file__).resolve().parents[3])
     definition = registry.get(
         manifest["factor_set"], manifest["factor_version"]
     )

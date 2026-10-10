@@ -256,6 +256,17 @@ def _preprocessing_quality_decision() -> dict:
     )
 
 
+def _label_quality_decision(status: str = "passed") -> dict:
+    return create_reviewed_quality_decision(
+        binding_type="label_set_v1",
+        policy="reject_all",
+        status=status,
+        checks=[{"name": "key_uniqueness", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
+    )
+
+
 def _dataset_quality_decision() -> dict:
     return create_reviewed_quality_decision(
         binding_type="model_dataset_v1", policy="reject_all", status="passed",
@@ -373,6 +384,7 @@ def test_dataset_stage_binds_reviewed_policy_and_verified_inputs(tmp_path: Path)
         runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
         quality_decision=_dataset_quality_decision(),
         preprocessing_quality_decision=_preprocessing_quality_decision(),
+        label_quality_decision=_label_quality_decision(),
         created_at="2026-01-30T07:00:00+00:00",
     )
     manifest = result.manifest
@@ -398,7 +410,36 @@ def test_dataset_stage_rejects_wrong_reviewed_quality_decision(tmp_path: Path) -
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=wrong_decision,
             preprocessing_quality_decision=_preprocessing_quality_decision(),
+            label_quality_decision=_label_quality_decision(),
         )
+
+
+def test_dataset_stage_verifies_label_decision_at_execute_time(tmp_path: Path) -> None:
+    # cr.md H5 regression: the label-set review decision used to be checked
+    # only as an envelope at resolve time; a rejected or wrong-family decision
+    # must fail the dataset stage at execute time (aligned with the factor stage).
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    kwargs = dict(
+        runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+        quality_decision=_dataset_quality_decision(),
+        preprocessing_quality_decision=_preprocessing_quality_decision(),
+        created_at="2026-01-30T07:00:00+00:00",
+    )
+    from uq.contracts.model_layer import review_signature
+    rejected_unsigned = {
+        "binding_type": "label_set_v1",
+        "checks": [{"name": "key_uniqueness", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        "errors": [], "key_id": "model-quality-reviewer-v1-2026-09", "policy": "reject_all",
+        "producer_code_fingerprint": "0" * 64, "reviewer": "external-model-quality-reviewer-v1",
+        "status": "rejected", "warnings": [],
+    }
+    rejected = {**rejected_unsigned, "report_version": 2, "review_signature_sha256": review_signature(
+        {**rejected_unsigned, "report_version": 2}, private_key_pem=REVIEWER_PRIVATE_KEY
+    )}
+    with pytest.raises(ContractError, match="not approved"):
+        adapter.run(plan, label_quality_decision=rejected, **kwargs)
+    with pytest.raises(ContractError, match="does not match label_set_v1"):
+        adapter.run(plan, label_quality_decision=_preprocessing_quality_decision(), **kwargs)
 
 
 def test_factor_stage_rejects_wrong_reviewed_decision(tmp_path: Path) -> None:
@@ -434,6 +475,7 @@ def test_dataset_stage_rejects_adjusted_price_manifest_mismatch(tmp_path: Path) 
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=_dataset_quality_decision(),
             preprocessing_quality_decision=_preprocessing_quality_decision(),
+            label_quality_decision=_label_quality_decision(),
         )
 
 
@@ -457,6 +499,7 @@ def test_dataset_stage_rejects_universe_manifest_mismatch(tmp_path: Path) -> Non
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=_dataset_quality_decision(),
             preprocessing_quality_decision=_preprocessing_quality_decision(),
+            label_quality_decision=_label_quality_decision(),
         )
 
 
@@ -480,6 +523,7 @@ def test_dataset_stage_rejects_label_manifest_mismatch(tmp_path: Path) -> None:
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=_dataset_quality_decision(),
             preprocessing_quality_decision=_preprocessing_quality_decision(),
+            label_quality_decision=_label_quality_decision(),
         )
 
 
@@ -493,6 +537,7 @@ def test_dataset_stage_rejects_tampered_universe_membership(tmp_path: Path) -> N
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=_dataset_quality_decision(),
             preprocessing_quality_decision=_preprocessing_quality_decision(),
+            label_quality_decision=_label_quality_decision(),
         )
 
 
@@ -513,6 +558,7 @@ def test_dataset_stage_rejects_missing_upstream_binding(tmp_path: Path) -> None:
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=_dataset_quality_decision(),
             preprocessing_quality_decision=_preprocessing_quality_decision(),
+            label_quality_decision=_label_quality_decision(),
         )
 
 
@@ -535,4 +581,5 @@ def test_dataset_stage_rejects_preprocessing_input_mismatch(tmp_path: Path) -> N
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=_dataset_quality_decision(),
             preprocessing_quality_decision=_preprocessing_quality_decision(),
+            label_quality_decision=_label_quality_decision(),
         )

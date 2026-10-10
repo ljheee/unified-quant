@@ -346,6 +346,7 @@ class TestEndToEndPipeline:
             dataset_frame=loaded_ds,
             feature_columns=["volume_ratio_20d"],
             label_column="label",
+            train_period=("2026-01-01", "2026-12-31"),
         )
         artifact_store = ArtifactStore(tmp_path)
         from uq.contracts.model_layer import model_manifest_identities as _mmi
@@ -373,6 +374,7 @@ class TestEndToEndPipeline:
         _, artifact_bytes_2 = trainer.train(
             definition=definition, dataset_frame=loaded_ds,
             feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"),
         )
         assert artifact_bytes == artifact_bytes_2  # same seed → same weights
 

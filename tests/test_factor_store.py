@@ -126,3 +126,44 @@ def test_duplicate_keys_and_empty_rejected(tmp_path):
         store.publish(frame=duplicated, **{
             key: value for key, value in kwargs().items() if key != "frame"
         })
+
+
+def test_store_honors_injected_registry_at_generation_and_read(tmp_path):
+    # cr.md H10 regression: factor_generation/read_factor_partition rebuilt a
+    # registry from the module path, so a store whose injected registry
+    # diverged from the live tree published partitions that failed their own
+    # identity and quality verification.
+    custom_root = tmp_path / "registry"
+    definitions_dir = custom_root / "config" / "factor-sets"
+    definitions_dir.mkdir(parents=True)
+    document = json.loads((ROOT / "config/factor-sets/basic-v1.json").read_text())
+    document["quality_thresholds"]["null_rate_maximum"] = 0.9  # live tree allows only 0.5
+    (definitions_dir / "basic-v1.json").write_text(json.dumps(document))
+    registry = FactorRegistry(custom_root)
+
+    sparse = pd.DataFrame([
+        {"instrument": "600000.XSHG", "datetime": pd.Timestamp(2026, 7, day),
+         "range_ratio_1d": (0.5 if day == 1 else None)}
+        for day in range(1, 5)
+    ])  # null rate 0.75: rejected by the live registry, accepted by the injected one
+    arguments = kwargs()
+    arguments["frame"] = sparse
+    generation = factor_generation(**{**arguments, "registry": registry})
+    definition = registry.get("basic", "1.0.0")
+    QualityReportStore().save(tmp_path, {
+        "report_version": 1,
+        "binding_type": "factor_v1",
+        "bound_generation_id": generation,
+        "policy": "reject_all",
+        "status": "passed",
+        "checks": _validate_factor_frame(sparse, definition)["checks"],
+        "errors": [],
+        "warnings": [],
+    })
+    arguments["quality_report_checksum"] = file_sha256_bytes(
+        (tmp_path / "reports" / "factor_v1" / generation / "report.json").read_bytes()
+    )
+    store = FactorStore(tmp_path, registry)
+    store.publish(**arguments)
+    _, restored = store.read_partition(generation)
+    assert len(restored) == 4

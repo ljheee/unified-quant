@@ -169,6 +169,32 @@ def test_universe_rejects_invalid_calendar_and_traversal(tmp_path):
         UniverseSnapshotStore().save(tmp_path, bad_path, pd.DataFrame({"instrument":["600000.XSHG"]}))
 
 
+def test_universe_path_segments_are_whitelisted(tmp_path):
+    # cr.md H12: universe_id/generation_id are joined into storage paths, so a
+    # crafted segment must be rejected before any path construction.
+    members = pd.DataFrame({"instrument": ["600000.XSHG"]})
+    directory = UniverseSnapshotStore().save(tmp_path, universe_document(), members)
+    generation_id = directory.name
+
+    traversal = universe_document()
+    traversal["universe_id"] = "../escape"
+    with pytest.raises(ContractError, match="unsafe universe identifier"):
+        UniverseSnapshotStore().save(tmp_path, traversal, members)
+
+    dotted = universe_document()
+    dotted["universe_id"] = "research.whitelist"
+    with pytest.raises(ContractError, match="unsafe universe identifier"):
+        UniverseSnapshotStore().save(tmp_path, dotted, members)
+
+    reader = UniverseSnapshotReader(tmp_path)
+    with pytest.raises(ContractError, match="unsafe universe identifier"):
+        reader.read("..", generation_id, requested_valid_from=date(2026, 8, 20))
+    with pytest.raises(ContractError, match="invalid universe generation id"):
+        reader.read("research-whitelist", "../escape", requested_valid_from=date(2026, 8, 20))
+    with pytest.raises(ContractError, match="unsafe universe identifier"):
+        UniverseSnapshotStore(tmp_path).read_manifest(generation_id, universe_id="*")
+
+
 def test_universe_same_root_pit_reuse_is_rejected(tmp_path):
     directory = UniverseSnapshotStore().save(tmp_path, universe_document("2026-08-22"), pd.DataFrame({"instrument":["600000.XSHG"]}))
     reader = UniverseSnapshotReader(tmp_path)

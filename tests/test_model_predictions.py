@@ -56,6 +56,7 @@ class TestPredictionBuilder:
         artifact_manifest, artifact_bytes = ModelTrainer(root).train(
             definition=definition, dataset_frame=frame,
             feature_columns=["feature"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"),
         )
         from uq.contracts.model_layer import model_manifest_identities, sha256_json
         candidate = {**artifact_manifest, "generation_id": DIGEST, "manifest_digest_sha256": DIGEST}

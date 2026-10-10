@@ -30,5 +30,8 @@ def test_cash_only_formula_matches_provider_factor_ratios():
             pd.Series([pre_close], index=pd.to_datetime([event_date])),
         )
         derived = float(derivation.frame.iloc[0]["adj_factor"])
-        expected = provider_factor / prior_factor
+        # exchange_v2 is multiply-basis pre-adjustment: the pre-ex session factor
+        # is ex_right/pre_close, the reciprocal of the provider's cumulative
+        # (post-adjustment) factor ratio across the same event.
+        expected = prior_factor / provider_factor
         assert derived == pytest.approx(expected, rel=2e-4)

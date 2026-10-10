@@ -515,3 +515,27 @@ def test_missing_store_and_overwrite_are_fail_closed(tmp_path: Path) -> None:
         store.publish_request(request, path_policy="strict_v1")
     with pytest.raises(ContractError, match="required property"):
         store.publish_result({}, path_policy="strict_v1")
+
+
+def test_mapping_decision_provider_invokes_callable_per_subject() -> None:
+    # cr.md H6 regression: --decision-provider-json mode stores per-family
+    # callables in the decisions mapping; the resolver used to dict() the
+    # callable and crash with TypeError before any verification could run.
+    from uq.research_chain.cli import _MappingDecisionProvider
+
+    calls: list[str] = []
+
+    def provider(subject_generation_id: str) -> Mapping[str, Any]:
+        calls.append(subject_generation_id)
+        return {"binding_type": "label_set_v1", "subject_generation_id": subject_generation_id}
+
+    mapping = _MappingDecisionProvider({"label_set": provider})
+    decision = mapping.resolve(output_family="label_set", subject_generation_id="a" * 64)
+    assert calls == ["a" * 64]
+    assert decision["subject_generation_id"] == "a" * 64
+
+    with pytest.raises(ContractError, match="missing research chain quality decision"):
+        mapping.resolve(output_family="factor_partition", subject_generation_id="b" * 64)
+    bad = _MappingDecisionProvider({"label_set": lambda subject: ["not-a-mapping"]})
+    with pytest.raises(ContractError, match="invalid research chain quality decision"):
+        bad.resolve(output_family="label_set", subject_generation_id="b" * 64)

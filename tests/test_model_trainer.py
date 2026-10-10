@@ -96,6 +96,7 @@ class TestModelTrainer:
             dataset_frame=_dataset(),
             feature_columns=["volume_ratio_20d"],
             label_column="label",
+            train_period=("2026-01-01", "2026-12-31"),
         )
         assert len(manifest["generation_id"]) == 64
         assert manifest["artifact_checksum_sha256"] != DIGEST
@@ -109,6 +110,7 @@ class TestArtifactStore:
         manifest, artifact_bytes = trainer.train(
             definition=_definition(), dataset_frame=_dataset(),
             feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"),
         )
         artifact_generation_id = _stable_artifact_generation(manifest)
         partition = store.publish(manifest, artifact_bytes, quality_report=_quality_report(artifact_generation_id))
@@ -121,7 +123,8 @@ class TestArtifactStore:
     def test_immutable_overwrite_rejected(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)
         trainer = ModelTrainer(tmp_path)
-        manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")
+        manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"))
         store.publish(manifest, artifact_bytes, quality_report=_quality_report(_stable_artifact_generation(manifest)))
         with pytest.raises(ContractError, match="immutable"):
             store.publish(manifest, artifact_bytes, quality_report=_quality_report(_stable_artifact_generation(manifest)))
@@ -129,7 +132,8 @@ class TestArtifactStore:
     def test_tampered_artifact_rejected(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)
         trainer = ModelTrainer(tmp_path)
-        manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")
+        manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"))
         partition = store.publish(manifest, artifact_bytes, quality_report=_quality_report(_stable_artifact_generation(manifest)))
         (partition / "artifact.bin").write_bytes(b"tampered")
         with pytest.raises(ContractError, match="tampered"):
@@ -138,7 +142,8 @@ class TestArtifactStore:
     def test_quarantine_path_is_not_visible_as_accepted(self, tmp_path: Path) -> None:
         store = ArtifactStore(tmp_path)
         trainer = ModelTrainer(tmp_path)
-        manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")
+        manifest, artifact_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"))
         generation = _stable_artifact_generation(manifest)
         accepted = store.publish(manifest, artifact_bytes, quality_report=_quality_report(generation))
         quarantine = store.quarantine("quality_failed", artifact_bytes=artifact_bytes)
@@ -184,6 +189,7 @@ class TestArtifactStore:
                 dataset_frame=_dataset(),
                 feature_columns=["volume_ratio_20d"],
                 label_column="label",
+                train_period=("2026-01-01", "2026-12-31"),
             )
 
     def test_artifact_report_missing_wrong_generation_and_failed_reject_publication_read(self, tmp_path: Path) -> None:
@@ -192,6 +198,7 @@ class TestArtifactStore:
         manifest, artifact_bytes = trainer.train(
             definition=_definition(), dataset_frame=_dataset(),
             feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"),
         )
         generation = _stable_artifact_generation(manifest)
 
@@ -227,6 +234,27 @@ class TestArtifactStore:
 
     def test_deterministic_training_same_seed(self) -> None:
         trainer = ModelTrainer(Path("/tmp/model-store"))
-        d1, a1 = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")
-        d2, a2 = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label")
+        d1, a1 = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"))
+        d2, a2 = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"))
         assert a1 == a2  # same seed → same weights → same bytes (except run metadata)
+
+    def test_train_period_is_required_and_restricts_fit_rows(self) -> None:
+        # Regression for cr.md C2: the dataset frame spans all splits with
+        # labels, so training must declare and honor the train window.
+        trainer = ModelTrainer(Path("/tmp/model-store"))
+        with pytest.raises(ContractError, match="train_period"):
+            trainer.train(definition=_definition(), dataset_frame=_dataset(),
+                          feature_columns=["volume_ratio_20d"], label_column="label")
+        _, full_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(),
+                                      feature_columns=["volume_ratio_20d"], label_column="label",
+                                      train_period=("2026-01-01", "2026-12-31"))
+        _, early_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(),
+                                       feature_columns=["volume_ratio_20d"], label_column="label",
+                                       train_period=("2026-01-01", "2026-01-20"))
+        assert full_bytes != early_bytes  # later rows actually excluded from the fit
+        with pytest.raises(ContractError, match="supervised observation"):
+            trainer.train(definition=_definition(), dataset_frame=_dataset(),
+                          feature_columns=["volume_ratio_20d"], label_column="label",
+                          train_period=("2027-01-01", "2027-01-31"))

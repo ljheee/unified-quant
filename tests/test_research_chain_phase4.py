@@ -111,6 +111,32 @@ def _result_decision() -> dict:
     )
 
 
+def _config_decision(status: str = "passed") -> dict:
+    if status == "passed":
+        return create_reviewed_quality_decision(
+            binding_type="backtest_config_v1", policy="reject_all", status="passed",
+            checks=[
+                {"name": "calendar_period_valid", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "cost_parameters_non_negative", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "price_source_bound", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+            ], errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+        )
+    # The registry factory refuses to issue non-approved decisions; craft a
+    # validly signed rejected document directly (cr.md H5 regression).
+    from uq.contracts.model_layer import review_signature
+    unsigned = {
+        "binding_type": "backtest_config_v1",
+        "checks": [{"name": "calendar_period_valid", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        "errors": [], "key_id": "model-quality-reviewer-v1-2026-09", "policy": "reject_all",
+        "producer_code_fingerprint": DIGEST, "reviewer": "external-model-quality-reviewer-v1",
+        "status": status, "warnings": [],
+    }
+    return {**unsigned, "report_version": 2, "review_signature_sha256": review_signature(
+        {**unsigned, "report_version": 2}, private_key_pem=REVIEWER_PRIVATE_KEY
+    )}
+
+
 def _publish_model_artifact(root: Path) -> tuple[str, str, str]:
     import numpy as np
 
@@ -131,6 +157,7 @@ def _publish_model_artifact(root: Path) -> tuple[str, str, str]:
     manifest, artifact_bytes = trainer.train(
         definition=definition, dataset_frame=dataset,
         feature_columns=["volume_ratio_20d"], label_column="label",
+        train_period=("2026-01-01", "2026-12-31"),
     )
     artifact_generation = model_manifest_identities(
         {**manifest, "generation_id": DIGEST, "manifest_digest_sha256": DIGEST},
@@ -634,7 +661,7 @@ def test_backtest_stage_publishes_ordered_weight_lineage(tmp_path: Path) -> None
     )
     result = backtest.run(
         plan, portfolio_stage_result=portfolio_result,
-        quality_decision=_result_decision(), runner_identity=RUNNER,
+        quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
     )
     bindings = result.result_manifest["target_weight_bindings"]
     assert [binding["decision_date"] for binding in bindings] == ["2026-01-05"]
@@ -651,6 +678,32 @@ def dataset_price_store(tmp_path: Path):
     from uq.research_chain.owning_contracts import AdjustedPriceDatasetStore
 
     return AdjustedPriceDatasetStore(tmp_path)
+
+
+def test_backtest_stage_verifies_config_decision_at_execute_time(tmp_path: Path) -> None:
+    # cr.md H5 regression: the backtest-config review decision used to be
+    # checked only as an envelope at resolve time; a rejected or wrong-family
+    # decision must fail the backtest stage at execute time.
+    plan, portfolio, portfolio_result, config = _prepare_portfolio(tmp_path)
+    backtest = BacktestStageAdapter(
+        backtest_engine=BacktestEngine(tmp_path),
+        backtest_result_store=BacktestResultStore(tmp_path),
+        backtest_config_store=BacktestConfigStore(tmp_path), run_store=portfolio.run_store,
+        adjusted_price_store=dataset_price_store(tmp_path),
+        market_dataset_store=BacktestMarketDatasetStore(tmp_path),
+    )
+    with pytest.raises(ContractError, match="not approved"):
+        backtest.run(
+            plan, portfolio_stage_result=portfolio_result,
+            quality_decision=_result_decision(), config_quality_decision=_config_decision(status="rejected"),
+            runner_identity=RUNNER,
+        )
+    with pytest.raises(ContractError, match="does not match backtest_config_v1"):
+        backtest.run(
+            plan, portfolio_stage_result=portfolio_result,
+            quality_decision=_result_decision(), config_quality_decision=_result_decision(),
+            runner_identity=RUNNER,
+        )
 
 
 def test_backtest_rejects_universe_binding_mismatch(tmp_path: Path) -> None:
@@ -683,7 +736,7 @@ def test_backtest_rejects_universe_binding_mismatch(tmp_path: Path) -> None:
     with pytest.raises(ContractError, match="backtest universe binding mismatch"):
         backtest.run(
             plan, portfolio_stage_result=portfolio_result,
-            quality_decision=_result_decision(), runner_identity=RUNNER,
+            quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
         )
 
 
@@ -705,7 +758,7 @@ def test_backtest_rejects_forged_portfolio_state(tmp_path: Path) -> None:
     with pytest.raises(ContractError, match="research state manifest digest mismatch"):
         backtest.run(
             plan, portfolio_stage_result=forged,
-            quality_decision=_result_decision(), runner_identity=RUNNER,
+            quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
         )
 
 
@@ -749,7 +802,7 @@ def test_backtest_records_suspension_skip(tmp_path: Path) -> None:
     backtest = _backtest_adapter(tmp_path, portfolio.run_store)
     result = backtest.run(
         plan, portfolio_stage_result=portfolio_result,
-        quality_decision=_result_decision(), runner_identity=RUNNER,
+        quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
     )
     statuses = result.result_artifacts["fills"]["status"].unique().tolist()
     assert "skipped_suspended" in statuses
@@ -768,7 +821,7 @@ def test_backtest_rejects_corporate_action_overlap(tmp_path: Path) -> None:
     with pytest.raises(ContractError, match="corporate-action instruments"):
         backtest.run(
             plan, portfolio_stage_result=portfolio_result,
-            quality_decision=_result_decision(), runner_identity=RUNNER,
+            quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
         )
 
 
@@ -786,5 +839,5 @@ def test_backtest_rejects_tampered_price_data(tmp_path: Path) -> None:
     with pytest.raises(ContractError, match="tampered adjusted price data checksum"):
         backtest.run(
             plan, portfolio_stage_result=portfolio_result,
-            quality_decision=_result_decision(), runner_identity=RUNNER,
+            quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
         )

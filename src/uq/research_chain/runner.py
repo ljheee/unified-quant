@@ -395,12 +395,19 @@ class ResearchChainRunner:
         quality_decisions: Mapping[str, Any],
         created_at: str,
     ) -> None:
+        # cr.md H5: label_set/backtest_config decisions are fetched by resolved
+        # subject at execute time so provider mode attests per subject and the
+        # stage adapters verify them (aligned with the factor stage).
+        label_binding = self._binding(plan, "label_set")
         result = self.dataset_adapter.run(
             plan,
             runner_identity=dict(runner_identity),
             quality_decision=self._decision(quality_decisions, "model_dataset"),
             preprocessing_quality_decision=self._decision(
                 quality_decisions, "feature_preprocessing"
+            ),
+            label_quality_decision=self._decision(
+                quality_decisions, "label_set", label_binding.generation_id
             ),
             created_at=created_at,
         )
@@ -603,10 +610,14 @@ class ResearchChainRunner:
         quality_decisions: Mapping[str, Any],
         created_at: str,
     ) -> None:
+        config_binding = self._binding(plan, "backtest_config")
         result = self.backtest_adapter.run(
             plan,
             portfolio_stage_result=self.portfolio_adapter.last_result,
             quality_decision=self._decision(quality_decisions, "backtest_result"),
+            config_quality_decision=self._decision(
+                quality_decisions, "backtest_config", config_binding.generation_id
+            ),
             runner_identity=dict(runner_identity),
             created_at=created_at,
         )

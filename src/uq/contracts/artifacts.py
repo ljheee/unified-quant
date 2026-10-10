@@ -20,6 +20,17 @@ from ..errors import ContractError
 
 _MEMBERS_COLUMNS = ["instrument"]
 
+_UNIVERSE_ID_PATTERN = re.compile(r"[a-z][a-z0-9_-]{1,63}")
+
+
+def _validate_universe_path_segments(universe_id: Any, generation_id: Any = None) -> None:
+    # cr.md H12: both segments are joined into storage paths, so whitelist them
+    # before any path construction; a crafted id must not escape root/universes.
+    if not isinstance(universe_id, str) or not _UNIVERSE_ID_PATTERN.fullmatch(universe_id):
+        raise ContractError("unsafe universe identifier")
+    if generation_id is not None and not re.fullmatch(r"[0-9a-f]{64}", generation_id):
+        raise ContractError("invalid universe generation id")
+
 
 class UniverseSnapshotStore:
     def __init__(self, root: Path | str | None = None) -> None:
@@ -44,6 +55,7 @@ class UniverseSnapshotStore:
         generation_id = adjustment_snapshot_generation(unsigned)
         document = {**unsigned, "generation_id": generation_id}
         validate_contract("universe_snapshot.v1.json", document)
+        _validate_universe_path_segments(document["universe_id"])
         directory = root / "universes" / document["universe_id"] / generation_id
         if directory.exists():
             raise ContractError(f"immutable universe snapshot already published: {directory}")
@@ -68,6 +80,8 @@ class UniverseSnapshotStore:
             raise ContractError("universe snapshot store root is required")
         if not re.fullmatch(r"[0-9a-f]{64}", generation_id):
             raise ContractError("invalid universe generation id")
+        if universe_id is not None:
+            _validate_universe_path_segments(universe_id)
         roots = [self.root / "universes" / universe_id] if universe_id else [self.root / "universes"]
         candidates: list[Path] = []
         for base in roots:
@@ -187,6 +201,7 @@ class UniverseSnapshotReader:
         self.root = root
 
     def read(self, universe_id: str, generation_id: str, *, requested_valid_from: date, requested_valid_to: date | None = None) -> pd.DataFrame:
+        _validate_universe_path_segments(universe_id, generation_id)
         directory = self.root / "universes" / universe_id / generation_id
         manifest_path = directory / "manifest.json"
         try:

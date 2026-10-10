@@ -1,7 +1,7 @@
 {
   "snapshot_version": 1,
   "instrument": "600000.XSHG",
-  "formula_version": "adj_factor.exchange_v1",
+  "formula_version": "adj_factor.exchange_v2",
   "visibility_time": "2026-08-21T16:00:00+08:00",
   "event_artifact": {
     "path": "events.csv",

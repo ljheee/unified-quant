@@ -80,7 +80,9 @@ def _qlib_worker(payload_path: str) -> int:
     )
     result.columns = payload["factor_names"]
     result = result.reset_index()
-    result["datetime"] = pd.to_datetime(result["datetime"]).dt.strftime("%Y-%m-%d")
+    # cr.md H9: keep the canonical datetime64 dtype — stringifying here broke
+    # dtype contracts for every downstream consumer of qlib factor frames.
+    result["datetime"] = pd.to_datetime(result["datetime"])
     result["instrument"] = result["instrument"].str.upper()
     output = result[["instrument", "datetime", *payload["factor_names"]]]
     output.sort_values(["instrument", "datetime"], kind="mergesort").to_parquet(
@@ -187,7 +189,7 @@ class QlibFactorAdapter:
     def partition_frames(self, result: pd.DataFrame) -> list[tuple[str, pd.DataFrame]]:
         partitions: list[tuple[str, pd.DataFrame]] = []
         for date_value, frame in result.groupby("datetime", sort=True):
-            partitions.append((str(date_value), frame.reset_index(drop=True)))
+            partitions.append((pd.Timestamp(date_value).strftime("%Y-%m-%d"), frame.reset_index(drop=True)))
         return partitions
 
     def _validate_request(
@@ -286,7 +288,10 @@ class QlibFactorAdapter:
             for date_value in sorted(expected_dates.unique())
             if start_date <= date_value <= end_date
         }
-        actual_keys = set(map(tuple, result[["instrument", "datetime"]].to_numpy()))
+        # cr.md H9: the result keeps canonical datetime64; compare on normalized
+        # date strings instead of raw column values.
+        actual_dates = pd.to_datetime(result["datetime"]).dt.strftime("%Y-%m-%d")
+        actual_keys = set(zip(result["instrument"].astype(str), actual_dates))
         if actual_keys != expected_keys or len(result) != len(expected_keys):
             raise ContractError("qlib result keys do not match governed input panel")
         if result.duplicated(["instrument", "datetime"]).any():
