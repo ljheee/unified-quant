@@ -1141,10 +1141,12 @@ def test_reviewed_status_policy_has_a_single_source():
     # its status policy from the registry — the sweep that found the eighth site
     # (Qlib export read) is encoded here so the class cannot reappear.
     assert reviewed_allowed_statuses("qlib_dataset_export_v1") == ["passed"]
+    assert reviewed_allowed_statuses("research_run_result_v1") == ["passed"]
     for module in (
         "src/uq/models/dataset_writer.py", "src/uq/models/trainer.py",
         "src/uq/models/predictions.py", "src/uq/models/qlib_export.py",
         "src/uq/portfolio/builder.py", "src/uq/backtest/engine.py",
+        "src/uq/research_chain/runner.py",
     ):
         source = (ROOT / module).read_text()
         assert '{"passed", "warning"}' not in source, module

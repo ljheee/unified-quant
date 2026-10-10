@@ -11,6 +11,7 @@ import pandas as pd
 from ..contracts.model_layer import (
     ModelContractLoader,
     bind_reviewed_quality_decision,
+    reviewed_allowed_statuses,
     research_contract_identities,
     research_stage_plan_sha256,
     research_stage_plan_v2_sha256,
@@ -810,7 +811,7 @@ class ResearchChainRunner:
             or decision["subject_generation_id"] != generation
             or owning_report["bound_generation_id"] != generation
             or decision["decision_checksum_sha256"] != owning_report["report_checksum_sha256"]
-            or owning_report["status"] not in {"passed", "warning"}
+            or owning_report["status"] not in reviewed_allowed_statuses("research_run_result_v1")
         ):
             raise ContractError("research result quality decision subject or checksum mismatch")
         final_binding = {
