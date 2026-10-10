@@ -210,6 +210,10 @@ def _research_result_decision(generation_id: str) -> dict:
         ],
         errors=[], warnings=[], producer_code_fingerprint=DIGEST,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        # CI 38053013828: 12d44af made the reviewed subject mandatory at
+        # creation (U9) but missed this call — the file is qlib-gated
+        # locally, so the TypeError only surfaced in the CI qlib cell.
+        subject_generation_id=generation_id, subject_content_sha256=generation_id,
     )
     report, _ = bind_reviewed_quality_decision(
         unsigned, binding_type="research_run_result_v1",

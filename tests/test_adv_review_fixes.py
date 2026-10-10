@@ -699,3 +699,105 @@ def test_portfolio_definition_raw_decision_binds_with_manifest_digest():
     )
     with pytest.raises(StoreContractError, match="different subject content"):
         PortfolioDefinitionBinding.bind(definition=dict(fixture), quality_decision=dict(rejected))
+
+
+def test_v1_state_publishes_at_v1_stage_number(tmp_path):
+    # CI run 38053013828 regression lock: validate_research_layout hardcoded
+    # the V3 ten-stage order, so a V1/V2 state at result_reconciliation was
+    # numbered stage=08 by stage_plan_for_request but expected at stage=09
+    # by the layout validator — a failed run's state publish raised
+    # "research path does not match state layout" and masked the original
+    # failure. The layout validator now takes the document's own stage plan.
+    from uq.contracts.model_layer import (
+        RESEARCH_STAGE_ORDER_V1,
+        research_contract_identities,
+    )
+    from uq.research_chain.resolver import FileResearchRunStore
+
+    run_id = "00000000-0000-4000-8000-000000000001"
+    records = [
+        {"stage": stage, "status": "passed", "output_bindings": [], "failure_reason": None}
+        for stage in RESEARCH_STAGE_ORDER_V1[:-1]
+    ]
+    records.append({
+        "stage": "result_reconciliation", "status": "failed",
+        "output_bindings": [], "failure_reason": "stage_failed",
+    })
+    state = {
+        "contract_version": 1, "schema_version": "1.0.0",
+        "request_content_generation_id": "a" * 64,
+        "request_manifest_digest_sha256": "b" * 64,
+        "run_id": run_id,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "runner_identity": {
+            "code_fingerprint": "c" * 64,
+            "environment_profile": "locked-test",
+            "lock_digest_sha256": "d" * 64,
+        },
+        "intent": "execute",
+        "stage_records": records,
+        "final_status": "failed",
+        "state_content_generation_id": "0" * 64,
+        "manifest_digest_sha256": "0" * 64,
+    }
+    state["state_content_generation_id"], state["manifest_digest_sha256"] = (
+        research_contract_identities(state, schema_name="research_run_state")
+    )
+    store = FileResearchRunStore(tmp_path)
+    published = store.publish_state(state, stage="result_reconciliation")
+    expected = (
+        tmp_path / "research_runs" / "states" / f"request={'a' * 64}"
+        / f"run={run_id}" / "stage=08" / "manifest.json"
+    )
+    assert published.manifest_path == expected
+    assert published.manifest_path.is_file()
+    reread = store.read_state(
+        state["request_content_generation_id"], run_id,
+        "result_reconciliation", state["manifest_digest_sha256"],
+    )
+    assert reread["stage_records"][-1]["status"] == "failed"
+
+
+def test_research_layout_stage_number_follows_explicit_stage_order(tmp_path):
+    # Locks the validate_research_layout stage_order parameter: the same
+    # stage numbers differently under the V1 (runtime) and V3 (disabled
+    # paper-execution) plans, and the validator must honor the caller's plan
+    # instead of a hardcoded one; the version-blind default is the V1 plan.
+    from uq.contracts.model_layer import RESEARCH_STAGE_ORDER_V1, RESEARCH_STAGE_ORDER_V3
+    from uq.research_chain.contracts import validate_research_layout
+
+    run_id = "00000000-0000-4000-8000-000000000001"
+    for order, number in ((RESEARCH_STAGE_ORDER_V1, "08"), (RESEARCH_STAGE_ORDER_V3, "09")):
+        path = (
+            tmp_path / "research_runs" / "states" / f"request={'a' * 64}"
+            / f"run={run_id}" / f"stage={number}" / "manifest.json"
+        )
+        path.parent.mkdir(parents=True)
+        resolved = validate_research_layout(
+            path, data_root=tmp_path, kind="state",
+            request_generation_id="a" * 64, run_id=run_id,
+            stage="result_reconciliation", stage_order=order,
+        )
+        assert resolved == path
+        other = "09" if number == "08" else "08"
+        wrong = (
+            tmp_path / "research_runs" / "states" / f"request={'b' * 64}"
+            / f"run={run_id}" / f"stage={other}" / "manifest.json"
+        )
+        wrong.parent.mkdir(parents=True)
+        with pytest.raises(StoreContractError, match="does not match state layout"):
+            validate_research_layout(
+                wrong, data_root=tmp_path, kind="state",
+                request_generation_id="b" * 64, run_id=run_id,
+                stage="result_reconciliation", stage_order=order,
+            )
+
+    default_path = (
+        tmp_path / "research_runs" / "states" / f"request={'c' * 64}"
+        / f"run={run_id}" / "stage=08" / "manifest.json"
+    )
+    default_path.parent.mkdir(parents=True)
+    assert validate_research_layout(
+        default_path, data_root=tmp_path, kind="state",
+        request_generation_id="c" * 64, run_id=run_id, stage="result_reconciliation",
+    ) == default_path

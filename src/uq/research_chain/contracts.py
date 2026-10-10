@@ -5,9 +5,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping, Protocol, Sequence
 
-from ..contracts.model_layer import canonical_json
+from ..contracts.model_layer import RESEARCH_STAGE_ORDER_V1, canonical_json
 from ..errors import ContractError
 from ..runtime import require_production_review_key
 
@@ -125,13 +125,20 @@ def validate_research_layout(
     stage: str | None = None,
     result_generation_id: str | None = None,
     require_parent: bool = True,
+    stage_order: Sequence[str] | None = None,
 ) -> Path:
     """Validate the frozen physical path without creating or accepting it."""
-    stage_order = [
-        "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
-        "model_training", "prediction_publication", "portfolio_construction",
-        "backtest_execution", "paper_execution", "result_reconciliation",
-    ]
+    # CI 38053013828: the stage number depends on the request contract
+    # version (V3 inserts paper_execution before result_reconciliation), so
+    # the previously hardcoded V3 order expected every V1/V2 state at
+    # result_reconciliation under stage=09 while the writers number it 08 —
+    # a failed run's state publish then raised "research path does not match
+    # state layout" and masked the original failure. State writers must pass
+    # the document's own plan (stage_plan_for_request); the V1 default only
+    # covers version-blind probes and matches every executable request (the
+    # V3 runtime is disabled — runner._validate_plan).
+    if stage_order is None:
+        stage_order = RESEARCH_STAGE_ORDER_V1
     if not isinstance(request_generation_id, str) or not _SHA256_PATTERN.fullmatch(request_generation_id):
         raise ContractError("invalid request generation in research path")
     try:

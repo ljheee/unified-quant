@@ -61,7 +61,7 @@ from .adapters import (
 )
 from ..models.definition import ModelDefinitionBuilder
 from .contracts import research_request_schema_name, verify_stage_plan_review
-from .resolver import FileResearchRunStore, ResolvedExecutionPlan, ResolvedStageBinding, _DEFAULT_STAGE_PLAN, build_dry_run_state, stage_plan_for_request
+from .resolver import FileResearchRunStore, ResolvedExecutionPlan, ResolvedStageBinding, build_dry_run_state, stage_plan_for_request
 
 
 @dataclass(frozen=True)
@@ -332,7 +332,8 @@ class ResearchChainRunner:
         state["state_content_generation_id"] = generation
         state["manifest_digest_sha256"] = digest
         path = self.run_store.root / self._state_relative_path(
-            state["request_content_generation_id"], state["run_id"], "resolve_request"
+            state["request_content_generation_id"], state["run_id"], "resolve_request",
+            stage_plan_for_request(plan.request),
         )
         if path.exists() or path.is_symlink():
             existing = self.run_store.list_state_snapshots(
@@ -905,7 +906,7 @@ class ResearchChainRunner:
         state["manifest_digest_sha256"] = digest
         ModelContractLoader.validate("research_run_state", state)
         path = self.run_store.root / self._state_relative_path(
-            request_generation_id, run_id, failed_stage
+            request_generation_id, run_id, failed_stage, stage_plan
         )
         if path.exists() or path.is_symlink():
             return
@@ -956,8 +957,12 @@ class ResearchChainRunner:
         )
 
     @staticmethod
-    def _state_relative_path(request_generation_id: str, run_id: str, stage: str) -> str:
-        stage_number = f"{_DEFAULT_STAGE_PLAN.index(stage):02d}"
+    def _state_relative_path(
+        request_generation_id: str, run_id: str, stage: str, stage_order: Sequence[str]
+    ) -> str:
+        # The caller passes the request's own stage plan (V3 inserts
+        # paper_execution); never number stages from a module default.
+        stage_number = f"{tuple(stage_order).index(stage):02d}"
         return (
             f"research_runs/states/request={request_generation_id}"
             f"/run={run_id}/stage={stage_number}/manifest.json"

@@ -11,6 +11,8 @@ from typing import Any, Mapping, Protocol
 
 from ..contracts.model_layer import (
     ModelContractLoader,
+    RESEARCH_STAGE_ORDER_V1,
+    RESEARCH_STAGE_ORDER_V3,
     research_contract_identities,
     research_stage_plan_sha256,
     research_stage_plan_v2_sha256,
@@ -41,16 +43,11 @@ _FAILURE_REASONS = frozenset({
     "store_read_failed", "overwrite_conflict", "reproducibility_failed",
     "result_reconciliation_failed",
 })
-_STAGE_PLAN = [
-    "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
-    "model_training", "prediction_publication", "portfolio_construction",
-    "backtest_execution", "result_reconciliation",
-]
-_STAGE_PLAN_V3 = [
-    "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
-    "model_training", "prediction_publication", "portfolio_construction",
-    "backtest_execution", "paper_execution", "result_reconciliation",
-]
+# Stage orders live in uq.contracts.model_layer (single source, shared with
+# schema validation and the physical layout validator); aliased here so the
+# runner-facing names keep working.
+_STAGE_PLAN = RESEARCH_STAGE_ORDER_V1
+_STAGE_PLAN_V3 = RESEARCH_STAGE_ORDER_V3
 _EXPECTED_STAGE_PLAN_SHA256 = research_stage_plan_sha256()
 
 
@@ -479,19 +476,23 @@ class FileResearchRunStore:
         if absolute_path.exists() or absolute_path.is_symlink():
             raise ContractError(f"immutable research manifest already exists: {relative_path}")
         stage = document.get("stage_records", [{}])[-1].get("stage") if "stage_records" in document else None
+        kind = (
+            "request" if relative_path.parts[1] == "requests"
+            else "result" if relative_path.parts[1] == "results"
+            else "state"
+        )
         validate_research_layout(
             absolute_path,
             data_root=self.root,
-            kind=(
-                "request" if relative_path.parts[1] == "requests"
-                else "result" if relative_path.parts[1] == "results"
-                else "state"
-            ),
+            kind=kind,
             request_generation_id=document["request_content_generation_id"],
             run_id=document["run_id"],
             stage=stage,
             result_generation_id=document.get("result_content_generation_id"),
             require_parent=False,
+            # The document carries its contract version, so its own stage
+            # plan — not a validator default — decides the stage number.
+            stage_order=stage_plan_for_request(document) if kind == "state" else None,
         )
         absolute_path.parent.mkdir(parents=True, exist_ok=False)
         staging = absolute_path.parent / f".{absolute_path.name}.staging.{uuid.uuid4().hex}"

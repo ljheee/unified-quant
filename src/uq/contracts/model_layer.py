@@ -94,14 +94,21 @@ _RESEARCH_STATUS_REASONS = {
     "failed": _RESEARCH_FAILURE_REASONS,
 }
 _FACTOR_TRUST_ANCHOR_IDS = {"factor-review-key-v1"}
-_RESEARCH_STAGE_ORDER_V1 = [
+# Single source for the research stage orders — schema validation (below),
+# research_chain.resolver (stage plans) and research_chain.contracts
+# (physical layout) all derive from these two lists. V3 inserts
+# paper_execution; its runtime is disabled (runner._validate_plan), so every
+# executable request numbers stages by V1.
+RESEARCH_STAGE_ORDER_V1 = [
     "resolve_request", "factor_computation", "dataset_preparation", "qlib_export",
     "model_training", "prediction_publication", "portfolio_construction",
     "backtest_execution", "result_reconciliation",
 ]
-_RESEARCH_STAGE_ORDER_V3 = [
-    *_RESEARCH_STAGE_ORDER_V1[:-1], "paper_execution", *_RESEARCH_STAGE_ORDER_V1[-1:],
+RESEARCH_STAGE_ORDER_V3 = [
+    *RESEARCH_STAGE_ORDER_V1[:-1], "paper_execution", *RESEARCH_STAGE_ORDER_V1[-1:],
 ]
+_RESEARCH_STAGE_ORDER_V1 = RESEARCH_STAGE_ORDER_V1
+_RESEARCH_STAGE_ORDER_V3 = RESEARCH_STAGE_ORDER_V3
 
 
 def _reject_non_finite(value: Any) -> None:
