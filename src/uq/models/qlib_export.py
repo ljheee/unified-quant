@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
-from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, sha256_json
+from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, reviewed_allowed_statuses, sha256_json
 from ..errors import ContractError
 
 
@@ -245,7 +245,7 @@ class QlibDatasetExporter:
         except (OSError,json.JSONDecodeError) as exc: raise ContractError("Qlib export quality report unavailable") from exc
         ModelContractLoader.validate("model_quality_report",report)
         actual=sha256_json({k:v for k,v in report.items() if k!="report_checksum_sha256"})
-        if checksum!=actual or report["binding_type"]!="qlib_dataset_export_v1" or report["bound_generation_id"]!=generation_id or report["status"] not in {"passed","warning"}:
+        if checksum!=actual or report["binding_type"]!="qlib_dataset_export_v1" or report["bound_generation_id"]!=generation_id or report["status"] not in reviewed_allowed_statuses("qlib_dataset_export_v1"):
             raise ContractError("Qlib export quality report rejects read")
         actual_paths: set[str] = set()
         for path in sorted(snapshot.rglob("*")):

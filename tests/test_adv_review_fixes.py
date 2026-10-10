@@ -6,8 +6,9 @@ docs/adversarial/2026-10-10-cr35c4e1b-regression-review/REPORT.md).
 
 import hashlib
 import json
+import re
 from datetime import date, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,8 @@ from uq.quality.gate import CrossSourceGate
 from uq.routing.router import SourceRouter
 from tests.test_adjustment_snapshot_runtime import _snapshot as save_snapshot
 from tests.test_real_chain import FakeMootdxAdapter, mootdx_page
+
+_SHA_RE = re.compile(r"[0-9a-f]{64}")
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "config/schemas/bars_daily.research-v1.yaml"
@@ -1045,32 +1048,70 @@ def test_evidence_indexes_are_fresh_and_never_index_themselves():
     # cr.md 8.4: an evidence index that records its own digest can never
     # verify (writing the record changes the file), and the old test carve-out
     # hid that stale pin. Index shapes differ per layer, so the check walks the
-    # whole document: every {"path", "sha256"} pair must exist and match, and no
-    # entry may point at the index containing it.
-    def walk(node, index_relative, pairs, self_references):
+    # whole document: every recorded path must exist and every recorded digest
+    # must match, digests must be well formed (a malformed digest is a finding,
+    # not something to skip), and no entry may point at its own index — under
+    # any spelling.
+    def walk(node, index_relative, pairs, directories, self_references):
         if isinstance(node, dict):
             path = node.get("path")
             if isinstance(path, str):
-                if path == index_relative:
-                    self_references.append(index_relative)
-                digest = node.get("sha256")
-                if isinstance(digest, str) and len(digest) == 64:
-                    pairs.append((index_relative, path, digest))
+                # Strictness follows the claim, not the field name: a record
+                # that carries a sha256 is an integrity claim and must name a
+                # normalized repo-relative file, otherwise the digest cannot be
+                # re-derived. Descriptive entries (a pinned directory, or a
+                # cross-reference into specs/*.md with a #anchor) stay lenient —
+                # they assert nothing, and the self-reference ban still applies.
+                target, _, _anchor = path.partition("#")
+                is_directory = target.endswith("/")
+                declared = target[:-1] if is_directory else target
+                normalized = PurePosixPath(declared) if declared else None
+                relative = normalized.as_posix() if normalized is not None else ""
+                if relative == index_relative:
+                    self_references.append(path)
+                well_formed = (
+                    normalized is not None
+                    and not normalized.is_absolute()
+                    and ".." not in normalized.parts
+                    and normalized.as_posix() == declared
+                )
+                if is_directory:
+                    if not well_formed:
+                        raise AssertionError(f"evidence directory record is not repo-relative: {path}")
+                    directories.append((index_relative, relative))
+                if "sha256" in node:
+                    if not well_formed:
+                        raise AssertionError(
+                            f"digest-bearing evidence record is not a normalized repo-relative path: {path}"
+                        )
+                    digest = node["sha256"]
+                    if not isinstance(digest, str) or not _SHA_RE.fullmatch(digest):
+                        raise AssertionError(f"digest-bearing evidence record has a malformed sha256: {path}")
+                    pairs.append((index_relative, relative, digest))
             for value in node.values():
-                walk(value, index_relative, pairs, self_references)
+                walk(value, index_relative, pairs, directories, self_references)
         elif isinstance(node, list):
             for value in node:
-                walk(value, index_relative, pairs, self_references)
+                walk(value, index_relative, pairs, directories, self_references)
 
     indexes = sorted(ROOT.glob("evidence/**/evidence-index.json"))
     assert len(indexes) >= 20, f"expected the full evidence index set, found {len(indexes)}"
     pairs: list[tuple[str, str, str]] = []
+    directories: list[tuple[str, str]] = []
     self_references: list[str] = []
     for index_path in indexes:
         document = json.loads(index_path.read_text())
-        walk(document, index_path.relative_to(ROOT).as_posix(), pairs, self_references)
+        walk(document, index_path.relative_to(ROOT).as_posix(), pairs, directories, self_references)
     assert pairs, "no digest-bearing evidence records found"
     assert self_references == [], f"evidence index records itself: {sorted(set(self_references))}"
+    # Directory descriptors use two conventions across layers (some index from
+    # the repository root, some from the index's own directory); accept either,
+    # but the directory must exist.
+    for index_relative, path in directories:
+        index_directory = ROOT / Path(index_relative).parent
+        assert (ROOT / path).is_dir() or (index_directory / path).is_dir(), (
+            f"missing evidence directory record: {path} ({index_relative})"
+        )
     for index_relative, path, digest in pairs:
         target = ROOT / path
         assert target.is_file(), f"missing evidence record: {path} ({index_relative})"
@@ -1096,10 +1137,14 @@ def test_reviewed_status_policy_has_a_single_source():
 
     # Lock the single source: the store read paths must not re-hardcode the
     # accepted status set.
+    # Every store that reads an externally supplied quality report must derive
+    # its status policy from the registry — the sweep that found the eighth site
+    # (Qlib export read) is encoded here so the class cannot reappear.
+    assert reviewed_allowed_statuses("qlib_dataset_export_v1") == ["passed"]
     for module in (
         "src/uq/models/dataset_writer.py", "src/uq/models/trainer.py",
-        "src/uq/models/predictions.py", "src/uq/portfolio/builder.py",
-        "src/uq/backtest/engine.py",
+        "src/uq/models/predictions.py", "src/uq/models/qlib_export.py",
+        "src/uq/portfolio/builder.py", "src/uq/backtest/engine.py",
     ):
         source = (ROOT / module).read_text()
         assert '{"passed", "warning"}' not in source, module
