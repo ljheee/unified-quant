@@ -989,3 +989,52 @@ def test_schema_rejects_non_finite_float_values():
     nulled.loc[0, "close"] = np.nan
     with pytest.raises(ContractError, match="non-nullable"):
         schema.validate(nulled)
+
+
+def test_v3_state_snapshots_list_in_v3_order_without_drops(tmp_path):
+    # CR follow-up to the D2 stage-plan single-sourcing (9a91cd2 review):
+    # publish_state now numbers V3 states correctly, but
+    # list_state_snapshots still ordered by a hardcoded V1 plan and
+    # silently dropped any paper_execution snapshot. The listing order is
+    # now derived from the states' own contract version.
+    from uq.contracts.model_layer import (
+        RESEARCH_STAGE_ORDER_V3,
+        research_contract_identities,
+    )
+    from uq.research_chain.resolver import FileResearchRunStore
+
+    store = FileResearchRunStore(tmp_path)
+    run_id = "00000000-0000-4000-8000-000000000001"
+
+    def v3_state(stages):
+        records = [
+            {"stage": stage, "status": "passed", "output_bindings": [], "failure_reason": None}
+            for stage in stages
+        ]
+        state = {
+            "contract_version": 3, "schema_version": "1.0.0",
+            "request_content_generation_id": "a" * 64,
+            "request_manifest_digest_sha256": "b" * 64,
+            "run_id": run_id,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "runner_identity": {
+                "code_fingerprint": "c" * 64,
+                "environment_profile": "locked-test",
+                "lock_digest_sha256": "d" * 64,
+            },
+            "intent": "execute",
+            "stage_records": records,
+            "final_status": records[-1]["status"],
+            "state_content_generation_id": "0" * 64,
+            "manifest_digest_sha256": "0" * 64,
+        }
+        state["state_content_generation_id"], state["manifest_digest_sha256"] = (
+            research_contract_identities(state, schema_name="research_run_state")
+        )
+        return state
+
+    prefix = RESEARCH_STAGE_ORDER_V3[: RESEARCH_STAGE_ORDER_V3.index("paper_execution") + 1]
+    store.publish_state(v3_state(prefix[:1]), stage="resolve_request")
+    store.publish_state(v3_state(prefix), stage="paper_execution")
+    snapshots = store.list_state_snapshots("a" * 64, run_id)
+    assert [item.stage for item in snapshots] == ["resolve_request", "paper_execution"]

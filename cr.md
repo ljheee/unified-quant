@@ -322,3 +322,11 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 - **R6（industry_membership_v1 无生产者）**：taxonomy artifact 目前只有 engine 侧内容绑定校验（U10：policy 绑定 + 内容一致性），无生产者/存储层为其内容背书——taxonomy 的正确性由 policy 评审承担（policy 本身经外部评审签名）。登记为已知治理缺口，待行业分类数据源接入时补齐生产者。
 - **R7（指纹版本未记录）**：manifest 未记录 fingerprint_version，v1 语义（NaN≡-0.0）永久可用；因 v1/v2 payload 结构不同，跨版本伪造路径不成立（U2/U18 已验证 ±inf 指纹互异），但排障时无法从 manifest 直读命中版本。接受为兼容性窗口的既定代价；下次 schema 版本化时连同登记。
 - **R8（provisional zero-checksum 身份约定）**：backtest_config/target_weights 评审签的是发布前合成 manifest（quality_report_checksum_sha256 置零参与身份），内部自洽。此为发布序依赖（报告校验和需在绑定后回填）的既定解法，非伪造路径——绑定态 manifest 的完整身份在 readback 时全量重算验证。
+
+### 8.3 自 CR 复核记录（2026-10-10，覆盖 844acc4 + 9a91cd2）
+
+对两个残留处置提交做了一遍对抗式自审（修复正确性 / 旁路消费方 / 边界形态 / 语义一致性 / 锁的真实性），结论：**发现 1 项遗漏并当场修复，1 项复核为有意保留**。
+
+- **已修复：V3 状态快照列表静默丢弃**。`list_state_snapshots` 仍按硬编码 V1 序排序——D2 修好后 V3 状态可经 store 直接发布（runner 虽禁 V3 执行，store 是公开 API），paper_execution 快照会从列表中消失。改为从状态文档自身的 contract_version 派生排序（同一次 run 的状态共享请求版本）。回归锁：test_v3_state_snapshots_list_in_v3_order_without_drops。
+- **有意保留：publish_result 闭包校验的 V1 硬编码**。与 runner._validate_plan 的 V3 执行禁用一致——V3 result 不可能合法存在，从 payload 派生只会为伪造文档松闸。已加注释防止下轮评审再标。
+- 复核通过的疑点：execution/stores.py 直读 registry bindings 但仅消费 allowed_checks（无 allowed_statuses 旁路）；R4 严格 arity 下 cli 两参带默认包装、functools.partial、bound method、__call__ 实例的路由均保持；R9 的 NaN 语义未受有限性禁令影响；R2 provenance 增补不破坏既有重放证据。

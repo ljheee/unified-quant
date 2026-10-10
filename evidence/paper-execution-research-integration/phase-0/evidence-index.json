@@ -184,7 +184,7 @@
     },
     {
       "path": "src/uq/research_chain/resolver.py",
-      "sha256": "79523e9b3846afe61eb4cab6b7e56ff83608a16b4b3d4bdca7a7924c67ff2938"
+      "sha256": "24cbe12843264f90c2b307b6ce2e16a75b2479c059b4df1573364e8eaa220db6"
     },
     {
       "path": "src/uq/research_chain/runner.py",

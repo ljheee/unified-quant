@@ -395,7 +395,13 @@ class FileResearchRunStore:
                 manifest_digest_sha256=state["manifest_digest_sha256"],
                 status=state["final_status"],
             ))
-        order = stage_plan_for_request({"contract_version": 1})
+        if not summaries:
+            return []
+        # The states of a run share the request's contract version — derive
+        # the listing order from the documents themselves (any of them); a
+        # hardcoded V1 order would silently drop V3 paper_execution
+        # snapshots, which publish_state now numbers correctly.
+        order = stage_plan_for_request(state)
         summaries_by_stage = {item.stage: item for item in summaries}
         return [summaries_by_stage[stage] for stage in order if stage in summaries_by_stage]
 
@@ -454,6 +460,10 @@ class FileResearchRunStore:
         if result_binding["manifest_digest_sha256"] != manifest_digest_sha256:
             raise ContractError("research result reconciliation digest mismatch")
         runtime_stage_records = result["stage_records"][1:-1]
+        # Deliberately the V1 order, not the payload's: the V3 paper-
+        # execution runtime is disabled (runner._validate_plan), so no
+        # legitimate V3 result can exist — deriving from the payload would
+        # only loosen the closure check for forged documents.
         expected_runtime_stages = list(stage_plan_for_request({"contract_version": 1}))[1:-1]
         if [record.get("stage") for record in runtime_stage_records] != expected_runtime_stages:
             raise ContractError("research result stage closure is incomplete")
