@@ -16,12 +16,12 @@ import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
-from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, sha256_json
 from ..errors import ContractError
 from .dataset import SplitValidator
 from .feature_preprocessing import FeaturePreprocessorBuilder
 from .features import FeatureSchemaValidator
-from ..factors.raw_price import logical_fingerprint as frame_logical_fingerprint
+from ..factors.raw_price import logical_fingerprint as frame_logical_fingerprint, verify_logical_fingerprint as verify_frame_logical_fingerprint
 
 
 class DatasetWriter:
@@ -75,6 +75,9 @@ class DatasetWriter:
             schema_name="model_dataset",
             exclude_fields={"input_feature_schema_manifest_digest_sha256", "logical_fingerprint", "quality_report_checksum_sha256"},
         )
+        quality_report = resolve_subject_quality_decision(
+            quality_report, subject_generation_id=generation_id, subject_content_sha256=generation_id
+        )
         bound_report, report_checksum = bind_reviewed_quality_decision(
             quality_report, binding_type="model_dataset_v1",
             subject_generation_id=generation_id,
@@ -83,6 +86,11 @@ class DatasetWriter:
         if preprocessing_manifest is not None:
             if preprocessing_quality_report is None:
                 raise ContractError("preprocessing publication requires an externally reviewed quality decision")
+            preprocessing_quality_report = resolve_subject_quality_decision(
+                preprocessing_quality_report,
+                subject_generation_id=preprocessing_manifest["generation_id"],
+                subject_content_sha256=preprocessing_manifest["generation_id"],
+            )
             bound_preprocessing_report, preprocessing_report_checksum = bind_reviewed_quality_decision(
                 preprocessing_quality_report, binding_type="feature_preprocessing_v1",
                 subject_generation_id=preprocessing_manifest["generation_id"],
@@ -282,11 +290,11 @@ class DatasetWriter:
             raise ContractError("dataset frame columns do not match feature schema and label contract")
         if frame.duplicated(["instrument", "datetime"]).any():
             raise ContractError("duplicate dataset keys prevent read")
-        if frame_logical_fingerprint(frame) != manifest.get("logical_fingerprint"):
+        if not verify_frame_logical_fingerprint(frame, manifest.get("logical_fingerprint")):
             raise ContractError("dataset logical fingerprint mismatch")
         if preprocessing_doc is not None:
             preprocessing_frame = frame[["instrument", "datetime", *preprocessing_doc["ordered_features"]]]
-            if frame_logical_fingerprint(preprocessing_frame) != preprocessing_doc["output_frame_sha256"]:
+            if not verify_frame_logical_fingerprint(preprocessing_frame, preprocessing_doc["output_frame_sha256"]):
                 raise ContractError("preprocessing output fingerprint mismatch")
         policy = manifest["split_policy"]
         trading_dates = sorted({timestamp.strftime("%Y-%m-%d") for timestamp in frame["datetime"]})
@@ -381,7 +389,7 @@ class DatasetWriter:
         pd.testing.assert_frame_equal(
             canonical_output, expected, check_exact=False, rtol=1e-12, atol=1e-12
         )
-        if frame_logical_fingerprint(canonical_output) != preprocessing_manifest["output_frame_sha256"]:
+        if not verify_frame_logical_fingerprint(canonical_output, preprocessing_manifest["output_frame_sha256"]):
             raise ContractError("preprocessing output fingerprint mismatch")
 
     def _validate_preprocessing_references(

@@ -179,6 +179,40 @@ def _validate_universe_binding(
         raise ContractError("risk universe identity mismatch")
 
 
+def _validate_industry_membership(
+    artifact: Mapping[str, Any], binding: Mapping[str, Any]
+) -> dict[str, str]:
+    """Bind the industry taxonomy to the artifact the policy declares (cr.md U10)."""
+    if not isinstance(artifact, Mapping):
+        raise ContractError("industry membership artifact is invalid")
+    family = artifact.get("family")
+    if family != "industry_membership_v1":
+        raise ContractError("industry membership artifact family is unsupported")
+    if family != binding.get("family"):
+        raise ContractError("industry membership binding family mismatch")
+    mapping = artifact.get("mapping")
+    if not isinstance(mapping, dict) or not mapping:
+        raise ContractError("industry membership artifact requires a mapping")
+    if any(
+        not isinstance(instrument, str)
+        or not instrument
+        or not isinstance(industry, str)
+        or not industry
+        for instrument, industry in mapping.items()
+    ):
+        raise ContractError("industry membership mapping requires string names")
+    unsigned = {"family": family, "mapping": dict(mapping)}
+    generation = sha256_json(unsigned)
+    digest = sha256_json({**unsigned, "generation_id": generation})
+    if artifact.get("generation_id") != generation or artifact.get("manifest_digest_sha256") != digest:
+        raise ContractError("industry membership artifact identity mismatch")
+    if artifact["generation_id"] != binding.get("generation_id"):
+        raise ContractError("industry membership binding generation mismatch")
+    if artifact["manifest_digest_sha256"] != binding.get("manifest_digest_sha256"):
+        raise ContractError("industry membership binding digest mismatch")
+    return dict(mapping)
+
+
 def _validate_policy_document(
     policy: Mapping[str, Any],
     as_of_date: str,
@@ -542,6 +576,7 @@ class RiskEngine:
         as_of_date: str,
         policy_review: Mapping[str, Any],
         industry_mapping: Mapping[str, str] | None = None,
+        industry_membership: Mapping[str, Any] | None = None,
         state: Mapping[str, Any] | None = None,
         state_payload: Mapping[str, Any] | None = None,
         previous_target_weights: Mapping[str, float] | None = None,
@@ -556,6 +591,19 @@ class RiskEngine:
         previous = dict(previous_target_weights or {})
         rules = sorted(policy["rules"], key=lambda rule: (rule["priority"], rule["rule_id"]))
         industry_rule_active = any(rule["metric"] == "industry_weight" for rule in rules)
+        if industry_rule_active:
+            # cr.md U10: when an industry limit is evaluated the taxonomy must be
+            # the membership artifact the policy binds, never an unverified
+            # caller-supplied mapping.
+            binding = policy.get("industry_membership_binding")
+            if not binding:
+                raise ContractError("industry limit requires industry_membership_binding")
+            if industry_membership is None:
+                raise ContractError("industry membership artifact is required")
+            bound_mapping = _validate_industry_membership(industry_membership, binding)
+            if mapping and mapping != bound_mapping:
+                raise ContractError("caller industry mapping conflicts with policy-bound membership artifact")
+            mapping = bound_mapping
         known_metrics = _metrics(
             target_weights_frame, definition, mapping, previous,
             require_industry_membership=industry_rule_active,
@@ -568,11 +616,6 @@ class RiskEngine:
                 raise ContractError(f"unsupported portfolio risk rule: {rule['rule_id']}")
             if _RULE_SCOPES[rule["rule_id"]] != "portfolio":
                 raise ContractError(f"portfolio rule has wrong scope: {rule['rule_id']}")
-            if rule["metric"] == "industry_weight":
-                if not policy.get("industry_membership_binding"):
-                    raise ContractError("industry limit requires industry_membership_binding")
-                if not mapping:
-                    raise ContractError("industry membership mapping is required")
             if rule["state_required"] and state is None:
                 raise ContractError(f"risk state is required for rule: {rule['rule_id']}")
             observed = known_metrics.get(rule["metric"])

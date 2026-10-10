@@ -20,6 +20,7 @@ from qlib.data.dataset.loader import QlibDataLoader
 from ..contracts.canonical_v2 import file_sha256_bytes
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities
 from ..errors import ContractError
+from .dataset import resolve_train_split
 
 
 def _sha256_text(value: str) -> str:
@@ -139,14 +140,7 @@ class QlibRuntimeTrainer:
         # so deriving the segment from the calendar leaks every evaluation.
         # Purge/embargo separation between splits is enforced at dataset build
         # time by SplitValidator; here we must simply not fit beyond train.
-        splits = dataset_manifest["split_policy"]["splits"]
-        train_splits = [split for split in splits if split["name"] == "train"]
-        if len(train_splits) != 1:
-            raise ContractError("Qlib training requires exactly one train split in the dataset split policy")
-        train_start = train_splits[0]["start_date"]
-        train_end = train_splits[0]["end_date"]
-        if train_start < calendar_dates[0] or train_end > calendar_dates[-1]:
-            raise ContractError("Qlib export calendar does not cover the dataset train split")
+        train_start, train_end = resolve_train_split(dataset_manifest, calendar_dates)
         dataset = DatasetH(handler, segments={"train": (train_start, train_end)})
         prepared = dataset.prepare("train", col_set=["feature", "label"])
         prepared = prepared.dropna()

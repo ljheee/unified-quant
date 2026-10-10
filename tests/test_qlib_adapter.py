@@ -451,6 +451,45 @@ def test_partition_frames_preserves_datetime64():
     assert all(pd.api.types.is_datetime64_any_dtype(partition["datetime"]) for _, partition in partitions)
 
 
+def test_qlib_worker_output_preserves_datetime64(monkeypatch, tmp_path):
+    # cr.md U21: the H9 dtype-preservation line in the worker itself had no
+    # regression lock — pyarrow silently accepts string datetimes, so reverting
+    # worker's to_datetime stayed green. Drive _qlib_worker with a fake qlib
+    # module returning string datetimes and assert the parquet output dtype.
+    import types
+
+    from uq.factors import qlib_adapter
+
+    index = pd.MultiIndex.from_tuples(
+        [("600000.sh", "2024-01-02"), ("600000.sh", "2024-01-03")],
+        names=["instrument", "datetime"],
+    )
+    features_frame = pd.DataFrame({"$close": [0.1, 0.2]}, index=index)
+    fake_qlib = types.SimpleNamespace(
+        init=lambda **kwargs: None,
+        data=types.SimpleNamespace(
+            D=types.SimpleNamespace(features=lambda *args, **kwargs: features_frame.copy())
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "qlib", fake_qlib)
+
+    result_path = tmp_path / "result.parquet"
+    payload_path = tmp_path / "payload.json"
+    payload_path.write_text(json.dumps({
+        "provider_uri": "file:///unused",
+        "instruments": ["600000.sh"],
+        "expressions": ["$close"],
+        "factor_names": ["KLEN"],
+        "start_date": "2024-01-02",
+        "end_date": "2024-01-03",
+        "result_path": str(result_path),
+    }))
+    assert qlib_adapter._qlib_worker(str(payload_path)) == 0
+    output = pd.read_parquet(result_path)
+    assert pd.api.types.is_datetime64_any_dtype(output["datetime"])
+    assert output["instrument"].tolist() == ["600000.SH", "600000.SH"]
+
+
 def test_reconcile_result_accepts_datetime64_results():
     # cr.md H9 regression companion: key reconciliation compares normalized
     # date strings, so datetime64 results reconcile against the input panel.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import math
 import re
@@ -176,6 +177,21 @@ def paper_execution_identities(
     return generation_id, manifest_digest
 
 
+def initial_state_provenance_sha256(initial_state: Mapping[str, Any]) -> str:
+    """Canonical content commitment for an execution config initial state.
+
+    cr.md U13: the provenance hash must commit to the declared holdings, cash
+    and valuation basis; a self-asserted opaque 64-hex string no longer
+    passes validation.
+    """
+    return sha256_json({
+        "family": "paper_initial_state_v1",
+        "cash": initial_state["cash"],
+        "holdings": initial_state["holdings"],
+        "valuation_price_basis": initial_state["valuation_price_basis"],
+    })
+
+
 def _validate_paper_execution_bindings(payload: dict[str, Any], *, schema_name: str) -> None:
     required_families = {
         "target_weights_binding": "target_weights_v1",
@@ -198,6 +214,14 @@ def _validate_paper_execution_bindings(payload: dict[str, Any], *, schema_name: 
     result = payload.get("execution_result_binding")
     if isinstance(result, dict) and result.get("family") != "execution_result_v1":
         raise ContractError("paper execution result must bind execution_result_v1")
+    if schema_name == "execution_config" and payload.get("state_mode") == "initial":
+        # cr.md U13: recompute the provenance from the declared initial state
+        # content so the hash is a commitment, not an existence-only claim.
+        initial_state = payload["initial_state"]
+        if initial_state["provenance_sha256"] != initial_state_provenance_sha256(initial_state):
+            raise ContractError(
+                "execution_config initial state provenance does not commit to the initial state content"
+            )
 
 
 def _validate_paper_execution_state_transition(payload: dict[str, Any]) -> None:
@@ -739,7 +763,13 @@ def verify_reviewed_quality_report_signature(report: Mapping[str, Any]) -> None:
     }
     if not signed_fields.issubset(report):
         raise ContractError("quality report does not contain a reviewer-signed decision")
+    # cr.md U9: the signed payload also covers the subject. The report shape
+    # is unchanged (model_quality_report.v2): the signed subject_generation_id
+    # is carried by bound_generation_id, which bind_reviewed_quality_decision
+    # proves equal to the decision's signed subject before publishing.
     unsigned_payload = {key: report[key] for key in signed_fields}
+    unsigned_payload["subject_generation_id"] = report.get("bound_generation_id")
+    unsigned_payload["subject_content_sha256"] = report.get("subject_content_sha256")
     _MODEL_QUALITY_TRUST_ANCHOR.verify(
         unsigned_payload,
         signature_hex=report.get("review_signature_sha256"),
@@ -774,6 +804,8 @@ def create_reviewed_quality_decision(
     warnings: list[str],
     producer_code_fingerprint: str,
     private_key_pem: Path | str,
+    subject_generation_id: str,
+    subject_content_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Create an immutable decision from the separately held reviewer role."""
     registry_binding = _MODEL_QUALITY_REVIEW_REGISTRY.bindings.get(binding_type)
@@ -787,11 +819,21 @@ def create_reviewed_quality_decision(
     for check in checks:
         if check.get("name") not in allowed_check_names:
             raise ContractError(f"check '{check.get('name')}' not in allowed checks {sorted(allowed_check_names)}")
+    # cr.md U9: the reviewer must commit to the reviewed subject inside the
+    # signed payload — a subject-less signature was replayable across any
+    # subject of the same binding_type (cross-subject replay).
+    if not isinstance(subject_generation_id, str) or not _SHA256.fullmatch(subject_generation_id):
+        raise ContractError("reviewed quality decision requires a valid subject generation id")
+    subject_digest = subject_content_sha256 or subject_generation_id
+    if not isinstance(subject_digest, str) or not _SHA256.fullmatch(subject_digest):
+        raise ContractError("reviewed quality decision requires a valid subject content checksum")
     unsigned_payload = {
         "binding_type": binding_type, "checks": checks, "errors": errors,
         "key_id": _MODEL_QUALITY_TRUST_ANCHOR.key_id, "policy": policy,
         "producer_code_fingerprint": producer_code_fingerprint,
         "reviewer": _MODEL_QUALITY_REVIEW_REGISTRY.reviewer, "status": status,
+        "subject_generation_id": subject_generation_id,
+        "subject_content_sha256": subject_digest,
         "warnings": warnings,
     }
     return {
@@ -811,17 +853,43 @@ def bind_reviewed_quality_decision(
     subject_content_sha256: str | None = None,
 ) -> tuple[dict[str, Any], str]:
     """Mechanically bind an unchanged external decision to a stable subject."""
+    if isinstance(decision, Mapping) and "owning_report" in decision:
+        # cr.md U15: the research-chain resolver hands stages quality_decision.v1
+        # envelopes (an already-bound owning report), while reviewers/providers
+        # hand the raw signed decision. Adopt the envelope after full
+        # verification instead of crashing on the raw-decision field set.
+        envelope = dict(decision)
+        ModelContractLoader.validate("quality_decision", envelope)
+        report = dict(envelope["owning_report"])
+        if envelope["binding_type"] != binding_type:
+            raise ContractError(f"quality decision does not match {binding_type}")
+        if envelope["subject_generation_id"] != subject_generation_id:
+            raise ContractError("quality decision is signed for a different subject generation")
+        if (
+            subject_content_sha256 is not None
+            and envelope.get("subject_manifest_digest_sha256") != subject_content_sha256
+        ):
+            raise ContractError("quality decision is signed for different subject content")
+        return report, envelope["decision_checksum_sha256"]
     if not isinstance(decision, dict):
         raise ContractError("external quality decision must be an object")
+    # cr.md U9: decisions created before the subject entered the signed field
+    # set (11 fields, no subject) fail closed here — the signature must commit
+    # to the subject, otherwise it replays across subjects.
     required = {
         "report_version", "binding_type", "policy", "status", "checks",
         "errors", "warnings", "key_id", "producer_code_fingerprint", "reviewer",
-        "review_signature_sha256",
+        "review_signature_sha256", "subject_generation_id", "subject_content_sha256",
     }
     if set(decision) != required:
         raise ContractError("external quality decision has unexpected or missing fields")
     if decision.get("report_version") != 2 or decision.get("binding_type") != binding_type:
         raise ContractError(f"quality decision does not match {binding_type}")
+    subject_digest = subject_content_sha256 or subject_generation_id
+    if decision.get("subject_generation_id") != subject_generation_id:
+        raise ContractError("quality decision is signed for a different subject generation")
+    if decision.get("subject_content_sha256") != subject_digest:
+        raise ContractError("quality decision is signed for different subject content")
     _MODEL_QUALITY_REVIEW_REGISTRY.validate_report({**decision, "bound_generation_id": subject_generation_id})
     if decision.get("key_id") != _MODEL_QUALITY_TRUST_ANCHOR.key_id:
         raise ContractError("external quality decision is bound to another trust anchor")
@@ -832,14 +900,49 @@ def bind_reviewed_quality_decision(
     _MODEL_QUALITY_TRUST_ANCHOR.verify(
         unsigned_payload, signature_hex=decision.get("review_signature_sha256")
     )
-    subject_digest = subject_content_sha256 or subject_generation_id
+    # The report shape (model_quality_report.v2) is unchanged: the decision's
+    # signed subject_generation_id is carried by bound_generation_id — proven
+    # equal above — so the redundant copy is dropped rather than versioned.
     unsigned_report = {
-        **decision, "bound_generation_id": subject_generation_id,
+        **{key: value for key, value in decision.items() if key != "subject_generation_id"},
+        "bound_generation_id": subject_generation_id,
         "subject_content_sha256": subject_digest,
     }
     report = {**unsigned_report, "report_checksum_sha256": sha256_json(unsigned_report)}
     ModelContractLoader.validate("model_quality_report", report)
     return report, report["report_checksum_sha256"]
+
+
+def resolve_subject_quality_decision(
+    decision: Any,
+    *,
+    subject_generation_id: str,
+    subject_content_sha256: str,
+) -> Any:
+    """Resolve a quality decision that may be a per-subject provider.
+
+    cr.md U9: since the reviewer signature now commits to the subject, flows
+    that derive the subject generation id internally (publish-time manifests)
+    cannot receive a pre-signed static decision — the caller cannot know the
+    subject in advance. Such flows accept a provider callable, mirroring the
+    research-chain runner protocol: it is invoked with the derived subject and
+    must return the signed decision for exactly that subject.
+
+    Providers are arity-adaptive (cr.md U14): a two-argument provider receives
+    (subject_generation_id, subject_content_sha256); the research-chain
+    runner's legacy one-argument providers receive only the generation id —
+    their decisions default the content digest to the generation id, so flows
+    whose content digest differs still fail closed at bind time.
+    """
+    if callable(decision):
+        try:
+            arity = len(inspect.signature(decision).parameters)
+        except (TypeError, ValueError):
+            arity = 2
+        if arity >= 2:
+            return decision(subject_generation_id, subject_content_sha256)
+        return decision(subject_generation_id)
+    return decision
 
 
 class AcceptedFactorIndexContract:

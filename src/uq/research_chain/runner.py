@@ -14,6 +14,7 @@ from ..contracts.model_layer import (
     research_contract_identities,
     research_stage_plan_sha256,
     research_stage_plan_v2_sha256,
+    resolve_subject_quality_decision,
     sha256_json,
 )
 from ..contracts.gate_contracts import adjustment_snapshot_generation
@@ -363,7 +364,33 @@ class ResearchChainRunner:
         if callable(decision):
             if subject_generation_id is None:
                 raise ContractError(f"quality decision provider requires a subject: {key}")
-            decision = decision(subject_generation_id)
+            decision = resolve_subject_quality_decision(
+                decision,
+                subject_generation_id=subject_generation_id,
+                subject_content_sha256=subject_generation_id,
+            )
+        if not isinstance(decision, Mapping):
+            raise ContractError(f"invalid research chain quality decision: {key}")
+        return decision
+
+    def _subject_decision(
+        self,
+        quality_decisions: Mapping[str, Any],
+        key: str,
+    ) -> Any:
+        """Pass a per-subject decision through to the stage flow unresolved.
+
+        cr.md U14: stages whose subject content digest differs from the subject
+        generation id (model_run, qlib export/receipt) or that attest one
+        subject per decision date (prediction_set, target_weights) cannot be
+        resolved eagerly by the runner — the flow derives the subject and
+        resolves provider callables / verifies resolver envelopes itself.
+        """
+        decision = quality_decisions.get(key)
+        if decision is None:
+            raise ContractError(f"missing research chain quality decision: {key}")
+        if callable(decision):
+            return decision
         if not isinstance(decision, Mapping):
             raise ContractError(f"invalid research chain quality decision: {key}")
         return decision
@@ -398,13 +425,18 @@ class ResearchChainRunner:
         # cr.md H5: label_set/backtest_config decisions are fetched by resolved
         # subject at execute time so provider mode attests per subject and the
         # stage adapters verify them (aligned with the factor stage).
+        # cr.md U14: the dataset is this stage's own output — the plan carries
+        # no model_dataset binding yet, so the decision must pass through to
+        # the writer, which resolves providers against the derived generation.
         label_binding = self._binding(plan, "label_set")
+        preprocessing_binding = self._binding(plan, "feature_preprocessing")
         result = self.dataset_adapter.run(
             plan,
             runner_identity=dict(runner_identity),
-            quality_decision=self._decision(quality_decisions, "model_dataset"),
+            quality_decision=self._subject_decision(quality_decisions, "model_dataset"),
             preprocessing_quality_decision=self._decision(
-                quality_decisions, "feature_preprocessing"
+                quality_decisions, "feature_preprocessing",
+                preprocessing_binding.generation_id,
             ),
             label_quality_decision=self._decision(
                 quality_decisions, "label_set", label_binding.generation_id
@@ -451,8 +483,12 @@ class ResearchChainRunner:
             cache_root=str(cache_root),
             cache_files_before=cache_before,
             cache_files_after=None,
-            export_quality_decision=self._decision(quality_decisions, "qlib_dataset_export"),
-            receipt_quality_decision=self._decision(quality_decisions, "qlib_init_receipt"),
+            export_quality_decision=self._subject_decision(
+                quality_decisions, "qlib_dataset_export"
+            ),
+            receipt_quality_decision=self._subject_decision(
+                quality_decisions, "qlib_init_receipt"
+            ),
             runner_identity=dict(runner_identity),
             created_at=created_at,
         )
@@ -512,7 +548,7 @@ class ResearchChainRunner:
                 "random_seed": plan.request["environment"]["seed"],
                 "threads": plan.request["environment"]["thread_count"],
             },
-            model_quality_decision=self._decision(quality_decisions, "model_run"),
+            model_quality_decision=self._subject_decision(quality_decisions, "model_run"),
             artifact_quality_decision_provider=artifact_decision_provider
                 or (lambda generation_id: self._decision(
                     quality_decisions, "model_artifact", generation_id
@@ -550,7 +586,7 @@ class ResearchChainRunner:
                 date: scores_by_decision_date[date]
                 for date in dates
             },
-            quality_decision=self._decision(quality_decisions, "prediction_set"),
+            quality_decision=self._subject_decision(quality_decisions, "prediction_set"),
             eligibility_policy="reviewed-v1",
             eligibility_status="passed",
             runner_identity=dict(runner_identity),
@@ -591,7 +627,9 @@ class ResearchChainRunner:
                     quality_decisions, "portfolio_definition", definition["generation_id"]
                 )
             ),
-            weights_quality_decision=self._decision(quality_decisions, "target_weights"),
+            weights_quality_decision=self._subject_decision(
+                quality_decisions, "target_weights"
+            ),
             runner_identity=dict(runner_identity),
             created_at=created_at,
             prediction_generation_by_date={
@@ -610,13 +648,18 @@ class ResearchChainRunner:
         quality_decisions: Mapping[str, Any],
         created_at: str,
     ) -> None:
-        config_binding = self._binding(plan, "backtest_config")
+        # cr.md U14: the backtest result is this stage's own output and the
+        # config review attests the provisional generation (the config identity
+        # covers the recorded checksum) — both decisions must pass through to
+        # the adapter, which resolves providers against the derived subjects.
         result = self.backtest_adapter.run(
             plan,
             portfolio_stage_result=self.portfolio_adapter.last_result,
-            quality_decision=self._decision(quality_decisions, "backtest_result"),
-            config_quality_decision=self._decision(
-                quality_decisions, "backtest_config", config_binding.generation_id
+            quality_decision=self._subject_decision(
+                quality_decisions, "backtest_result"
+            ),
+            config_quality_decision=self._subject_decision(
+                quality_decisions, "backtest_config"
             ),
             runner_identity=dict(runner_identity),
             created_at=created_at,

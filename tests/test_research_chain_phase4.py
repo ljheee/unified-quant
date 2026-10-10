@@ -48,6 +48,7 @@ def _definition_decision(generation_id: str = DIGEST) -> dict:
             {"name": "universe_binding_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
         ], errors=[], warnings=[], producer_code_fingerprint=DIGEST,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=generation_id,
     )
     report, _ = bind_reviewed_quality_decision(
         decision, binding_type="portfolio_definition_v1",
@@ -65,16 +66,23 @@ def _definition_decision(generation_id: str = DIGEST) -> dict:
     }
 
 
-def _weights_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="target_weights_v1", policy="reject_all", status="passed",
-        checks=[
-            {"name": "weight_sum_within_reserve", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-            {"name": "no_nan_inf_weights", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-            {"name": "instruments_in_universe", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-        ], errors=[], warnings=[], producer_code_fingerprint=DIGEST,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def _weights_decision():
+    # cr.md U9: reviewer signatures commit to the subject, and each decision
+    # date's weights subject is derived inside the portfolio flow — so the
+    # factory returns a per-subject provider the store resolves at publish.
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="target_weights_v1", policy="reject_all", status="passed",
+            checks=[
+                {"name": "weight_sum_within_reserve", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "no_nan_inf_weights", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "instruments_in_universe", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+            ], errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
 def _wrong_binding_type_decision(generation_id: str) -> dict:
@@ -83,6 +91,7 @@ def _wrong_binding_type_decision(generation_id: str) -> dict:
         checks=[{"name": "weight_sum_within_reserve", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint=DIGEST,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=generation_id,
     )
     report, _ = bind_reviewed_quality_decision(
         unsigned, binding_type="target_weights_v1", subject_generation_id=generation_id,
@@ -99,42 +108,55 @@ def _wrong_binding_type_decision(generation_id: str) -> dict:
     }
 
 
-def _result_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="backtest_result_v1", policy="reject_all", status="passed",
-        checks=[
-            {"name": "equity_curve_finite_positive", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-            {"name": "turnover_non_negative", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-            {"name": "lineage_generations_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-        ], errors=[], warnings=[], producer_code_fingerprint=DIGEST,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
-
-
-def _config_decision(status: str = "passed") -> dict:
-    if status == "passed":
+def _result_decision():
+    # cr.md U9: the result generation is derived inside the result store at
+    # publish time, so the factory returns a per-subject provider.
+    def provider(subject_generation_id: str) -> dict:
         return create_reviewed_quality_decision(
-            binding_type="backtest_config_v1", policy="reject_all", status="passed",
+            binding_type="backtest_result_v1", policy="reject_all", status="passed",
             checks=[
-                {"name": "calendar_period_valid", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-                {"name": "cost_parameters_non_negative", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-                {"name": "price_source_bound", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "equity_curve_finite_positive", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "turnover_non_negative", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "lineage_generations_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
             ], errors=[], warnings=[], producer_code_fingerprint=DIGEST,
             private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
         )
-    # The registry factory refuses to issue non-approved decisions; craft a
-    # validly signed rejected document directly (cr.md H5 regression).
-    from uq.contracts.model_layer import review_signature
-    unsigned = {
-        "binding_type": "backtest_config_v1",
-        "checks": [{"name": "calendar_period_valid", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        "errors": [], "key_id": "model-quality-reviewer-v1-2026-09", "policy": "reject_all",
-        "producer_code_fingerprint": DIGEST, "reviewer": "external-model-quality-reviewer-v1",
-        "status": status, "warnings": [],
-    }
-    return {**unsigned, "report_version": 2, "review_signature_sha256": review_signature(
-        {**unsigned, "report_version": 2}, private_key_pem=REVIEWER_PRIVATE_KEY
-    )}
+    return provider
+
+
+def _config_decision(status: str = "passed"):
+    # cr.md U9: reviewer signatures commit to the subject, so the factory
+    # returns a provider keyed by the config generation.
+    def provider(subject_generation_id: str) -> dict:
+        if status == "passed":
+            return create_reviewed_quality_decision(
+                binding_type="backtest_config_v1", policy="reject_all", status="passed",
+                checks=[
+                    {"name": "calendar_period_valid", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                    {"name": "cost_parameters_non_negative", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                    {"name": "price_source_bound", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                ], errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+                private_key_pem=REVIEWER_PRIVATE_KEY,
+                subject_generation_id=subject_generation_id,
+            )
+        # The registry factory refuses to issue non-approved decisions; craft a
+        # validly signed rejected document directly (cr.md H5 regression).
+        # cr.md U9: the subject must sit inside the signed payload.
+        from uq.contracts.model_layer import review_signature
+        unsigned = {
+            "binding_type": "backtest_config_v1",
+            "checks": [{"name": "calendar_period_valid", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            "errors": [], "key_id": "model-quality-reviewer-v1-2026-09", "policy": "reject_all",
+            "producer_code_fingerprint": DIGEST, "reviewer": "external-model-quality-reviewer-v1",
+            "status": status, "warnings": [],
+            "subject_generation_id": subject_generation_id,
+            "subject_content_sha256": subject_generation_id,
+        }
+        return {**unsigned, "report_version": 2, "review_signature_sha256": review_signature(
+            {**unsigned, "report_version": 2}, private_key_pem=REVIEWER_PRIVATE_KEY
+        )}
+    return provider
 
 
 def _publish_model_artifact(root: Path) -> tuple[str, str, str]:
@@ -168,6 +190,8 @@ def _publish_model_artifact(root: Path) -> tuple[str, str, str]:
         checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint=DIGEST,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=artifact_generation,
+        subject_content_sha256=artifact_generation,
     )
     report, _ = bind_reviewed_quality_decision(
         unsigned, binding_type="model_artifact_v1", subject_generation_id=artifact_generation,
@@ -308,6 +332,19 @@ def _backtest_config(
         "quality_report_checksum_sha256": DIGEST,
         "generation_id": DIGEST, "manifest_digest_sha256": DIGEST,
     }
+    config["generation_id"], config["manifest_digest_sha256"] = model_manifest_identities(
+        config, schema_name="backtest_config"
+    )
+    # cr.md U9: the backtest_config identity covers the recorded review
+    # checksum, so the review attests the provisional generation first;
+    # bind and record its checksum, then re-derive the final identity
+    # (two-step, aligned with TargetWeightStore.publish).
+    _, config_report_checksum = bind_reviewed_quality_decision(
+        _config_decision()(config["generation_id"]),
+        binding_type="backtest_config_v1",
+        subject_generation_id=config["generation_id"],
+    )
+    config["quality_report_checksum_sha256"] = config_report_checksum
     config["generation_id"], config["manifest_digest_sha256"] = model_manifest_identities(
         config, schema_name="backtest_config"
     )
@@ -661,7 +698,8 @@ def test_backtest_stage_publishes_ordered_weight_lineage(tmp_path: Path) -> None
     )
     result = backtest.run(
         plan, portfolio_stage_result=portfolio_result,
-        quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
+        quality_decision=_result_decision(),
+        config_quality_decision=_config_decision(), runner_identity=RUNNER,
     )
     bindings = result.result_manifest["target_weight_bindings"]
     assert [binding["decision_date"] for binding in bindings] == ["2026-01-05"]
@@ -695,13 +733,15 @@ def test_backtest_stage_verifies_config_decision_at_execute_time(tmp_path: Path)
     with pytest.raises(ContractError, match="not approved"):
         backtest.run(
             plan, portfolio_stage_result=portfolio_result,
-            quality_decision=_result_decision(), config_quality_decision=_config_decision(status="rejected"),
+            quality_decision=_result_decision(),
+            config_quality_decision=_config_decision(status="rejected"),
             runner_identity=RUNNER,
         )
     with pytest.raises(ContractError, match="does not match backtest_config_v1"):
         backtest.run(
             plan, portfolio_stage_result=portfolio_result,
-            quality_decision=_result_decision(), config_quality_decision=_result_decision(),
+            quality_decision=_result_decision(),
+            config_quality_decision=_result_decision(),
             runner_identity=RUNNER,
         )
 
@@ -736,12 +776,13 @@ def test_backtest_rejects_universe_binding_mismatch(tmp_path: Path) -> None:
     with pytest.raises(ContractError, match="backtest universe binding mismatch"):
         backtest.run(
             plan, portfolio_stage_result=portfolio_result,
-            quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
+            quality_decision=_result_decision(),
+            config_quality_decision=_config_decision(), runner_identity=RUNNER,
         )
 
 
 def test_backtest_rejects_forged_portfolio_state(tmp_path: Path) -> None:
-    plan, portfolio, portfolio_result, _ = _prepare_portfolio(tmp_path)
+    plan, portfolio, portfolio_result, config = _prepare_portfolio(tmp_path)
     forged = dataclasses.replace(
         portfolio_result,
         published_state=PublishedState(
@@ -758,7 +799,8 @@ def test_backtest_rejects_forged_portfolio_state(tmp_path: Path) -> None:
     with pytest.raises(ContractError, match="research state manifest digest mismatch"):
         backtest.run(
             plan, portfolio_stage_result=forged,
-            quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
+            quality_decision=_result_decision(),
+            config_quality_decision=_config_decision(), runner_identity=RUNNER,
         )
 
 
@@ -802,7 +844,8 @@ def test_backtest_records_suspension_skip(tmp_path: Path) -> None:
     backtest = _backtest_adapter(tmp_path, portfolio.run_store)
     result = backtest.run(
         plan, portfolio_stage_result=portfolio_result,
-        quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
+        quality_decision=_result_decision(),
+        config_quality_decision=_config_decision(), runner_identity=RUNNER,
     )
     statuses = result.result_artifacts["fills"]["status"].unique().tolist()
     assert "skipped_suspended" in statuses
@@ -821,7 +864,8 @@ def test_backtest_rejects_corporate_action_overlap(tmp_path: Path) -> None:
     with pytest.raises(ContractError, match="corporate-action instruments"):
         backtest.run(
             plan, portfolio_stage_result=portfolio_result,
-            quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
+            quality_decision=_result_decision(),
+            config_quality_decision=_config_decision(), runner_identity=RUNNER,
         )
 
 
@@ -839,5 +883,6 @@ def test_backtest_rejects_tampered_price_data(tmp_path: Path) -> None:
     with pytest.raises(ContractError, match="tampered adjusted price data checksum"):
         backtest.run(
             plan, portfolio_stage_result=portfolio_result,
-            quality_decision=_result_decision(), config_quality_decision=_config_decision(), runner_identity=RUNNER,
+            quality_decision=_result_decision(),
+            config_quality_decision=_config_decision(), runner_identity=RUNNER,
         )

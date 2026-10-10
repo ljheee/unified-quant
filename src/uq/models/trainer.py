@@ -13,7 +13,7 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
-from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, sha256_json
 from ..errors import ContractError
 
 
@@ -348,10 +348,14 @@ class ModelRunBuilder:
             "manifest_digest_sha256": "0" * 64,
         }
         generation_id,_=model_manifest_identities(manifest,schema_name="model_run",exclude_fields={"quality_report_checksum_sha256"})
+        subject_content=sha256_json({key:value for key,value in manifest.items() if key not in {"quality_report_checksum_sha256","generation_id","manifest_digest_sha256","run_id","created_at"}})
+        quality_decision=resolve_subject_quality_decision(
+            quality_decision,subject_generation_id=generation_id,subject_content_sha256=subject_content
+        )
         bound_report, report_checksum = bind_reviewed_quality_decision(
             quality_decision,binding_type="model_run_v1",
             subject_generation_id=generation_id,
-            subject_content_sha256=sha256_json({key:value for key,value in manifest.items() if key not in {"quality_report_checksum_sha256","generation_id","manifest_digest_sha256","run_id","created_at"}}),
+            subject_content_sha256=subject_content,
         )
         governance_dir=Path(store_root)/"external_quality_reviews";governance_dir.mkdir(parents=True,exist_ok=True)
         report_path=governance_dir/f"{report_checksum}.json"

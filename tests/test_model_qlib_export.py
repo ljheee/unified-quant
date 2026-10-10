@@ -16,22 +16,33 @@ from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
 
 
 
-def export_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
-        checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def export_decision():
+    # cr.md U9/U14: the export generation and content digest are derived
+    # inside the exporter, so the decision must arrive as a two-argument
+    # per-subject provider.
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
+            checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
-def receipt_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="qlib_init_receipt_v1", policy="reject_all", status="passed",
-        checks=[{"name": "runtime_cache_boundary", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def receipt_decision():
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="qlib_init_receipt_v1", policy="reject_all", status="passed",
+            checks=[{"name": "runtime_cache_boundary", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 def _dataset_frame() -> pd.DataFrame:
     dates = pd.bdate_range("2026-01-05", periods=3)

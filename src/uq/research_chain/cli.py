@@ -203,11 +203,18 @@ class _CommandDecisionProvider:
 def _decision_provider_for_family(provider: Any, output_family: str):
     binding_type = _BINDING_TYPE_BY_FAMILY[output_family]
 
-    def resolve(subject_generation_id: str) -> Mapping[str, Any]:
+    # cr.md U14: two-argument so content≠generation stage flows (model_run,
+    # qlib export/receipt, prediction_set, target_weights) forward the subject
+    # digest to the external provider; one-argument legacy callables would
+    # fail closed at those stages.
+    def resolve(
+        subject_generation_id: str,
+        subject_manifest_digest_sha256: str | None = None,
+    ) -> Mapping[str, Any]:
         return provider.resolve(
             binding_type=binding_type,
             subject_generation_id=subject_generation_id,
-            subject_manifest_digest_sha256=None,
+            subject_manifest_digest_sha256=subject_manifest_digest_sha256,
             output_family=output_family,
             provider_config_ref=provider.provider_config_ref,
         )

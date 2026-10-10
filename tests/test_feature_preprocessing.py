@@ -46,30 +46,38 @@ def _frame() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _report() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="feature_preprocessing_v1",
-        policy="cross_sectional_stateless_v1",
-        status="passed",
-        checks=CHECKS["feature_preprocessing_v1"],
-        errors=[],
-        warnings=[],
-        producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def _report():
+    # cr.md U9: the writer derives the preprocessing/dataset generation at
+    # write time, so decisions must arrive as per-subject providers.
+    def provider(subject_generation_id: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="feature_preprocessing_v1",
+            policy="cross_sectional_stateless_v1",
+            status="passed",
+            checks=CHECKS["feature_preprocessing_v1"],
+            errors=[],
+            warnings=[],
+            producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+        )
+    return provider
 
 
-def _dataset_report() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="model_dataset_v1",
-        policy="reject_all",
-        status="passed",
-        checks=CHECKS["model_dataset_v1"],
-        errors=[],
-        warnings=[],
-        producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def _dataset_report():
+    def provider(subject_generation_id: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="model_dataset_v1",
+            policy="reject_all",
+            status="passed",
+            checks=CHECKS["model_dataset_v1"],
+            errors=[],
+            warnings=[],
+            producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+        )
+    return provider
 
 
 def _input_schema(frame: pd.DataFrame) -> dict:
@@ -495,12 +503,13 @@ def test_quality_review_requires_separately_held_private_key() -> None:
             warnings=[],
             producer_code_fingerprint="0" * 64,
             private_key_pem=Path("/definitely/missing/reviewer-key.pem"),
+            subject_generation_id="0" * 64,
         )
 
 
 def test_quality_review_signature_binds_all_decision_fields() -> None:
     subject = "a" * 64
-    decision = _report()
+    decision = _report()(subject)
     bind_reviewed_quality_decision(
         decision, binding_type="feature_preprocessing_v1", subject_generation_id=subject
     )

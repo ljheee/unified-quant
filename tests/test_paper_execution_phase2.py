@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import copy
 import json
 from pathlib import Path
-from uuid import NAMESPACE_URL, uuid5
 
 import pandas as pd
 import pytest
 
 from uq.contracts.model_layer import (
-    ModelContractLoader,
+    create_reviewed_quality_decision,
+    initial_state_provenance_sha256,
     paper_execution_identities,
-    review_signature,
 )
 from uq.errors import ContractError
 from uq.execution.engine import PaperExecutionEngine
@@ -31,6 +29,12 @@ def _config() -> dict:
 
 
 def _recompute(config: dict) -> dict:
+    # cr.md U13: the provenance commits to the initial state content, so any
+    # mutation of that content must re-commit before identities are recomputed.
+    if config.get("state_mode") == "initial" and config.get("initial_state") is not None:
+        config["initial_state"]["provenance_sha256"] = initial_state_provenance_sha256(
+            config["initial_state"]
+        )
     config["generation_id"], config["manifest_digest_sha256"] = paper_execution_identities(
         config, schema_name="execution_config"
     )
@@ -87,10 +91,19 @@ def _unsigned(family: str, generation: str) -> dict:
 
 
 def _decision_for_review(unsigned: dict, family: str, generation: str) -> dict:
-    unsigned = copy.deepcopy(unsigned)
-    unsigned["binding_type"] = family
-    unsigned["review_signature_sha256"] = review_signature(unsigned, private_key_pem=REVIEWER_PRIVATE_KEY)
-    return unsigned
+    # cr.md U9: the reviewer signature must cover the subject; hand-assembled
+    # decisions fail closed at bind time. Mint through the reviewer factory.
+    return create_reviewed_quality_decision(
+        binding_type=family,
+        policy=unsigned["policy"],
+        status=unsigned["status"],
+        checks=unsigned["checks"],
+        errors=unsigned["errors"],
+        warnings=unsigned["warnings"],
+        producer_code_fingerprint=unsigned["producer_code_fingerprint"],
+        private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=generation,
+    )
 
 
 def _converged_risk(config: dict) -> dict:
@@ -171,9 +184,12 @@ def _publish_plan(tmp_path: Path, config: dict, target: pd.DataFrame) -> tuple[d
         "generation_id": "0" * 64,
     }
     store = OrderPlanStore(tmp_path)
-    generation = config["generation_id"]
-    unsigned = _unsigned("order_plan_v1", generation)
-    decision = _decision_for_review(unsigned, "order_plan_v1", generation)
+    # cr.md U9: the store derives the plan manifest generation at publish time,
+    # so the decision must arrive as a per-subject provider.
+    def decision(subject_generation_id: str) -> dict:
+        return _decision_for_review(
+            _unsigned("order_plan_v1", subject_generation_id), "order_plan_v1", subject_generation_id
+        )
     store.publish(manifest, frame, quality_decision=decision, risk_decision=risk)
     published, published_frame = store.read(json.loads((store.directory / config["execution_id"] / config["execution_date"] / f"generation={manifest['generation_id']}" / "manifest.json").read_text())["generation_id"])
     return published, published_frame
@@ -396,9 +412,12 @@ def test_result_store_readback_rejects_payload_tampering(tmp_path: Path) -> None
     plan_manifest, plan_frame = _publish_plan(tmp_path, config, target)
     result, manifest = _execute(config, plan_manifest, plan_frame, target)
     store = ExecutionResultStore(tmp_path)
-    generation = config["generation_id"]
-    unsigned = _unsigned("execution_result_v1", generation)
-    decision = _decision_for_review(unsigned, "execution_result_v1", generation)
+    # cr.md U9: the store derives the result manifest generation at publish
+    # time, so the decision must arrive as a per-subject provider.
+    def decision(subject_generation_id: str) -> dict:
+        return _decision_for_review(
+            _unsigned("execution_result_v1", subject_generation_id), "execution_result_v1", subject_generation_id
+        )
     partition = store.publish(manifest, result, quality_decision=decision)
     published_generation = json.loads((partition / "manifest.json").read_text())["generation_id"]
     data_path = partition / "data.parquet"

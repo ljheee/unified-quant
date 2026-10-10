@@ -6,11 +6,15 @@ import json
 import numpy as np
 import pandas as pd
 
+from ..contracts.adjustment_snapshot import CONSUMABLE_FORMULA_VERSION
 from ..errors import ContractError
 
 
 _REQUIRED = ["instrument", "datetime", "close", "adj_factor"]
-_LINEAGE_VERSION = "adj_factor.exchange_v2"
+# cr.md U6/U17: no longer a dead duplicate — this names the same constant the
+# snapshot reader enforces at the consumption seam (select_visible_generation),
+# so the factor layer and the contract layer cannot drift apart again.
+_LINEAGE_VERSION = CONSUMABLE_FORMULA_VERSION
 _FACTOR_FORMULAS = {
     "return_1d": {"operation": "pct_change", "periods": 1},
     "return_5d": {"operation": "pct_change", "periods": 5},

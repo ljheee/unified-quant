@@ -17,6 +17,7 @@ from ..contracts.model_layer import (
     bind_reviewed_quality_decision,
     file_sha256_bytes,
     paper_execution_identities,
+    resolve_subject_quality_decision,
     sha256_json,
 )
 from ..errors import ContractError
@@ -149,6 +150,9 @@ class ExecutionConfigStore(_ImmutablePaperManifestStore):
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
             manifest, schema_name=self.family
         )
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision, subject_generation_id=manifest["generation_id"], subject_content_sha256=manifest["generation_id"]
+        )
         report, checksum = bind_reviewed_quality_decision(
             quality_decision,
             binding_type="execution_config_v1",
@@ -203,6 +207,9 @@ class OrderPlanStore(_ImmutablePaperManifestStore):
         manifest["data_checksum_sha256"] = payload_checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
             manifest, schema_name=self.family
+        )
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision, subject_generation_id=manifest["generation_id"], subject_content_sha256=manifest["generation_id"]
         )
         report, report_checksum = bind_reviewed_quality_decision(
             quality_decision,
@@ -286,6 +293,9 @@ class ExecutionResultStore(_ImmutablePaperManifestStore):
         manifest["data_checksum_sha256"] = payload_checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
             manifest, schema_name=self.family
+        )
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision, subject_generation_id=manifest["generation_id"], subject_content_sha256=manifest["generation_id"]
         )
         report, report_checksum = bind_reviewed_quality_decision(
             quality_decision,
@@ -380,6 +390,9 @@ class PaperPortfolioStateStore(_ImmutablePaperManifestStore):
         manifest["data_checksum_sha256"] = payload_checksum
         manifest["generation_id"], manifest["manifest_digest_sha256"] = paper_execution_identities(
             manifest, schema_name=self.family
+        )
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision, subject_generation_id=manifest["generation_id"], subject_content_sha256=manifest["generation_id"]
         )
         report, report_checksum = bind_reviewed_quality_decision(
             quality_decision,

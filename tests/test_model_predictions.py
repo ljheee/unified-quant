@@ -16,7 +16,8 @@ from uq.models.trainer import ArtifactStore, ModelTrainer
 DIGEST = "0" * 64
 
 
-def prediction_decision() -> dict:
+def prediction_decision(subject_generation_id, subject_content_sha256) -> dict:
+    # cr.md U9: provider form — the reviewer signs the derived subject.
     return create_reviewed_quality_decision(
         binding_type="prediction_set_v1", policy="reject_all", status="passed",
         checks=[
@@ -25,6 +26,7 @@ def prediction_decision() -> dict:
         ],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=subject_generation_id, subject_content_sha256=subject_content_sha256,
     )
 
 
@@ -67,6 +69,7 @@ class TestPredictionBuilder:
             checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
             errors=[], warnings=[], producer_code_fingerprint=DIGEST,
             private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=generation, subject_content_sha256=generation,
         )
         report, _ = bind_reviewed_quality_decision(
             decision, binding_type="model_artifact_v1",
@@ -93,7 +96,7 @@ class TestPredictionBuilder:
             model_artifact_generation_id=artifact_generation_id,
             model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
             run_generation_id=run_generation_id, eligibility_policy="reviewed-v1", eligibility_status="passed",
-            decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision(),
+            decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision,
         )
         return builder, manifest, artifact
 
@@ -106,7 +109,7 @@ class TestPredictionBuilder:
             model_artifact_generation_id=artifact_generation_id,
             model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
             run_generation_id=run_generation_id, eligibility_policy="reviewed-v1", eligibility_status="passed",
-            decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision(),
+            decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision,
         )
         assert len(manifest["generation_id"]) == 64
         assert builder.publish(manifest, artifact).is_dir()
@@ -127,7 +130,7 @@ class TestPredictionBuilder:
                 model_artifact_generation_id="a" * 64, model_artifact_checksum="b" * 64,
                 input_dataset_generation_id="c" * 64, run_generation_id=DIGEST,
                 eligibility_policy="reviewed-v1", eligibility_status="passed", decision_date="2026-02-15", scores=scores,
-                quality_decision=prediction_decision(),
+                quality_decision=prediction_decision,
             )
 
     def test_immutable_overwrite_rejected(self, tmp_path) -> None:
@@ -154,7 +157,7 @@ class TestPredictionBuilder:
                 model_artifact_generation_id=artifact_generation_id,
                 model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
                 run_generation_id=run_generation_id, eligibility_policy="reviewed-v1", eligibility_status="passed",
-                decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision(),
+                decision_date="2026-02-15", scores=_scores(), quality_decision=prediction_decision,
             )
 
     def test_empty_scores_rejected(self, tmp_path) -> None:
@@ -186,6 +189,7 @@ class TestPredictionBuilder:
             ],
             errors=[], warnings=[], producer_code_fingerprint=DIGEST,
             private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id="f" * 64, subject_content_sha256="f" * 64,
         )
         wrong_generation, _ = bind_reviewed_quality_decision(
             wrong_decision, binding_type="prediction_set_v1",
@@ -211,13 +215,16 @@ class TestPredictionBuilder:
             ],
             errors=[], warnings=[], producer_code_fingerprint=DIGEST,
             private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=manifest["generation_id"], subject_content_sha256=manifest["generation_id"],
         )
         failed_report = {
-            **failed_decision,
+            key: value for key, value in failed_decision.items() if key != "subject_generation_id"
+        }
+        failed_report.update({
             "bound_generation_id": manifest["generation_id"],
             "subject_content_sha256": manifest["generation_id"],
             "status": "rejected",
-        }
+        })
         failed_report["report_checksum_sha256"] = sha256_json(failed_report)
         report_path.write_text(json.dumps(failed_report, sort_keys=True))
         tampered = {**manifest, "quality_report_checksum_sha256": failed_report["report_checksum_sha256"]}
@@ -235,13 +242,14 @@ class TestPredictionBuilder:
                     model_artifact_generation_id=artifact_generation_id,
                     model_artifact_checksum=checksum, input_dataset_generation_id="c" * 64,
                     run_generation_id=run_generation_id, decision_date="2026-02-15",
-                    scores=_scores(), eligibility_policy="reviewed-v1", eligibility_status=status, quality_decision=prediction_decision(),
+                    scores=_scores(), eligibility_policy="reviewed-v1", eligibility_status=status, quality_decision=prediction_decision,
                 )
         missing_eligibility_decision = create_reviewed_quality_decision(
             binding_type="prediction_set_v1", policy="reject_all", status="passed",
             checks=[{"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
             errors=[], warnings=[], producer_code_fingerprint=DIGEST,
             private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=DIGEST,
         )
         with pytest.raises(ContractError, match="passed eligibility_coverage"):
             builder.build(
@@ -260,5 +268,5 @@ class TestPredictionBuilder:
                 run_generation_id=run_generation_id, decision_date="2026-02-15",
                 scores=_scores(), eligibility_policy="reviewed-v1", eligibility_status="passed",
                 score_semantics={"unit": "raw_score", "direction": "higher_better", "ranking_scope": "global", "tie_policy": "instrument_order", "normalization": "none"},
-                quality_decision=prediction_decision(),
+                quality_decision=prediction_decision,
             )

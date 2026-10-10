@@ -554,6 +554,7 @@ def test_portfolio_definition_binding() -> None:
         binding_type="portfolio_definition_v1", policy="reject_all", status="passed",
         checks=checks, errors=[], warnings=[], producer_code_fingerprint="0" * 64,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=fixture["generation_id"],
     )
     report, _ = bind_reviewed_quality_decision(
         decision, binding_type="portfolio_definition_v1",

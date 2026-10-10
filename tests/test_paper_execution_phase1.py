@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import copy
 import json
 from pathlib import Path
-from uuid import uuid5, NAMESPACE_URL
 
 import pandas as pd
 import pytest
@@ -11,7 +9,6 @@ import pytest
 from uq.contracts.model_layer import (
     ModelContractLoader,
     create_reviewed_quality_decision,
-    review_signature,
 )
 from uq.errors import ContractError
 from uq.execution.planner import PaperOrderPlanner
@@ -30,7 +27,13 @@ def _config() -> dict:
 
 
 def _recompute(config: dict) -> dict:
-    from uq.contracts.model_layer import paper_execution_identities
+    from uq.contracts.model_layer import initial_state_provenance_sha256, paper_execution_identities
+    # cr.md U13: the provenance commits to the initial state content, so any
+    # mutation of that content must re-commit before identities are recomputed.
+    if config.get("state_mode") == "initial" and config.get("initial_state") is not None:
+        config["initial_state"]["provenance_sha256"] = initial_state_provenance_sha256(
+            config["initial_state"]
+        )
     config["generation_id"], config["manifest_digest_sha256"] = paper_execution_identities(
         config, schema_name="execution_config"
     )
@@ -74,10 +77,19 @@ def _unsigned(family: str, checks: list[str], generation: str) -> dict:
 
 
 def _decision_for_review(unsigned: dict, binding_type: str, generation: str) -> dict:
-    unsigned = copy.deepcopy(unsigned)
-    unsigned["binding_type"] = binding_type
-    signature = review_signature(unsigned, private_key_pem=REVIEWER_PRIVATE_KEY)
-    return {**unsigned, "review_signature_sha256": signature}
+    # cr.md U9: the reviewer signature must cover the subject; hand-assembled
+    # decisions fail closed at bind time. Mint through the reviewer factory.
+    return create_reviewed_quality_decision(
+        binding_type=binding_type,
+        policy=unsigned["policy"],
+        status=unsigned["status"],
+        checks=unsigned["checks"],
+        errors=unsigned["errors"],
+        warnings=unsigned["warnings"],
+        producer_code_fingerprint=unsigned["producer_code_fingerprint"],
+        private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=generation,
+    )
 
 
 def _publish_config(tmp_path: Path) -> tuple[dict, Path]:
@@ -335,12 +347,16 @@ def test_tampered_order_plan_payload_fails_read(tmp_path: Path) -> None:
     frame, residual = PaperOrderPlanner().plan(
         config, _target(), None, _prices(), opening_cash=config["initial_state"]["cash"]
     )
-    generation = config["generation_id"]
-    unsigned = _unsigned("order_plan_v1", [
-        "target_weights_binding_resolved", "row_count_and_keys_valid",
-        "cash_feasible_planning", "t1_quantity_valid",
-    ], generation)
-    decision = _decision_for_review(unsigned, "order_plan_v1", generation)
+    # cr.md U9: the store derives the plan manifest generation at publish time,
+    # so a pre-signed static decision cannot name the subject — provide the
+    # decision as a per-subject provider the store resolves after derivation.
+    def decision(subject_generation_id: str) -> dict:
+        unsigned = _unsigned("order_plan_v1", [
+            "target_weights_binding_resolved", "row_count_and_keys_valid",
+            "cash_feasible_planning", "t1_quantity_valid",
+        ], subject_generation_id)
+        return _decision_for_review(unsigned, "order_plan_v1", subject_generation_id)
+
     manifest = _order_plan_manifest(config, frame, residual)
     partition = store.publish(manifest, frame, quality_decision=decision, risk_decision=_decision(config))
     generation_id = json.loads((partition / "manifest.json").read_text())["generation_id"]

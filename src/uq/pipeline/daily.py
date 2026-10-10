@@ -147,6 +147,7 @@ class DailyIngestPipeline:
             "required_fields": self.contract.required_fields,
             "primary_source": self.contract.primary_source,
             "cross_validation": self.contract.cross_validation,
+            "minimum_coverage": self.contract.minimum_coverage,
             "sources": {name: sorted(capability.provides) for name, capability in self.contract.sources.items()},
         }, sort_keys=True)
         return {
@@ -322,8 +323,17 @@ class DailyIngestPipeline:
 
         gate = CrossSourceGate(
             self.contract.primary_source,
-            self.contract.cross_validation,
+            # cr.md U1: cross-source comparison is opt-in via
+            # require_cross_validation (--cross-validate). The default
+            # credential-free tdx pipeline carries no comparator source, so
+            # feeding the contract's rules into the gate would trip the
+            # comparator-unavailable error on every run and reject the
+            # documented default ingest path. When cross-validation *is*
+            # requested, the absent-secondary pre-check above and the gate's
+            # fail-closed comparator errors still apply.
+            self.contract.cross_validation if self.require_cross_validation else {},
             self.contract.owners,
+            minimum_coverage=self.contract.minimum_coverage,
         )
         quality = gate.merge(frames, ["instrument", "datetime"], set(requested_fields))
         if quality.frame.empty and instruments:

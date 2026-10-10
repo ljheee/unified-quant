@@ -25,7 +25,7 @@
     ],
     "cash": 100000.0,
     "valuation_price_basis": "decision_close_estimate",
-    "provenance_sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+    "provenance_sha256": "40a7ccfce2e266f2c1da88458f7c9d32abce67d62b43c5f09c9edaf10da398bf"
   },
   "market_data_binding": {
     "dataset_family": "bars_daily",
@@ -98,6 +98,6 @@
   "run_id": "bf12fa86-43d0-5310-ba8e-6e28bf5bd727",
   "created_at": "2026-09-08T00:00:00+00:00",
   "quality_report_checksum_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "manifest_digest_sha256": "44e1a10f007c09eb232e9cfee107bb69facd352cfa0e2f37c7929c521e2fd34b",
-  "generation_id": "39da9c4d89c4030fab383467037916abd0083e995506e5d109267e84c18e1334"
+  "manifest_digest_sha256": "321b0c321a6553acfb2ea4b68c03b15f21b6cfcb29c486d27c27cc5cc68dc117",
+  "generation_id": "fc5a042339525732454ca83b9ea6bb99ffeec128777b86df5d84a3b2ff520ad8"
 }

@@ -44,11 +44,17 @@ class AkShareLifecycleProvider:
             # and must stay unexplained (fail closed), not be excused as
             # "not listed yet".
             if symbol in delisted_codes:
-                result[instrument] = (
-                    "delisted_expected_missing"
-                    if trade_date >= delisted_codes[symbol]
-                    else "unknown_requires_review"
-                )
+                listed_on, delisted_on = delisted_codes[symbol]
+                if trade_date >= delisted_on:
+                    result[instrument] = "delisted_expected_missing"
+                elif listed_on is not None and trade_date < listed_on:
+                    # cr.md U5: a gap before the listing date of a
+                    # since-delisted stock is a legitimate not-yet-listed
+                    # absence (historical backfill spans pre-IPO dates);
+                    # only the in-window gap stays fail closed (H1).
+                    result[instrument] = "not_listed_expected_missing"
+                else:
+                    result[instrument] = "unknown_requires_review"
             elif exchange_ok and prefix_ok and symbol not in listed_codes:
                 result[instrument] = "not_listed_expected_missing"
             else:
@@ -66,18 +72,27 @@ class AkShareLifecycleProvider:
         codes.update(frame["A股代码"].astype(str).str.zfill(6))
         return codes
 
-    def _delisted_codes(self) -> dict[str, date]:
+    def _delisted_codes(self) -> dict[str, tuple[date | None, date]]:
+        """Map delisted symbol -> (listing date when known, delist date)."""
         import akshare as ak
 
-        events: dict[str, date] = {}
+        events: dict[str, tuple[date | None, date]] = {}
         sh = ak.stock_info_sh_delist(symbol="全部")
-        for code, value in zip(sh["公司代码"], sh["暂停上市日期"]):
+        sh_listed = sh["上市日期"] if "上市日期" in sh.columns else None
+        for index, (code, value) in enumerate(zip(sh["公司代码"], sh["暂停上市日期"])):
             if pd.notna(value):
-                events[str(code).zfill(6)] = pd.Timestamp(value).date()
+                listed_on = None
+                if sh_listed is not None and pd.notna(sh_listed.iloc[index]):
+                    listed_on = pd.Timestamp(sh_listed.iloc[index]).date()
+                events[str(code).zfill(6)] = (listed_on, pd.Timestamp(value).date())
         sz = ak.stock_info_sz_delist(symbol="终止上市公司")
-        for code, value in zip(sz["证券代码"], sz["终止上市日期"]):
+        sz_listed = sz["上市日期"] if "上市日期" in sz.columns else None
+        for index, (code, value) in enumerate(zip(sz["证券代码"], sz["终止上市日期"])):
             if pd.notna(value):
-                events[str(code).zfill(6)] = pd.Timestamp(value).date()
+                listed_on = None
+                if sz_listed is not None and pd.notna(sz_listed.iloc[index]):
+                    listed_on = pd.Timestamp(sz_listed.iloc[index]).date()
+                events[str(code).zfill(6)] = (listed_on, pd.Timestamp(value).date())
         return events
 
     def suspension_window(

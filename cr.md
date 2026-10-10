@@ -228,15 +228,15 @@
 
 | ID | 修复要点 | 主要变更文件 | 回归测试 |
 |---|---|---|---|
-| C1 | deriver 改为乘法基准复权因子并挂接正确日期侧，快照语义升级 v2（schema/fixture 同步），消除两处消费方乘法/除法倒挂 | market/adjustment.py、contracts/adjustment_snapshot.py、adjustment_snapshot.v1.json、formula-golden.json | test_adjustment_snapshot_runtime.py、test_adjustment_provider.py、test_adjusted_price_engine.py |
+| C1 | deriver 改为乘法基准复权因子并挂接正确日期侧，快照语义升级 v2（schema/fixture 同步），消除两处消费方乘法/除法倒挂 | market/adjustment.py、contracts/adjustment_snapshot.py、factors/adjusted_price.py、adjustment_snapshot.v1.json、formula-golden.json | test_adjustment_snapshot_runtime.py、test_adjustment_provider.py |
 | C2 | trainer/qlib_runtime 强制显式 train_period（缺省即拒），按 split_policy 窗口拟合，杜绝全导出日历训练泄漏 | models/trainer.py、models/qlib_runtime.py | test_model_trainer.py、test_model_end_to_end.py、test_model_predictions.py；既有调用点补 train_period（phase4、model_store_isolation） |
-| C3 | risk_decision 强制 review_status==approved，rejected 不再被当批准 | risk/contracts.py | test_risk_control_plane_phase0/1/3.py |
-| H1 | lifecycle 以上市/退市窗口判定历史缺行，退市前缺口不再误判 not_listed_expected_missing | market/lifecycle.py | test_cr_fixes.py |
+| C3 | risk_decision 强制 review_status==approved，rejected 不再被当批准 | risk/contracts.py | test_risk_control_plane_phase0.py |
+| H1 | lifecycle 以上市/退市窗口判定历史缺行，退市前缺口不再误判 not_listed_expected_missing | market/lifecycle.py | test_real_data_policy.py::test_gap_before_delist_date_is_not_excused_as_unlisted |
 | H2 | gate 四处 fail-open 全修：主源/参照源重复键拒绝、空主源拒绝、comparator 缺失/零重叠报错、最小覆盖率强制、零基期相对差按冲突计 | quality/gate.py | test_cr_fixes.py（4 项新增）；test_contract_validation.py 补 tushare 行 close/volume |
 | H3 | industry_weight 改由目标权重经 instrument→industry 映射实测聚合（不再取调用方入参 max(values)）；存在 industry_weight 规则时正权重标的缺行业归属即 fail-closed | risk/engine.py | test_risk_control_plane_phase1.py |
 | H4 | 零数量订单免收最低佣金（卖出现金贷记与买入费用两侧对齐 engine） | execution/planner.py | test_paper_execution_phase1.py::test_zero_quantity_rows_do_not_incur_minimum_commission |
 | H5 | label_set_v1/backtest_config_v1 质量决定在 execute 期取回并 bind 核验（签名/binding_type/subject/status），伪造或被拒决定 fail-closed | research_chain/adapters.py、runner.py | test_research_chain_phase2.py（label）、phase4.py（config）、phase1/3/5 同步 |
-| H6 | _MappingDecisionProvider 支持 callable 按 subject 求值，非 Mapping 返回 fail-closed，provider-json 模式不再必崩 | research_chain/cli.py | test_research_chain_phase1.py::test_mapping_decision_provider_invokes_callable_per_subject |
+| H6 | _MappingDecisionProvider 支持 callable 按 subject 求值，非 Mapping 返回 fail-closed，resolve 半段不再必崩；「provider-json 模式不再必崩」按端到端口径当时不成立（崩点后移至 execute 首站 subject-less 决策取回），execute 半段由 U 批 U14 补齐（见 §7.3） | research_chain/cli.py | test_research_chain_phase1.py::test_mapping_decision_provider_invokes_callable_per_subject（resolve 半段）；execute 半段覆盖见 §7.3 U14 行 |
 | H7 | pct_change 显式 fill_method=None，NaN close 在绑定校验即拒，不再跨缺失 bar 伪造收益 | factors/adjusted_price.py | test_adjusted_price_engine.py::test_nan_close_is_rejected_before_return_calculation |
 | H8 | prior_state 与 prior_payload 必须成对提供（单独携带 payload 即拒），payload 完整性校验前置，伪造 cooldown state 不再抑制 loss-control | risk/state.py | test_risk_control_plane_phase3.py |
 | H9 | qlib worker 输出保留 datetime64，分区标签与结果对账统一按规范化日期字符串，下游 .dt 消费不再崩 | factors/qlib_adapter.py | test_qlib_adapter.py（dtype 保持 + 对账接受 datetime64） |
@@ -256,3 +256,46 @@
 - 每批相关套件绿：cr_fixes 13；quality 邻接 72；paper execution 82；research chain phase1–5 全绿；factors 及下游消费套件全绿。
 - 最终全量：**592 passed, 22 skipped**（skip 均为 qlib 门禁用例，本地无 pyqlib）。
 - 未动 Medium/Low 清单（5.4 余下约 34 条）与原 15 条正式发现，留待下批。
+
+## 七、对抗评审修复记录（2026-10-10，U 批次）
+
+2026-10-10 对 35c4e1b 的四路对抗评审（报告：docs/adversarial/2026-10-10-cr35c4e1b-regression-review/REPORT.md，U 编号）确认 **1 BLOCKER + 8 MAJOR + 8 MINOR** 及若干观察项，本批全部修复。本节登记归因勘误、兼容性切断与逐项修复清单。
+
+### 7.1 6.1 表归因勘误（U23）
+
+- **C1 行**：回归测试列原引 test_adjusted_price_engine.py——35c4e1b 在该文件仅新增 H7 之锁（test_nan_close_is_rejected_before_return_calculation）；C1 真锁为 test_adjustment_snapshot_runtime.py 与 test_adjustment_provider.py。行已订正，变更文件列同步补上消费侧 factors/adjusted_price.py。
+- **C3 行**：原引 test_risk_control_plane_phase0/1/3.py——phase1/phase3 之锁分属 H3/H8；C3 真锁在 phase0（test_validly_signed_rejected_review_is_not_an_approval、test_approved_policy_binds_verified_external_review_decision 等）。行已订正。
+- **H1 行**：原引 test_cr_fixes.py——该文件 91 行新增均属 H2，对 H1 零覆盖；真锁在 test_real_data_policy.py::test_gap_before_delist_date_is_not_excused_as_unlisted。行已订正。
+
+### 7.2 兼容性切断声明
+
+本批含以下不向后兼容变更，程序化调用方需同步适配：
+
+1. **质量决定签名覆盖 subject（U9）**：`create_reviewed_quality_decision` 新增必填 `subject_generation_id`（content≠generation 的 flow 另需 `subject_content_sha256`）；缺 subject 的 11 字段旧形态决定在 bind 处一律 fail closed。
+2. **label/backtest 决定必填（U8，H5 影响面登记）**：`DatasetStageAdapter.run` / `BacktestStageAdapter.run` 新增必填 quality decision 参数（label_set_v1/backtest_config_v1 两族）；绕过 CLI 的程序化 execute 调用方若持最小 decision 映射（缺此两族）将在执行期被拒。
+3. **provider 决策通道协议（U14/U15）**：runner 对 content==generation 的 flow（model_dataset/feature_preprocessing/label_set/backtest_config/backtest_result/execution 系/portfolio_definition）eager 解析 provider(g)；对 content≠generation 及 per-date flow（model_run/qlib_dataset_export/qlib_init_receipt/prediction_set/target_weights）原样透传，stage flow 以 (generation, content) 两参解析——一参 legacy provider 在这些 flow 上 fail closed。静态决策可为签名裸决策或 quality_decision.v1 信封（含 owning_report）。
+4. **行业规则须绑 membership artifact（U10）**：policy 启用 industry_weight 规则时，`evaluate_portfolio`/gate 必须提供 policy `industry_membership_binding` 绑定的 industry_membership_v1 artifact；裸 industry_mapping 降为信息参考，与绑定 artifact 冲突即拒。
+5. **initial_state provenance 内容承诺（U13）**：execution_config initial 模式的 `initial_state.provenance_sha256` 必须是 {cash, holdings, valuation_price_basis} 的 canonical sha256 承诺（`initial_state_provenance_sha256`），自撰 64hex 在校验期即拒；paper-execution fixture 与 identity golden vectors 已重钉。
+6. **universe_id schema 收紧（U4）**：universe_snapshot.v1 的 universe_id 收紧为 `^[a-z][a-z0-9_-]{1,63}$`，与 H12 运行时白名单一致；此前 schema 期可过、运行期才拒的 id 现在 schema 期即拒。
+
+### 7.3 逐项修复与回归测试
+
+除注明外，新增回归锁均在 tests/test_adv_review_fixes.py。
+
+| ID | 修复要点 | 回归测试 |
+|---|---|---|
+| U1（BLOCKER） | 文档默认 `uq-ingest daily`（不带 --cross-validate）不再可发布：默认路径必过参照源比对 | test_default_tdx_pipeline_publishes_without_comparator、test_requested_cross_validation_stays_fail_closed |
+| U2+U18 | 指纹算法版本化（v1 fillna / v2 null_mask 前置）+ 读取路径全版本兼容；±inf 指纹互异 | test_fingerprint_distinguishes_signed_infinities、test_fingerprint_read_path_accepts_all_known_versions |
+| U3+U6+U17 | 复权快照 schema v1/v2 并存（v1 可读不可消费，未知版本 fail closed）；_LINEAGE_VERSION 单一来源成活 | test_snapshot_store_writes_v2_and_reader_roundtrips、test_legacy_v1_snapshot_stays_readable_but_is_not_consumable、test_unknown_snapshot_version_is_rejected、test_v1_snapshot_reexports_through_current_deriver、test_lineage_constant_is_single_sourced |
+| U4 | universe_id schema pattern 与 H12 运行时白名单对齐 | test_universe_id_schema_pattern_matches_runtime_whitelist；contract-negative-cases 补三例 |
+| U5 | lifecycle 已退市股票上市前缺口不再误判 unknown_requires_review | test_real_data_policy.py::test_pre_listing_gap_of_delisted_symbol_is_expected_missing（+窗口内/未知上市日两 companion） |
+| U9 | 质量决定签名覆盖 binding_type+subject_generation_id+subject_content_sha256，跨 subject 重放与 11 字段旧形态均 fail closed | test_quality_decision_rejects_cross_subject_replay、test_subject_less_legacy_decision_fails_closed_at_bind、test_bound_report_signature_verification_covers_subject |
+| U10 | industry_weight 规则激活时 taxonomy 必须来自 policy 绑定的 industry_membership_v1 artifact，裸 industry_mapping 仅信息参考 | test_risk_industry_rule_requires_policy_bound_artifact；test_risk_control_plane_phase1.py 同步 |
+| U11+U12 | gate 零基期 ±inf 不再豁免（inf vs inf 保持干净）；minimum_coverage 入契约且生产可达 | test_gate_nonfinite_primary_is_a_conflict_both_branches、test_gate_equal_infinities_stay_clean、test_contract_minimum_coverage_parsed_and_validated、test_default_contract_minimum_coverage_is_zero |
+| U13 | initial_state.provenance_sha256 升级为内容承诺，校验期重算比对 | test_execution_config_initial_state_provenance_commits_to_content；paper-execution fixture 与 golden vectors 重钉 |
+| U14 | runner 决策取回按 flow 分流（eager vs 透传），provider arity 自适应；CLI `_decision_provider_for_family` 升两参透传 subject digest，provider-json 模式 execute 全链打通（H6 行 X1 证据缺口闭合） | test_resolve_subject_quality_decision_is_arity_adaptive、test_cli_decision_provider_forwards_subject_digest、test_cli_provider_wrapper_compose_with_runner_resolution；research_chain phase0–4 全量转换 |
+| U15 | quality_decision.v1 信封在 bind 单一收口验签拆解，裸/信封双形态统一 | test_bind_adopts_verified_resolver_envelope |
+| U16 | AcceptedFactorIndexRuntime 支持注入 FactorRegistry，publish/accept 两侧 registry 不再可能分叉 | test_accepted_runtime_reads_through_injected_registry |
+| U20 | C2 train split 校验抽纯函数 resolve_train_split（免 qlib 回归锁） | test_qlib_train_split_validation_is_pure_and_rejects |
+| U21 | qlib worker datetime64 保持真锁（fake-qlib 全链路，变异验证） | test_qlib_adapter.py::test_qlib_worker_output_preserves_datetime64 |
+| U22 | 重复状态行删除，allowed_statuses 单一收口于 review registry | research_chain/model_layer 邻接套件 |

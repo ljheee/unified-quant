@@ -115,6 +115,8 @@ class RecordingProvider:
             warnings=[],
             producer_code_fingerprint="0" * 64,
             private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_manifest_digest_sha256,
         )
         subject_digest = subject_manifest_digest_sha256
         report, checksum = bind_reviewed_quality_decision(

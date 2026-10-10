@@ -316,16 +316,28 @@ def test_risk_industry_limit_disabled_without_contract():
         _evaluate(policy=policy)
 
 
-def _industry_policy(threshold: float = 0.5) -> dict:
+def _industry_membership(mapping: dict[str, str]) -> dict:
+    """Build a real membership artifact with self-consistent digests (cr.md U10)."""
+    unsigned = {"family": "industry_membership_v1", "mapping": dict(mapping)}
+    generation = sha256_json(unsigned)
+    return {
+        **unsigned,
+        "generation_id": generation,
+        "manifest_digest_sha256": sha256_json({**unsigned, "generation_id": generation}),
+    }
+
+
+def _industry_policy(threshold: float = 0.5, artifact: dict | None = None) -> dict:
+    artifact = artifact if artifact is not None else _industry_membership({"A": "tech", "B": "finance"})
     policy = _policy()
     policy.pop("approval_binding")
     policy["rules"][0]["rule_id"] = "portfolio_industry_limit"
     policy["rules"][0]["metric"] = "industry_weight"
     policy["rules"][0]["threshold"] = threshold
     policy["industry_membership_binding"] = {
-        "family": "industry_membership_v1",
-        "generation_id": "d" * 64,
-        "manifest_digest_sha256": "e" * 64,
+        "family": artifact["family"],
+        "generation_id": artifact["generation_id"],
+        "manifest_digest_sha256": artifact["manifest_digest_sha256"],
     }
     review = _policy_review(policy)
     policy["approval_binding"] = {
@@ -340,9 +352,10 @@ def test_risk_industry_weight_aggregates_actual_frame_weights():
     # Regression for cr.md H3: industry_weight used to be max() of unverified
     # caller-supplied values, so a 60% single-industry book could pass a 25%
     # limit by declaring {"tech": 0.10}.
+    artifact = _industry_membership({"A": "tech", "B": "finance"})
     decision = _evaluate(
-        policy=_industry_policy(threshold=0.5),
-        industry_mapping={"A": "tech", "B": "finance"},
+        policy=_industry_policy(threshold=0.5, artifact=artifact),
+        industry_membership=artifact,
     )
     industry_finding = next(
         item for item in decision["findings"] if item["rule_id"] == "portfolio_industry_limit"
@@ -350,9 +363,10 @@ def test_risk_industry_weight_aggregates_actual_frame_weights():
     assert industry_finding["observed"] == pytest.approx(0.6)
     assert industry_finding["result"] == "failed"
 
+    artifact = _industry_membership({"A": "tech", "B": "tech"})
     decision = _evaluate(
-        policy=_industry_policy(threshold=0.5),
-        industry_mapping={"A": "tech", "B": "tech"},
+        policy=_industry_policy(threshold=0.5, artifact=artifact),
+        industry_membership=artifact,
     )
     industry_finding = next(
         item for item in decision["findings"] if item["rule_id"] == "portfolio_industry_limit"
@@ -361,10 +375,11 @@ def test_risk_industry_weight_aggregates_actual_frame_weights():
 
 
 def test_risk_industry_rule_fails_closed_on_missing_membership():
+    artifact = _industry_membership({"A": "tech"})
     with pytest.raises(ContractError, match="missing industry membership"):
         _evaluate(
-            policy=_industry_policy(threshold=0.5),
-            industry_mapping={"A": "tech"},
+            policy=_industry_policy(threshold=0.5, artifact=artifact),
+            industry_membership=artifact,
         )
 
 

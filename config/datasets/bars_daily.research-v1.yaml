@@ -24,6 +24,10 @@ cross_validation:
   volume:
     compare_with: tushare
     max_rel_diff_pct: 0.01
+# cr.md U12: enforced only when cross-validation is requested
+# (uq-ingest daily --cross-validate); fraction of primary rows that must be
+# comparable against the comparator source, below which the run is rejected.
+minimum_coverage: 0.9
 sources:
   tdx:
     priority: 1

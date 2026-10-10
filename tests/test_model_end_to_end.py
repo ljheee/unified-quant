@@ -102,52 +102,74 @@ def _publish_universe(root: Path) -> dict:
 DIGEST = "0" * 64
 
 
-def dataset_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="model_dataset_v1", policy="reject_all", status="passed",
-        checks=[{"name": "row_count", "threshold": 0, "observed": 60, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def dataset_decision():
+    # cr.md U9: stores/builders derive the subject generation (and content
+    # digest for content-bound flows) internally, so decisions must arrive as
+    # per-subject providers.
+    def provider(subject_generation_id: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="model_dataset_v1", policy="reject_all", status="passed",
+            checks=[{"name": "row_count", "threshold": 0, "observed": 60, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+        )
+    return provider
 
 
-def export_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
-        checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def export_decision():
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
+            checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
-def receipt_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="qlib_init_receipt_v1", policy="reject_all", status="passed",
-        checks=[{"name": "runtime_cache_boundary", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def receipt_decision():
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="qlib_init_receipt_v1", policy="reject_all", status="passed",
+            checks=[{"name": "runtime_cache_boundary", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
-def run_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="model_run_v1", policy="reject_all", status="passed",
-        checks=[{"name": "upstream_lineage_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def run_decision():
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="model_run_v1", policy="reject_all", status="passed",
+            checks=[{"name": "upstream_lineage_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
-def prediction_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="prediction_set_v1", policy="reject_all", status="passed",
-        checks=[
-            {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-            {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
-        ],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def prediction_decision():
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="prediction_set_v1", policy="reject_all", status="passed",
+            checks=[
+                {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
+            ],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
 
@@ -324,6 +346,8 @@ class TestEndToEndPipeline:
                     checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
                     errors=[], warnings=[], producer_code_fingerprint=DIGEST,
                     private_key_pem=REVIEWER_PRIVATE_KEY,
+                    subject_generation_id=runtime_generation,
+                    subject_content_sha256=runtime_generation,
                 ),
                 binding_type="model_artifact_v1", subject_generation_id=runtime_generation,
                 subject_content_sha256=runtime_generation,
@@ -360,6 +384,8 @@ class TestEndToEndPipeline:
                 checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
                 errors=[], warnings=[], producer_code_fingerprint=DIGEST,
                 private_key_pem=REVIEWER_PRIVATE_KEY,
+                subject_generation_id=artifact_generation,
+                subject_content_sha256=artifact_generation,
             ),
             binding_type="model_artifact_v1", subject_generation_id=artifact_generation,
             subject_content_sha256=artifact_generation,

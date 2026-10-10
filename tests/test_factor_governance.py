@@ -178,12 +178,15 @@ def test_universe_path_segments_are_whitelisted(tmp_path):
 
     traversal = universe_document()
     traversal["universe_id"] = "../escape"
-    with pytest.raises(ContractError, match="unsafe universe identifier"):
+    # cr.md U4: the schema pattern now matches the runtime whitelist, so the
+    # save path rejects crafted ids at contract validation, even earlier than
+    # the H12 segment check.
+    with pytest.raises(ContractError, match="validation failed"):
         UniverseSnapshotStore().save(tmp_path, traversal, members)
 
     dotted = universe_document()
     dotted["universe_id"] = "research.whitelist"
-    with pytest.raises(ContractError, match="unsafe universe identifier"):
+    with pytest.raises(ContractError, match="validation failed"):
         UniverseSnapshotStore().save(tmp_path, dotted, members)
 
     reader = UniverseSnapshotReader(tmp_path)

@@ -22,6 +22,20 @@ _EVENT_COLUMNS = ["year", "month", "day", "category", "fenhong", "songzhuangu", 
 _EFFECTIVE_COLUMNS = ["session_date", "effective_date", "source_event_id"]
 _SESSION_COLUMNS = ["session_date"]
 
+# cr.md U3: the v1 schema const was flipped v1->v2 in place, orphaning every
+# stored v1 manifest (AGENTS.md: canonical schema semantic changes require a
+# new version). Both schema versions now coexist; the reader dispatches on the
+# manifest's snapshot_version. Snapshots store raw exchange events, which are
+# version-agnostic, so a legacy v1 document can be re-exported by re-deriving
+# with the v2 deriver over the same events.
+SNAPSHOT_SCHEMA_BY_VERSION = {1: "adjustment_snapshot.v1.json", 2: "adjustment_snapshot.v2.json"}
+LATEST_SNAPSHOT_VERSION = 2
+# cr.md U6/U17: the only formula lineage the factor side may consume. v1
+# documents stay readable (audit/re-export) but are rejected at the
+# consumption seam below instead of being silently consumed under v2
+# multiply-basis semantics.
+CONSUMABLE_FORMULA_VERSION = "adj_factor.exchange_v2"
+
 
 def _csv_checksum(frame: pd.DataFrame) -> tuple[bytes, str]:
     content = frame.to_csv(index=False, lineterminator="\n").encode("utf-8")
@@ -68,9 +82,9 @@ class AdjustmentSnapshotStore:
         _, sessions_checksum = _csv_checksum(sessions_frame)
 
         unsigned = {
-            "snapshot_version": 1,
+            "snapshot_version": LATEST_SNAPSHOT_VERSION,
             "instrument": instrument,
-            "formula_version": "adj_factor.exchange_v2",
+            "formula_version": CONSUMABLE_FORMULA_VERSION,
             "visibility_time": visibility_time.isoformat(),
             "event_artifact": {"path": "events.csv", "checksum_sha256": event_checksum},
             "effective_date_table": {"path": "effective_dates.csv", "checksum_sha256": effective_checksum},
@@ -78,7 +92,7 @@ class AdjustmentSnapshotStore:
         }
         generation_id = adjustment_snapshot_generation(unsigned)
         manifest = {**unsigned, "generation_id": generation_id}
-        validate_contract("adjustment_snapshot.v1.json", manifest)
+        validate_contract(SNAPSHOT_SCHEMA_BY_VERSION[LATEST_SNAPSHOT_VERSION], manifest)
         directory = root / "adjustments" / "snapshots" / instrument / generation_id
         staging = directory.with_name(f"{directory.name}.staging.{uuid.uuid4().hex}")
         staging.mkdir(parents=True)
@@ -124,7 +138,11 @@ class AdjustmentSnapshotReader:
             manifest = json.loads(path.read_text(encoding="utf-8"))
         except (FileNotFoundError, json.JSONDecodeError) as exc:
             raise ContractError(f"missing or malformed adjustment snapshot: {instrument}/{generation_id}") from exc
-        validate_contract("adjustment_snapshot.v1.json", manifest)
+        version = manifest.get("snapshot_version")
+        schema_name = SNAPSHOT_SCHEMA_BY_VERSION.get(version) if isinstance(version, int) else None
+        if schema_name is None:
+            raise ContractError(f"unsupported adjustment snapshot version: {version!r}")
+        validate_contract(schema_name, manifest)
         _validate_calendar_dates(manifest["sessions"]["start_date"], manifest["sessions"]["end_date"])
         expected_generation = adjustment_snapshot_generation({key: value for key, value in manifest.items() if key != "generation_id"})
         if manifest["generation_id"] != expected_generation:
@@ -149,6 +167,15 @@ class AdjustmentSnapshotReader:
         visible: list[str] = []
         for generation_id in candidates:
             manifest = self.read_manifest(instrument, generation_id)
+            # cr.md U6/U17: fail closed on lineage drift — a v1 candidate must
+            # never be silently consumed under (or silently skipped into) the
+            # v2 multiply basis; re-export it with the v2 deriver instead.
+            if manifest["formula_version"] != CONSUMABLE_FORMULA_VERSION:
+                raise ContractError(
+                    f"adjustment snapshot lineage {manifest['formula_version']} is not consumable "
+                    f"(requires {CONSUMABLE_FORMULA_VERSION}); re-export by re-deriving the "
+                    "snapshot's raw events with the current deriver"
+                )
             if datetime.fromisoformat(manifest["visibility_time"]) > as_of_time:
                 continue
             sessions = self._read_csv(instrument, generation_id, "sessions", _SESSION_COLUMNS)["session_date"].tolist()

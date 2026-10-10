@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
-from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, sha256_json
+from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, sha256_json
 from ..errors import ContractError
 
 
@@ -174,13 +174,17 @@ class QlibDatasetExporter:
                     digest_exclude_fields={"export_layout","quality_report_checksum_sha256","provider_uri_sha256"},
                 )
                 manifest["export_layout"]["root"] = f"dataset={dataset_name}/generation={export_generation_id}"
+                export_subject_content = sha256_json({
+                    key: value for key, value in manifest.items()
+                    if key not in {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256", "generation_id", "manifest_digest_sha256"}
+                })
+                quality_decision = resolve_subject_quality_decision(
+                    quality_decision, subject_generation_id=export_generation_id, subject_content_sha256=export_subject_content
+                )
                 quality_report, report_checksum = bind_reviewed_quality_decision(
                     quality_decision, binding_type="qlib_dataset_export_v1",
                     subject_generation_id=export_generation_id,
-                    subject_content_sha256=sha256_json({
-                        key: value for key, value in manifest.items()
-                        if key not in {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256", "generation_id", "manifest_digest_sha256"}
-                    }),
+                    subject_content_sha256=export_subject_content,
                 )
                 manifest["quality_report_checksum_sha256"]=report_checksum
                 manifest["generation_id"]=export_generation_id
@@ -322,13 +326,17 @@ class QlibInitReceiptBuilder:
             exclude_fields={"quality_report_checksum_sha256","resolved_provider_uri_sha256","cache_root"},
             digest_exclude_fields={"export_manifest_digest_sha256","resolved_provider_uri_sha256","cache_root"},
         )
+        receipt_subject_content = sha256_json({
+            key: value for key, value in receipt.items()
+            if key not in {"quality_report_checksum_sha256", "export_manifest_digest_sha256", "resolved_provider_uri_sha256", "cache_root", "generation_id", "manifest_digest_sha256"}
+        })
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision, subject_generation_id=generation_id, subject_content_sha256=receipt_subject_content
+        )
         quality_report, report_checksum = bind_reviewed_quality_decision(
             quality_decision,binding_type="qlib_init_receipt_v1",
             subject_generation_id=generation_id,
-            subject_content_sha256=sha256_json({
-                key: value for key, value in receipt.items()
-                if key not in {"quality_report_checksum_sha256", "export_manifest_digest_sha256", "resolved_provider_uri_sha256", "cache_root", "generation_id", "manifest_digest_sha256"}
-            }),
+            subject_content_sha256=receipt_subject_content,
         )
         governance_dir = Path(governance_root) / "research_exports"
         governance_dir.mkdir(parents=True, exist_ok=True)

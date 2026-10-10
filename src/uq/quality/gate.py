@@ -136,14 +136,26 @@ class CrossSourceGate:
             valid = secondary.notna() & primary_values.notna()
             absolute = (primary_values - secondary).abs()
             tolerance_pct = float(rules.get("max_abs_diff_pct", rules.get("max_rel_diff_pct", 0)))
+            # cr.md U11: a non-finite primary (±inf) used to be silently exempt
+            # in both branches (x/inf -> 0, x > inf*tol never true); only an
+            # equal-infinity pair is benign, anything else diverges without
+            # bound and must conflict.
+            nonfinite_primary = ~np.isfinite(primary_values)
             if "max_rel_diff_pct" in rules:
                 # cr.md H2: a zero primary makes the relative difference NaN and
                 # used to excuse any nonzero comparator value; zero-vs-nonzero
                 # is an unbounded relative divergence and must conflict.
                 relative = absolute / primary_values.abs().replace(0, np.nan)
-                mismatch = valid & ((relative > tolerance_pct) | ((primary_values.abs() == 0) & (absolute > 0)))
+                mismatch = valid & (
+                    (relative > tolerance_pct)
+                    | ((primary_values.abs() == 0) & (absolute > 0))
+                    | (nonfinite_primary & (absolute > 0))
+                )
             else:
-                mismatch = valid & (absolute > primary_values.abs() * tolerance_pct)
+                mismatch = valid & (
+                    (absolute > primary_values.abs() * tolerance_pct)
+                    | (nonfinite_primary & (absolute > 0))
+                )
             for index_value in primary_indexed.index[mismatch]:
                 key_value = index_value if isinstance(index_value, tuple) else (index_value,)
                 conflicts.append({

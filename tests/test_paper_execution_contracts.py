@@ -105,38 +105,38 @@ def test_paper_config_can_bind_reviewed_quality_decision() -> None:
     from uq.contracts.model_layer import bind_reviewed_quality_decision, verify_reviewed_quality_report_signature
 
     payload = _valid("execution_config")
-    unsigned = {
-        "binding_type": "execution_config_v1",
-        "checks": [
-            {
-                "name": "schema_valid", "threshold": True, "observed": True,
-                "level": "error", "result": "passed",
-            },
-            {
-                "name": "state_mode_valid", "threshold": True, "observed": True,
-                "level": "error", "result": "passed",
-            },
-            {
-                "name": "market_data_binding_resolved", "threshold": True,
-                "observed": True, "level": "error", "result": "passed",
-            },
-            {
-                "name": "execution_policy_within_bounds", "threshold": True,
-                "observed": True, "level": "error", "result": "passed",
-            },
-        ],
-        "errors": [],
-        "warnings": [],
-        "key_id": "model-quality-reviewer-v1-2026-09",
-        "policy": "reject_all",
-        "producer_code_fingerprint": "a" * 64,
-        "reviewer": "external-model-quality-reviewer-v1",
-        "report_version": 2,
-        "status": "passed",
-    }
-    from uq.contracts.model_layer import review_signature
-    signature = review_signature(unsigned, private_key_pem=REVIEWER_PRIVATE_KEY)
-    decision = {**unsigned, "review_signature_sha256": signature}
+    checks = [
+        {
+            "name": "schema_valid", "threshold": True, "observed": True,
+            "level": "error", "result": "passed",
+        },
+        {
+            "name": "state_mode_valid", "threshold": True, "observed": True,
+            "level": "error", "result": "passed",
+        },
+        {
+            "name": "market_data_binding_resolved", "threshold": True,
+            "observed": True, "level": "error", "result": "passed",
+        },
+        {
+            "name": "execution_policy_within_bounds", "threshold": True,
+            "observed": True, "level": "error", "result": "passed",
+        },
+    ]
+    # cr.md U9: mint through the reviewer factory so the signature commits to
+    # the subject; hand-assembled decisions fail closed at bind time.
+    from uq.contracts.model_layer import create_reviewed_quality_decision
+    decision = create_reviewed_quality_decision(
+        binding_type="execution_config_v1",
+        policy="reject_all",
+        status="passed",
+        checks=checks,
+        errors=[],
+        warnings=[],
+        producer_code_fingerprint="a" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=payload["generation_id"],
+    )
     report, checksum = bind_reviewed_quality_decision(
         decision,
         binding_type="execution_config_v1",

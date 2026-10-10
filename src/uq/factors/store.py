@@ -21,7 +21,7 @@ from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.factor_governance import FactorRegistry
 from ..contracts.gate_contracts import canonical_json, factor_manifest_identities, validate_contract_path
 from ..errors import ContractError
-from .raw_price import logical_fingerprint
+from .raw_price import logical_fingerprint, verify_logical_fingerprint
 from .repro_staging import SERIALIZATION_PROFILE, environment_profile
 
 
@@ -547,7 +547,10 @@ def read_factor_partition(partition: Path, *, registry: FactorRegistry | None = 
     } != {key: str(value) for key, value in expected_dtypes.items()}:
         raise ContractError("factor artifact dtype does not match manifest")
     try:
-        if logical_fingerprint(frame) != manifest.get("logical_fingerprint"):
+        # cr.md U2: accept fingerprints pinned by any known algorithm version
+        # so partitions published before the H11/U18 algorithm changes remain
+        # readable (writes always use the latest version).
+        if not verify_logical_fingerprint(frame, manifest.get("logical_fingerprint")):
             raise ContractError("tampered factor logical content")
     except (TypeError, ValueError) as exc:
         raise ContractError("invalid factor artifact for logical verification") from exc

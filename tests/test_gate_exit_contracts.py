@@ -64,10 +64,14 @@ def test_canonical_migration_contract_and_negative_fields():
 
 
 def test_adjustment_snapshot_generation_is_stable():
-    payload = json.loads((FIXTURES / "adjustment-snapshot-v1-valid.json").read_text())
-    payload["generation_id"] = adjustment_snapshot_generation(payload)
-    validate_contract("adjustment_snapshot.v1.json", payload)
-    assert payload["generation_id"] == adjustment_snapshot_generation(payload)
+    for schema_name, fixture_name in (
+        ("adjustment_snapshot.v1.json", "adjustment-snapshot-v1-valid.json"),
+        ("adjustment_snapshot.v2.json", "adjustment-snapshot-v2-valid.json"),
+    ):
+        payload = json.loads((FIXTURES / fixture_name).read_text())
+        payload["generation_id"] = adjustment_snapshot_generation(payload)
+        validate_contract(schema_name, payload)
+        assert payload["generation_id"] == adjustment_snapshot_generation(payload)
 
 
 def test_factor_manifest_contract():
@@ -123,6 +127,7 @@ def test_all_contract_negative_fixtures():
         "canonical_manifest.v2.json": _canonical_v2_valid(),
         "canonical_migration.v1.json": _migration_valid(),
         "adjustment_snapshot.v1.json": json.loads((FIXTURES / "adjustment-snapshot-v1-valid.json").read_text()),
+        "adjustment_snapshot.v2.json": json.loads((FIXTURES / "adjustment-snapshot-v2-valid.json").read_text()),
         "factor_manifest.v1.json": json.loads((FIXTURES / "factor-manifest-v1-valid.json").read_text()),
         "universe_snapshot.v1.json": _universe_valid(),
         "quality_report.v1.json": _quality_valid(),
@@ -130,7 +135,7 @@ def test_all_contract_negative_fixtures():
     }
     for schema_name, invalid_cases in cases.items():
         base = valid_payloads[schema_name]
-        if schema_name == "adjustment_snapshot.v1.json":
+        if schema_name.startswith("adjustment_snapshot."):
             base = copy.deepcopy(base)
             base.pop("generation_id", None)
             base["generation_id"] = adjustment_snapshot_generation(base)

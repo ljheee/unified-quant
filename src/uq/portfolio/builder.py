@@ -20,6 +20,7 @@ from ..contracts.model_layer import (
     ModelContractLoader,
     bind_reviewed_quality_decision,
     model_manifest_identities,
+    resolve_subject_quality_decision,
     sha256_json,
     validate_quality_decision_owning_report,
 )
@@ -187,7 +188,15 @@ class PortfolioDefinitionBinding:
         ModelContractLoader.validate("portfolio_definition", definition)
         report = quality_decision.get("owning_report")
         if not isinstance(report, dict):
-            raise ContractError("portfolio quality decision missing owning report")
+            # cr.md U15: accept the raw signed decision shape as well — bind it
+            # to this definition on the spot (envelopes keep the legacy path).
+            bound_report, _ = bind_reviewed_quality_decision(
+                dict(quality_decision),
+                binding_type="portfolio_definition_v1",
+                subject_generation_id=definition["generation_id"],
+                subject_content_sha256=definition["manifest_digest_sha256"],
+            )
+            return definition, bound_report
         checksum = validate_quality_decision_owning_report(report)
         if quality_decision.get("binding_type") != "portfolio_definition_v1":
             raise ContractError("portfolio quality decision binding mismatch")
@@ -236,6 +245,9 @@ class TargetWeightStore:
         )
 
         # Step 3: bind quality decision to provisional generation + content checksum
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision, subject_generation_id=provisional_gen, subject_content_sha256=checksum
+        )
         bound_report, report_checksum = bind_reviewed_quality_decision(
             quality_decision,
             binding_type="target_weights_v1",

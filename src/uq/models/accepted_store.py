@@ -6,6 +6,7 @@ from typing import Any, Mapping
 
 import pandas as pd
 
+from ..contracts.factor_governance import FactorRegistry
 from ..contracts.model_layer import AcceptedFactorIndexContract
 from ..errors import ContractError
 from ..factors.store import read_factor_partition
@@ -19,9 +20,13 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
     via ``read_factor_partition``.
     """
 
-    def __init__(self, store_root: Path | str) -> None:
+    def __init__(self, store_root: Path | str, registry: FactorRegistry | None = None) -> None:
         super().__init__()
         self.store_root = Path(store_root)
+        # cr.md U16: same injection point as FactorStore — the accept side must
+        # read through the caller's registry, not one rebuilt from the source
+        # tree, or publish-time and accept-time registries can diverge.
+        self._registry = registry
         self._factors_dir = self.store_root / "factors"
         self._frames: dict[str, pd.DataFrame] = {}
         self._partition_paths: dict[str, Path] = {}
@@ -37,7 +42,7 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
                 continue
             try:
                 manifest = json.loads(manifest_path.read_text())
-                frame = read_factor_partition(partition)
+                frame = read_factor_partition(partition, registry=self._registry)
             except (json.JSONDecodeError, OSError, ContractError) as exc:
                 self._tampered_generations.add(manifest_path.parent.name)
                 raise ContractError(
@@ -110,5 +115,5 @@ class AcceptedFactorIndexRuntime(AcceptedFactorIndexContract):
         partition = self._partition_paths.get(generation_id)
         if partition is None:
             raise ContractError(f"accepted factor generation is not uniquely addressable: {generation_id}")
-        read_factor_partition(partition)
+        read_factor_partition(partition, registry=self._registry)
         return self._frames[generation_id]

@@ -48,6 +48,7 @@ class DatasetContract:
     row_policy: dict[str, Any] | None = None
     cross_validation: dict[str, dict[str, Any]] = field(default_factory=dict)
     sources: dict[str, SourceCapability] = field(default_factory=dict)
+    minimum_coverage: float = 0.0
 
     def eligible_sources(self, fields: set[str]) -> list[SourceCapability]:
         return sorted(

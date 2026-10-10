@@ -10,7 +10,7 @@ import pandas as pd
 from ..backtest.engine import BacktestEngine, BacktestResultStore
 from ..contracts.canonical_v2 import file_sha256_bytes
 from ..contracts.gate_contracts import adjustment_snapshot_generation
-from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, canonical_json, model_manifest_identities, research_contract_identities, sha256_bytes
+from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision, canonical_json, model_manifest_identities, research_contract_identities, resolve_subject_quality_decision, sha256_bytes
 from ..contracts.artifacts import UniverseSnapshotStore
 from ..errors import ContractError
 from ..models.dataset import DatasetBuilder
@@ -48,6 +48,16 @@ def _stage_binding(plan: ResolvedExecutionPlan, *, stage: str, output_family: st
     if len(matches) != 1:
         raise ContractError(f"ambiguous {output_family} binding in resolved plan")
     return matches[0]
+
+
+def _decision_payload(decision: Any) -> Any:
+    """Pass provider callables through; copy concrete decisions (cr.md U14).
+
+    Stages whose subject is derived inside the build flow (per-date manifests,
+    content digests) must let the flow resolve the provider per subject —
+    materializing a callable with dict() would crash provider mode here.
+    """
+    return decision if callable(decision) else dict(decision)
 
 
 def build_stage_state(
@@ -269,14 +279,15 @@ class DatasetStageAdapter:
         # cr.md H5: the label-set review decision must be retrieved and verified
         # at execute time (aligned with the factor stage), not trusted from
         # resolve-time envelope checks alone.
-        label_report, _ = bind_reviewed_quality_decision(
+        bind_reviewed_quality_decision(
             dict(label_quality_decision),
             binding_type="label_set_v1",
             subject_generation_id=label_manifest["generation_id"],
             subject_content_sha256=label_manifest["generation_id"],
         )
-        if label_report["status"] not in {"passed", "warning"}:
-            raise ContractError("label set quality decision is not approved")
+        # cr.md U22: no status re-check here — the review registry enforces
+        # allowed_statuses inside bind; a second hardcoded copy could only
+        # diverge from the registry's policy.
         preprocessing = self.preprocessing_store.read_manifest(preprocessing_binding.generation_id)
         if preprocessing["manifest_digest_sha256"] != preprocessing_binding.manifest_digest_sha256:
             raise ContractError("preprocessing binding manifest digest mismatch")
@@ -336,7 +347,10 @@ class DatasetStageAdapter:
             manifest,
             dataset_frame,
             feature_schema=output_schema,
-            quality_report=dict(quality_decision),
+            # cr.md U14: the dataset generation is derived inside the writer,
+            # so a per-subject provider must pass through untouched; static
+            # decisions keep the historical defensive copy.
+            quality_report=quality_decision if callable(quality_decision) else dict(quality_decision),
             preprocessing_manifest=dict(preprocessing),
             preprocessing_input_frame=factor_frame,
             preprocessing_frame=preprocessed_frame,
@@ -584,9 +598,6 @@ class PortfolioStageAdapter:
             universe_generation_id=universe_binding.generation_id,
             created_at=created_at or prediction_stage_result.manifest["created_at"],
         )
-        report = definition_quality_decision.get("owning_report")
-        if not isinstance(report, dict):
-            raise ContractError("portfolio stage requires a bound owning quality report")
         prediction_generation_map = dict(prediction_generation_by_date or {})
         prediction_generation_digests = {
             binding.generation_id: binding.manifest_digest_sha256
@@ -639,7 +650,7 @@ class PortfolioStageAdapter:
             self.target_weight_store.publish(
                 manifest,
                 frame,
-                quality_decision=dict(weights_quality_decision),
+                quality_decision=_decision_payload(weights_quality_decision),
                 previous_target_weights_generation_id=previous_generation,
             )
             readback_manifest, readback_frame = self.target_weight_store.read(
@@ -716,14 +727,34 @@ class BacktestStageAdapter:
         # cr.md H5: the backtest-config review decision must be retrieved and
         # verified at execute time (aligned with the factor stage), not trusted
         # from resolve-time envelope checks alone.
-        config_report, _ = bind_reviewed_quality_decision(
-            dict(config_quality_decision),
-            binding_type="backtest_config_v1",
-            subject_generation_id=config["generation_id"],
-            subject_content_sha256=config["generation_id"],
+        # cr.md U9: compare the bound report checksum with the config manifest's
+        # recorded binding — the checksum used to be discarded here. The
+        # backtest_config identity covers that recorded checksum, so the review
+        # attests the provisional generation (checksum zeroed): re-derive it
+        # before binding, aligned with TargetWeightStore.read.
+        provisional_config_generation, _ = model_manifest_identities(
+            {**config, "quality_report_checksum_sha256": "0" * 64,
+             "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
+            schema_name="backtest_config",
         )
-        if config_report["status"] not in {"passed", "warning"}:
-            raise ContractError("backtest config quality decision is not approved")
+        resolved_config_decision = (
+            resolve_subject_quality_decision(
+                config_quality_decision,
+                subject_generation_id=provisional_config_generation,
+                subject_content_sha256=provisional_config_generation,
+            )
+            if callable(config_quality_decision)
+            else dict(config_quality_decision)
+        )
+        _, expected_config_checksum = bind_reviewed_quality_decision(
+            resolved_config_decision,
+            binding_type="backtest_config_v1",
+            subject_generation_id=provisional_config_generation,
+        )
+        if expected_config_checksum != config["quality_report_checksum_sha256"]:
+            raise ContractError("backtest config quality decision checksum mismatch")
+        # cr.md U22: status policy is enforced by the review registry inside
+        # bind (allowed_statuses); duplicating it here risks divergence.
         state = self.run_store.read_state(
             plan.request["request_content_generation_id"],
             plan.request["run_id"],
@@ -834,6 +865,9 @@ class BacktestStageAdapter:
             }
             for decision_date in ordered_dates
         ]
+        # cr.md U14: the result generation is derived inside the result store
+        # at publish time, so a per-subject provider must pass through
+        # untouched; static decisions keep the historical defensive copy.
         manifest, artifacts = self.backtest_engine.run(
             config=config,
             portfolio_definition=portfolio_stage_result.definition_manifest,
@@ -841,12 +875,12 @@ class BacktestStageAdapter:
             price_panel=price_panel,
             suspension_dates=suspension_dates,
             corporate_action_instruments=corporate_action_instruments,
-            quality_decision=dict(quality_decision),
+            quality_decision=_decision_payload(quality_decision),
         )
         self.backtest_result_store.publish(
             manifest,
             artifacts,
-            quality_decision=dict(quality_decision),
+            quality_decision=_decision_payload(quality_decision),
             target_weight_generations=target_weight_generations,
         )
         readback_manifest, readback_artifacts = self.backtest_result_store.read(
@@ -955,7 +989,7 @@ class QlibExportStageAdapter:
             calendar_dates=calendar_dates,
             instruments=instruments,
             provider_uri=provider_uri,
-            quality_decision=dict(export_quality_decision),
+            quality_decision=_decision_payload(export_quality_decision),
         )
         verified_export = self.exporter.read(dataset_manifest["dataset_name"], export_manifest["generation_id"])
         if verified_export[0]["generation_id"] != export_manifest["generation_id"]:
@@ -976,7 +1010,7 @@ class QlibExportStageAdapter:
             cache_files_after=cache_after,
             verified_export=verified_export,
             governance_root=self.run_store.root,
-            quality_decision=dict(receipt_quality_decision),
+            quality_decision=_decision_payload(receipt_quality_decision),
         )
         state = build_stage_state(
             plan,
@@ -1089,7 +1123,7 @@ class ModelStageAdapter:
             label_manifest=label_manifest,
             universe_snapshot=universe_manifest,
             factor_manifests={factor_generation_id: factor_manifest},
-            quality_decision=dict(model_quality_decision),
+            quality_decision=_decision_payload(model_quality_decision),
             store_root=self.run_store.root,
         )
         if bound_definition["model_run_content_generation_id"] != run_manifest["run_content_generation_id"]:
@@ -1197,7 +1231,7 @@ class PredictionStageAdapter:
             scores=scores,
             eligibility_policy=eligibility_policy,
             eligibility_status=eligibility_status,
-            quality_decision=dict(quality_decision),
+            quality_decision=_decision_payload(quality_decision),
         )
         self.prediction_builder.publish(manifest, artifact)
         readback_manifest, frame = self.prediction_builder.read(
@@ -1246,7 +1280,7 @@ class PredictionStageAdapter:
                 model_stage_result=model_stage_result,
                 scores=scores,
                 decision_date=decision_date,
-                quality_decision=dict(quality_decision),
+                quality_decision=_decision_payload(quality_decision),
                 eligibility_policy=eligibility_policy,
                 eligibility_status=eligibility_status,
                 runner_identity=runner_identity,

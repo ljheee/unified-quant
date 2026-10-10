@@ -75,6 +75,50 @@
       "remove": [
         "generation_id"
       ]
+    },
+    {
+      "case": "v2_formula_const_under_v1_schema",
+      "patch": {
+        "formula_version": "adj_factor.exchange_v2"
+      }
+    },
+    {
+      "case": "v2_snapshot_version_under_v1_schema",
+      "patch": {
+        "snapshot_version": 2
+      }
+    }
+  ],
+  "adjustment_snapshot.v2.json": [
+    {
+      "case": "bad_symbol",
+      "patch": {
+        "instrument": "AAPL"
+      }
+    },
+    {
+      "case": "v1_formula_const_under_v2_schema",
+      "patch": {
+        "formula_version": "adj_factor.exchange_v1"
+      }
+    },
+    {
+      "case": "v1_snapshot_version_under_v2_schema",
+      "patch": {
+        "snapshot_version": 1
+      }
+    },
+    {
+      "case": "bad_visibility_type",
+      "patch": {
+        "visibility_time": 123
+      }
+    },
+    {
+      "case": "missing_generation",
+      "remove": [
+        "generation_id"
+      ]
     }
   ],
   "factor_manifest.v1.json": [
@@ -140,6 +184,24 @@
       "remove": [
         "valid_from"
       ]
+    },
+    {
+      "case": "single_char_universe_id",
+      "patch": {
+        "universe_id": "a"
+      }
+    },
+    {
+      "case": "uppercase_universe_id",
+      "patch": {
+        "universe_id": "Research"
+      }
+    },
+    {
+      "case": "dotted_universe_id",
+      "patch": {
+        "universe_id": "research.cn"
+      }
     }
   ],
   "quality_report.v1.json": [

@@ -3,7 +3,7 @@
   "model_definition_template.manifest_digest_sha256": "0231f1c3fc612e38eeb9eeaede55e70ad34bfafadcf168dfa973277f5380484c",
   "portfolio_definition_template.generation_id": "6d72056d696c3d1c51c6303a65814027a046c4f5be32ea8216c6ec4b73512519",
   "portfolio_definition_template.manifest_digest_sha256": "71c354dfa1dc8424800de5b25ee491d686e85984cb16014a86978b83a1d847fa",
-  "quality_decision.decision_checksum_sha256": "d77616b44626e6d6ca9baedb8d569d268f3b025f53a6e5e8e95c1817ba28d6cc",
+  "quality_decision.decision_checksum_sha256": "f5a28b880d16ceb1099b3d73d4815feac7aeecf8681ebfdb98c126723397e4d9",
   "research_run_request.digest_under_run_metadata": "8f0db2cf9d7630df650d7b6be7c16c1ee21e0a26de3b4dba1a03ffdd66e72119",
   "research_run_request.generation_id": "c42cfc221a76c8465870afbb667b9acda27f9d0a45726d5debfa858b9a4a1f23",
   "research_run_request.manifest_digest_sha256": "d441b92cca98e9d8319acd9f9900a40719c18a0deaaf227b4b3a655eba951c90",

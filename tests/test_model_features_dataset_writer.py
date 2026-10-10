@@ -19,13 +19,18 @@ from uq.models.features import FeatureSchemaBuilder, FeatureSchemaValidator
 DIGEST = "0" * 64
 
 
-def _quality_report() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="model_dataset_v1", policy="reject_all", status="passed",
-        checks=[{"name": "row_count", "threshold": 6, "observed": 40, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint=DIGEST,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def _quality_report():
+    # cr.md U9: the writer derives the dataset generation at write time, so
+    # the decision must arrive as a per-subject provider.
+    def provider(subject_generation_id: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="model_dataset_v1", policy="reject_all", status="passed",
+            checks=[{"name": "row_count", "threshold": 6, "observed": 40, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+        )
+    return provider
 
 
 def _factor_frame() -> pd.DataFrame:
@@ -166,8 +171,16 @@ class TestDatasetWriter:
     def test_wrong_binding_external_quality_decision_rejected(self, tmp_path: Path) -> None:
         manifest = self._build_manifest()
         frame = _factor_frame()
-        decision = _quality_report()
-        decision["binding_type"] = "prediction_set_v1"
+        # cr.md U9: decisions are minted per subject; sign one for the wrong
+        # binding type so the bind-time binding check still fires.
+        def decision(subject_generation_id: str) -> dict:
+            return create_reviewed_quality_decision(
+                binding_type="prediction_set_v1", policy="reject_all", status="passed",
+                checks=[{"name": "eligibility_coverage", "threshold": True, "observed": True, "level": "error", "result": "passed"}],
+                errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+                private_key_pem=REVIEWER_PRIVATE_KEY,
+                subject_generation_id=subject_generation_id,
+            )
         with pytest.raises(ContractError, match="does not match model_dataset_v1"):
             DatasetWriter(tmp_path).write(
                 manifest, frame,

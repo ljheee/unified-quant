@@ -34,6 +34,7 @@ def _quality_report(bound_generation_id: str = DIGEST) -> dict:
         checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint=DIGEST,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=bound_generation_id, subject_content_sha256=bound_generation_id,
     )
     report, _ = bind_reviewed_quality_decision(
         decision, binding_type="model_artifact_v1",
@@ -51,6 +52,7 @@ def _failed_quality_report(bound_generation_id: str) -> dict:
         errors=[], warnings=[],
         producer_code_fingerprint=DIGEST,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=bound_generation_id, subject_content_sha256=bound_generation_id,
     )
     report, _ = bind_reviewed_quality_decision(
         decision, binding_type="model_artifact_v1",

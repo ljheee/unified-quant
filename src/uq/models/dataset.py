@@ -67,6 +67,30 @@ class SplitValidator:
                 raise ContractError("overlapping split intervals")
 
 
+def resolve_train_split(
+    dataset_manifest: Mapping[str, Any], calendar_dates: list[str]
+) -> tuple[str, str]:
+    """Resolve the declared train split against an export calendar (cr.md C2).
+
+    Qlib training must fit strictly on the dataset manifest's declared train
+    split: the export calendar spans train+validation+test with labels
+    attached, so deriving the segment from the calendar leaks every
+    evaluation. Extracted as a pure function so the rejection paths are
+    testable without a qlib installation (cr.md U20).
+    """
+    splits = dataset_manifest["split_policy"]["splits"]
+    train_splits = [split for split in splits if split["name"] == "train"]
+    if len(train_splits) != 1:
+        raise ContractError(
+            "Qlib training requires exactly one train split in the dataset split policy"
+        )
+    train_start = train_splits[0]["start_date"]
+    train_end = train_splits[0]["end_date"]
+    if train_start < calendar_dates[0] or train_end > calendar_dates[-1]:
+        raise ContractError("Qlib export calendar does not cover the dataset train split")
+    return train_start, train_end
+
+
 class DatasetBuilder:
     """Build a governed model dataset manifest from factor/label/universe bindings."""
 

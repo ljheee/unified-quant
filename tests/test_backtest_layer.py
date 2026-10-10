@@ -60,12 +60,14 @@ def _make_weights(date, instruments, weight=1.0):
     return pd.DataFrame({"instrument": instruments, "weight": [w] * n})
 
 
-def _make_decision():
+def _make_decision(subject_generation_id, subject_content_sha256):
+    # cr.md U9: provider form — the reviewer signs the derived subject.
     checks = [{"name": "equity_curve_finite_positive", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}]
     return create_reviewed_quality_decision(
         binding_type="backtest_result_v1", policy="reject_all", status="passed",
         checks=checks, errors=[], warnings=[], producer_code_fingerprint="0" * 64,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=subject_generation_id, subject_content_sha256=subject_content_sha256,
     )
 
 
@@ -194,7 +196,7 @@ class TestBacktestResultStore:
             "generation_id": GEN_C,
             "manifest_digest_sha256": GEN_D,
         }]
-        partition = store.publish(manifest.copy(), artifacts, quality_decision=_make_decision(), target_weight_generations=tw_bindings)
+        partition = store.publish(manifest.copy(), artifacts, quality_decision=_make_decision, target_weight_generations=tw_bindings)
 
         disk_manifest = json.loads((partition / "manifest.json").read_text())
         read_manifest, read_artifacts = store.read(disk_manifest["generation_id"])
@@ -215,7 +217,7 @@ class TestBacktestResultStore:
             weight_partitions=weights, price_panel=price_panel,
         )
         tw_bindings = [{"decision_date": "2026-01-05", "generation_id": GEN_C, "manifest_digest_sha256": GEN_D}]
-        decision = _make_decision()
+        decision = _make_decision
         store.publish(manifest.copy(), artifacts, quality_decision=decision, target_weight_generations=tw_bindings)
         with pytest.raises(ContractError, match="already exists"):
             store.publish(manifest.copy(), artifacts, quality_decision=decision, target_weight_generations=tw_bindings)
@@ -232,7 +234,7 @@ class TestBacktestResultStore:
             weight_partitions=weights, price_panel=price_panel,
         )
         tw_bindings = [{"decision_date": "2026-01-05", "generation_id": GEN_C, "manifest_digest_sha256": GEN_D}]
-        partition = store.publish(manifest.copy(), artifacts, quality_decision=_make_decision(), target_weight_generations=tw_bindings)
+        partition = store.publish(manifest.copy(), artifacts, quality_decision=_make_decision, target_weight_generations=tw_bindings)
         disk_manifest = json.loads((partition / "manifest.json").read_text())
 
         equity_file = partition / "equity_curve.parquet"

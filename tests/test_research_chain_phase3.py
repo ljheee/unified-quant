@@ -31,6 +31,7 @@ from uq.models.trainer import ArtifactStore, ModelRunBuilder
 from tests.test_research_chain_phase2 import (
     RUN_ID,
     _dataset_quality_decision,
+    _execute_decisions,
     _label_quality_decision,
     _preprocessing_quality_decision,
     _prepare_dataset_store,
@@ -40,31 +41,48 @@ from tests.test_research_chain_phase2 import (
 DIGEST = "0" * 64
 
 
-def export_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
-        checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint=DIGEST,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def export_decision():
+    # cr.md U9: reviewer signatures commit to the subject, and the export
+    # subject content digest is derived inside the exporter — so the factory
+    # returns a per-subject provider the flow resolves at publish time.
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
+            checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
-def receipt_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="qlib_init_receipt_v1", policy="reject_all", status="passed",
-        checks=[{"name": "runtime_cache_boundary", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint=DIGEST,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def receipt_decision():
+    # cr.md U9: per-subject provider, see export_decision above.
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="qlib_init_receipt_v1", policy="reject_all", status="passed",
+            checks=[{"name": "runtime_cache_boundary", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
-def run_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="model_run_v1", policy="reject_all", status="passed",
-        checks=[{"name": "upstream_lineage_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint=DIGEST,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def run_decision():
+    # cr.md U9: per-subject provider, see export_decision above.
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="model_run_v1", policy="reject_all", status="passed",
+            checks=[{"name": "upstream_lineage_resolved", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
 def artifact_decision(artifact_generation: str) -> dict:
@@ -73,6 +91,8 @@ def artifact_decision(artifact_generation: str) -> dict:
         checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint=DIGEST,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=artifact_generation,
+        subject_content_sha256=artifact_generation,
     )
     bound, _ = bind_reviewed_quality_decision(
         unsigned, binding_type="model_artifact_v1",
@@ -82,16 +102,21 @@ def artifact_decision(artifact_generation: str) -> dict:
     return bound
 
 
-def prediction_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="prediction_set_v1", policy="reject_all", status="passed",
-        checks=[
-            {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-            {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
-        ],
-        errors=[], warnings=[], producer_code_fingerprint=DIGEST,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def prediction_decision():
+    # cr.md U9: per-subject provider, see export_decision above.
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="prediction_set_v1", policy="reject_all", status="passed",
+            checks=[
+                {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
+            ],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
 def _prepare_model_stage(tmp_path: Path):
@@ -99,9 +124,7 @@ def _prepare_model_stage(tmp_path: Path):
     dataset_result = adapter.run(
         plan,
         runner_identity={"code_fingerprint": DIGEST, "environment_profile": "locked-test", "lock_digest_sha256": DIGEST},
-        quality_decision=_dataset_quality_decision(),
-        preprocessing_quality_decision=_preprocessing_quality_decision(),
-        label_quality_decision=_label_quality_decision(),
+        **_execute_decisions(plan),
         created_at="2026-01-30T07:00:00+00:00",
     )
     dataset_generation_id = dataset_result.manifest["generation_id"]

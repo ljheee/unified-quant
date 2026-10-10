@@ -45,15 +45,22 @@ def _make_quality_decision(binding_type="target_weights_v1"):
     checks = {
         "target_weights_v1": [{"name": "weight_sum_within_reserve", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
     }
-    return create_reviewed_quality_decision(
-        binding_type=binding_type,
-        policy="reject_all",
-        status="passed",
-        checks=checks.get(binding_type, []),
-        errors=[], warnings=[],
-        producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+    # cr.md U9/U14: the store derives the weights generation and content
+    # checksum at publish time, so the decision must arrive as a two-argument
+    # per-subject provider.
+    def provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type=binding_type,
+            policy="reject_all",
+            status="passed",
+            checks=checks.get(binding_type, []),
+            errors=[], warnings=[],
+            producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
+    return provider
 
 
 class TestPortfolioBuilder:
@@ -263,7 +270,7 @@ class TestPB1NegativeTests:
 
     def test_wrong_reviewer_signature_rejects(self):
         from uq.contracts.model_layer import bind_reviewed_quality_decision
-        decision = _make_quality_decision()
+        decision = _make_quality_decision()(GEN_A, GEN_A)
         tampered = {**decision, "review_signature_sha256": "f" * 128}
         with pytest.raises(ContractError, match="signature mismatch"):
             bind_reviewed_quality_decision(

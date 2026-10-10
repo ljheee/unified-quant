@@ -20,3 +20,5 @@ data/
 /research_exports/
 /.qlib/
 qlib_data/
+
+.supervisor/

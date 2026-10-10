@@ -20,6 +20,7 @@ from ..contracts.model_layer import (
     ModelContractLoader,
     bind_reviewed_quality_decision,
     model_manifest_identities,
+    resolve_subject_quality_decision,
 )
 from ..errors import ContractError
 
@@ -517,6 +518,9 @@ class BacktestResultStore:
             schema_name="backtest_result",
         )
 
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision, subject_generation_id=provisional_gen, subject_content_sha256=provisional_gen
+        )
         bound_report, report_checksum = bind_reviewed_quality_decision(
             quality_decision,
             binding_type="backtest_result_v1",

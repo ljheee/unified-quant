@@ -271,8 +271,13 @@ def test_allow_and_warn_are_executable_noop(tmp_path: Path) -> None:
             "manifest_digest_sha256": "0" * 64,
             "generation_id": "0" * 64,
         }
-        unsigned = _unsigned("order_plan_v1", config["generation_id"])
-        quality = _decision_for_review(unsigned, "order_plan_v1", config["generation_id"])
+        # cr.md U9: the store derives the plan manifest generation at publish
+        # time, so the decision must arrive as a per-subject provider.
+        def quality(subject_generation_id: str) -> dict:
+            return _decision_for_review(
+                _unsigned("order_plan_v1", subject_generation_id),
+                "order_plan_v1", subject_generation_id,
+            )
         store = OrderPlanStore(root)
         store.publish(manifest, frame, quality_decision=quality, risk_decision=risk)
         assert store.read(manifest["generation_id"])[0]["generation_id"] == manifest["generation_id"]
@@ -382,28 +387,25 @@ def test_failed_review_publish_leaves_no_partition(tmp_path: Path, monkeypatch) 
     assert list(tmp_path.rglob("manifest.json")) == []
 
 def test_mismatched_report_generation_blocks_publication(tmp_path: Path) -> None:
-    from uq.contracts.model_layer import bind_reviewed_quality_decision, sha256_json
+    from uq.contracts.model_layer import bind_reviewed_quality_decision
 
     root = tmp_path / "mismatch"
     root.mkdir()
     config, _risk = _publish_action_config(root, "allow")
+    # cr.md U9: tampering a published report's bound generation is now caught
+    # by signature verification first (the subject is inside the signed
+    # payload). To exercise the store-side generation-binding guard, attach a
+    # report that is legitimately signed for a *different* subject.
     decision = _decision_for_review(
-        _unsigned("order_plan_v1", config["generation_id"]),
+        _unsigned("order_plan_v1", "e" * 64),
         "order_plan_v1",
-        config["generation_id"],
+        "e" * 64,
     )
-    report, _ = bind_reviewed_quality_decision(
+    report, checksum = bind_reviewed_quality_decision(
         decision,
         binding_type="order_plan_v1",
-        subject_generation_id=config["generation_id"],
+        subject_generation_id="e" * 64,
     )
-    report["bound_generation_id"] = "e" * 64
-    report["subject_content_sha256"] = report["bound_generation_id"]
-    checksum = sha256_json({
-        key: value for key, value in report.items()
-        if key != "report_checksum_sha256"
-    })
-    report["report_checksum_sha256"] = checksum
     report_path = root / "external_quality_reviews" / f"{checksum}.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, sort_keys=True) + "\n")

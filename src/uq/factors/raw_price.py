@@ -45,19 +45,47 @@ def calculate_raw_price_factors(frame: pd.DataFrame) -> pd.DataFrame:
     return output
 
 
-def logical_fingerprint(frame: pd.DataFrame, *, tolerance: float = 1e-12) -> str:
+# cr.md U2: the fingerprint algorithm has changed twice (H11 null-mask, U18
+# infinity signs), which orphaned every artifact pinned by an older algorithm.
+# Rather than cut existing partitions off, reads accept any known version
+# (verify_logical_fingerprint below); writes always use the latest.
+KNOWN_FINGERPRINT_VERSIONS = (1, 2, 3)
+LATEST_FINGERPRINT_VERSION = 3
+
+
+def logical_fingerprint(frame: pd.DataFrame, *, tolerance: float = 1e-12, version: int = LATEST_FINGERPRINT_VERSION) -> str:
     columns = [column for column in frame.columns if column not in {"instrument", "datetime"}]
-    # cr.md H11: masking NaN to -0.0 used to make missing values collide with
-    # genuine -0.0 in the fingerprint; hash the null mask independently and
-    # keep NaN distinct from both -0.0 and masked infinities.
-    null_mask = frame[columns].isna().to_numpy(dtype=bool)
-    normalized = frame[columns].round(12).replace([np.inf, -np.inf], np.nan).round(12)
+    if version == 1:
+        # Legacy (pre-H11): masking NaN to -0.0 made missing values collide
+        # with genuine -0.0; kept for reading存量 artifacts.
+        normalized = frame[columns].round(12).fillna(-0.0).replace([np.inf, -np.inf], np.nan).round(12)
+        null_mask = None
+    elif version == 2:
+        # cr.md H11: masking NaN to -0.0 used to make missing values collide
+        # with genuine -0.0 in the fingerprint; hash the null mask
+        # independently and keep NaN distinct from both -0.0 and masked
+        # infinities.
+        null_mask = frame[columns].isna().to_numpy(dtype=bool)
+        normalized = frame[columns].round(12).replace([np.inf, -np.inf], np.nan).round(12)
+    elif version == 3:
+        # cr.md U18/U24: version 2 mapped both infinities to NaN *after*
+        # sampling the null mask, so +inf and -inf still collided with each
+        # other; emit them as distinct signed sentinels instead.
+        null_mask = frame[columns].isna().to_numpy(dtype=bool)
+        normalized = frame[columns].round(12)
+    else:
+        raise ContractError(f"unsupported logical fingerprint version: {version}")
     keys = frame[["instrument", "datetime"]].to_numpy()
     values = normalized.to_numpy()
     rows = []
     def canonical_value(value):
         if pd.isna(value):
             return None
+        if version == 3 and isinstance(value, (float, np.floating)):
+            if value == np.inf:
+                return "+inf"
+            if value == -np.inf:
+                return "-inf"
         if isinstance(value, (bool, np.bool_)):
             return bool(value)
         if isinstance(value, (int, float, np.integer, np.floating)):
@@ -69,5 +97,23 @@ def logical_fingerprint(frame: pd.DataFrame, *, tolerance: float = 1e-12) -> str
     for key_row, value_row in zip(keys, values):
         timestamp = pd.Timestamp(key_row[1]).isoformat()
         rows.append([str(key_row[0]), timestamp, *[canonical_value(value) for value in value_row]])
-    payload = {"columns": columns, "rows": rows, "tolerance": tolerance, "null_mask": null_mask.tolist()}
+    payload = {"columns": columns, "rows": rows, "tolerance": tolerance}
+    if null_mask is not None:
+        payload["null_mask"] = null_mask.tolist()
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def verify_logical_fingerprint(frame: pd.DataFrame, expected: str | None, *, tolerance: float = 1e-12) -> bool:
+    """Accept a fingerprint pinned by any known algorithm version.
+
+    cr.md U2 migration layer: manifests carry no algorithm marker, so a stored
+    fingerprint may come from any historical version; every known version is a
+    deterministic, key-inclusive SHA-256 construction, so multi-accept does not
+    weaken tamper evidence in practice.
+    """
+    if not expected:
+        return False
+    return any(
+        logical_fingerprint(frame, tolerance=tolerance, version=version) == expected
+        for version in KNOWN_FINGERPRINT_VERSIONS
+    )

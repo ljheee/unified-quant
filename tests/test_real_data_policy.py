@@ -14,7 +14,13 @@ class _FakeLifecycle(AkShareLifecycleProvider):
         return self.codes
 
     def _delisted_codes(self):
-        return self.delisted
+        # cr.md U5: the provider now maps symbol -> (listing date, delist
+        # date); accept a bare delist date in fixtures as (None, delist date),
+        # which keeps the in-window gap fail closed (H1 semantics).
+        return {
+            symbol: (value if isinstance(value, tuple) else (None, value))
+            for symbol, value in self.delisted.items()
+        }
 
     def suspension_window(self, trade_date, instruments, sources=("akshare",)):
         return {instrument: "suspended_expected_missing" for instrument in instruments}
@@ -61,6 +67,38 @@ def test_gap_before_delist_date_is_not_excused_as_unlisted():
     provider = _FakeLifecycle({"600000"}, {"600001": date(2025, 6, 30)})
     result = provider.classify_missing(
         date(2024, 1, 5), ["600001.XSHG"], ("akshare",)
+    )
+    assert result["600001.XSHG"] == "unknown_requires_review"
+
+
+def test_pre_listing_gap_of_delisted_symbol_is_expected_missing():
+    # cr.md U5 regression: a stock listed 2020-01-06 and delisted 2025-06-30
+    # has no bars on 2019-12-31 because it was not on the exchange at all;
+    # classifying that as unknown_requires_review killed legitimate historical
+    # backfill spanning pre-IPO dates.
+    provider = _FakeLifecycle({"600000"}, {"600001": (date(2020, 1, 6), date(2025, 6, 30))})
+    result = provider.classify_missing(
+        date(2019, 12, 31), ["600001.XSHG"], ("akshare",)
+    )
+    assert result["600001.XSHG"] == "not_listed_expected_missing"
+
+
+def test_in_window_gap_of_delisted_symbol_stays_fail_closed():
+    # U5 must not reopen H1: a gap inside the listing window (between listing
+    # and delisting) remains unexplained.
+    provider = _FakeLifecycle({"600000"}, {"600001": (date(2020, 1, 6), date(2025, 6, 30))})
+    result = provider.classify_missing(
+        date(2024, 1, 5), ["600001.XSHG"], ("akshare",)
+    )
+    assert result["600001.XSHG"] == "unknown_requires_review"
+
+
+def test_unknown_listing_date_of_delisted_symbol_stays_fail_closed():
+    # When the delist feed lacks the listing date, the pre-delist gap cannot
+    # be distinguished from an in-window gap; fail closed (H1 default).
+    provider = _FakeLifecycle({"600000"}, {"600001": date(2025, 6, 30)})
+    result = provider.classify_missing(
+        date(2019, 12, 31), ["600001.XSHG"], ("akshare",)
     )
     assert result["600001.XSHG"] == "unknown_requires_review"
 

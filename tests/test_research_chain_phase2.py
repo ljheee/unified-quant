@@ -245,35 +245,65 @@ def _publish_universe(root: Path, instruments: list[str]) -> dict:
     return manifest
 
 
-def _preprocessing_quality_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="feature_preprocessing_v1",
-        policy="cross_sectional_stateless_v1",
-        status="passed",
-        checks=[{"name": "key_reconciliation", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def _preprocessing_quality_decision():
+    # cr.md U9/U14: reviewer signatures commit to the subject, so decisions
+    # are produced as per-subject providers; the stage adapter receives them
+    # resolved for the exact generation it binds at execute time.
+    def provider(subject_generation_id: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="feature_preprocessing_v1",
+            policy="cross_sectional_stateless_v1",
+            status="passed",
+            checks=[{"name": "key_reconciliation", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+        )
+    return provider
 
 
-def _label_quality_decision(status: str = "passed") -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="label_set_v1",
-        policy="reject_all",
-        status=status,
-        checks=[{"name": "key_uniqueness", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def _label_quality_decision(status: str = "passed"):
+    def provider(subject_generation_id: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="label_set_v1",
+            policy="reject_all",
+            status=status,
+            checks=[{"name": "key_uniqueness", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+        )
+    return provider
 
 
-def _dataset_quality_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="model_dataset_v1", policy="reject_all", status="passed",
-        checks=[{"name": "row_count", "threshold": 0, "observed": 60, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def _dataset_quality_decision():
+    def provider(subject_generation_id: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="model_dataset_v1", policy="reject_all", status="passed",
+            checks=[{"name": "row_count", "threshold": 0, "observed": 60, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+        )
+    return provider
+
+
+def _execute_decisions(plan: ResolvedExecutionPlan) -> dict:
+    # cr.md U9: reviewer signatures commit to the subject, so each decision
+    # must be minted for the exact generation the stage binds at execute time.
+    # The resolved plan carries no model_dataset binding (the dataset is the
+    # stage's own output), so the dataset decision stays a provider — the
+    # dataset writer resolves it against the derived generation at write time.
+    from uq.research_chain.adapters import _stage_binding
+    return {
+        "quality_decision": _dataset_quality_decision(),
+        "preprocessing_quality_decision": _preprocessing_quality_decision()(
+            _stage_binding(plan, stage="dataset_preparation", output_family="feature_preprocessing").generation_id
+        ),
+        "label_quality_decision": _label_quality_decision()(
+            _stage_binding(plan, stage="dataset_preparation", output_family="label_set").generation_id
+        ),
+    }
 
 
 def _prepare_dataset_store(tmp_path: Path) -> tuple[DatasetStageAdapter, ResolvedExecutionPlan, FactorStore]:
@@ -324,6 +354,8 @@ def _prepare_dataset_store(tmp_path: Path) -> tuple[DatasetStageAdapter, Resolve
         checks=[{"name": "key_reconciliation", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint="0" * 64,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=preprocessing["generation_id"],
+        subject_content_sha256=preprocessing["generation_id"],
     )
     bound_preprocessing, _ = bind_reviewed_quality_decision(
         preprocessing_decision,
@@ -382,9 +414,7 @@ def test_dataset_stage_binds_reviewed_policy_and_verified_inputs(tmp_path: Path)
     result = adapter.run(
         plan,
         runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
-        quality_decision=_dataset_quality_decision(),
-        preprocessing_quality_decision=_preprocessing_quality_decision(),
-        label_quality_decision=_label_quality_decision(),
+        **_execute_decisions(plan),
         created_at="2026-01-30T07:00:00+00:00",
     )
     manifest = result.manifest
@@ -402,15 +432,25 @@ def test_dataset_stage_binds_reviewed_policy_and_verified_inputs(tmp_path: Path)
 
 def test_dataset_stage_rejects_wrong_reviewed_quality_decision(tmp_path: Path) -> None:
     adapter, plan, _ = _prepare_dataset_store(tmp_path)
-    wrong_decision = _dataset_quality_decision()
-    wrong_decision["binding_type"] = "prediction_set_v1"
+    decisions = _execute_decisions(plan)
+
+    # cr.md U9: mint a decision signed for the wrong binding type against the
+    # derived dataset subject; the bind-time binding check still fires.
+    def wrong_decision(subject_generation_id: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="prediction_set_v1", policy="reject_all", status="passed",
+            checks=[{"name": "eligibility_coverage", "threshold": True, "observed": True, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+        )
     with pytest.raises(ContractError, match="does not match model_dataset_v1"):
         adapter.run(
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             quality_decision=wrong_decision,
-            preprocessing_quality_decision=_preprocessing_quality_decision(),
-            label_quality_decision=_label_quality_decision(),
+            preprocessing_quality_decision=decisions["preprocessing_quality_decision"],
+            label_quality_decision=decisions["label_quality_decision"],
         )
 
 
@@ -419,27 +459,31 @@ def test_dataset_stage_verifies_label_decision_at_execute_time(tmp_path: Path) -
     # only as an envelope at resolve time; a rejected or wrong-family decision
     # must fail the dataset stage at execute time (aligned with the factor stage).
     adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    decisions = _execute_decisions(plan)
     kwargs = dict(
         runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
-        quality_decision=_dataset_quality_decision(),
-        preprocessing_quality_decision=_preprocessing_quality_decision(),
+        quality_decision=decisions["quality_decision"],
+        preprocessing_quality_decision=decisions["preprocessing_quality_decision"],
         created_at="2026-01-30T07:00:00+00:00",
     )
-    from uq.contracts.model_layer import review_signature
-    rejected_unsigned = {
-        "binding_type": "label_set_v1",
-        "checks": [{"name": "key_uniqueness", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
-        "errors": [], "key_id": "model-quality-reviewer-v1-2026-09", "policy": "reject_all",
-        "producer_code_fingerprint": "0" * 64, "reviewer": "external-model-quality-reviewer-v1",
-        "status": "rejected", "warnings": [],
-    }
-    rejected = {**rejected_unsigned, "report_version": 2, "review_signature_sha256": review_signature(
-        {**rejected_unsigned, "report_version": 2}, private_key_pem=REVIEWER_PRIVATE_KEY
-    )}
-    with pytest.raises(ContractError, match="not approved"):
-        adapter.run(plan, label_quality_decision=rejected, **kwargs)
+    from uq.research_chain.adapters import _stage_binding
+    label_generation = _stage_binding(
+        plan, stage="dataset_preparation", output_family="label_set"
+    ).generation_id
+    # cr.md U9: decisions are minted per subject through the reviewer factory;
+    # a rejected status is refused by the reviewed registry policy.
+    with pytest.raises(ContractError, match="not approved|not in allowed statuses"):
+        adapter.run(
+            plan,
+            label_quality_decision=_label_quality_decision(status="rejected")(label_generation),
+            **kwargs,
+        )
     with pytest.raises(ContractError, match="does not match label_set_v1"):
-        adapter.run(plan, label_quality_decision=_preprocessing_quality_decision(), **kwargs)
+        adapter.run(
+            plan,
+            label_quality_decision=_preprocessing_quality_decision()(label_generation),
+            **kwargs,
+        )
 
 
 def test_factor_stage_rejects_wrong_reviewed_decision(tmp_path: Path) -> None:
@@ -473,9 +517,7 @@ def test_dataset_stage_rejects_adjusted_price_manifest_mismatch(tmp_path: Path) 
         adapter.run(
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
-            quality_decision=_dataset_quality_decision(),
-            preprocessing_quality_decision=_preprocessing_quality_decision(),
-            label_quality_decision=_label_quality_decision(),
+            **_execute_decisions(plan),
         )
 
 
@@ -497,9 +539,7 @@ def test_dataset_stage_rejects_universe_manifest_mismatch(tmp_path: Path) -> Non
         adapter.run(
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
-            quality_decision=_dataset_quality_decision(),
-            preprocessing_quality_decision=_preprocessing_quality_decision(),
-            label_quality_decision=_label_quality_decision(),
+            **_execute_decisions(plan),
         )
 
 
@@ -521,9 +561,7 @@ def test_dataset_stage_rejects_label_manifest_mismatch(tmp_path: Path) -> None:
         adapter.run(
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
-            quality_decision=_dataset_quality_decision(),
-            preprocessing_quality_decision=_preprocessing_quality_decision(),
-            label_quality_decision=_label_quality_decision(),
+            **_execute_decisions(plan),
         )
 
 
@@ -535,9 +573,7 @@ def test_dataset_stage_rejects_tampered_universe_membership(tmp_path: Path) -> N
         adapter.run(
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
-            quality_decision=_dataset_quality_decision(),
-            preprocessing_quality_decision=_preprocessing_quality_decision(),
-            label_quality_decision=_label_quality_decision(),
+            **_execute_decisions(plan),
         )
 
 
@@ -556,9 +592,7 @@ def test_dataset_stage_rejects_missing_upstream_binding(tmp_path: Path) -> None:
         adapter.run(
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
-            quality_decision=_dataset_quality_decision(),
-            preprocessing_quality_decision=_preprocessing_quality_decision(),
-            label_quality_decision=_label_quality_decision(),
+            **_execute_decisions(plan),
         )
 
 
@@ -579,7 +613,5 @@ def test_dataset_stage_rejects_preprocessing_input_mismatch(tmp_path: Path) -> N
         adapter.run(
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
-            quality_decision=_dataset_quality_decision(),
-            preprocessing_quality_decision=_preprocessing_quality_decision(),
-            label_quality_decision=_label_quality_decision(),
+            **_execute_decisions(plan),
         )

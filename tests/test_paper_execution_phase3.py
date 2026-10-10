@@ -23,7 +23,6 @@ from uq.execution.stores import (
 )
 from uq.risk.contracts import risk_contract_identities
 from uq.risk.publication import ConfigPublicationBinding
-from tests.review_key import REVIEWER_PRIVATE_KEY
 from tests.test_paper_execution_phase2 import (
     _config,
     _decision_prices,
@@ -159,8 +158,12 @@ def _publish_continuation_plan(
         "generation_id": "0" * 64,
     }
     store = OrderPlanStore(root)
-    unsigned = _unsigned("order_plan_v1", config["generation_id"])
-    decision = _decision_for_review(unsigned, "order_plan_v1", config["generation_id"])
+    # cr.md U9: the store derives the plan manifest generation at publish time,
+    # so the decision must arrive as a per-subject provider.
+    def decision(subject_generation_id: str) -> dict:
+        return _decision_for_review(
+            _unsigned("order_plan_v1", subject_generation_id), "order_plan_v1", subject_generation_id
+        )
     store.publish(manifest, frame, quality_decision=decision, risk_decision=risk)
     return store.read(manifest["generation_id"])
 
@@ -211,10 +214,17 @@ def _publish_initial_state(
         opening_cash=config["initial_state"]["cash"],
     )
     result_store = ExecutionResultStore(root)
-    unsigned = _unsigned("execution_result_v1", result_manifest["generation_id"])
-    quality = _decision_for_review(unsigned, "execution_result_v1", result_manifest["generation_id"])
-    result_store.publish(result_manifest, result, quality_decision=quality)
-    result_manifest, result = result_store.read(result_manifest["generation_id"])
+    # cr.md U9: the store fills the payload checksum and derives the result
+    # manifest generation at publish time, so the decision must arrive as a
+    # per-subject provider.
+    def quality(subject_generation_id: str) -> dict:
+        return _decision_for_review(
+            _unsigned("execution_result_v1", subject_generation_id),
+            "execution_result_v1", subject_generation_id,
+        )
+    partition = result_store.publish(result_manifest, result, quality_decision=quality)
+    published_generation = json.loads((partition / "manifest.json").read_text())["generation_id"]
+    result_manifest, result = result_store.read(published_generation)
     frame, manifest = PaperPortfolioStateBuilder().build(
         config,
         result_manifest=result_manifest,
@@ -393,12 +403,18 @@ def test_continuation_state_resets_prior_buy_lock(tmp_path: Path) -> None:
         opening_cash=CONTINUATION_OPENING_CASH,
     )
     next_result_store = ExecutionResultStore(continuation_root)
-    unsigned = _unsigned("execution_result_v1", next_result_manifest["generation_id"])
-    next_result_quality = _decision_for_review(
-        unsigned, "execution_result_v1", next_result_manifest["generation_id"]
+    # cr.md U9: the store derives the result manifest generation at publish
+    # time, so the decision must arrive as a per-subject provider.
+    def next_result_quality(subject_generation_id: str) -> dict:
+        return _decision_for_review(
+            _unsigned("execution_result_v1", subject_generation_id),
+            "execution_result_v1", subject_generation_id,
+        )
+    next_partition = next_result_store.publish(
+        next_result_manifest, next_result, quality_decision=next_result_quality
     )
-    next_result_store.publish(next_result_manifest, next_result, quality_decision=next_result_quality)
-    next_result_manifest, next_result = next_result_store.read(next_result_manifest["generation_id"])
+    next_generation = json.loads((next_partition / "manifest.json").read_text())["generation_id"]
+    next_result_manifest, next_result = next_result_store.read(next_generation)
     with pytest.raises(ContractError, match="prior state payload"):
         PaperPortfolioStateBuilder().build(
             continuation_config,
@@ -488,9 +504,13 @@ def test_state_store_publish_read_and_tamper_detection(tmp_path: Path) -> None:
         "reviewer": "external-model-quality-reviewer-v1", "report_version": 2,
         "status": "passed",
     }
-    decision = _decision_for_review(unsigned, "paper_portfolio_state_v1", manifest["generation_id"])
+    # cr.md U9: the store derives the state manifest generation at publish
+    # time, so the decision must arrive as a per-subject provider.
+    def decision(subject_generation_id: str) -> dict:
+        return _decision_for_review(unsigned, "paper_portfolio_state_v1", subject_generation_id)
     partition = store.publish(manifest, frame, quality_decision=decision)
-    published_manifest, published_frame = store.read(manifest["generation_id"])
+    published_generation = json.loads((partition / "manifest.json").read_text())["generation_id"]
+    published_manifest, published_frame = store.read(published_generation)
     assert published_frame["quantity"].tolist() == [5500]
     assert partition.exists()
 
@@ -515,7 +535,10 @@ def test_state_store_rejects_tampered_manifest_identity(tmp_path: Path) -> None:
         "reviewer": "external-model-quality-reviewer-v1", "report_version": 2,
         "status": "passed",
     }
-    decision = _decision_for_review(unsigned, "paper_portfolio_state_v1", manifest["generation_id"])
+    # cr.md U9: the store derives the state manifest generation at publish
+    # time, so the decision must arrive as a per-subject provider.
+    def decision(subject_generation_id: str) -> dict:
+        return _decision_for_review(unsigned, "paper_portfolio_state_v1", subject_generation_id)
     partition = store.publish(manifest, frame, quality_decision=decision)
     tampered_manifest = json.loads((partition / "manifest.json").read_text())
     tampered_manifest["row_count"] += 1

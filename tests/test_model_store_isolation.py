@@ -73,13 +73,18 @@ def _publish_factor(root: Path) -> Path:
     return FactorStore(root, registry).publish(**{key: value for key, value in arguments.items() if key != "frame"}, frame=frame)
 
 
-def _dataset_decision() -> dict:
-    return create_reviewed_quality_decision(
-        binding_type="model_dataset_v1", policy="reject_all", status="passed",
-        checks=[{"name": "row_count", "threshold": 6, "observed": 40, "level": "error", "result": "passed"}],
-        errors=[], warnings=[], producer_code_fingerprint=DIGEST,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+def _dataset_decision():
+    # cr.md U9: the writer derives the dataset generation at write time, so
+    # the decision must arrive as a per-subject provider.
+    def provider(subject_generation_id: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="model_dataset_v1", policy="reject_all", status="passed",
+            checks=[{"name": "row_count", "threshold": 6, "observed": 40, "level": "error", "result": "passed"}],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+        )
+    return provider
 
 
 def _artifact_report(generation: str) -> dict:
@@ -88,6 +93,8 @@ def _artifact_report(generation: str) -> dict:
         checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
         errors=[], warnings=[], producer_code_fingerprint=DIGEST,
         private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=generation,
+        subject_content_sha256=generation,
     )
     report, _ = bind_reviewed_quality_decision(
         decision, binding_type="model_artifact_v1",
@@ -194,15 +201,21 @@ def test_staging_directories_are_invisible_to_accepted_readers(tmp_path: Path, s
         "datetime": pd.bdate_range("2026-02-01", periods=5),
         "score": range(5),
     })
-    prediction_decision = create_reviewed_quality_decision(
-        binding_type="prediction_set_v1", policy="reject_all", status="passed",
-        checks=[
-            {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
-            {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
-        ],
-        errors=[], warnings=[], producer_code_fingerprint=DIGEST,
-        private_key_pem=REVIEWER_PRIVATE_KEY,
-    )
+    # cr.md U9/U14: the builder derives the prediction generation and content
+    # digest internally, so the decision must arrive as a two-argument
+    # per-subject provider.
+    def prediction_decision(subject_generation_id: str, subject_content_sha256: str) -> dict:
+        return create_reviewed_quality_decision(
+            binding_type="prediction_set_v1", policy="reject_all", status="passed",
+            checks=[
+                {"name": "finite_scores", "threshold": 0, "observed": 0, "level": "error", "result": "passed"},
+                {"name": "eligibility_coverage", "threshold": 1, "observed": 1, "level": "error", "result": "passed"},
+            ],
+            errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=subject_content_sha256,
+        )
     prediction_manifest, prediction_bytes = builder.build(
         prediction_set_name="isolation", artifact_store=store,
         model_artifact_generation_id=generation,
