@@ -2,7 +2,7 @@
   "algorithm": "Ed25519",
   "key_id": "model-quality-reviewer-v1-2026-09",
   "public_key_hex": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
-  "registry_sha256": "b0115472a50eba70b226d13ed1040a9647d161d8e8047d1cdf36253bb65b0cf3",
+  "registry_sha256": "688fa3fd758ad29c8743fecf44d9e2d0af1fbbce93b3ff0c8e6c263f16e8bad5",
   "status": "active",
   "trust_anchor_version": 1
 }

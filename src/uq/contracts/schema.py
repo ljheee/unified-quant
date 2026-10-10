@@ -69,6 +69,15 @@ class Schema:
                     raise ContractError(f"field {field} must contain day-resolution dates")
             elif str(series.dtype) != _DTYPE_ALIASES[dtype]:
                 raise ContractError(f"field {field} dtype {series.dtype}, expected {dtype}")
+            # 2026-10-10 residual R9: ±inf used to sail through the float
+            # dtype check, letting non-finite rows reach the cross-source
+            # gate (where only an equal-infinity pair stayed clean). Ban
+            # non-finite values at the schema so no store write or read can
+            # carry them; NaN remains governed by the nullable rule below.
+            if dtype == "float64":
+                nonfinite = series.notna() & (series.abs() == float("inf"))
+                if bool(nonfinite.any()):
+                    raise ContractError(f"field {field} contains non-finite values")
             if not rules.get("nullable", True) and series.isna().any():
                 raise ContractError(f"non-nullable field {field} contains null")
 

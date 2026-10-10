@@ -14,7 +14,7 @@ _ROW_POLICY_KEYS = {
     "allow_unknown_missing",
     "raw_capture",
 }
-_CONFIG_KEYS = {"dataset", "schema_version", "required_fields", "owners", "primary_source", "row_policy", "cross_validation", "sources", "minimum_coverage"}
+_CONFIG_KEYS = {"dataset", "schema_version", "required_fields", "owners", "primary_source", "row_policy", "cross_validation", "cross_validation_mode", "sources", "minimum_coverage"}
 _SOURCE_KEYS = {"priority", "fallback", "provides", "coverage", "authentication", "latency_class", "quota", "reliability", "correction_window", "revision_support"}
 
 
@@ -61,6 +61,16 @@ def load_dataset_contract(path: str | Path, schema: Schema | None = None) -> Dat
     if not 0.0 <= minimum_coverage <= 1.0:
         raise ContractError("minimum_coverage must be within [0, 1]")
 
+    # 2026-10-10 residual R2: the contract must say whether its declared
+    # cross_validation rules are always enforced or only apply to runs that
+    # request them; absent the key the historical reading was "enforced"
+    # while the default path never executed them.
+    cross_validation_mode = str(payload.get("cross_validation_mode", "optional"))
+    if cross_validation_mode not in {"optional", "required"}:
+        raise ContractError("cross_validation_mode must be optional or required")
+    if cross_validation_mode == "required" and not payload.get("cross_validation"):
+        raise ContractError("cross_validation_mode required declares no cross_validation rules")
+
     contract = DatasetContract(
         dataset=payload["dataset"],
         schema_version=str(payload["schema_version"]),
@@ -77,6 +87,7 @@ def load_dataset_contract(path: str | Path, schema: Schema | None = None) -> Dat
         cross_validation=dict(payload.get("cross_validation", {})),
         sources=sources,
         minimum_coverage=minimum_coverage,
+        cross_validation_mode=cross_validation_mode,
     )
     if schema is not None:
         _validate_against_schema(contract, schema)

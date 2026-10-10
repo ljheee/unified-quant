@@ -131,6 +131,14 @@ class DailyIngestPipeline:
         self.require_complete_route = require_complete_route
         self.run_health_probe = run_health_probe
         self.require_cross_validation = require_cross_validation
+        # Residual R2: a contract that declares its cross-validation rules
+        # as required must not run through a pipeline that skips them — the
+        # builders (build_tdx_pipeline) and CLI default trip here instead of
+        # silently under-enforcing.
+        if self.contract.cross_validation_mode == "required" and not require_cross_validation:
+            raise ContractError(
+                "dataset contract declares cross_validation_mode=required; enable cross-validation for this run"
+            )
         policy = self.contract.row_policy or {}
         self.verified_rows_only = (
             bool(policy.get("verified_only", False))
@@ -147,6 +155,7 @@ class DailyIngestPipeline:
             "required_fields": self.contract.required_fields,
             "primary_source": self.contract.primary_source,
             "cross_validation": self.contract.cross_validation,
+            "cross_validation_mode": self.contract.cross_validation_mode,
             "minimum_coverage": self.contract.minimum_coverage,
             "sources": {name: sorted(capability.provides) for name, capability in self.contract.sources.items()},
         }, sort_keys=True)

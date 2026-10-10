@@ -49,6 +49,11 @@ class DatasetContract:
     cross_validation: dict[str, dict[str, Any]] = field(default_factory=dict)
     sources: dict[str, SourceCapability] = field(default_factory=dict)
     minimum_coverage: float = 0.0
+    # 2026-10-10 residual R2: whether the declared cross_validation rules are
+    # enforcement ("required") or only apply when a run explicitly requests
+    # them ("optional", the default). Without this field the contract read
+    # as always-enforced while the default ingest path never executed it.
+    cross_validation_mode: str = "optional"
 
     def eligible_sources(self, fields: set[str]) -> list[SourceCapability]:
         return sorted(

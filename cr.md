@@ -299,3 +299,26 @@
 | U20 | C2 train split 校验抽纯函数 resolve_train_split（免 qlib 回归锁） | test_qlib_train_split_validation_is_pure_and_rejects |
 | U21 | qlib worker datetime64 保持真锁（fake-qlib 全链路，变异验证） | test_qlib_adapter.py::test_qlib_worker_output_preserves_datetime64 |
 | U22 | 重复状态行删除，allowed_statuses 单一收口于 review registry | research_chain/model_layer 邻接套件 |
+
+## 八、残留项处置记录（2026-10-10，U 批次复核后的 10 项残留）
+
+U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方给出 10 项残留分析。逐条核验结论：**6 项代码修复（R1/R2/R3/R4/R9 + CI 回归），4 项文档化接受（R5/R6/R7/R8）**。CI 回归（qlib 门控全链首跑失败，run 38053013828）定位出两个本地不可见缺陷并已修复验证（844acc4 全格绿）。除注明外，新增回归锁均在 tests/test_adv_review_fixes.py。
+
+### 8.1 代码修复项
+
+| 残留 | 处置 | 回归测试 |
+|---|---|---|
+| CI 回归 D1 | phase5 的 `create_reviewed_quality_decision` 漏带必填 subject（U9 转换时该文件被 qlib 门控遮挡）→ 补 subject_generation_id/subject_content_sha256 | tests/test_research_chain_phase5.py（CI qlib 格验证） |
+| CI 回归 D2 | `validate_research_layout` 硬编码 V3 十阶段序，而可执行请求全是 V1/V2 九阶段（V3 runtime 在 runner._validate_plan 禁用）——失败 run 在 result_reconciliation 的状态发布报 08 vs 09 版式错并掩盖 D1。阶段序单一来源化于 `RESEARCH_STAGE_ORDER_V1/V3`（model_layer），layout 校验器收 `stage_order` 参数、_atomic_write 传文档自身 plan、runner._state_relative_path 全线穿 plan | test_v1_state_publishes_at_v1_stage_number、test_research_layout_stage_number_follows_explicit_stage_order |
+| R1 | registry 全部 18 个 reject_all binding 的 allowed_statuses 由 [passed, warning] 收紧为 [passed]（此前 warning 决定可铸造并 bind，与因子/规范侧同策略只认 passed 相悖）；feature_preprocessing_v1 因非 reject_all 策略保持双态；registry 加载期拒绝自相矛盾口径；信任锚 registry_sha256 已重锚 | test_reject_all_registry_bindings_admit_only_passed_status |
+| R2 | research-v1 契约新增 `cross_validation_mode: optional|required`（默认 optional）：声明即现实——optional 时默认路径合法跳过比对；required 时跳过比对的 pipeline 在构造期即拒。U1 语义债清偿，下轮评审不会再把它当 H2↔U1 摆回 | test_cross_validation_mode_is_declared_and_enforced |
+| R3 | build_tdx_pipeline / build_tushare_crosscheck_pipeline 装配直接上锁（适配器集、日历、cross-validation 三旗标），不再只靠 U1 手工重建间接覆盖 | test_pipeline_builders_lock_their_wiring |
+| R4 | provider arity 契约收紧为严格 {1,2} 位置参数：*args 误路由、3 参晚爆 TypeError、不可内省签名静默退化两参，三者均在解析期即拒 | test_decision_provider_arity_is_strict |
+| R9 | canonical schema 的 float64 字段禁非有限值（±inf）——CanonicalStore 发布与读取同走 Schema.validate，inf 行从此写不进也读不出；NaN 仍归 nullable 规则，gate 的 U11 行为（inf vs inf 干净）不变 | test_schema_rejects_non_finite_float_values |
+
+### 8.2 文档化接受项（经核验为既定架构口径，非缺陷）
+
+- **R5（外部评审信任边界）**：`create_reviewed_quality_decision` 在 src/scripts 零生产调用方，外部评审仍是库调用——「谁能签」的信任边界在部署层（评审私钥的保管与签名环境的隔离），代码层只能保证「签什么」可验证（U9 已加固）。本批确认此为既定部署模型并登记于此；若未来引入远程评审服务，信任边界需随部署架构重述。
+- **R6（industry_membership_v1 无生产者）**：taxonomy artifact 目前只有 engine 侧内容绑定校验（U10：policy 绑定 + 内容一致性），无生产者/存储层为其内容背书——taxonomy 的正确性由 policy 评审承担（policy 本身经外部评审签名）。登记为已知治理缺口，待行业分类数据源接入时补齐生产者。
+- **R7（指纹版本未记录）**：manifest 未记录 fingerprint_version，v1 语义（NaN≡-0.0）永久可用；因 v1/v2 payload 结构不同，跨版本伪造路径不成立（U2/U18 已验证 ±inf 指纹互异），但排障时无法从 manifest 直读命中版本。接受为兼容性窗口的既定代价；下次 schema 版本化时连同登记。
+- **R8（provisional zero-checksum 身份约定）**：backtest_config/target_weights 评审签的是发布前合成 manifest（quality_report_checksum_sha256 置零参与身份），内部自洽。此为发布序依赖（报告校验和需在绑定后回填）的既定解法，非伪造路径——绑定态 manifest 的完整身份在 readback 时全量重算验证。

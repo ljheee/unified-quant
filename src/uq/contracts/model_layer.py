@@ -727,6 +727,21 @@ class ModelQualityReviewRegistry:
         bindings = payload.get("bindings")
         if not isinstance(bindings, dict):
             raise ContractError("model quality review registry has no bindings")
+        # 2026-10-10 residual R1: unify the status口径 with the factor and
+        # canonical sides (factors/store.py, contracts/canonical_v2.py) —
+        # reject_all admits only "passed". A reject_all binding that also
+        # admits "warning" contradicts the policy name and previously let a
+        # warning decision mint and bind (e.g. model_artifact_v1). Fail
+        # closed at load so the contradiction can never be re-registered.
+        for binding_type, binding in bindings.items():
+            if (
+                isinstance(binding, dict)
+                and binding.get("policy") == "reject_all"
+                and binding.get("allowed_statuses") != ["passed"]
+            ):
+                raise ContractError(
+                    f"reject_all binding {binding_type} must admit only passed status"
+                )
         self.reviewer = payload["reviewer"]
         self.bindings = bindings
 
@@ -940,13 +955,39 @@ def resolve_subject_quality_decision(
     runner's legacy one-argument providers receive only the generation id —
     their decisions default the content digest to the generation id, so flows
     whose content digest differs still fail closed at bind time.
+
+    The provider contract is strict (2026-10-10 residual R4): exactly one or
+    two positional parameters. A variadic (*args) or three-parameter callable
+    used to be misrouted by the raw parameter count — a *args provider was
+    invoked with one argument and a three-parameter provider blew up with a
+    late TypeError at the call site; both are now rejected up front, as are
+    callables whose signature cannot be inspected (the previous silent
+    two-argument fallback) and required keyword-only parameters.
     """
     if callable(decision):
         try:
-            arity = len(inspect.signature(decision).parameters)
-        except (TypeError, ValueError):
-            arity = 2
-        if arity >= 2:
+            parameters = tuple(inspect.signature(decision).parameters.values())
+        except (TypeError, ValueError) as exc:
+            raise ContractError("quality decision provider signature is not inspectable") from exc
+        positional = [
+            parameter
+            for parameter in parameters
+            if parameter.kind
+            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        variadic = any(
+            parameter.kind == inspect.Parameter.VAR_POSITIONAL for parameter in parameters
+        )
+        required_keyword_only = any(
+            parameter.kind == inspect.Parameter.KEYWORD_ONLY
+            and parameter.default is inspect.Parameter.empty
+            for parameter in parameters
+        )
+        if variadic or required_keyword_only or len(positional) not in (1, 2):
+            raise ContractError(
+                "quality decision provider must take exactly one or two positional arguments"
+            )
+        if len(positional) == 2:
             return decision(subject_generation_id, subject_content_sha256)
         return decision(subject_generation_id)
     return decision

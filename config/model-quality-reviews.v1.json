@@ -7,8 +7,7 @@
         "price_source_bound"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -19,8 +18,7 @@
         "lineage_generations_resolved"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -44,8 +42,7 @@
         "horizon_coverage"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -55,8 +52,7 @@
         "artifact_readback"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -68,8 +64,7 @@
         "null_rate"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -78,8 +73,7 @@
         "upstream_lineage_resolved"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -90,8 +84,7 @@
         "universe_binding_resolved"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -101,8 +94,7 @@
         "eligibility_coverage"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -111,8 +103,7 @@
         "export_files_verified"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -121,8 +112,7 @@
         "runtime_cache_boundary"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -132,8 +122,7 @@
         "research_stage_plan_valid"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -143,8 +132,7 @@
         "readback_status_valid"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -154,8 +142,7 @@
         "output_binding_checksums_valid"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -166,8 +153,7 @@
         "instruments_in_universe"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -179,8 +165,7 @@
         "execution_policy_within_bounds"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -192,8 +177,7 @@
         "t1_quantity_valid"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -205,8 +189,7 @@
         "reconciliation_complete"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     },
@@ -218,8 +201,7 @@
         "state_reconciliation_complete"
       ],
       "allowed_statuses": [
-        "passed",
-        "warning"
+        "passed"
       ],
       "policy": "reject_all"
     }

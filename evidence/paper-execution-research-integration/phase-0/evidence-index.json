@@ -176,7 +176,7 @@
     },
     {
       "path": "src/uq/contracts/model_layer.py",
-      "sha256": "dd0a10b145647a7b672765036e12619ea8586f1ec0273ed5b2d287924b86f65f"
+      "sha256": "8f4f59cbcafe6bfabd2888fc87f6bfeb29907cbc9ed75d4973a9ad62a44bcce2"
     },
     {
       "path": "src/uq/research_chain/contracts.py",

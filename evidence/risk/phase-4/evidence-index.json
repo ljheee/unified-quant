@@ -3,7 +3,7 @@
   "records": [
     {
       "path": "evidence/risk/phase-4/phase-record.json",
-      "sha256": "a021d72eb4b101f372be8b295ed689c2477085780465e83cb31ee9947a384ab9"
+      "sha256": "3c0a37a693eb5e971cfa00950016dd733c6594dc0daf09b768cf9c63e3b4cf89"
     },
     {
       "path": "evidence/risk/phase-4/gate-reports/final-head/gate-report.json",
@@ -19,7 +19,7 @@
     },
     {
       "path": "evidence/risk/phase-4/research_run_request_v2-valid.json",
-      "sha256": "90d7d1ccd082a731aa2d827251d391cf06ebd3ced0b86fab92c14762753f0cdf"
+      "sha256": "6857a83b59f0ff2810e6dc5f33ef6f3a315b21748bd437456e19c47f3df7c5d5"
     }
   ]
 }

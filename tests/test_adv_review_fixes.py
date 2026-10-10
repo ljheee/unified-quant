@@ -801,3 +801,191 @@ def test_research_layout_stage_number_follows_explicit_stage_order(tmp_path):
         default_path, data_root=tmp_path, kind="state",
         request_generation_id="c" * 64, run_id=run_id, stage="result_reconciliation",
     ) == default_path
+
+
+def test_reject_all_registry_bindings_admit_only_passed_status(tmp_path):
+    # Residual R1 (U22 follow-up): the reviewed registry used to declare
+    # policy=reject_all while admitting ["passed", "warning"] on every
+    # model-side binding, so a warning decision minted and bound — while
+    # the factor and canonical sides reject anything but passed under the
+    # same policy (factors/store.py:161/:560, contracts/canonical_v2.py:204).
+    # The registry now unifies on reject_all ⇒ passed-only and refuses to
+    # load a contradictory binding. feature_preprocessing_v1 keeps
+    # passed+warning under its non-reject_all policy, matching the
+    # factor-side policy-adaptive rule.
+    from uq.contracts.model_layer import (
+        ModelQualityReviewRegistry,
+        create_reviewed_quality_decision,
+    )
+    from tests.review_key import REVIEWER_PRIVATE_KEY
+
+    registry = ModelQualityReviewRegistry()
+    reject_all = {
+        bt: b for bt, b in registry.bindings.items() if b.get("policy") == "reject_all"
+    }
+    assert reject_all, "expected reject_all bindings in the reviewed registry"
+    assert all(b["allowed_statuses"] == ["passed"] for b in reject_all.values())
+    assert registry.bindings["feature_preprocessing_v1"]["allowed_statuses"] == [
+        "passed", "warning",
+    ]
+
+    with pytest.raises(StoreContractError, match="not in allowed statuses"):
+        create_reviewed_quality_decision(
+            binding_type="model_artifact_v1", policy="reject_all", status="warning",
+            checks=[], errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+            private_key_pem=REVIEWER_PRIVATE_KEY,
+            subject_generation_id="0" * 64,
+        )
+
+    payload = json.loads(registry.path.read_text())
+    payload["bindings"]["model_artifact_v1"]["allowed_statuses"] = ["passed", "warning"]
+    contradictory = tmp_path / "registry.json"
+    contradictory.write_text(json.dumps(payload, indent=2) + "\n")
+    with pytest.raises(StoreContractError, match="must admit only passed"):
+        ModelQualityReviewRegistry(contradictory)
+
+
+def test_decision_provider_arity_is_strict():
+    # Residual R4: resolve_subject_quality_decision used to route providers
+    # by raw parameter count — a *args callable was invoked with one
+    # argument and a three-parameter callable failed late at the call site,
+    # while an uninspectable signature silently fell back to two arguments.
+    # The contract is now strict: exactly one or two positional arguments,
+    # inspectable signature, no *args, no required keyword-only parameters.
+    from uq.contracts.model_layer import resolve_subject_quality_decision
+
+    subject_g, subject_c = "g" * 64, "c" * 64
+    assert resolve_subject_quality_decision(
+        lambda g: ("one", g),
+        subject_generation_id=subject_g, subject_content_sha256=subject_c,
+    ) == ("one", subject_g)
+    assert resolve_subject_quality_decision(
+        lambda g, c: ("two", g, c),
+        subject_generation_id=subject_g, subject_content_sha256=subject_c,
+    ) == ("two", subject_g, subject_c)
+    # an optional second parameter still receives the content digest
+    assert resolve_subject_quality_decision(
+        lambda g, c=None: ("opt", c),
+        subject_generation_id=subject_g, subject_content_sha256=subject_c,
+    ) == ("opt", subject_c)
+    for bad in (
+        lambda *args: None,
+        lambda g, c, extra: None,
+        lambda: None,
+        lambda g, *, c: None,
+    ):
+        with pytest.raises(StoreContractError, match="exactly one or two positional"):
+            resolve_subject_quality_decision(
+                bad, subject_generation_id=subject_g, subject_content_sha256=subject_c,
+            )
+    # static decisions pass through untouched
+    assert resolve_subject_quality_decision(
+        {"static": True}, subject_generation_id=subject_g, subject_content_sha256=subject_c,
+    ) == {"static": True}
+
+
+def test_pipeline_builders_lock_their_wiring(tmp_path):
+    # Residual R3 (U1 follow-up): U1's regression test rebuilt the pipeline
+    # by hand from the real contract, so the builders themselves were never
+    # locked — a wiring change (dropping the tushare adapter, the calendar,
+    # or the cross-validation flags) would have passed silently.
+    from uq.pipeline.daily import build_tdx_pipeline, build_tushare_crosscheck_pipeline
+
+    tdx = build_tdx_pipeline(tmp_path / "tdx", ROOT, run_health_probe=False)
+    assert set(tdx.router.adapters) == {"tdx"}
+    assert tdx.router.calendar is None
+    assert tdx.require_cross_validation is False
+    assert tdx.require_complete_route is False
+    assert tdx.run_health_probe is False
+
+    cross = build_tushare_crosscheck_pipeline(tmp_path / "cross", ROOT, run_health_probe=False)
+    assert set(cross.router.adapters) == {"tdx", "tushare"}
+    assert cross.router.calendar is not None
+    assert cross.router.calendar.provenance == "akshare_sina_trade_dates"
+    assert cross.require_cross_validation is True
+    assert cross.require_complete_route is True
+    assert cross.verified_rows_only is True
+
+    # both builders load the same frozen research contract the U1 test uses
+    assert tdx.contract.cross_validation == cross.contract.cross_validation
+    assert tdx.contract.minimum_coverage == cross.contract.minimum_coverage
+
+
+def test_cross_validation_mode_is_declared_and_enforced(tmp_path):
+    # Residual R2 (U1 semantic debt): the research-v1 contract declared
+    # cross_validation rules + minimum_coverage: 0.9 while the default
+    # ingest path never executed them, so every reviewer read the
+    # declaration as always-enforced. The contract now declares its mode
+    # explicitly; "required" makes a pipeline that skips cross-validation
+    # fail at construction instead of silently under-enforcing.
+    from uq.contracts.config import load_dataset_contract
+
+    contract = load_dataset_contract(CONTRACT_PATH, load_schema(SCHEMA_PATH))
+    assert contract.cross_validation_mode == "optional"
+
+    # optional mode keeps the default TDX-only path legal (U1 stays closed)
+    report = _default_pipeline(tmp_path / "opt").run(date(2026, 8, 21), ["600000.XSHG"])
+    assert report.status == "published", report.errors
+
+    # required mode trips a cross-validation-skipping pipeline at construction
+    required_path = tmp_path / "required.yaml"
+    required_path.write_text(
+        CONTRACT_PATH.read_text().replace(
+            "cross_validation_mode: optional", "cross_validation_mode: required"
+        )
+    )
+    contract_required = load_dataset_contract(required_path, load_schema(SCHEMA_PATH))
+    with pytest.raises(StoreContractError, match="cross_validation_mode=required"):
+        DailyIngestPipeline(
+            tmp_path / "req",
+            SCHEMA_PATH,
+            required_path,
+            SourceRouter(contract_required, {"tdx": FakeMootdxAdapter(mootdx_page())}),
+            run_health_probe=False,
+        )
+    pipeline = DailyIngestPipeline(
+        tmp_path / "req2",
+        SCHEMA_PATH,
+        required_path,
+        SourceRouter(contract_required, {"tdx": FakeMootdxAdapter(mootdx_page())}),
+        run_health_probe=False,
+        require_cross_validation=True,
+    )
+    assert pipeline.require_cross_validation is True
+
+    # unknown modes are rejected at load
+    bad_path = tmp_path / "bad.yaml"
+    bad_path.write_text(
+        CONTRACT_PATH.read_text().replace(
+            "cross_validation_mode: optional", "cross_validation_mode: sometimes"
+        )
+    )
+    with pytest.raises(ContractError, match="must be optional or required"):
+        load_dataset_contract(bad_path, load_schema(SCHEMA_PATH))
+
+
+def test_schema_rejects_non_finite_float_values():
+    # Residual R9: ±inf passed the float dtype check, so non-finite rows
+    # could reach the cross-source gate, where only an equal-infinity pair
+    # stays clean (locked by test_gate_equal_infinities_stay_clean). The
+    # canonical schema now bans non-finite floats — CanonicalStore publish
+    # and read both run Schema.validate — while NaN stays governed by the
+    # nullable rule and the gate's U11 behavior is untouched.
+    schema = load_schema(SCHEMA_PATH)
+    frame = pd.DataFrame({
+        "instrument": ["600000.XSHG"],
+        "datetime": pd.to_datetime(["2026-08-21"]),
+        "open": [10.0], "high": [11.0], "low": [9.0], "close": [10.5],
+        "volume": [100.0], "amount": [1050.0],
+    })
+    schema.validate(frame)
+    for bad_value in (np.inf, -np.inf):
+        forged = frame.copy()
+        forged.loc[0, "close"] = bad_value
+        with pytest.raises(ContractError, match="non-finite"):
+            schema.validate(forged)
+    # NaN still reports through the nullable rule, not the finite ban
+    nulled = frame.copy()
+    nulled.loc[0, "close"] = np.nan
+    with pytest.raises(ContractError, match="non-nullable"):
+        schema.validate(nulled)

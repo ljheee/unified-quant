@@ -24,9 +24,15 @@ cross_validation:
   volume:
     compare_with: tushare
     max_rel_diff_pct: 0.01
-# cr.md U12: enforced only when cross-validation is requested
-# (uq-ingest daily --cross-validate); fraction of primary rows that must be
-# comparable against the comparator source, below which the run is rejected.
+# cr.md U12 + 2026-10-10 residual R2: the rules above are OPTIONAL — they
+# execute only when a run requests cross-validation (uq-ingest daily
+# --cross-validate / build_tushare_crosscheck_pipeline); the default
+# TDX-only path legitimately skips them. Set to "required" to make every
+# run from this contract enforce them; a pipeline that skips a required
+# mode fails at construction.
+cross_validation_mode: optional
+# Fraction of primary rows that must be comparable against the comparator
+# source when cross-validation runs, below which the run is rejected.
 minimum_coverage: 0.9
 sources:
   tdx:
