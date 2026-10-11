@@ -10,7 +10,7 @@ sort_key:
 fields:
   instrument:
     dtype: string
-    pattern: '^[0-9]{6}\\.(XSHG|XSHE)$'
+    pattern: '^[0-9]{6}\.(XSHG|XSHE|XBSE)$'
     nullable: false
   session_date:
     dtype: date32

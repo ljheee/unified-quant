@@ -64,7 +64,7 @@ def build_tushare_crosscheck_pipeline(
     from ..market.calendar import TradingCalendar, akshare_calendar
     from ..routing.router import SourceRouter
 
-    project_root = project_root or Path(__file__).resolve().parents[2]
+    project_root = project_root or Path(__file__).resolve().parents[3]
     schema_path = project_root / "config/schemas/bars_daily.research-v1.yaml"
     contract_path = project_root / "config/datasets/bars_daily.research-v1.yaml"
     schema = load_schema(schema_path)
@@ -97,7 +97,7 @@ def build_tdx_pipeline(
     from ..adapters.mootdx_source import MootdxSourceAdapter
     from ..routing.router import SourceRouter
 
-    project_root = project_root or Path(__file__).resolve().parents[2]
+    project_root = project_root or Path(__file__).resolve().parents[3]
     schema_path = project_root / "config/schemas/bars_daily.research-v1.yaml"
     contract_path = project_root / "config/datasets/bars_daily.research-v1.yaml"
     contract = load_dataset_contract(contract_path, load_schema(schema_path))
@@ -108,6 +108,42 @@ def build_tdx_pipeline(
         contract_path,
         SourceRouter(contract, adapters),
         run_health_probe=run_health_probe,
+    )
+
+
+def build_tushare_v2_pipeline(
+    root: Path,
+    project_root: Path | None = None,
+    run_health_probe: bool = True,
+    require_cross_validation: bool = False,
+) -> DailyIngestPipeline:
+    """Build the bars_daily v2 pipeline: Tushare primary, TDX close/volume comparator.
+
+    v2 is keyed by ``session_date`` and carries ``status``/``limit_up``/
+    ``limit_down``/``adj_factor``. Only Tushare serves those fields today, so
+    the ownership order inverts relative to the research-v1 builders: Tushare
+    is the primary source and TDX can only act as the OHLCV comparator.
+
+    Deliberately not wired yet: an independent trading calendar (coverage stays
+    ``unverified`` and the report warns) and the Mootdx XDXR dividend path that
+    cross-checks ``adj_factor``. Both are tracked in ``pendding.md``.
+    """
+    from ..adapters.mootdx_source import MootdxSourceAdapter
+    from ..adapters.tushare_2k import Tushare2kAdapter
+    from ..routing.router import SourceRouter
+
+    project_root = project_root or Path(__file__).resolve().parents[3]
+    schema_path = project_root / "config/schemas/bars_daily.v2.yaml"
+    contract_path = project_root / "config/datasets/bars_daily.v2.yaml"
+    contract = load_dataset_contract(contract_path, load_schema(schema_path))
+    adapters = {"tushare": Tushare2kAdapter(), "tdx": MootdxSourceAdapter()}
+    return DailyIngestPipeline(
+        root,
+        schema_path,
+        contract_path,
+        SourceRouter(contract, adapters),
+        run_health_probe=run_health_probe,
+        require_cross_validation=require_cross_validation,
     )
 
 
@@ -127,6 +163,10 @@ class DailyIngestPipeline:
         self.root = root
         self.schema: Schema = load_schema(schema_path)
         self.contract = load_dataset_contract(contract_path, self.schema)
+        session_fields = [field for field in self.schema.primary_key if field != "instrument"]
+        if len(session_fields) != 1:
+            raise ContractError("dataset schema primary key must be instrument plus one session field")
+        self.session_key = session_fields[0]
         self.router = router
         self.require_complete_route = require_complete_route
         self.run_health_probe = run_health_probe
@@ -270,8 +310,26 @@ class DailyIngestPipeline:
 
         frames[self.contract.primary_source] = primary_result.rows
         for source_name, result in source_results.items():
-            if source_name != self.contract.primary_source and result.is_usable and not result.rows.empty:
-                frames[source_name] = result.rows
+            if source_name == self.contract.primary_source or not result.is_usable or result.rows.empty:
+                continue
+            # A comparator keyed on a different session column cannot be
+            # aligned on the contract key. Dropping it silently would publish
+            # an unaudited single-source partition under a contract that
+            # declares cross-validation, so reject the run instead.
+            if "instrument" not in result.rows.columns or self.session_key not in result.rows.columns:
+                errors.append(
+                    f"{source_name} rows lack the dataset key columns ['instrument', {self.session_key!r}]"
+                )
+                return IngestReport(
+                    trade_date,
+                    "comparator_key_missing",
+                    len(primary_result.rows),
+                    {k: v.status.value for k, v in source_results.items()},
+                    tuple(warnings),
+                    tuple(errors),
+                    provenance=provenance,
+                )
+            frames[source_name] = result.rows
 
         if self.require_cross_validation:
             secondary_sources = {
@@ -284,7 +342,7 @@ class DailyIngestPipeline:
                 return IngestReport(trade_date, "cross_validation_missing", len(primary_result.rows), {k: v.status.value for k, v in source_results.items()}, tuple(warnings), tuple(errors))
 
         if self.verified_rows_only and instruments:
-            primary_keys = set(map(tuple, primary_result.rows[["instrument", "datetime"]].itertuples(index=False, name=None)))
+            primary_keys = set(map(tuple, primary_result.rows[["instrument", self.session_key]].itertuples(index=False, name=None)))
             expected_keys = {
                 (instrument, pd.Timestamp(trade_date))
                 for instrument in instruments
@@ -344,7 +402,7 @@ class DailyIngestPipeline:
             self.contract.owners,
             minimum_coverage=self.contract.minimum_coverage,
         )
-        quality = gate.merge(frames, ["instrument", "datetime"], set(requested_fields))
+        quality = gate.merge(frames, ["instrument", self.session_key], set(requested_fields))
         if quality.frame.empty and instruments:
             quality = dataclasses.replace(
                 quality,

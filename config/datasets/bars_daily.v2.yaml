@@ -13,19 +13,19 @@ required_fields:
   - adj_factor
 owners:
   adj_factor: tushare
-primary_source: tdx
+primary_source: tushare
 cross_validation:
   close:
-    compare_with: tushare
+    compare_with: tdx
     max_abs_diff_pct: 0.001
   volume:
-    compare_with: tushare
+    compare_with: tdx
     max_rel_diff_pct: 0.01
 sources:
   tdx:
-    priority: 1
-    provides: [instrument, session_date, open, high, low, close, volume, amount, status]
-  tushare:
     priority: 2
     fallback: true
+    provides: [instrument, session_date, open, high, low, close, volume, amount]
+  tushare:
+    priority: 1
     provides: [instrument, session_date, open, high, low, close, volume, amount, status, limit_up, limit_down, adj_factor]

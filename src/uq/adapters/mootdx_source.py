@@ -115,10 +115,23 @@ class MootdxSourceAdapter:
         # ``end``. A full page makes recent historical requests deterministic;
         # longer ranges remain covered by bounded pagination.
         return self.page_size
+
+    @staticmethod
+    def _schema_version_for(fields: list[str]) -> str:
+        """bars_daily v2 is keyed by session_date; anything else keeps the research-v1 key.
+
+        Same rule as ``TushareAdapter._schema_version_for`` so a single
+        contract field list selects one key schema across every source;
+        without it a v2 request silently returns ``datetime`` and the
+        merge/verified-row paths cannot align the two sources.
+        """
+        return "v2" if "session_date" in set(fields) else "research-v1"
+
     def fetch(self, dataset: str, instruments: list[str], start: str, end: str, fields: list[str]) -> FetchResult:
         fetched_at = datetime.now()
+        schema_version = self._schema_version_for(fields)
         if dataset != "bars_daily":
-            return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, self.source_name, dataset, "research-v1", frozenset(fields), frozenset(), fetched_at, errors=("dataset unsupported",))
+            return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, errors=("dataset unsupported",))
         frames: list[pd.DataFrame] = []
         warnings: list[str] = []
         errors: list[str] = []
@@ -130,7 +143,7 @@ class MootdxSourceAdapter:
                 FetchStatus.UPSTREAM_ERROR,
                 self.source_name,
                 dataset,
-                "research-v1",
+                schema_version,
                 frozenset(fields),
                 frozenset(),
                 fetched_at,
@@ -187,24 +200,27 @@ class MootdxSourceAdapter:
                 pass
         if not frames:
             if errors:
-                return FetchResult(pd.DataFrame(), FetchStatus.UPSTREAM_ERROR, self.source_name, dataset, "research-v1", frozenset(fields), frozenset(), fetched_at, retryable=True, errors=tuple(errors), metadata={"server": getattr(self, "server", self.servers[0])})
-            return FetchResult(pd.DataFrame(), FetchStatus.EMPTY, self.source_name, dataset, "research-v1", frozenset(fields), frozenset(), fetched_at, retryable=True, warnings=tuple(warnings), metadata={"server": getattr(self, "server", self.servers[0])})
+                return FetchResult(pd.DataFrame(), FetchStatus.UPSTREAM_ERROR, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=True, errors=tuple(errors), metadata={"server": getattr(self, "server", self.servers[0])})
+            return FetchResult(pd.DataFrame(), FetchStatus.EMPTY, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=True, warnings=tuple(warnings), metadata={"server": getattr(self, "server", self.servers[0])})
         raw = pd.concat(frames, ignore_index=False)
         raw_payload = raw.to_csv(index=True, index_label="__source_index").encode("utf-8")
         try:
             normalized = self._normalize(raw, start, end)
         except Exception as exc:
-            return FetchResult(pd.DataFrame(), FetchStatus.UPSTREAM_ERROR, self.source_name, dataset, "research-v1", frozenset(fields), frozenset(), fetched_at, retryable=False, errors=(f"normalization failed: {exc}",), metadata={"server": getattr(self, "server", self.servers[0])})
+            return FetchResult(pd.DataFrame(), FetchStatus.UPSTREAM_ERROR, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=False, errors=(f"normalization failed: {exc}",), metadata={"server": getattr(self, "server", self.servers[0])})
+        key_field = "session_date" if schema_version == "v2" else "datetime"
+        if key_field != "datetime":
+            normalized = normalized.rename(columns={"datetime": key_field})
         delivered = frozenset(set(fields) & set(normalized.columns))
         status = FetchStatus.PARTIAL_ROWS if len(frames) < len(instruments) else FetchStatus.SUCCESS
-        observed_start = min(normalized["datetime"]) if not normalized.empty else None
-        observed_end = max(normalized["datetime"]) if not normalized.empty else None
+        observed_start = min(normalized[key_field]) if not normalized.empty else None
+        observed_end = max(normalized[key_field]) if not normalized.empty else None
         return FetchResult(
             normalized,
             FetchStatus.EMPTY if normalized.empty else status,
             self.source_name,
             dataset,
-            "research-v1",
+            schema_version,
             frozenset(fields),
             delivered,
             fetched_at,

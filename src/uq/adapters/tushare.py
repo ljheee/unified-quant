@@ -69,6 +69,34 @@ class TushareAdapter:
         ts.set_token(token)
         return ts.pro_api(token)
 
+    def health_probe(self, exchange: str = "SSE") -> dict[str, object]:
+        """Probe the real upstream path with one cheap calendar call.
+
+        ``DailyIngestPipeline`` treats ``ok is not True`` as unhealthy, so a
+        primary source without a probe can never publish. The probe must be an
+        actual round trip — a token-presence check would report healthy while
+        every data call still fails.
+        """
+        session = date.today().isoformat()
+        report: dict[str, object] = {
+            "provider": self.source_name,
+            "token_env": self.token_env,
+            "fetched_at": datetime.now().isoformat(),
+        }
+        try:
+            frame = self._call("trade_cal", exchange=exchange, start_date=session, end_date=session)
+        except Exception as exc:
+            report["ok"] = False
+            report["error"] = str(exc)
+            return report
+        columns = set(getattr(frame, "columns", ()))
+        ok = frame is not None and not frame.empty and {"cal_date", "is_open"} <= columns
+        report["ok"] = ok
+        report["rows"] = int(len(frame)) if frame is not None else 0
+        if not ok:
+            report["error"] = "trade_cal returned an unusable envelope"
+        return report
+
     def trade_dates(self, start: str, end: str, exchange: str = "SSE") -> set[date]:
         cache_key = (exchange, start, end)
         if cache_key in self._calendar_cache:
