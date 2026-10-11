@@ -24,7 +24,11 @@
   - 4d. [已完成] `tests/test_research_membership_input.py`(11 项):跨月窗口逐日成员、快照日当天不可见、成员字节篡改、两个集合摘要漂移、窗口早于首个可见快照 fail closed、绑定窗口与请求窗口不一致、resolver 治理参数缺失、v1/v3 解析不受影响。
   - 不变量:任何训练窗口内的每个交易日,成员只能来自 `visible_from <= 该交易日` 的快照。
 - [ ] 5. 训练前覆盖校验 fail-closed(成员数 500、Alpha158 每只至少 60 个交易日、5 日 label 需未来数据、adj_factor/涨跌停/停牌/上市退市字段缺失率)。
-- [ ] 6. 数据面补齐:`adj_factor`、`stock_basic`、`suspend_d`、`stk_limit` 的 importer,落为可校验 artifact。
+  - 已实测(2026-10-11,`scripts/probe_reference_data_coverage.py`,中证全指约 5100 只,3 个抽样交易日,证据 `evidence/reference-data/csi-all-coverage-probe.json`):`adj_factor` 与 `stk_limit` 整市场按 trade_date 取,成员覆盖率 1.0,无非正/空因子;`suspend_d` 与 `dividend`(按 ann_date)为事件型,每日 4~22 只停牌、分红 1~217 条,低覆盖属预期而非缺陷。
+  - 未做:逐日全窗口的成员级缺失率校验,以及与因子/label 计算的联动断言。
+- [ ] 6. 数据面补齐:`adj_factor`、`stock_basic`、`suspend_d`、`stk_limit`、`dividend` 的 importer,落为可校验 artifact。
+  - 已做:`TushareAdapter` 新增 `_call` 统一错误映射与 `adj_factor`/`stk_limit`/`suspension`/`dividend`/`stock_basic` 端点(实测 2000 积分均可用)。
+  - 未做:受治理落盘形态待定。不建议再造一套私有 store;需要决定是复用 `config/datasets` 数据集契约,还是新增辅助数据契约。除权除息事件的生产 importer 仍缺(`XdxrAdjustmentDeriver.derive` 目前仅被测试调用)。
 - [ ] 7. 20 只烟雾测试(2025-08-29 至 2025-09-30)端到端跑通。
 - [ ] 8. 500 只端到端与证据归档到 `evidence/`。
 

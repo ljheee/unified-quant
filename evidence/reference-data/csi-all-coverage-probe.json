@@ -1,0 +1,112 @@
+{
+  "universe_id": "csi-all",
+  "window_start": "2026-03-02",
+  "window_end": "2026-09-30",
+  "sampled_days": [
+    "2026-03-02",
+    "2026-05-14",
+    "2026-07-23"
+  ],
+  "coverage_by_day": {
+    "2026-03-02": {
+      "adj_factor": {
+        "rows": 5486,
+        "universe_covered": 5166,
+        "universe_size": 5166,
+        "coverage": 1.0,
+        "null_keys": 0,
+        "adj_factor_nonpositive": 0,
+        "adj_factor_null": 0
+      },
+      "stk_limit": {
+        "rows": 5564,
+        "universe_covered": 5166,
+        "universe_size": 5166,
+        "coverage": 1.0,
+        "null_keys": 0
+      },
+      "suspension": {
+        "rows": 15,
+        "universe_covered": 9,
+        "universe_size": 5166,
+        "coverage": 0.001742,
+        "null_keys": 0,
+        "suspended_in_universe": 9
+      },
+      "dividend": {
+        "rows": 1,
+        "universe_covered": 1,
+        "universe_size": 5166,
+        "coverage": 0.000194,
+        "null_keys": 0
+      }
+    },
+    "2026-05-14": {
+      "adj_factor": {
+        "rows": 5521,
+        "universe_covered": 5159,
+        "universe_size": 5159,
+        "coverage": 1.0,
+        "null_keys": 0,
+        "adj_factor_nonpositive": 0,
+        "adj_factor_null": 0
+      },
+      "stk_limit": {
+        "rows": 5594,
+        "universe_covered": 5159,
+        "universe_size": 5159,
+        "coverage": 1.0,
+        "null_keys": 0
+      },
+      "suspension": {
+        "rows": 22,
+        "universe_covered": 7,
+        "universe_size": 5159,
+        "coverage": 0.001357,
+        "null_keys": 0,
+        "suspended_in_universe": 7
+      },
+      "dividend": {
+        "rows": 217,
+        "universe_covered": 204,
+        "universe_size": 5159,
+        "coverage": 0.039543,
+        "null_keys": 0
+      }
+    },
+    "2026-07-23": {
+      "adj_factor": {
+        "rows": 5543,
+        "universe_covered": 5129,
+        "universe_size": 5129,
+        "coverage": 1.0,
+        "null_keys": 0,
+        "adj_factor_nonpositive": 0,
+        "adj_factor_null": 0
+      },
+      "stk_limit": {
+        "rows": 5609,
+        "universe_covered": 5129,
+        "universe_size": 5129,
+        "coverage": 1.0,
+        "null_keys": 0
+      },
+      "suspension": {
+        "rows": 4,
+        "universe_covered": 4,
+        "universe_size": 5129,
+        "coverage": 0.00078,
+        "null_keys": 0,
+        "suspended_in_universe": 4
+      },
+      "dividend": {
+        "rows": 7,
+        "universe_covered": 4,
+        "universe_size": 5129,
+        "coverage": 0.00078,
+        "null_keys": 0
+      }
+    }
+  },
+  "note": "suspension and dividend are event datasets; low row counts are expected and are not a defect"
+}

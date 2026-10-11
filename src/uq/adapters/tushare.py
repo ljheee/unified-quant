@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from datetime import date
+from typing import Any
 import pandas as pd
 
 from ..errors import ContractError
@@ -93,21 +94,42 @@ class TushareAdapter:
         self._calendar_cache[cache_key] = sessions
         return sessions
 
-    def index_weight(self, index_code: str, start: str, end: str) -> pd.DataFrame:
+    def _call(self, endpoint: str, **params: Any) -> pd.DataFrame:
+        """Call one Tushare pro endpoint, mapping provider failures onto ContractError."""
         client = self._client()
         try:
-            raw = client.index_weight(
-                index_code=index_code,
-                start_date=start.replace("-", ""),
-                end_date=end.replace("-", ""),
+            return getattr(client, endpoint)(
+                **{
+                    key: (value.replace("-", "") if isinstance(value, str) and key.endswith(("_start", "_end", "_date")) else value)
+                    for key, value in params.items()
+                }
             )
         except Exception as exc:
             status, retryable, message = self._map_error(exc)
-            error = ContractError(message)
+            error = ContractError(f"{endpoint} failed: {message}")
             error.status = status.value
             error.retryable = retryable
             raise error from exc
-        return raw
+
+    def index_weight(self, index_code: str, start: str, end: str) -> pd.DataFrame:
+        return self._call("index_weight", index_code=index_code, start_date=start, end_date=end)
+
+    def adj_factor(self, *, trade_date: str | None = None, ts_code: str | None = None,
+                   start: str | None = None, end: str | None = None) -> pd.DataFrame:
+        return self._call("adj_factor", trade_date=trade_date, ts_code=ts_code,
+                          start_date=start, end_date=end)
+
+    def stk_limit(self, *, trade_date: str) -> pd.DataFrame:
+        return self._call("stk_limit", trade_date=trade_date)
+
+    def suspension(self, *, trade_date: str, suspend_type: str = "S") -> pd.DataFrame:
+        return self._call("suspend_d", trade_date=trade_date, suspend_type=suspend_type)
+
+    def dividend(self, *, ann_date: str | None = None, ts_code: str | None = None) -> pd.DataFrame:
+        return self._call("dividend", ann_date=ann_date, ts_code=ts_code)
+
+    def stock_basic(self, *, exchange: str = "", list_status: str = "L") -> pd.DataFrame:
+        return self._call("stock_basic", exchange=exchange, list_status=list_status)
 
     def fetch(self, dataset: str, instruments: list[str], start: str, end: str, fields: list[str]) -> FetchResult:
         fetched_at = datetime.now()
