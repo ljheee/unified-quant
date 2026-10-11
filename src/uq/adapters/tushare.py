@@ -159,6 +159,28 @@ class TushareAdapter:
     def stock_basic(self, *, exchange: str = "", list_status: str = "L") -> pd.DataFrame:
         return self._call("stock_basic", exchange=exchange, list_status=list_status)
 
+    def delisted_instruments(self) -> set[str]:
+        """Instruments the provider marks as delisted as of now (``list_status='D'``).
+
+        This is a point-in-time truth, not an event date: at the measured account
+        level ``stock_basic`` never returns ``out_date`` (it is dropped even when
+        requested through ``fields``), ``namechange`` carried no delisting row for
+        the one instrument that motivated this helper, and ``stk_premarket`` is not
+        permitted. Callers may therefore only use it to excuse an absence that
+        already looks total, never to date-bound one.
+        """
+        frame = self.stock_basic(list_status="D")
+        if frame.empty:
+            return set()
+        delisted: set[str] = set()
+        for code in frame["ts_code"]:
+            try:
+                delisted.add(_to_instrument(str(code)))
+            except ValueError:
+                # An unmappable code simply cannot excuse its own absence, which
+                # leaves the gate flagging it: the fail-safe direction.
+                continue
+        return delisted
     @staticmethod
     def _schema_version_for(fields: list[str]) -> str:
         """bars_daily v2 is keyed by session_date; anything else keeps the research-v1 key.

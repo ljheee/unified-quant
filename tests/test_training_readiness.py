@@ -145,6 +145,34 @@ def test_a_fully_suspended_member_is_explained_rather_than_reported_as_a_gap():
     assert report.metrics["instruments_fully_suspended"] == 1.0
 
 
+def test_a_delisted_member_without_any_bars_is_reported_but_not_blocking():
+    bars = _bars(instruments=["600000.XSHG"])
+    report = _assess(bars, _members(), suspensions={}, delisted={"000001.XSHE"})
+    assert report.status == "passed", report.findings
+    assert report.metrics["instruments_delisted_excluded"] == 1.0
+    finding = report.findings[0]
+    assert finding.code == "delisted_members_excluded"
+    assert finding.severity == "informational"
+    assert report.to_json()["findings"][0]["severity"] == "informational"
+
+
+def test_a_delisted_member_with_a_partial_gap_is_still_a_blocking_gap():
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"]),
+            _bars(instruments=["000001.XSHE"], sessions=SESSIONS[:-1]),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(bars, _members(), suspensions={}, delisted={"000001.XSHE"})
+    # a delisting flag without a date cannot turn a mid-window hole into an
+    # explained absence, even for a name the provider says is gone
+    gap = next(item for item in report.findings if item.code == "unexplained_bar_gap")
+    assert gap.severity == "blocking"
+    assert gap.instruments == ("000001.XSHE",)
+    assert report.status == "blocked"
+
+
 def test_a_gap_the_suspension_source_cannot_explain_blocks():
     bars = _bars(
         mutate=lambda instrument, session: {"close": None} if session == SESSIONS[4] else {}

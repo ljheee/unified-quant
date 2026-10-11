@@ -128,6 +128,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="do not query suspend_d; bar gaps are then reported without an explained/unexplained verdict",
     )
+    parser.add_argument(
+        "--skip-delistings",
+        action="store_true",
+        help="do not query stock_basic(list_status=D); delisted members stay unexplained gaps",
+    )
     parser.add_argument("--schema", type=Path, default=Path("config/schemas/bars_daily.v2.yaml"))
     parser.add_argument("--exchange", default="SSE")
     parser.add_argument("--output", type=Path, required=True)
@@ -147,6 +152,12 @@ def main(argv: list[str] | None = None) -> int:
     suspensions: dict[str, list[dt.date]] | None = None
     if not args.skip_suspensions:
         suspensions = _suspensions_for_gaps(adapter, sessions, membership, bars, notes)
+    delisted: set[str] | None = None
+    delisted_provenance = "unspecified"
+    if not args.skip_delistings:
+        delisted = adapter.delisted_instruments()
+        delisted_provenance = "tushare:stock_basic(list_status=D)"
+        notes["delisted_universe_size"] = len(delisted)
 
     report = assess_readiness(
         window_start=args.start,
@@ -159,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
         max_null_rate=args.max_null_rate,
         suspensions=suspensions,
         suspension_provenance=str(notes.get("suspension_provenance", "unspecified")),
+        delisted=delisted,
+        delisted_provenance=delisted_provenance,
     )
     payload = report.to_json()
     payload["universe_id"] = args.universe_id

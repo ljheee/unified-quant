@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Mapping, Sequence
+from typing import Any, Collection, Mapping, Sequence
 
 import pandas as pd
 
@@ -48,9 +48,15 @@ class ReadinessFinding:
     code: str
     detail: str
     instruments: tuple[str, ...] = ()
+    severity: str = "blocking"
 
     def to_json(self) -> dict[str, Any]:
-        return {"code": self.code, "detail": self.detail, "instruments": list(self.instruments)}
+        return {
+            "code": self.code,
+            "detail": self.detail,
+            "instruments": list(self.instruments),
+            "severity": self.severity,
+        }
 
 
 @dataclass(frozen=True)
@@ -66,7 +72,7 @@ class ReadinessReport:
 
     @property
     def status(self) -> str:
-        return "passed" if not self.findings else "blocked"
+        return "passed" if not [item for item in self.findings if item.severity == "blocking"] else "blocked"
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -94,6 +100,8 @@ def assess_readiness(
     max_null_rate: float = 0.0,
     suspensions: Mapping[str, Sequence[date]] | None = None,
     suspension_provenance: str = "unspecified",
+    delisted: Collection[str] | None = None,
+    delisted_provenance: str = "unspecified",
 ) -> ReadinessReport:
     """Evaluate the cross-input conditions a training run depends on."""
     session_values = sorted(set(sessions))
@@ -189,14 +197,34 @@ def assess_readiness(
         # name is indistinguishable from a two-week restructuring halt.
         gaps: list[str] = []
         conflicts: list[str] = []
+        excused_delisted: list[str] = []
         for instrument in sorted(set(members) | set(with_bars)):
             present = present_sessions.get(instrument, set())
             suspended = suspended_by_instrument.get(instrument, set())
             if suspended & present:
                 conflicts.append(instrument)
             missing = {value for value in session_values if value not in suspended} - present
-            if missing:
-                gaps.append(instrument)
+            if not missing:
+                continue
+            # A provider-confirmed delisting excuses an absence that is total for
+            # the window. It cannot excuse a partial one: the account level offers
+            # no delisting date, so only "never traded at all here" is verifiable,
+            # and a mid-window ingest hole keeps its own signature.
+            if delisted is not None and not present and instrument in delisted:
+                excused_delisted.append(instrument)
+                continue
+            gaps.append(instrument)
+        if excused_delisted:
+            metrics["instruments_delisted_excluded"] = float(len(excused_delisted))
+            findings.append(
+                ReadinessFinding(
+                    "delisted_members_excluded",
+                    f"{len(excused_delisted)} members have no bars in the window and "
+                    f"{delisted_provenance} marks them delisted",
+                    tuple(excused_delisted[:50]),
+                    "informational",
+                )
+            )
         if gaps:
             findings.append(
                 ReadinessFinding(

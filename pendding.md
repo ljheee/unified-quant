@@ -48,7 +48,9 @@
   - 已做(2026-10-12):A500 全 500 只成员 × 23 个交易日灌入本地 canonical store `data/bars-a500-store/`(gitignored,可重灌),23/23 分区发布,行数为 499(其余为停牌缺失);为补齐窗口,`data/a500-store/` 已追加 2025-05-30/06-30/07-31 三个月度快照,最早可见日提前到 2025-06-10。
   - 未做:把 ingest report 与就绪门 JSON 归档进 `evidence/`(目前只落在 `/tmp`,不属于可交付证据)。
   - 就绪门口径(2026-10-12 补):`suspensions`(来自 `suspend_d`,仅查询"有标的缺日线的会话")启用后区分三态 —— 全窗停牌(计入 `instruments_fully_suspended`)、可交易日数不足(`limited_tradable_history`, remedy 是拉长窗口)、日线确实缺失(`unexplained_bar_gap`, remedy 是修 ingest)。另有 `suspension_bar_conflict`(停牌日却有日线)。全窗口 A500 实测:批次缺口修复后仅剩 1 条 `unexplained_bar_gap`,即 601989。
-  - 残留(需生命周期源):601989 已于吸收合并后退市(`stock_basic(list_status=D)` 可查,名称"中国重工(退)"),但 `suspend_d` 自 2025-09-04 起不再给出停牌行,因此其后继会话无法被"可解释"覆盖。接入 `stock_basic` 的 `list_status/out_date`(退市日)即可把这类标的从缺陷改判为预期缺失;`D` 档默认字段不含 `out_date`,需显式 `fields` 参数。
+  - 已做(2026-10-12):退市标的改判。`TushareAdapter.delisted_instruments()` 取 `stock_basic(list_status=D)`,就绪门据此把"整窗零日线且已退市"的成员记为 informational 的 `delisted_members_excluded`(不阻断),其余缺口仍为 blocking。同时引入 finding 严重度(`blocking`/`informational`),`status` 只看 blocking。
+  - 实测否证了先前"接 `out_date` 即可"的设想:2000 积分下 `stock_basic` 即使显式传 `fields=...,out_date` 仍不返回该列(仅 ts_code/name/list_date/list_status);`namechange` 对 601989 无退市记录;`stk_premarket` 无权限。因此**拿不到退市日期**,只能做保守判定:仅当该标的在本窗口完全没有日线时才豁免;有部分缺口仍按缺陷处理。若将来需要精确到日,需要更高积分或交易所公告源。
+  - 结果:A500 2025-08-29~09-30 窗口首次 `passed`(23 会话/500 成员/499 只有日线),唯一条目为 informational 的 601989(中国重工,已退市)。
 
 # Tushare PIT 能力边界(2026-10-11,2000 积分账号实测)
 
