@@ -10,6 +10,13 @@ cross-input conditions explicit and fail-closed before a run is attempted.
 
 It is deliberately pure: every input is passed in, so the rules can be tested
 and re-evaluated without a network or a store.
+
+    ``suspensions`` is the governed suspension source. It is authoritative only
+    for the instrument/session pairs it contains, so a caller that collects it
+    lazily (for example, only for the sessions where some instrument lacks bars)
+    gets an exact ``unexplained_bar_gap`` verdict but partial
+    ``suspension_bar_conflict`` coverage; passing ``None`` means "not checked"
+    and disables both rules.
 """
 
 from __future__ import annotations
@@ -85,11 +92,16 @@ def assess_readiness(
     min_sessions_per_instrument: int = 60,
     label_horizon_sessions: int = 5,
     max_null_rate: float = 0.0,
+    suspensions: Mapping[str, Sequence[date]] | None = None,
+    suspension_provenance: str = "unspecified",
 ) -> ReadinessReport:
     """Evaluate the cross-input conditions a training run depends on."""
     session_values = sorted(set(sessions))
     findings: list[ReadinessFinding] = []
     metrics: dict[str, float] = {}
+    suspended_by_instrument = {
+        instrument: set(values) for instrument, values in (suspensions or {}).items()
+    }
 
     if not session_values:
         findings.append(ReadinessFinding("no_sessions", "the window contains no trading sessions"))
@@ -148,7 +160,10 @@ def assess_readiness(
     members_without_bars = sorted(set(members) - set(with_bars))
     # When the window has no bars at all, ``no_bars`` is the root cause; listing
     # every member as a second finding would only bury it.
-    if members_without_bars and not frame.empty:
+    # With a suspension source available the per-session rules below give the
+    # explained/unexplained verdict, so the blunt member-level finding would
+    # only double-report a halt as a defect.
+    if members_without_bars and not frame.empty and suspensions is None:
         findings.append(
             ReadinessFinding(
                 "member_without_bars",
@@ -157,19 +172,75 @@ def assess_readiness(
             )
         )
 
-    too_short = sorted(
+    present_sessions = sessions_by_instrument(frame)
+    observable_counts: dict[str, int] = {}
+    for instrument in set(members) | set(with_bars):
+        suspended = suspended_by_instrument.get(instrument, set())
+        observable = [value for value in session_values if value not in suspended]
+        observable_counts[instrument] = len(observable)
+    fully_suspended = sorted(
+        instrument for instrument in members if observable_counts.get(instrument) == 0
+    )
+    if fully_suspended:
+        metrics["instruments_fully_suspended"] = float(len(fully_suspended))
+    if suspensions is not None and session_values:
+        # A gap is only actionable once the governed suspension source says the
+        # session was not tradable: otherwise a mid-window ingest hole for one
+        # name is indistinguishable from a two-week restructuring halt.
+        gaps: list[str] = []
+        conflicts: list[str] = []
+        for instrument in sorted(set(members) | set(with_bars)):
+            present = present_sessions.get(instrument, set())
+            suspended = suspended_by_instrument.get(instrument, set())
+            if suspended & present:
+                conflicts.append(instrument)
+            missing = {value for value in session_values if value not in suspended} - present
+            if missing:
+                gaps.append(instrument)
+        if gaps:
+            findings.append(
+                ReadinessFinding(
+                    "unexplained_bar_gap",
+                    f"{len(gaps)} instruments lack sessions that {suspension_provenance} does not "
+                    "attribute to a suspension",
+                    tuple(gaps[:50]),
+                )
+            )
+        if conflicts:
+            findings.append(
+                ReadinessFinding(
+                    "suspension_bar_conflict",
+                    f"{len(conflicts)} instruments have bars on sessions the suspension source marks "
+                    f"suspended ({suspension_provenance})",
+                    tuple(conflicts[:50]),
+                )
+            )
+
+    short = sorted(
         instrument
         for instrument, count in rows_by_instrument.items()
         if count < min_sessions_per_instrument
     )
-    if too_short:
-        findings.append(
-            ReadinessFinding(
-                "insufficient_history",
-                f"{len(too_short)} instruments have fewer than {min_sessions_per_instrument} sessions",
-                tuple(too_short[:50]),
-            )
+    if short:
+        # Distinguish "the window never offered enough tradable sessions" (halt
+        # or recent listing -> widen the window) from "sessions were tradable
+        # but the bars are not there" (an ingest defect to repair).
+        limited = (
+            [instrument for instrument in short if observable_counts.get(instrument, 0) < min_sessions_per_instrument]
+            if suspensions is not None
+            else []
         )
+        missing = [instrument for instrument in short if instrument not in limited]
+        for code, group in (("insufficient_history", missing), ("limited_tradable_history", limited)):
+            if not group:
+                continue
+            body = f"{len(group)} instruments have fewer than {min_sessions_per_instrument} bar sessions"
+            if suspensions is not None:
+                body += ";tradable " + ",".join(
+                    f"{instrument}={rows_by_instrument[instrument]}/{observable_counts.get(instrument, 0)}"
+                    for instrument in group[:10]
+                )
+            findings.append(ReadinessFinding(code, body, tuple(group[:50])))
 
     if not frame.empty:
         rows = len(frame)
@@ -246,3 +317,14 @@ def _usable_label_end(sessions: Sequence[date], label_horizon_sessions: int) -> 
     if label_horizon_sessions < 0 or len(sessions) <= label_horizon_sessions:
         return None
     return sessions[len(sessions) - label_horizon_sessions - 1]
+
+
+def sessions_by_instrument(frame: pd.DataFrame) -> dict[str, set[date]]:
+    """Sessions each instrument actually has bars for, as plain dates."""
+    if frame.empty or "session_date" not in frame.columns:
+        return {}
+    sessions = pd.to_datetime(frame["session_date"]).dt.date
+    grouped: dict[str, set[date]] = {}
+    for instrument, value in zip(frame["instrument"], sessions):
+        grouped.setdefault(str(instrument), set()).add(value)
+    return grouped

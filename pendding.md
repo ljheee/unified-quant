@@ -42,8 +42,13 @@
   - 修缺陷:对照源若交付的帧缺少契约主键列(例如仍按 `datetime` 键),原实现会在 merge/verified-row 处 `KeyError`;现以 `comparator_key_missing` fail closed。
   - 未做:v2 链路尚无独立交易日历(覆盖率仍为 `unverified`,报告带警告);v1 交叉校验链路使用 akshare 日历。
   - 未做:`adjustment_snapshot`/`golden_provenance` 等已发布契约的 instrument 正则仍只允许 XSHG/XSHE,与 `index_membership_row.v1`(含 XBSE)不一致;放宽属语义变更,需按规则开新版本。
-- [ ] 7. 20 只烟雾测试(2025-08-29 至 2025-09-30)端到端跑通。
+- [x] 7. 20 只烟雾测试(2025-08-29 至 2025-09-30)端到端跑通。
+  - 已完成(2026-10-12):A500 前 20 只成员 × 23 个交易日,`build_tushare_v2_pipeline` 23/23 分区发布,`status/limit_up/limit_down/adj_factor` 全部就位,就绪门全字段空值率 0。
 - [ ] 8. 500 只端到端与证据归档到 `evidence/`。
+  - 已做(2026-10-12):A500 全 500 只成员 × 23 个交易日灌入本地 canonical store `data/bars-a500-store/`(gitignored,可重灌),23/23 分区发布,行数为 499(其余为停牌缺失);为补齐窗口,`data/a500-store/` 已追加 2025-05-30/06-30/07-31 三个月度快照,最早可见日提前到 2025-06-10。
+  - 未做:把 ingest report 与就绪门 JSON 归档进 `evidence/`(目前只落在 `/tmp`,不属于可交付证据)。
+  - 就绪门口径(2026-10-12 补):`suspensions`(来自 `suspend_d`,仅查询"有标的缺日线的会话")启用后区分三态 —— 全窗停牌(计入 `instruments_fully_suspended`)、可交易日数不足(`limited_tradable_history`, remedy 是拉长窗口)、日线确实缺失(`unexplained_bar_gap`, remedy 是修 ingest)。另有 `suspension_bar_conflict`(停牌日却有日线)。全窗口 A500 实测:批次缺口修复后仅剩 1 条 `unexplained_bar_gap`,即 601989。
+  - 残留(需生命周期源):601989 已于吸收合并后退市(`stock_basic(list_status=D)` 可查,名称"中国重工(退)"),但 `suspend_d` 自 2025-09-04 起不再给出停牌行,因此其后继会话无法被"可解释"覆盖。接入 `stock_basic` 的 `list_status/out_date`(退市日)即可把这类标的从缺陷改判为预期缺失;`D` 档默认字段不含 `out_date`,需显式 `fields` 参数。
 
 # Tushare PIT 能力边界(2026-10-11,2000 积分账号实测)
 

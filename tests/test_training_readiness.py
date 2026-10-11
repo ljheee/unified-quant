@@ -138,6 +138,44 @@ def test_bar_session_gap_against_the_declared_calendar_blocks():
     assert any(item.code == "bar_session_gap" for item in report.findings)
 
 
+def test_a_fully_suspended_member_is_explained_rather_than_reported_as_a_gap():
+    bars = _bars(instruments=["600000.XSHG"])
+    report = _assess(bars, _members(), suspensions={"000001.XSHE": SESSIONS})
+    assert report.status == "passed", report.findings
+    assert report.metrics["instruments_fully_suspended"] == 1.0
+
+
+def test_a_gap_the_suspension_source_cannot_explain_blocks():
+    bars = _bars(
+        mutate=lambda instrument, session: {"close": None} if session == SESSIONS[4] else {}
+    )
+    bars = bars[bars["close"].notna()].reset_index(drop=True)
+    report = _assess(bars, _members(), suspensions={"600000.XSHG": SESSIONS[:1]})
+    finding = next(item for item in report.findings if item.code == "unexplained_bar_gap")
+    assert set(finding.instruments) == {"600000.XSHG", "000001.XSHE"}
+
+
+def test_bars_on_a_suspended_session_are_reported_as_a_conflict():
+    report = _assess(_bars(), _members(), suspensions={"600000.XSHG": SESSIONS[3:4]})
+    assert [item.code for item in report.findings] == ["suspension_bar_conflict"]
+
+
+def test_tradable_history_below_the_minimum_is_a_distinct_verdict():
+    halted = SESSIONS[15:]
+    bars = _bars(instruments=["600000.XSHG"], sessions=SESSIONS[:15])
+    report = _assess(
+        bars,
+        {session: ["600000.XSHG"] for session in SESSIONS},
+        suspensions={"600000.XSHG": halted},
+    )
+    codes = [item.code for item in report.findings]
+    assert "limited_tradable_history" in codes
+    assert "insufficient_history" not in codes
+    assert "unexplained_bar_gap" not in codes
+    detail = next(item.detail for item in report.findings if item.code == "limited_tradable_history")
+    assert "600000.XSHG=15/15" in detail
+
+
 def test_sessions_outside_the_requested_window_block():
     report = _assess(_bars(), _members(), window_start=SESSIONS[2], window_end=SESSIONS[-3])
     assert any(item.code == "session_outside_window" for item in report.findings)

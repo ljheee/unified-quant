@@ -15,8 +15,8 @@ from ..errors import ContractError
 class ManifestFirstReader:
     """Only read published partitions through valid manifests."""
 
-    def __init__(self, root: Path) -> None:
-        self.root = root
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root)
 
     def read(self, schema: Schema, partition_date: date, verify_checksum: bool = True) -> pd.DataFrame:
         partition = self.root / "canonical" / schema.dataset / schema.version / f"date={partition_date.isoformat()}"
