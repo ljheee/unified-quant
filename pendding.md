@@ -28,7 +28,8 @@
   - 未做:逐日全窗口的成员级缺失率校验,以及与因子/label 计算的联动断言。
 - [ ] 6. 数据面补齐:`adj_factor`、`stock_basic`、`suspend_d`、`stk_limit`、`dividend` 的 importer,落为可校验 artifact。
   - 已做:`TushareAdapter` 新增 `_call` 统一错误映射与 `adj_factor`/`stk_limit`/`suspension`/`dividend`/`stock_basic` 端点(实测 2000 积分均可用)。
-  - 未做:受治理落盘形态待定。不建议再造一套私有 store;需要决定是复用 `config/datasets` 数据集契约,还是新增辅助数据契约。除权除息事件的生产 importer 仍缺(`XdxrAdjustmentDeriver.derive` 目前仅被测试调用)。
+  - 已做(决定:复用 `config/datasets` 契约,不新造存储):`TushareAdapter.fetch` 支持 `bars_daily` v2 字段集(`bars_daily.v2` 早已定义 `status`/`limit_up`/`limit_down`/`adj_factor`),按交易日拉整市场 `adj_factor`/`stk_limit`/`suspend_d` 并合并;`config/datasets/bars_daily.v2.yaml` 的 tushare `provides` 已补齐这些字段。实测 2026-08-05 三所标的(含 `920438.XBSE`)字段齐全,北交所涨跌停为 ±30%,证明必须用 `stk_limit` 而非硬编码 ±10%。
+  - 未做:除权除息事件(`dividend`)的生产 importer 仍缺(`XdxrAdjustmentDeriver.derive` 目前仅被测试调用)。
 - [ ] 7. 20 只烟雾测试(2025-08-29 至 2025-09-30)端到端跑通。
 - [ ] 8. 500 只端到端与证据归档到 `evidence/`。
 

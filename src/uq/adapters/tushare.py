@@ -131,10 +131,59 @@ class TushareAdapter:
     def stock_basic(self, *, exchange: str = "", list_status: str = "L") -> pd.DataFrame:
         return self._call("stock_basic", exchange=exchange, list_status=list_status)
 
+    @staticmethod
+    def _schema_version_for(fields: list[str]) -> str:
+        """bars_daily v2 is keyed by session_date; anything else keeps the research-v1 key.
+
+        Comparator fetches ask for a field subset without any key field, so the
+        version may not be inferable; those keep the historical research-v1 path.
+        """
+        return "v2" if "session_date" in set(fields) else "research-v1"
+
+    def _reference_frames(self, start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, set[tuple[str, object]]]:
+        """Whole-market adjustment factors, price limits and suspensions for the window days."""
+        days = sorted(self.trade_dates(start, end))
+        stamp = lambda value: value.strftime("%Y%m%d")
+        adj_parts: list[pd.DataFrame] = []
+        limit_parts: list[pd.DataFrame] = []
+        suspended: set[tuple[str, object]] = set()
+        for day in days:
+            for label, frame in (
+                ("adj_factor", self.adj_factor(trade_date=stamp(day))),
+                ("stk_limit", self.stk_limit(trade_date=stamp(day))),
+                ("suspend_d", self.suspension(trade_date=stamp(day))),
+            ):
+                if frame.empty:
+                    continue
+                frame = frame.assign(instrument=frame["ts_code"].map(_to_instrument))
+                if label == "adj_factor":
+                    adj_parts.append(frame[["instrument", "trade_date", "adj_factor"]])
+                elif label == "stk_limit":
+                    limit_parts.append(frame[["instrument", "trade_date", "up_limit", "down_limit"]])
+                else:
+                    suspended.update(
+                        (row.instrument, day) for row in frame[["instrument"]].itertuples()
+                    )
+        adj = (
+            pd.concat(adj_parts, ignore_index=True)
+            .assign(session_date=lambda frame: pd.to_datetime(frame["trade_date"], format="%Y%m%d").dt.normalize())
+            [["instrument", "session_date", "adj_factor"]]
+            if adj_parts else pd.DataFrame(columns=["instrument", "session_date", "adj_factor"])
+        )
+        limits = (
+            pd.concat(limit_parts, ignore_index=True)
+            .assign(session_date=lambda frame: pd.to_datetime(frame["trade_date"], format="%Y%m%d").dt.normalize())
+            .rename(columns={"up_limit": "limit_up", "down_limit": "limit_down"})
+            [["instrument", "session_date", "limit_up", "limit_down"]]
+            if limit_parts else pd.DataFrame(columns=["instrument", "session_date", "limit_up", "limit_down"])
+        )
+        return adj, limits, suspended
+
     def fetch(self, dataset: str, instruments: list[str], start: str, end: str, fields: list[str]) -> FetchResult:
         fetched_at = datetime.now()
         if dataset != "bars_daily":
             return self._unsupported(dataset, fields, fetched_at)
+        schema_version = self._schema_version_for(fields)
         try:
             client = self._client()
         except ContractError:
@@ -158,20 +207,29 @@ class TushareAdapter:
                 status, retryable, message = self._map_error(exc)
                 return FetchResult(pd.DataFrame(), status, self.source_name, dataset, "research-v1", frozenset(fields), frozenset(), fetched_at, retryable=retryable, errors=(message,))
         raw = pd.concat(raw_parts, ignore_index=True) if raw_parts else pd.DataFrame()
-        normalized = self._normalize(raw)
+        if schema_version == "v2":
+            try:
+                adj, limits, suspended = self._reference_frames(start, end)
+            except ContractError as exc:
+                status, retryable, message = self._map_error(exc)
+                return FetchResult(pd.DataFrame(), status, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=retryable, errors=(message,))
+            normalized = self._normalize_v2(raw, adj, limits, suspended)
+        else:
+            normalized = self._normalize(raw)
         missing_fields = set(fields) - set(normalized.columns)
         status = FetchStatus.PARTIAL_FIELDS if missing_fields else FetchStatus.SUCCESS
         warnings = tuple(f"missing fields: {sorted(missing_fields)}") if missing_fields else ()
         delivered = frozenset(set(fields) & set(normalized.columns))
-        observed_start = min(normalized["datetime"]) if not normalized.empty else None
-        observed_end = max(normalized["datetime"]) if not normalized.empty else None
+        key_field = "session_date" if schema_version == "v2" else "datetime"
+        observed_start = min(normalized[key_field]) if not normalized.empty else None
+        observed_end = max(normalized[key_field]) if not normalized.empty else None
         empty = normalized.empty
         return FetchResult(
             normalized,
             FetchStatus.EMPTY if empty else status,
             self.source_name,
             dataset,
-            "research-v1",
+            schema_version,
             frozenset(fields),
             delivered,
             fetched_at,
@@ -182,6 +240,7 @@ class TushareAdapter:
             metadata={
                 "provider": "tushare.pro",
                 "endpoint": "daily",
+                "reference_endpoints": ["adj_factor", "stk_limit", "suspend_d"],
                 "raw_payload": raw.to_csv(index=False).encode("utf-8"),
                 "request": {"dataset": dataset, "instruments": instruments, "start": start, "end": end, "fields": fields},
             },
@@ -203,6 +262,35 @@ class TushareAdapter:
     @staticmethod
     def _unsupported(dataset: str, fields: list[str], fetched_at: datetime) -> FetchResult:
         return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, "tushare", dataset, "research-v1", frozenset(fields), frozenset(), fetched_at, errors=("dataset unsupported",))
+
+    @staticmethod
+    def _normalize_v2(
+        raw: pd.DataFrame,
+        adj: pd.DataFrame,
+        limits: pd.DataFrame,
+        suspended: set[tuple[str, object]],
+    ) -> pd.DataFrame:
+        base = TushareAdapter._normalize(raw).rename(columns={"datetime": "session_date"})
+        if base.empty:
+            return base.assign(
+                status=pd.Series(dtype=str),
+                limit_up=pd.Series(dtype="float64"),
+                limit_down=pd.Series(dtype="float64"),
+                adj_factor=pd.Series(dtype="float64"),
+            )
+        frame = base.merge(adj, on=["instrument", "session_date"], how="left")
+        frame = frame.merge(limits, on=["instrument", "session_date"], how="left")
+        # A suspension row or a zero-volume bar both mean the instrument did not trade
+        # that session; bars_daily.v2 only allows volume == 0 for non-trading status.
+        keys = list(zip(frame["instrument"], frame["session_date"].dt.date))
+        frame["status"] = [
+            "suspended" if key in suspended or volume == 0 else "trading"
+            for key, volume in zip(keys, frame["volume"])
+        ]
+        return frame[
+            ["instrument", "session_date", "open", "high", "low", "close", "volume", "amount",
+             "status", "limit_up", "limit_down", "adj_factor"]
+        ]
 
     @staticmethod
     def _normalize(raw: pd.DataFrame) -> pd.DataFrame:

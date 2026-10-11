@@ -28,4 +28,4 @@ sources:
   tushare:
     priority: 2
     fallback: true
-    provides: [instrument, session_date, open, high, low, close, volume, amount, adj_factor]
+    provides: [instrument, session_date, open, high, low, close, volume, amount, status, limit_up, limit_down, adj_factor]
