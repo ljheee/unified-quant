@@ -136,7 +136,13 @@ def build_tushare_v2_pipeline(
     schema_path = project_root / "config/schemas/bars_daily.v2.yaml"
     contract_path = project_root / "config/datasets/bars_daily.v2.yaml"
     contract = load_dataset_contract(contract_path, load_schema(schema_path))
-    adapters = {"tushare": Tushare2kAdapter(), "tdx": MootdxSourceAdapter()}
+    # TDX is registered only when its comparison is actually required. The
+    # router selects any registered ``compare_with`` source, so always wiring
+    # TDX made every v2 run pay the TDX server retry/backoff cost even though
+    # the default path never enforces the comparison.
+    adapters: dict[str, object] = {"tushare": Tushare2kAdapter()}
+    if require_cross_validation:
+        adapters["tdx"] = MootdxSourceAdapter()
     return DailyIngestPipeline(
         root,
         schema_path,
