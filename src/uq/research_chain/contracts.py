@@ -249,6 +249,7 @@ _STAGE_PLAN_REVIEW_FIELDS = (
 _STAGE_PLAN_REVIEW_TYPES = {
     "research_stage_plan_v2_activation",
     "research_stage_plan_v3_activation",
+    "research_stage_plan_v4_activation",
 }
 
 
@@ -267,7 +268,10 @@ def verify_stage_plan_review(review: Mapping[str, Any], *, stage_plan_sha256: st
         or review["subject_manifest_digest_sha256"] != stage_plan_sha256
     ):
         raise ContractError("research stage plan review subject mismatch")
-    anchor_suffix = "v3" if review["review_type"] == "research_stage_plan_v3_activation" else "v1"
+    anchor_suffix = {
+        "research_stage_plan_v3_activation": "v3",
+        "research_stage_plan_v4_activation": "v4",
+    }.get(review["review_type"], "v1")
     anchor_path = Path(__file__).parents[3] / f"config/research-stage-plan-review-anchor.{anchor_suffix}.json"
     anchor = json.loads(anchor_path.read_text(encoding="utf-8"))
     if review["key_id"] != anchor["key_id"] or anchor["review_type"] != review["review_type"]:
@@ -294,4 +298,6 @@ def research_request_schema_name(request: Mapping[str, Any]) -> str:
         return "research_run_request_v2"
     if version == 3:
         return "research_run_request_v3"
+    if version == 4:
+        return "research_run_request_v4"
     raise ContractError(f"unsupported research request contract version: {version}")

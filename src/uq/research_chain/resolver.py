@@ -17,6 +17,7 @@ from ..contracts.model_layer import (
     research_stage_plan_sha256,
     research_stage_plan_v2_sha256,
     research_stage_plan_v3_sha256,
+    research_stage_plan_v4_sha256,
     sha256_json,
 )
 from ..errors import ContractError
@@ -123,7 +124,7 @@ class ResearchChainRequestResolver:
             candidate = dict(request)
             request_schema = research_request_schema_name(candidate)
             ModelContractLoader.validate(request_schema, candidate)
-            if request_schema in {"research_run_request_v2", "research_run_request_v3"}:
+            if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4"}:
                 verify_stage_plan_review(
                     candidate["stage_plan_review"],
                     stage_plan_sha256=candidate["stage_plan_sha256"],
@@ -134,6 +135,8 @@ class ResearchChainRequestResolver:
                 else research_stage_plan_v2_sha256()
                 if request_schema == "research_run_request_v2"
                 else research_stage_plan_v3_sha256()
+                if request_schema == "research_run_request_v3"
+                else research_stage_plan_v4_sha256()
             )
             if candidate["stage_plan_sha256"] != expected_stage_plan_sha256:
                 raise ResearchResolutionError(
