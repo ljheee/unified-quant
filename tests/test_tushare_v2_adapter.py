@@ -132,3 +132,78 @@ def test_comparator_subset_fetch_keeps_the_historical_path():
     result = _adapter(client).fetch("bars_daily", ["600000.XSHG"], "2026-03-02", "2026-03-02", ["close"])
     assert result.schema_version == "research-v1"
     assert client.calls == ["daily"]
+
+
+class _DroppingClient(_Client):
+    """Answers a batch with nothing, the failure mode that published a short panel."""
+
+    def __init__(self, *, recover_after: int | None = None):
+        super().__init__()
+        self.recover_after = recover_after
+        self.daily_calls = 0
+
+    def daily(self, ts_code, start_date, end_date):
+        self.daily_calls += 1
+        if self.recover_after is not None and self.daily_calls > self.recover_after:
+            return super().daily(ts_code, start_date, end_date)
+        return pd.DataFrame()
+
+
+class _PartialClient(_Client):
+    """Answers two of three requested instruments, as a dropped batch looks."""
+
+    def daily(self, ts_code, start_date, end_date):
+        self.calls.append("daily")
+        frame = super().daily(ts_code, start_date, end_date)
+        return frame[frame["ts_code"] != "000001.SZ"].reset_index(drop=True)
+
+
+def test_silently_empty_batch_is_retried_then_fails_closed():
+    client = _DroppingClient()
+    result = _adapter(client).fetch("bars_daily", ["600000.XSHG", "000001.XSHE"], "2026-03-02", "2026-03-02", V2_FIELDS)
+    assert result.status is FetchStatus.UPSTREAM_ERROR
+    assert result.retryable is True
+    assert result.rows.empty
+    assert client.daily_calls == 2
+    assert "no rows for batch" in result.errors[0]
+
+
+def test_empty_batch_that_recovers_on_retry_publishes():
+    client = _DroppingClient(recover_after=1)
+    result = _adapter(client).fetch("bars_daily", ["600000.XSHG", "000001.XSHE"], "2026-03-02", "2026-03-02", V2_FIELDS)
+    assert result.status is FetchStatus.SUCCESS
+    assert client.daily_calls == 2
+
+
+def test_requested_instrument_missing_without_a_suspension_is_reported_not_blocked():
+    client = _PartialClient()
+    result = _adapter(client).fetch(
+        "bars_daily", ["600000.XSHG", "000001.XSHE", "000651.XSHE"], "2026-03-02", "2026-03-02", V2_FIELDS
+    )
+    assert result.status is FetchStatus.SUCCESS
+    # 000001 is halted for the whole window per suspend_d, so only the name the
+    # provider simply did not answer for is reported. Blocking here would be
+    # wrong: a long halt loses its suspend_d rows, which only the whole-window
+    # readiness gate can weigh.
+    report = " ".join(result.warnings)
+    assert "['000651.XSHE']" in report
+    assert "000001.XSHE" not in report
+
+
+def test_instrument_halted_for_the_whole_window_is_not_reported_as_missing():
+    class _HaltedClient(_PartialClient):
+        def suspend_d(self, trade_date, suspend_type):
+            self.calls.append("suspend_d")
+            return pd.DataFrame({
+                "ts_code": ["000001.SZ", "000651.SZ"],
+                "trade_date": [trade_date, trade_date],
+                "suspend_timing": [None, None],
+                "suspend_type": ["S", "S"],
+            })
+
+    halted = _adapter(_HaltedClient()).fetch(
+        "bars_daily", ["600000.XSHG", "000001.XSHE", "000651.XSHE"], "2026-03-02", "2026-03-02", V2_FIELDS
+    )
+    assert halted.status is FetchStatus.SUCCESS
+    assert halted.rows["instrument"].tolist() == ["600000.XSHG"]
+    assert not [warning for warning in halted.warnings if "omitted" in warning]

@@ -168,6 +168,36 @@ class TushareAdapter:
         """
         return "v2" if "session_date" in set(fields) else "research-v1"
 
+    def _daily_batch(
+        self,
+        client,
+        codes: str,
+        batch: list[str],
+        start: str,
+        end: str,
+    ) -> pd.DataFrame:
+        """Fetch one ``daily`` batch, refusing to accept a silent empty answer.
+
+        Tushare raises on most transient failures, so an empty frame for a
+        non-empty batch is indistinguishable from a dropped request. Measured in
+        production: one 50-code batch of a 500-name session answered empty, the
+        run published 451 of 500 instruments as ``published``, and only the
+        training readiness gate noticed 22 sessions later. Retry once, then raise
+        so the caller reports a retryable upstream error instead of publishing a
+        silently short panel.
+        """
+        for _ in range(2):
+            response = client.daily(
+                ts_code=codes or None,
+                start_date=start.replace("-", ""),
+                end_date=end.replace("-", ""),
+            )
+            if not batch or response is None or not response.empty:
+                return pd.DataFrame() if response is None else response
+        raise RuntimeError(
+            f"daily returned no rows for batch {batch[0]}..{batch[-1]} ({len(batch)} codes)"
+        )
+
     def _reference_frames(self, start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, set[tuple[str, object]]]:
         """Whole-market adjustment factors, price limits and suspensions for the window days."""
         days = sorted(self.trade_dates(start, end))
@@ -218,7 +248,7 @@ class TushareAdapter:
             raise
         except Exception as exc:
             status, retryable, message = self._map_error(exc)
-            return FetchResult(pd.DataFrame(), status, self.source_name, dataset, "research-v1", frozenset(fields), frozenset(), fetched_at, retryable=retryable, errors=(message,))
+            return FetchResult(pd.DataFrame(), status, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=retryable, errors=(message,))
         raw_parts: list[pd.DataFrame] = []
         errors: list[str] = []
         provider_codes = [_to_provider_code(instrument) for instrument in instruments]
@@ -226,14 +256,11 @@ class TushareAdapter:
         for batch in batches:
             codes = ",".join(batch)
             try:
-                raw_parts.append(client.daily(
-                    ts_code=codes or None,
-                    start_date=start.replace("-", ""),
-                    end_date=end.replace("-", ""),
-                ))
+                response = self._daily_batch(client, codes, batch, start, end)
+                raw_parts.append(response)
             except Exception as exc:
                 status, retryable, message = self._map_error(exc)
-                return FetchResult(pd.DataFrame(), status, self.source_name, dataset, "research-v1", frozenset(fields), frozenset(), fetched_at, retryable=retryable, errors=(message,))
+                return FetchResult(pd.DataFrame(), status, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=retryable, errors=(message,))
         raw = pd.concat(raw_parts, ignore_index=True) if raw_parts else pd.DataFrame()
         if schema_version == "v2":
             try:
@@ -244,9 +271,32 @@ class TushareAdapter:
             normalized = self._normalize_v2(raw, adj, limits, suspended)
         else:
             normalized = self._normalize(raw)
+        unexplained: list[str] = []
+        if schema_version == "v2" and instruments:
+            # Report, never block: this call sees one session and only suspend_d,
+            # and a multi-week halt loses its suspend_d rows partway through
+            # (measured: 601989 stopped appearing in suspend_d on 2025-09-04 while
+            # it stayed halted until its merger), so blocking here rejected 18 of
+            # 23 legitimate sessions. The training readiness gate owns the
+            # explained/unexplained verdict because it evaluates the whole window.
+            halted: dict[str, set[object]] = {}
+            for instrument, day in suspended:
+                halted.setdefault(instrument, set()).add(day)
+            window_days = set(self.trade_dates(start, end))
+            present = set(normalized["instrument"]) if not normalized.empty else set()
+            unexplained = [
+                instrument
+                for instrument in instruments
+                if instrument not in present and not window_days <= halted.get(instrument, set())
+            ]
         missing_fields = set(fields) - set(normalized.columns)
         status = FetchStatus.PARTIAL_FIELDS if missing_fields else FetchStatus.SUCCESS
-        warnings = tuple(f"missing fields: {sorted(missing_fields)}") if missing_fields else ()
+        warnings = list(f"missing fields: {sorted(missing_fields)}") if missing_fields else []
+        if unexplained:
+            warnings.append(
+                f"daily omitted {len(unexplained)} requested instruments that suspend_d does not "
+                f"cover for the whole window: {sorted(unexplained)[:10]}"
+            )
         delivered = frozenset(set(fields) & set(normalized.columns))
         key_field = "session_date" if schema_version == "v2" else "datetime"
         observed_start = min(normalized[key_field]) if not normalized.empty else None
@@ -263,7 +313,7 @@ class TushareAdapter:
             fetched_at,
             observed_start.date() if observed_start is not None else None,
             observed_end.date() if observed_end is not None else None,
-            warnings=warnings,
+            warnings=tuple(warnings),
             errors=tuple(errors),
             metadata={
                 "provider": "tushare.pro",
