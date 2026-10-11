@@ -10,6 +10,12 @@ Date: 2026-08-22
 - `TUSHARE_TOKEN` remains supported as a single-token fallback. Requests rotate
   across configured tokens, but rotation must not be used to circumvent provider
   terms or build bulk production datasets.
+- `TUSHARE_2K_TOKEN` is the 2000-point account used by `Tushare2kAdapter`.
+  Scripts that need endpoints beyond the free tier select this class explicitly;
+  the class is never chosen automatically from token contents.
+- `TushareAdapter` (`src/uq/adapters/tushare.py`) holds the shared implementation.
+  `TushareFreeAdapter` and `Tushare2kAdapter` subclass it and keep their own
+  default token variables.
 - Put credentials in `.env`; `.env` and `.env.*` are ignored.
 - `.env.example` contains no secret.
 - Tokens must never enter logs, manifests, canonical data, or run reports.

@@ -5,7 +5,7 @@ import re
 
 
 class StaticUniverseLoader:
-    pattern = re.compile(r"^\d{6}\.(XSHG|XSHE)$")
+    pattern = re.compile(r"^\d{6}\.(XSHG|XSHE|XBSE)$")
 
     def __init__(self, path: Path) -> None:
         self.path = path
