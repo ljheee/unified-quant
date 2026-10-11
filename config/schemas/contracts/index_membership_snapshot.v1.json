@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/index_membership_snapshot.v1.json",
+  "title": "Monthly index membership snapshot v1 (approximate PIT)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "snapshot_version",
+    "universe_id",
+    "index_code",
+    "source",
+    "source_fetched_at",
+    "snapshot_date",
+    "visible_from",
+    "publish_lag_days",
+    "pit_precision",
+    "members_artifact",
+    "generation_id"
+  ],
+  "properties": {
+    "snapshot_version": {
+      "const": 1
+    },
+    "universe_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+    },
+    "index_code": {
+      "type": "string",
+      "pattern": "^[0-9]{6}\\.(SH|SZ|CSI)$"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_fetched_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "snapshot_date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "visible_from": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "publish_lag_days": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pit_precision": {
+      "const": "monthly_approximation"
+    },
+    "members_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "row_count",
+        "checksum_sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!\\.\\.?$)[A-Za-z0-9._-]+$"
+        },
+        "row_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "checksum_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}
