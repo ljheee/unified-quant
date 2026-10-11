@@ -5,9 +5,9 @@ import os
 import shutil
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping, Protocol, Sequence
 
 from ..contracts.model_layer import (
     ModelContractLoader,
@@ -21,6 +21,7 @@ from ..contracts.model_layer import (
     sha256_json,
 )
 from ..errors import ContractError
+from .membership_input import verify_request_input_sets
 from .contracts import (
     PublishedRequest,
     PublishedResult,
@@ -110,8 +111,20 @@ class ResolvedExecutionPlan:
 class ResearchChainRequestResolver:
     """Resolve immutable request references through owning-layer stores."""
 
-    def __init__(self, stores_by_output_family: Mapping[str, Any]) -> None:
+    def __init__(
+        self,
+        stores_by_output_family: Mapping[str, Any],
+        *,
+        membership_store: Any | None = None,
+        trading_calendar: Sequence[date] | None = None,
+    ) -> None:
+        if (membership_store is None) != (trading_calendar is None):
+            raise ContractError(
+                "index membership governance requires both a membership store and a trading calendar"
+            )
         self.stores_by_output_family = dict(stores_by_output_family)
+        self.membership_store = membership_store
+        self.trading_calendar = list(trading_calendar) if trading_calendar is not None else None
 
     def resolve(
         self,
@@ -231,6 +244,9 @@ class ResearchChainRequestResolver:
                 data_checksum_sha256=data_checksum,
             ))
 
+        if request_schema == "research_run_request_v4":
+            self._verify_v4_input_sets(candidate)
+
         execution_plan = {
             "schema_version": "v1",
             "request_content_generation_id": candidate["request_content_generation_id"],
@@ -253,6 +269,36 @@ class ResearchChainRequestResolver:
             stage_bindings=tuple(stage_bindings),
             resolved_execution_plan_sha256=sha256_json(execution_plan),
         )
+
+
+    def _verify_v4_input_sets(self, request: dict[str, Any]) -> None:
+        """Bind a v4 request to the point-in-time membership and factor partition sets."""
+        if self.membership_store is None or self.trading_calendar is None:
+            raise ResearchResolutionError(
+                "request_invalid",
+                "v4 requests require an index membership store and a governed trading calendar",
+            )
+        factor_store = self.stores_by_output_family.get("factor_partition")
+        if factor_store is None:
+            raise ResearchResolutionError(
+                "request_invalid",
+                "no owning store is registered for output family factor_partition",
+            )
+        try:
+            verify_request_input_sets(
+                request,
+                membership_store=self.membership_store,
+                factor_store=factor_store,
+                trading_days=self.trading_calendar,
+            )
+        except ContractError as exc:
+            detail = str(exc)
+            code = (
+                "input_tampered"
+                if "tampered" in detail or "digest mismatch" in detail
+                else "input_unresolved"
+            )
+            raise ResearchResolutionError(code, detail) from exc
 
 
 class FileResearchRunStore:

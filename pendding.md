@@ -19,9 +19,9 @@
     - `set_digest_sha256` = canonical JSON 的 SHA-256,覆盖 `snapshots` 全部字段与窗口;任何快照增删或内容变化都会改变集合 digest。
     - 窗口覆盖校验:窗口内每个交易日必须存在 `visible_from <= 该日` 的快照,否则拒绝(fail-closed)。
     - 旧 `universe_snapshot` v1 绑定保持不变,新旧绑定通过 `family` 区分,不互相替换。
-  - 4b. [未开始,等待接入 resolver] factor 阶段成员过滤:对每个交易日用 `IndexMembershipStore.as_of` 取成员,替代 `UniverseSnapshotStore.read_members` 的单窗口读取。
-  - 4c. 读回与绑定校验:runner `_readback`、model/backtest 阶段绑定校验改为校验快照集合的 digest。
-  - 4d. 测试:覆盖跨月窗口、PIT 边界(快照日当天不可用)、篡改快照被拒绝、与旧 v1 绑定的隔离。
+  - 4b. [已完成:绑定校验已接入 resolver;按日过滤函数已实现并有测试,待 v4 执行路径开启后挂载到 dataset 阶段] `src/uq/research_chain/membership_input.py`:`verify_request_input_sets` 由 store 重建两类集合并与请求摘要比对;`filtered_factor_frame` 对每个交易日取该日可见成员(每个快照只读一次成员)并与当日因子分区求交。
+  - 4c. [部分完成] resolver 已在 v4 分支校验两个集合摘要;runner `_readback` 与 model/backtest 阶段的集合摘要校验待 v4 执行路径开启后接入。
+  - 4d. [已完成] `tests/test_research_membership_input.py`(11 项):跨月窗口逐日成员、快照日当天不可见、成员字节篡改、两个集合摘要漂移、窗口早于首个可见快照 fail closed、绑定窗口与请求窗口不一致、resolver 治理参数缺失、v1/v3 解析不受影响。
   - 不变量:任何训练窗口内的每个交易日,成员只能来自 `visible_from <= 该交易日` 的快照。
 - [ ] 5. 训练前覆盖校验 fail-closed(成员数 500、Alpha158 每只至少 60 个交易日、5 日 label 需未来数据、adj_factor/涨跌停/停牌/上市退市字段缺失率)。
 - [ ] 6. 数据面补齐:`adj_factor`、`stock_basic`、`suspend_d`、`stk_limit` 的 importer,落为可校验 artifact。
