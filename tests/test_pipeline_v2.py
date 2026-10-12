@@ -1,6 +1,7 @@
 """bars_daily v2 ingest: session_date key, Tushare primary, TDX comparator."""
 
-from datetime import date, datetime
+import json
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -8,9 +9,10 @@ import pytest
 
 from uq.adapters.tushare import TushareAdapter
 from uq.contracts.config import load_dataset_contract
+from uq.contracts.index_membership import IndexMembershipStore
 from uq.contracts.schema import load_schema
 from uq.errors import ContractError
-from uq.pipeline.daily import DailyIngestPipeline, build_tushare_v2_pipeline
+from uq.pipeline.daily import DailyIngestPipeline, IngestReport, build_tushare_v2_pipeline
 from uq.routing.router import SourceRouter
 from uq.sources.fetch import FetchResult, FetchStatus
 from tests.test_real_chain import FakeMootdxAdapter, mootdx_page
@@ -210,3 +212,103 @@ def test_unprobeable_primary_cannot_publish(tmp_path, monkeypatch):
     report = pipeline.run(TRADE_DATE, INSTRUMENTS)
     assert report.status == "primary_source_unhealthy"
     assert not list((tmp_path / "canonical").glob("**/*")) if (tmp_path / "canonical").exists() else True
+
+
+def _membership_store(root: Path, snapshot: date, codes: tuple[str, ...]) -> IndexMembershipStore:
+    store = IndexMembershipStore(root)
+    store.publish(
+        universe_id="a500",
+        index_code="000510.SH",
+        source="tushare:index_weight:000510.SH",
+        source_fetched_at=datetime(2025, 10, 8, 9, 0, tzinfo=timezone(timedelta(hours=8))),
+        snapshot_date=snapshot,
+        publish_lag_days=2,
+        trading_days=[date(2025, 10, day) for day in range(9, 20)],
+        members=pd.DataFrame({"instrument": list(codes)}),
+    )
+    return store
+
+
+class _StubPipeline:
+    def __init__(self, calls: dict) -> None:
+        self.calls = calls
+
+    def run(self, trade_date, instruments):
+        self.calls["date"] = trade_date
+        self.calls["instruments"] = list(instruments)
+        return IngestReport(
+            trade_date=trade_date,
+            status="published",
+            rows=len(instruments),
+            source_statuses={"tushare": "ok"},
+            warnings=(),
+            errors=(),
+        )
+
+
+def test_cli_v2_resolves_members_from_the_membership_store(tmp_path, monkeypatch, capsys):
+    # The 500-instrument pilot could only be driven by an inline loop because the
+    # documented CLI hard-wired the research-v1 whitelist universe. v2 now takes
+    # its members from the PIT membership store so the pilot is reproducible.
+    from uq import cli
+
+    calls: dict = {}
+    monkeypatch.setattr(cli, "build_tushare_v2_pipeline", lambda *args, **kwargs: _StubPipeline(calls))
+    store = _membership_store(tmp_path / "membership", date(2025, 9, 30), ("000001.XSHE", "600000.XSHG"))
+
+    code = cli.uq_ingest(
+        [
+            "daily",
+            "--date",
+            "2025-10-14",
+            "--data-root",
+            str(tmp_path / "bars"),
+            "--pipeline",
+            "v2",
+            "--membership-root",
+            str(tmp_path / "membership"),
+            "--universe-id",
+            "a500",
+        ]
+    )
+    assert code == 0, capsys.readouterr().out
+    assert calls["date"] == date(2025, 10, 14)
+    assert calls["instruments"] == ["000001.XSHE", "600000.XSHG"]
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "published"
+    assert report["rows"] == 2
+
+
+def test_cli_v2_requires_governed_membership_inputs(tmp_path, monkeypatch):
+    from uq import cli
+
+    monkeypatch.setenv("UQ_SKIP_HEALTH_PROBE", "1")
+    with pytest.raises(SystemExit):
+        cli.uq_ingest(["daily", "--date", "2025-10-14", "--data-root", str(tmp_path), "--pipeline", "v2"])
+
+
+def test_cli_v2_fails_closed_when_membership_is_not_visible_yet(tmp_path, monkeypatch, capsys):
+    from uq import cli
+
+    calls: dict = {}
+    monkeypatch.setattr(cli, "build_tushare_v2_pipeline", lambda *args, **kwargs: _StubPipeline(calls))
+    _membership_store(tmp_path / "membership", date(2025, 9, 30), ("000001.XSHE",))
+
+    code = cli.uq_ingest(
+        [
+            "daily",
+            "--date",
+            "2025-10-01",
+            "--data-root",
+            str(tmp_path / "bars"),
+            "--pipeline",
+            "v2",
+            "--membership-root",
+            str(tmp_path / "membership"),
+            "--universe-id",
+            "a500",
+        ]
+    )
+    assert code == 3
+    assert "configuration_failure" in capsys.readouterr().out
+    assert calls == {}

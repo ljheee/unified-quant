@@ -9,7 +9,13 @@ from datetime import date
 from datetime import datetime as utc_datetime
 from pathlib import Path
 
-from .pipeline.daily import build_tdx_pipeline, build_tushare_crosscheck_pipeline
+from .contracts.index_membership import IndexMembershipStore
+from .errors import ContractError
+from .pipeline.daily import (
+    build_tdx_pipeline,
+    build_tushare_crosscheck_pipeline,
+    build_tushare_v2_pipeline,
+)
 
 
 EXIT_STATUS_CODES = {
@@ -43,6 +49,23 @@ def uq_ingest(argv: list[str] | None = None) -> int:
         default=Path(__file__).resolve().parents[2],
         help="repository/config root; override for installed deployments",
     )
+    daily.add_argument(
+        "--pipeline",
+        choices=("v1", "v2"),
+        default="v1",
+        help="bars_daily schema line to ingest; v2 takes its universe from the membership store",
+    )
+    daily.add_argument(
+        "--membership-root",
+        type=Path,
+        default=None,
+        help="index membership store root used to resolve v2 members (required with --pipeline v2)",
+    )
+    daily.add_argument(
+        "--universe-id",
+        default=None,
+        help="universe identifier read from the membership store (required with --pipeline v2)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -52,11 +75,23 @@ def uq_ingest(argv: list[str] | None = None) -> int:
 
     try:
         skip_health = os.environ.get("UQ_SKIP_HEALTH_PROBE") == "1"
-        builder = build_tushare_crosscheck_pipeline if args.cross_validate else build_tdx_pipeline
-        pipeline = builder(args.data_root, args.project_root, run_health_probe=not skip_health)
-        universe_path = args.project_root / "config/universe/research-whitelist.txt"
-        instruments = [line.strip() for line in universe_path.read_text().splitlines() if line.strip()]
-    except (OSError, ValueError, RuntimeError) as exc:
+        if args.pipeline == "v2":
+            if args.membership_root is None or args.universe_id is None:
+                parser.error("--pipeline v2 requires --membership-root and --universe-id")
+            pipeline = build_tushare_v2_pipeline(
+                args.data_root,
+                args.project_root,
+                run_health_probe=not skip_health,
+                require_cross_validation=args.cross_validate,
+            )
+            _, members = IndexMembershipStore(args.membership_root).as_of(args.universe_id, trade_date)
+            instruments = sorted(str(value) for value in members["instrument"])
+        else:
+            builder = build_tushare_crosscheck_pipeline if args.cross_validate else build_tdx_pipeline
+            pipeline = builder(args.data_root, args.project_root, run_health_probe=not skip_health)
+            universe_path = args.project_root / "config/universe/research-whitelist.txt"
+            instruments = [line.strip() for line in universe_path.read_text().splitlines() if line.strip()]
+    except (OSError, ValueError, RuntimeError, ContractError) as exc:
         print(json.dumps({"status": "configuration_failure", "errors": [str(exc)]}, sort_keys=True))
         return 3
 
