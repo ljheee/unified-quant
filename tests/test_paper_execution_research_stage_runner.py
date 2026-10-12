@@ -330,3 +330,86 @@ def test_paper_stage_is_idempotent_and_rejects_republish(tmp_path: Path) -> None
     adapter.run(_plan(), **kwargs)
     with pytest.raises(ContractError):
         adapter.run(_plan(), **kwargs)
+
+
+def test_paper_stage_refusal_stops_the_stage_and_hides_later_dates(tmp_path: Path) -> None:
+    """PE23: a refused risk decision at date D halts the stage; D and every later
+    date stay unpublished and no paper stage state reaches the run store."""
+
+    from types import SimpleNamespace
+
+    from uq.risk.contracts import risk_contract_identities
+
+    sessions = [date(2026, 1, 5), date(2026, 1, 6), date(2026, 1, 7), date(2026, 1, 8)]
+    publisher = _publish_market(tmp_path / "market", sessions)
+    template = _template(publisher, sessions)
+    paper_root = tmp_path / "paper"
+    (tmp_path / "runs").mkdir(parents=True, exist_ok=True)
+    run_store = FileResearchRunStore(tmp_path / "runs")
+
+    adapter = PaperExecutionStageAdapter(
+        template,
+        market=PublishedPaperMarketData(publisher, window_start=sessions[0], window_end=sessions[-1]),
+        config_store=ExecutionConfigStore(paper_root),
+        plan_store=OrderPlanStore(paper_root),
+        result_store=ExecutionResultStore(paper_root),
+        state_store=PaperPortfolioStateStore(paper_root),
+    )
+
+    decision_dates = [session.isoformat() for session in sessions[:3]]
+    frames = {
+        decision_date: pd.DataFrame({"instrument": ["000001.XSHE"], "weight": [0.5]})
+        for decision_date in decision_dates
+    }
+    manifests = {
+        decision_date: _target_manifest(frame, decision_date)
+        for decision_date, frame in frames.items()
+    }
+    portfolio_result = SimpleNamespace(
+        definition_manifest={"generation_id": "1" * 64},
+        target_weight_manifests=manifests,
+        target_weight_frames=frames,
+    )
+
+    refusal_date = decision_dates[1]
+    allowed_source = _risk_source()
+
+    def blocking_source(decision_date: str, config_generation_id: str, context) -> dict:
+        decision = allowed_source(decision_date, config_generation_id, context)
+        if decision_date == refusal_date:
+            decision["action"] = "block"
+            decision["generation_id"], decision["manifest_digest_sha256"] = risk_contract_identities(
+                decision, schema_name="risk_decision"
+            )
+        return decision
+
+    with pytest.raises(ContractError, match="not executable"):
+        adapter.run(
+            _plan(),
+            portfolio_stage_result=portfolio_result,
+            decision_dates=decision_dates,
+            market=adapter.market,
+            quality_decisions=_quality_source(),
+            run_store=run_store,
+            risk_decision_source=blocking_source,
+            runner_identity={
+                "code_fingerprint": "e" * 64,
+                "environment_profile": "locked-test",
+                "lock_digest_sha256": "f" * 64,
+            },
+            created_at="2026-01-01T00:00:00+00:00",
+        )
+
+    # Exactly the first (allowed) date is published ...
+    assert len(sorted((paper_root / "execution-configs").glob("*/generation=*"))) == 1
+    assert len(sorted((paper_root / "order-plans").glob("*/*/generation=*"))) == 1
+    assert len(sorted((paper_root / "execution-results").glob("*/*/generation=*"))) == 1
+    assert len(sorted((paper_root / "paper-states").glob("*/*/generation=*"))) == 1
+    # ... the refused date and every later date stay unpublished, and no paper stage
+    # state reaches the run store (the accepted result cannot see a partial stage).
+    published_configs = sorted((paper_root / "execution-configs").glob("*/generation=*/manifest.json"))
+    published_dates = {
+        json.loads(path.read_text())["decision_date"] for path in published_configs
+    }
+    assert published_dates == {decision_dates[0]}
+    assert not (tmp_path / "runs" / "research_runs" / "states").exists()
