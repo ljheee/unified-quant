@@ -1,64 +1,64 @@
 {
-  "layer": "a500_pilot_ingest",
-  "record_version": 1,
-  "status": "archived",
-  "note": "digests recomputed by scripts/build_store_evidence.py; per-partition digests live in bars-inventory.json",
-  "records": [
-    {
-      "path": "config/datasets/bars_daily.v2.yaml",
-      "sha256": "3b0f50e0db05d395dfeb009ce5bd2fa621ff04aaf0695f440336924b39f6f75a"
-    },
-    {
-      "path": "config/schemas/bars_daily.v2.yaml",
-      "sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38"
-    },
-    {
-      "path": "evidence/a500-membership/evidence-index.json",
-      "sha256": "d0d3bc243afe7df945f2879f15bb303812d691fd5b72bf32b23513a1604ce15b"
-    },
-    {
-      "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/bars-inventory.json",
-      "sha256": "85e7bb8f34d9138c12a0de8fb210ed1bfd850fb8d6ad2c02e9cd0227b37512e1"
-    },
-    {
-      "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/gate-report.json",
-      "sha256": "afaae7c9ade4055a755a7e3a1942d96bedfe6ef9a1a8c06fd967e20e62693a5c"
-    },
-    {
-      "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/requirements.lock.txt",
-      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
-    },
-    {
-      "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/requirements.lock.txt.sha256",
-      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
-    },
-    {
-      "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/pilot-record.json",
-      "sha256": "d123b2a5f4ca83c6f7cfd1d5a198e2a1be2fca829f06660f95c47a1901fcf6ed"
-    },
-    {
-      "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",
-      "sha256": "c91d11369d6b6234351904fe4013f6e8ef22d20473585fd5e046dfe8130e9457"
-    },
-    {
-      "path": "scripts/build_store_evidence.py",
-      "sha256": "7ffabc35d2b333c2ddb089a7990d9b759f69a92d12f9045d61e19066f1eec2ec"
-    },
-    {
-      "path": "scripts/fetch_index_membership.py",
-      "sha256": "6e30dff8c37783a0624297cf42cb19f97a21c69fd496e5715f5d5c4b1d5d9db5"
-    },
-    {
-      "path": "scripts/validate_training_readiness.py",
-      "sha256": "5311ce7c61da063e21d042f8a5f9cf6dbc05a986a3164637f70ba461aa423e3d"
-    },
-    {
-      "path": "src/uq/cli.py",
-      "sha256": "3234a519829b1c40526282b5e8b6a2aa058f7c6570620a9f41b39f12e409040a"
-    },
-    {
-      "path": "src/uq/pipeline/readiness.py",
-      "sha256": "978d3ab66db3345c0cd4f240a3b595d7fa9b7fca10d964ce8c15c092e919beee"
-    }
-  ]
+ "layer": "a500_pilot_ingest",
+ "record_version": 1,
+ "status": "archived",
+ "note": "digests recomputed by scripts/build_store_evidence.py; per-partition digests live in bars-inventory.json",
+ "records": [
+  {
+   "path": "config/datasets/bars_daily.v2.yaml",
+   "sha256": "3b0f50e0db05d395dfeb009ce5bd2fa621ff04aaf0695f440336924b39f6f75a"
+  },
+  {
+   "path": "config/schemas/bars_daily.v2.yaml",
+   "sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38"
+  },
+  {
+   "path": "evidence/a500-membership/evidence-index.json",
+   "sha256": "d0d3bc243afe7df945f2879f15bb303812d691fd5b72bf32b23513a1604ce15b"
+  },
+  {
+   "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/bars-inventory.json",
+   "sha256": "85e7bb8f34d9138c12a0de8fb210ed1bfd850fb8d6ad2c02e9cd0227b37512e1"
+  },
+  {
+   "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/gate-report.json",
+   "sha256": "95267983ae84b6e5455876524754b46cd2eb903549672d20b7e11dc426c87615"
+  },
+  {
+   "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/requirements.lock.txt",
+   "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+  },
+  {
+   "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/requirements.lock.txt.sha256",
+   "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+  },
+  {
+   "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/pilot-record.json",
+   "sha256": "33269b8aba53c23dd98126904c59eafea82cb1f1e263a5191c73d59fed9a66ce"
+  },
+  {
+   "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",
+   "sha256": "c91d11369d6b6234351904fe4013f6e8ef22d20473585fd5e046dfe8130e9457"
+  },
+  {
+   "path": "scripts/build_store_evidence.py",
+   "sha256": "7ffabc35d2b333c2ddb089a7990d9b759f69a92d12f9045d61e19066f1eec2ec"
+  },
+  {
+   "path": "scripts/fetch_index_membership.py",
+   "sha256": "6e30dff8c37783a0624297cf42cb19f97a21c69fd496e5715f5d5c4b1d5d9db5"
+  },
+  {
+   "path": "scripts/validate_training_readiness.py",
+   "sha256": "5311ce7c61da063e21d042f8a5f9cf6dbc05a986a3164637f70ba461aa423e3d"
+  },
+  {
+   "path": "src/uq/cli.py",
+   "sha256": "3234a519829b1c40526282b5e8b6a2aa058f7c6570620a9f41b39f12e409040a"
+  },
+  {
+   "path": "src/uq/pipeline/readiness.py",
+   "sha256": "978d3ab66db3345c0cd4f240a3b595d7fa9b7fca10d964ce8c15c092e919beee"
+  }
+ ]
 }
