@@ -92,9 +92,25 @@
     "result": "passed",
     "run_id": 38197992719,
     "url": "https://github.com/ljheee/unified-quant/actions/runs/38197992719",
-    "commit_bound": "55c478a9f663cba88be6d4b12b5083ea0027d74a",
+    "commit_bound": "acd1eea2e6844a3734e1c86270747c5c8ad89ced",
     "jobs_passed": 11,
     "coverage": "six base cells (macOS/Ubuntu x Python 3.11-3.13) plus four qlib-runtime cells plus f4-certification",
-    "note": "aggregated per-cell gate artifacts were not archived here; the pilot archive claims the local gate report, and this entry records the remote run as corroborating status only"
+    "note": "both runs are recorded because each evidence-only commit moves HEAD past the run that verified it; per-cell gate artifacts were not archived, so remote_ci records status and bound commits only and the local gate report stays the only per-cell evidence",
+    "runs": [
+      {
+        "run_id": 38197992719,
+        "commit_bound": "55c478a9f663cba88be6d4b12b5083ea0027d74a",
+        "url": "https://github.com/ljheee/unified-quant/actions/runs/38197992719",
+        "result": "passed",
+        "covers": "the archive itself (inventories, readiness output, re-pinned digests)"
+      },
+      {
+        "run_id": 38199553014,
+        "commit_bound": "acd1eea2e6844a3734e1c86270747c5c8ad89ced",
+        "url": "https://github.com/ljheee/unified-quant/actions/runs/38199553014",
+        "result": "passed",
+        "covers": "the index producer guard and tests/test_store_evidence.py on top of the archive"
+      }
+    ]
   }
 }
