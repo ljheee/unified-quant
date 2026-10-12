@@ -46,7 +46,7 @@
     },
     {
       "path": "scripts/fetch_index_membership.py",
-      "sha256": "b3a5340573640ced869e8f59eee0a8836a0768beebd4c833c1d0d94ff5b8beb5"
+      "sha256": "1520a17b547b9c0a734e588c95db4d1639802cb7341c56d0b0c254a79cc5b931"
     },
     {
       "path": "scripts/validate_training_readiness.py",

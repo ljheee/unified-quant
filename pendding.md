@@ -13,7 +13,7 @@
 
 待办(按依赖顺序):
 - [x] 1. 实测 `index_weight` 发布滞后,确定 `publish_lag_days`。
-  - 结论(2026-10-12):`index_weight` **没有任何可见时间字段**,且只返回每月月末一个 `trade_date` 的快照,因此滞后无法事后回溯测量,只能**向前观测**。已实现可复跑探针 `scripts/measure_index_weight_lag.py`(逐日运行会把观测追加到 `evidence/reference-data/index-weight-lag-observations.json`),首条观测:2026-10-12 查询时最新可得快照为 `2026-09-30`、当月(10 月)快照不可得 → 该快照的可见滞后 `<= 3` 个会话;且**当月快照在月内不可得**,证明快照只在月末之后才发布。
+  - 结论(2026-10-12):`index_weight` **没有任何可见时间字段**,且只返回每月月末一个 `trade_date` 的快照,因此滞后无法事后回溯测量,只能**向前观测**。已实现可复跑探针 `scripts/probe_index_weight_visibility.py`(逐日运行会把 `first_seen`/`content_changed` 事件追加到 `evidence/reference-data/index-weight-visibility-log.jsonl`,并打印每个快照的会话数上界),首条观测:2026-10-12 查询时最新可得快照为 `2026-09-30`、当月(10 月)快照不可得 → 该快照的可见滞后 `<= 3` 个会话;且**当月快照在月内不可得**,证明快照只在月末之后才发布。注意:只有"正在观测中"的那个最新快照上界才有信息量,更早的快照因为起观测时早已发布,上界会偏大(首个观测中 2026-06-30 的上界是 68 个会话,属于这类)。
   - 决定:`PUBLISH_LAG_DAYS = 5` 保留,但性质从"未实测假设"升级为"高于已实测上界的保守值"——5 > 3,只会把快照的可用时间推迟、绝不会提前暴露,故不会引入前视;注释与证据路径已写入 `scripts/fetch_index_membership.py`。若未来需要更紧的界,继续累积该探针观测即可逐月收紧。
 - [x] 2. 定义月度快照 raw artifact 与 manifest 契约(主键 `(snapshot_date, instrument)`,记录 `source_fetched_at`、SHA-256、`publish_lag_days`、`visible_from`)。
 - [x] 3. 改造 `scripts/fetch_index_membership.py`:写入不可变快照 artifact(经 `IndexMembershipStore`),不再输出 CSV 作为训练输入。脚本与测试已完成;正式 store 为 `data/a500-store/`,待用该路径正式拉取后勾选。
@@ -98,7 +98,7 @@
 
 生效规则(防前视,强制):
 - 快照不得在"当月第一天"生效。一个快照只能在其 `trade_date` 之后的第一个交易日起使用,并且再加 `publish_lag_days` 个交易日作为保守可见时间。
-- `publish_lag_days` 取 5 个交易日(写入 manifest)。这是**高于实测上界的保守值**,不是未实测的假设:实测见待办第 1 条(`evidence/reference-data/index-weight-lag-observations.json`,首条观测上界为 3 个会话),5 只会推迟快照可用时间,不会提前暴露。
+- `publish_lag_days` 取 5 个交易日(写入 manifest)。这是**高于实测上界的保守值**,不是未实测的假设:实测见待办第 1 条(`evidence/reference-data/index-weight-visibility-log.jsonl`,首条观测中最新快照上界为 3 个会话),5 只会推迟快照可用时间,不会提前暴露。
 - 每个快照的有效区间为 `[visible_from, 下一快照 visible_from)`;最后一个快照的 `end` 为开放区间,需标注。
 
 限制(必须写入所有研究报告与 manifest):

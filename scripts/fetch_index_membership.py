@@ -14,8 +14,8 @@ from uq.errors import ContractError
 
 # Conservative visibility lag in governed sessions.  Tushare's index_weight
 # endpoint carries no visibility timestamp, so the true lag is bounded
-# forward-only by scripts/measure_index_weight_lag.py (observations land in
-# evidence/reference-data/index-weight-lag-observations.json).  The first
+# forward-only by scripts/probe_index_weight_visibility.py (observations land
+# in evidence/reference-data/index-weight-visibility-log.jsonl).  The first
 # observation (2026-10-12) bounds the 2026-09-30 snapshot at <=3 sessions and
 # confirms the current month is unpublished intra-month, so 5 sessions stays
 # above the measured bound and can only defer a snapshot, never expose it early.
