@@ -75,7 +75,7 @@
   ],
   "local_gate": {
     "result": "passed",
-    "commit_bound": "be672b895a9be6d9ba7a0d8fdc8dfffe68c1a75c",
+    "commit_bound": "6facb196c8648af3d67aaa353f7189df7c6ca8f1",
     "runner": "uv",
     "platform": "macOS-26.3-arm64-arm-64bit",
     "python_version": "3.12.13",

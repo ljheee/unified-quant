@@ -22,7 +22,7 @@
     },
     {
       "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/gate-report.json",
-      "sha256": "de4741a969aebccb76fc6abcf7a73979051613dce830bf9f6e5ba19b71546b76"
+      "sha256": "5fbe96bf2debc322e9e9957dff91828d8e25e59b10654807e0748e38f7ef9855"
     },
     {
       "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/requirements.lock.txt",
@@ -34,7 +34,7 @@
     },
     {
       "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/pilot-record.json",
-      "sha256": "304c8ba8df581c0ca9222c14a66a9539c64c4242dc0383272ec738a69d054e3e"
+      "sha256": "654351f43230fcce21e26f5d39a963e2fb008d15d767a6fb0b8ebc5503806745"
     },
     {
       "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",
