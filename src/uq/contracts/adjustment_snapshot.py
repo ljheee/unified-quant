@@ -180,14 +180,21 @@ class AdjustmentSnapshotReader:
                 continue
             sessions = self._read_csv(instrument, generation_id, "sessions", _SESSION_COLUMNS)["session_date"].tolist()
             session_manifest = manifest["sessions"]
-            expected_dates = pd.date_range(session_manifest["start_date"], session_manifest["end_date"], freq="D").strftime("%Y-%m-%d").tolist()
             if (
                 session_manifest["start_date"] != window_start.isoformat()
                 or session_manifest["end_date"] != window_end.isoformat()
             ):
                 continue
-            if sessions != expected_dates:
+            # ``sessions`` are the deriver's trading sessions, not calendar
+            # days: a window spanning a weekend can never match a daily
+            # date_range, and that check would have made every real multi-week
+            # window unselectable. Mirror the save-time invariant instead:
+            # strictly increasing sessions that begin and end the declared
+            # window (the manifest checksum still pins the exact list).
+            if sessions != sorted(set(sessions)):
                 raise ContractError("invalid adjustment snapshot session coverage")
+            if not sessions or sessions[0] != window_start.isoformat() or sessions[-1] != window_end.isoformat():
+                raise ContractError("adjustment snapshot sessions do not cover the declared window")
             visible.append(generation_id)
         if len(visible) != 1:
             raise ContractError(f"ambiguous or absent visible adjustment snapshot: {len(visible)}")

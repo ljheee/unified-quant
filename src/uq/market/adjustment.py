@@ -19,6 +19,7 @@ class AdjustmentDerivation:
     provenance: str
     snapshot_id: str | None = None
     effective_date_table_checksum: str | None = None
+    effective_dates: pd.DataFrame | None = None
 
 
 class XdxrAdjustmentDeriver:
@@ -100,7 +101,7 @@ class XdxrAdjustmentDeriver:
         }
         snapshot_id = hashlib.sha256(json.dumps(snapshot_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
         table_checksum = hashlib.sha256(effective_table.to_csv(index=False).encode("utf-8")).hexdigest()
-        return AdjustmentDerivation(result, DERIVATION_VERSION, self.provenance, snapshot_id, table_checksum)
+        return AdjustmentDerivation(result, DERIVATION_VERSION, self.provenance, snapshot_id, table_checksum, effective_table)
 
     @staticmethod
     def _event_fingerprint(event: dict[str, object]) -> str:
