@@ -1,16 +1,71 @@
 {
- "layer": "paper_execution_research_integration",
- "phase": 1,
- "status": "in_progress",
- "acceptance_rows": [
-  {"id": "PE17", "status": "passed", "test_ids": ["test_paper_bindings_resolve_from_published_stores"]},
-  {"id": "PE18", "status": "passed", "test_ids": ["test_missing_paper_binding_fails_closed", "test_tampered_paper_input_fails_closed_before_compute", "test_v5_without_market_store_fails_closed"]},
-  {"id": "PE19", "status": "passed", "test_ids": ["test_v1_v2_resolver_behaviour_unchanged"]}
- ],
- "blocked_by": ["final HEAD gate report generation after commit"],
- "exit_criteria": {
-  "resolver_produces_paper_execution_plan": "passed",
-  "missing_tampered_fail_closed": "passed",
-  "v1_v2_v3_v4_unchanged": "passed (existing suite green)"
- }
+  "acceptance_rows": [
+    {
+      "id": "PE17",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase1.py::test_paper_bindings_resolve_from_published_stores"
+      ]
+    },
+    {
+      "id": "PE18",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase1.py::test_missing_paper_binding_fails_closed",
+        "tests/test_paper_execution_research_integration_phase1.py::test_tampered_paper_input_fails_closed_before_compute",
+        "tests/test_paper_execution_research_integration_phase1.py::test_v5_without_market_store_fails_closed"
+      ]
+    },
+    {
+      "id": "PE19",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase1.py::test_v1_v2_resolver_behaviour_unchanged"
+      ]
+    }
+  ],
+  "blocked_by": [],
+  "deferred": [],
+  "evidence_commit_bound": "HEAD_evidence_only",
+  "implementation_commit": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+  "layer": "paper_execution_research_integration",
+  "local_gate": {
+    "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+    "commit_bound": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+    "path": "evidence/paper-execution-research-integration/release/local-gate-report.json",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "requirements_lock_path": "evidence/paper-execution-research-integration/release/requirements.lock.txt",
+    "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+    "requirements_lock_sha256_path": "evidence/paper-execution-research-integration/release/requirements.lock.txt.sha256",
+    "result": "passed"
+  },
+  "phase": 1,
+  "remote_gate": {
+    "aggregated_path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/aggregated-gates.json",
+    "cells_root": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339",
+    "commit_bound": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+    "covered_cells": [
+      "macos-latest/3.11",
+      "macos-latest/3.12",
+      "macos-latest/3.13",
+      "ubuntu-latest/3.11",
+      "ubuntu-latest/3.12",
+      "ubuntu-latest/3.13",
+      "macos-latest/3.11/qlib",
+      "macos-latest/3.12/qlib",
+      "ubuntu-latest/3.11/qlib",
+      "ubuntu-latest/3.12/qlib"
+    ],
+    "result": "passed",
+    "run_id": "38252277339",
+    "run_path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/run.json",
+    "summary": {
+      "failed": 0,
+      "passed": 10,
+      "total": 10
+    },
+    "url": "https://github.com/ljheee/unified-quant/actions/runs/38252277339"
+  },
+  "status": "exited_after_remote_gate"
 }

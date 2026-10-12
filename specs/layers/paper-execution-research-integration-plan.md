@@ -1,9 +1,10 @@
 # Paper Execution Research Integration Plan
 
-Status: **Phase 0 (v3 contract basis) exited at `de26458`; Phase 0R, Phase 0.5,
-Phase 1 and the Phase 2/3 runtime wiring are implemented; Phase 2/3 exit is
-pending a local gate and the ten-cell remote matrix on the final HEAD, and
-Phase 4 release evidence is not refreshed.** The released
+Status: **Released.** Phase 0 exited at `de26458`; Phases 0R, 0.5, 1, 2, 3 and the
+Phase 4 release evidence are exited at the final implementation commit
+`f8fe690e2dc71e3069ce9692ac3418a0bb6ba435`, certified by the local gate plus the
+ten-cell remote matrix (run `38252277339`) archived under
+`evidence/paper-execution-research-integration/release/`. The released
 `research_run_request.v1`/`.v2` contracts and stage plans `v1`/`v2` remain
 byte-for-byte compatible; nothing here changes them.
 
@@ -66,7 +67,7 @@ or execution logic in the Research Chain.
 | `research_run_request.v1`, `.v2` | released | yes (current chain) |
 | `research_run_request_v3.json` + `paper_execution_template.v1` | Phase 0 contract basis, indexed | **no**, superseded before ever running |
 | `research_run_request_v4.json` | v3 plus `index_membership_binding` and `factor_partition_set_binding` (pendding 4a/4d) | **no**, superseded |
-| `research_run_request_v5.json` + `paper_execution_template.v2` | **Phase 0R deliverable** | yes, once Phase 2 lands |
+| `research_run_request_v5.json` + `paper_execution_template.v2` | released (Phase 0R) | yes (paper execution enabled at v5) |
 
 v3 and v4 cannot express an executable paper run: `paper_execution_template.v1` carries
 no initial paper state and no opening cash, while `execution_config.v1` requires
@@ -200,7 +201,10 @@ acceptance rows PE1-PE3 in `phase-0/phase-record.json`. The R1 review found that
 incomplete (no golden vectors on disk, no initial state or cash carrier, no set
 bindings). Those findings are Phase 0R work, not a reopened Phase 0.
 
-### Phase 0R - Contract remediation (currently open)
+### Phase 0R - Contract remediation - exited
+
+Exited at `f8fe690`; acceptance rows PE5-PE12 pass and the gate/remote evidence is
+recorded in `phase-0r/phase-record.json`.
 
 Deliverables:
 
@@ -229,9 +233,10 @@ Exit criteria:
    digest, or a v3/v4 review type.
 4. All Phase 0R fixtures, golden vectors, and phase record are persisted and indexed.
 
-### Phase 0.5 - Governed market dataset publisher (new)
+### Phase 0.5 - Governed market dataset publisher - exited
 
-This plan previously assumed governed calendar/suspension/corporate-action inputs. They
+Exited at `f8fe690`; acceptance rows PE13-PE16 pass and the gate/remote evidence is
+recorded in `phase-0.5/phase-record.json`. This plan previously assumed governed calendar/suspension/corporate-action inputs. They
 exist as binding names only: `BacktestMarketDatasetStore` is read-only
 (`src/uq/research_chain/owning_contracts.py`) and the only writer of its physical layout
 is a test helper (`tests/test_research_chain_phase4.py:243`). Real runs need publishers.
@@ -264,7 +269,10 @@ Exit criteria:
 4. Evidence archived under `evidence/paper-execution-research-integration/phase-0.5/`
    with gate reports and phase record.
 
-### Phase 1 - Runtime resolver
+### Phase 1 - Runtime resolver - exited
+
+Exited at `f8fe690`; acceptance rows PE17-PE19 pass and the gate/remote evidence is
+recorded in `phase-1/phase-record.json`.
 
 Deliverables:
 
@@ -282,13 +290,14 @@ Exit criteria:
 2. Missing or tampered upstream documents fail closed before computation.
 3. v1/v2/v3/v4 resolver tests remain green.
 
-### Phase 2 - Adapter
+### Phase 2 - Adapter - exited
 
-Status: adapter, runner mount and stores wiring implemented; exit pending gate
-evidence. The per-date risk decision is produced by
+Exited at `f8fe690`; acceptance rows PE20-PE24 pass (PE23's stage-level refusal test
+landed with this commit) and the gate/remote evidence is recorded in
+`phase-2/phase-record.json`. The per-date risk decision is produced by
 `RiskPolicyOrderSubmissionSource` from a reviewed policy (portfolio-level
 evaluation re-scoped to `order_submission`); per-candidate-order refinement is
-deferred.
+deferred to the paper-execution layer.
 
 Deliverables:
 
@@ -306,8 +315,8 @@ Exit criteria:
 
 ### Phase 3 - Result reconciliation
 
-Status: implemented and unit-tested through the runner; exit pending gate
-evidence.
+Exited at `f8fe690`; acceptance rows PE25-PE27 pass and the gate/remote evidence is
+recorded in `phase-3/phase-record.json`.
 
 Deliverables:
 
@@ -322,7 +331,11 @@ Exit criteria:
    physical path for every paper artifact.
 3. Failure-state output remains invisible to accepted result publication.
 
-### Phase 4 - Release evidence
+### Phase 4 - Release evidence - exited
+
+Exited at `f8fe690`. The local gate report, the per-cell remote artifacts, the release
+record, the phase record, the marker and the evidence index live under
+`evidence/paper-execution-research-integration/release/`.
 
 Deliverables:
 
@@ -331,8 +344,8 @@ Deliverables:
    3.11/3.12/3.13) plus the four Qlib cells (macOS/Ubuntu x 3.11/3.12) defined by
    `.github/workflows/ci.yml`. Each cell's raw `gate-report.json`,
    `requirements.lock.txt`, `.sha256`, and `environment-cell.txt` artifact is archived
-   per cell; the aggregate file only concatenates them and must not restate a cell's
-   platform or Python version.
+   per cell. `aggregated-gates.json` copies every cell field verbatim from that cell's
+   own report; it must never restate one platform or Python version for all cells.
 3. Release marker, phase record, evidence index, and immutable historical evidence if
    any defect is reconciled.
 
@@ -378,13 +391,13 @@ target test and stay `planned` until it exists.
 | PE20 | 2 | one-date initial paper execution through the runner-owned stores | `test_paper_stage_publishes_ordered_4n_bindings_across_two_dates` | `passed` |
 | PE21 | 2 | multi-date continuation state lineage and execution-id grouping | `test_paper_stage_publishes_ordered_4n_bindings_across_two_dates`, `test_paper_stage_is_idempotent_and_rejects_republish` | `passed` |
 | PE22 | 2 | reject reasons preserved: `suspended`, `limit_up`, `limit_down`, `insufficient_cash`, `t1_not_sellable` | existing paper-execution suite (`test_execution_reject_reasons`) | `passed` |
-| PE23 | 2 | refused risk decision stops the stage and hides later dates | `test_order_submission_source_fails_closed_on_blocking_decision` (source-level), stage-level refusal `planned` | `partial` |
+| PE23 | 2 | refused risk decision stops the stage and hides later dates | `test_paper_stage_refusal_stops_the_stage_and_hides_later_dates`, `test_order_submission_source_fails_closed_on_blocking_decision` | `passed` |
 | PE24 | 2 | v5 execution enabled and refusal lock replaced | `test_v5_execution_enabled_v3_v4_refused` | `passed` |
 | PE25 | 3 | result binds all 4N paper outputs, re-read verified | `test_paper_outputs_reconciled_in_result`, `test_reconcile_paper_bindings_accepts_ordered_stage_bindings` | `passed` |
 | PE26 | 3 | missing, extra, unordered, duplicated, tampered bindings rejected | `test_paper_result_binding_tampering_rejected`, `test_reconcile_paper_bindings_rejects_incomplete_and_duplicated`, `test_reconcile_paper_bindings_rejects_cross_date_execution_id_mix` | `passed` |
 | PE27 | 3 | failed run publishes no accepted result | `test_paper_failure_hides_accepted_result` | `passed` |
-| PE28 | 4 | local gate and Qlib gate on final HEAD | superseded — must be re-run on the Phase 2/3 HEAD | `stale` |
-| PE29 | 4 | remote ten-cell matrix on final HEAD, per-cell reports archived | superseded — must be re-run on the Phase 2/3 HEAD | `stale` |
+| PE28 | 4 | local gate and Qlib gate on final HEAD | `evidence/paper-execution-research-integration/release/local-gate-report.json` (remote Qlib cells cover the Qlib extras) | `passed` |
+| PE29 | 4 | remote ten-cell matrix on final HEAD, per-cell reports archived | `evidence/paper-execution-research-integration/release/final-head-ci/38252277339/aggregated-gates.json` | `passed` |
 | PE30 | 4 | evidence index freshness and self-hash exclusion | `test_evidence_indexes_are_fresh_and_never_index_themselves` | `passed` |
 
 ## 5. Execution Rules

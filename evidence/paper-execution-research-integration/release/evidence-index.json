@@ -1,0 +1,225 @@
+{
+  "evidence_commit_bound": "HEAD_evidence_only",
+  "final_implementation_commit": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+  "layer": "paper_execution_research_integration",
+  "records": [
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0.5/phase-record.json",
+      "sha256": "1b3ffd7d77e80fc323e2b2c3477ef219b2e6a1d8a1dfdf0dd5e8f397803babc0"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/phase-record.json",
+      "sha256": "cc4ed2e2113135f064b717bd76334575d05418eb18d42ffd2bf3845f2fbb1048"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0r/phase-record.json",
+      "sha256": "ec27c2e872fd7f05e9be8fd58c93e0e04cf7dd02d15fe874d475d00fff9002e7"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-1/phase-record.json",
+      "sha256": "0004bf64c3c85cd3db04f51371af0a22c63326733734345915964f0c529e76d7"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-2/phase-record.json",
+      "sha256": "fbb17ea977a1278a8ece3d772caec709e42b74519b2dfb763ff962210c87b084"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-3/phase-record.json",
+      "sha256": "7089bf92722e2bf8b73b6d00138bb6f3777302fa7e591e035eddc505afeab864"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/MARKER.md",
+      "sha256": "10b7dea824182aae7d5d5bc10fdc4e68dd0f40ab0ffb66cf1111476b69dc1580"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/aggregated-gates.json",
+      "sha256": "250b5039f37f2fc36ab172eb8b30192adf8cbb1cde3e5260d3a7084b6dc33d53"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11/certification/environment-cell.txt",
+      "sha256": "746c759f358193dbcec500fc21df31d673233781affd81330860b70c1ea5f381"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11/gate-report.json",
+      "sha256": "675b1c7f509c09fd52cfbba198185044e8005838252155eb18b9f51315f5474d"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11_qlib/certification/environment-cell.txt",
+      "sha256": "3e6411c0361692dcca335ea63ea9ea476763540cdf9ae54aacc2c78e3e52883b"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11_qlib/gate-report.json",
+      "sha256": "9101ccf51395104b3fb60d9a9c4b886bf1fd30018e2ca8efc33aae6faab1f290"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11_qlib/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11_qlib/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12/certification/environment-cell.txt",
+      "sha256": "d819cb91e089ddc585208a81481333542586f1ef1f34432d4d5e28e7c5653540"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12/gate-report.json",
+      "sha256": "977f37cc3e49518003124b8eb6f7ba7c9e9aa44e27e57db95622cc91b609cf44"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12_qlib/certification/environment-cell.txt",
+      "sha256": "57fb740e1272b52def91131d935e78dfc3e3f697c209b6660070966f54b74401"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12_qlib/gate-report.json",
+      "sha256": "0e0c2cb39a8dfd8a8054e8b1544c961910e9360cbd581af9984bff4c1975f921"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12_qlib/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12_qlib/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.13/certification/environment-cell.txt",
+      "sha256": "4e8fa5b555c5ca04f2bde19e3e5e3a0b49170baac3387e646ea64fc34ef8412f"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.13/gate-report.json",
+      "sha256": "57d78bdd4c324707f21ac75d8b0ac703a5e9a04177c55c2d542005271904cc9a"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.13/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.13/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11/certification/environment-cell.txt",
+      "sha256": "2ae2b898872c38818628f34abf48cc129bc31baec5660b0bdd5d28c8ba1bdee0"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11/gate-report.json",
+      "sha256": "59e6e7714943820fd9c04bc0b4eb991c8e297460d51819eda43db18a54875694"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11_qlib/certification/environment-cell.txt",
+      "sha256": "60e6b85f0cfb61bdde068e4747a8762252a7fcd44d7c252864c25c0a106d32b4"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11_qlib/gate-report.json",
+      "sha256": "59d7ff0fc7bca5a89587b5df11163d0d85197475a6a164c0d65492b4a6f19ead"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11_qlib/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11_qlib/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12/certification/environment-cell.txt",
+      "sha256": "fba02a897384d405620a1829d075a3a7d5068ccd284e7f14a174f51ff6a54420"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12/gate-report.json",
+      "sha256": "02a2e1b0965bd50e984a7fa68068cd972410826e5606d0187f416fcbae635e90"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12_qlib/certification/environment-cell.txt",
+      "sha256": "e77cd18f34ba2bfebdfc7a7036970a9d05bdc5fc58528e89ea0f2dcd92a7418c"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12_qlib/gate-report.json",
+      "sha256": "a0ae3018c9d7c27de456071ec0a47dda2f9b2d069d7206e0c8de54ba25fec26b"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12_qlib/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12_qlib/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.13/certification/environment-cell.txt",
+      "sha256": "ef3dadbd9440e63fc00318c5c76f761e2defb1cbbf15d9c1de5fc05282e6779e"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.13/gate-report.json",
+      "sha256": "46c097e2413b23d7ddde7594c24cbe8f6c84789b53238e0a25ad37302780e8d5"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.13/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.13/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/run.json",
+      "sha256": "0c29e8ba3476a3dfaea83fd51008c75a11b982a61b3d21df5238bc4858ab159f"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/local-gate-report.json",
+      "sha256": "0aeb46d51dd1e759b5b07d1313225b77ff91eb992f22e6094661b0df4998cd3f"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/phase-record.json",
+      "sha256": "31a2ec66d99a42745c8d3e4fc4227503e060292b905ac1276385c015fba36ee8"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/release-record.json",
+      "sha256": "e8b9c8cebab934d4935459b8ce906382b45a6caf907d4f33134c0d031b00d020"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/release/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    }
+  ],
+  "remote_ci_run_id": "38252277339",
+  "status": "released"
+}

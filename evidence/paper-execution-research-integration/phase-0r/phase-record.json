@@ -1,23 +1,111 @@
 {
- "layer": "paper_execution_research_integration",
- "phase": "0R",
- "status": "in_progress",
- "acceptance_rows": [
-  {"id": "PE5", "status": "passed", "test_ids": ["test_paper_execution_template_v2_and_request_v5_validate", "test_request_v5_validates"]},
-  {"id": "PE6", "status": "passed", "test_ids": ["test_request_v5_rejects_superseded_stage_plan"]},
-  {"id": "PE7", "status": "passed", "test_ids": ["test_state_and_result_widening_is_compatibility_preserving"]},
-  {"id": "PE8", "status": "passed", "test_ids": ["test_research_stage_plan_golden_vectors_are_persisted"]},
-  {"id": "PE9", "status": "passed", "test_ids": ["test_template_v2_requires_initial_state_or_bound_state"]},
-  {"id": "PE10", "status": "passed", "test_ids": ["test_set_binding_digest_recomputation_and_drift"]},
-  {"id": "PE11", "status": "passed", "test_ids": ["test_paper_quality_checks_match_registry_allowed_checks"]},
-  {"id": "PE12", "status": "passed", "test_ids": ["test_paper_execution_negative_fixtures_fail_closed"]}
- ],
- "blocked_by": ["final HEAD gate report generation after commit"],
- "exit_criteria": {
-  "unified_gate_passes": "pending gate run",
-  "ten_cell_remote_matrix": "pending CI run",
-  "v1_v2_v3_v4_unchanged": "passed (golden digests unchanged in lock tests)",
-  "v5_exclusive_paper_execution": "passed (v5 rejects v3/v4 digest and review type)",
-  "fixtures_golden_vectors_phase_record": "passed (persisted under phase-0r/)"
- }
+  "acceptance_rows": [
+    {
+      "id": "PE5",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase0r.py::test_paper_execution_template_v2_and_request_v5_validate",
+        "tests/test_paper_execution_research_integration_phase0r.py::test_request_v5_validates"
+      ]
+    },
+    {
+      "id": "PE6",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase0r.py::test_request_v5_rejects_superseded_stage_plan"
+      ]
+    },
+    {
+      "id": "PE7",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase0r.py::test_state_and_result_widening_is_compatibility_preserving"
+      ]
+    },
+    {
+      "id": "PE8",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase0r.py::test_research_stage_plan_golden_vectors_are_persisted"
+      ]
+    },
+    {
+      "id": "PE9",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase0r.py::test_template_v2_requires_initial_state_or_bound_state"
+      ]
+    },
+    {
+      "id": "PE10",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase0r.py::test_set_binding_digest_recomputation_and_drift"
+      ]
+    },
+    {
+      "id": "PE11",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase0r.py::test_paper_quality_checks_match_registry_allowed_checks"
+      ]
+    },
+    {
+      "id": "PE12",
+      "status": "passed",
+      "test_ids": [
+        "tests/test_paper_execution_research_integration_phase0r.py::test_paper_execution_negative_fixtures_fail_closed"
+      ]
+    }
+  ],
+  "blocked_by": [],
+  "evidence_commit_bound": "HEAD_evidence_only",
+  "exit_criteria": {
+    "fixtures_golden_vectors_phase_record": "passed (persisted under phase-0r/)",
+    "ten_cell_remote_matrix": "passed (run 38252277339, ten cells)",
+    "unified_gate_passes": "passed (local gate on the final HEAD)",
+    "v1_v2_v3_v4_unchanged": "passed (golden digests unchanged in lock tests)",
+    "v5_exclusive_paper_execution": "passed (v5 rejects v3/v4 digest and review type)"
+  },
+  "implementation_commit": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+  "layer": "paper_execution_research_integration",
+  "local_gate": {
+    "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
+    "commit_bound": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+    "path": "evidence/paper-execution-research-integration/release/local-gate-report.json",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.12.13",
+    "requirements_lock_path": "evidence/paper-execution-research-integration/release/requirements.lock.txt",
+    "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+    "requirements_lock_sha256_path": "evidence/paper-execution-research-integration/release/requirements.lock.txt.sha256",
+    "result": "passed"
+  },
+  "phase": "0R",
+  "remote_gate": {
+    "aggregated_path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/aggregated-gates.json",
+    "cells_root": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339",
+    "commit_bound": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+    "covered_cells": [
+      "macos-latest/3.11",
+      "macos-latest/3.12",
+      "macos-latest/3.13",
+      "ubuntu-latest/3.11",
+      "ubuntu-latest/3.12",
+      "ubuntu-latest/3.13",
+      "macos-latest/3.11/qlib",
+      "macos-latest/3.12/qlib",
+      "ubuntu-latest/3.11/qlib",
+      "ubuntu-latest/3.12/qlib"
+    ],
+    "result": "passed",
+    "run_id": "38252277339",
+    "run_path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/run.json",
+    "summary": {
+      "failed": 0,
+      "passed": 10,
+      "total": 10
+    },
+    "url": "https://github.com/ljheee/unified-quant/actions/runs/38252277339"
+  },
+  "status": "exited_after_remote_gate"
 }

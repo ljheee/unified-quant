@@ -1,0 +1,179 @@
+{
+  "cells": [
+    {
+      "cell": "macos-latest/3.11",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11/gate-report.json",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.11.9",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11/requirements.lock.txt",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11/requirements.lock.txt.sha256",
+      "result": "passed"
+    },
+    {
+      "cell": "macos-latest/3.12",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12/gate-report.json",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.12.10",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12/requirements.lock.txt",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12/requirements.lock.txt.sha256",
+      "result": "passed"
+    },
+    {
+      "cell": "macos-latest/3.13",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.13/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.13/gate-report.json",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.13.15",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.13/requirements.lock.txt",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.13/requirements.lock.txt.sha256",
+      "result": "passed"
+    },
+    {
+      "cell": "ubuntu-latest/3.11",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11/gate-report.json",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.17",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11/requirements.lock.txt",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11/requirements.lock.txt.sha256",
+      "result": "passed"
+    },
+    {
+      "cell": "ubuntu-latest/3.12",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12/gate-report.json",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.15",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12/requirements.lock.txt",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12/requirements.lock.txt.sha256",
+      "result": "passed"
+    },
+    {
+      "cell": "ubuntu-latest/3.13",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.13/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.13/gate-report.json",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.13.16",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.13/requirements.lock.txt",
+      "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.13/requirements.lock.txt.sha256",
+      "result": "passed"
+    },
+    {
+      "cell": "macos-latest/3.11/qlib",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11_qlib/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11_qlib/gate-report.json",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.11.9",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11_qlib/requirements.lock.txt",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.11_qlib/requirements.lock.txt.sha256",
+      "result": "passed"
+    },
+    {
+      "cell": "macos-latest/3.12/qlib",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12_qlib/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12_qlib/gate-report.json",
+      "platform": "macOS-26.6.2-arm64-arm-64bit",
+      "python_version": "3.12.10",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12_qlib/requirements.lock.txt",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/macos-latest_3.12_qlib/requirements.lock.txt.sha256",
+      "result": "passed"
+    },
+    {
+      "cell": "ubuntu-latest/3.11/qlib",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11_qlib/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11_qlib/gate-report.json",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.11.17",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11_qlib/requirements.lock.txt",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.11_qlib/requirements.lock.txt.sha256",
+      "result": "passed"
+    },
+    {
+      "cell": "ubuntu-latest/3.12/qlib",
+      "environment_cell": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12_qlib/certification/environment-cell.txt",
+      "extras": [
+        "dev",
+        "real",
+        "qlib"
+      ],
+      "gate_report": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12_qlib/gate-report.json",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python_version": "3.12.15",
+      "requirements_lock": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12_qlib/requirements.lock.txt",
+      "requirements_lock_sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934",
+      "requirements_lock_sha256_file": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/cells/ubuntu-latest_3.12_qlib/requirements.lock.txt.sha256",
+      "result": "passed"
+    }
+  ],
+  "expected_cells": [
+    "macos-latest/3.11",
+    "macos-latest/3.12",
+    "macos-latest/3.13",
+    "ubuntu-latest/3.11",
+    "ubuntu-latest/3.12",
+    "ubuntu-latest/3.13",
+    "macos-latest/3.11/qlib",
+    "macos-latest/3.12/qlib",
+    "ubuntu-latest/3.11/qlib",
+    "ubuntu-latest/3.12/qlib"
+  ],
+  "git_commit": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+  "layer": "paper_execution_research_integration",
+  "note": "Every cell field is copied verbatim from that cell's own gate-report.json; the aggregate never restates one platform/Python for all cells.",
+  "run_id": "38252277339",
+  "summary": {
+    "failed": 0,
+    "passed": 10,
+    "total": 10
+  }
+}
