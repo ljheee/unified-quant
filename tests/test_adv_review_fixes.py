@@ -182,16 +182,17 @@ def _craft_legacy_v1_snapshot(tmp_path: Path) -> str:
     return generation_id
 
 
-def test_snapshot_store_writes_v2_and_reader_roundtrips(tmp_path):
+def test_snapshot_store_writes_the_latest_version_and_reader_roundtrips(tmp_path):
     # U3: the in-place const flip is rolled back into proper versioning —
-    # writes now carry snapshot_version 2 under the new v2 schema, and the
+    # writes carry the latest snapshot_version under its own schema, and the
     # reader dispatches validation by the manifest's own version marker.
+    # pendding 6: the latest version is now 3 (XBSE widened instrument).
     directory = save_snapshot(tmp_path)
     reader = AdjustmentSnapshotReader(tmp_path)
     manifest = reader.read_manifest("600000.XSHG", directory.name)
-    assert manifest["snapshot_version"] == 2
+    assert manifest["snapshot_version"] == 3
     assert manifest["formula_version"] == "adj_factor.exchange_v2"
-    validate_contract("adjustment_snapshot.v2.json", manifest)
+    validate_contract("adjustment_snapshot.v3.json", manifest)
     selected = reader.select_visible_generation(
         instrument="600000.XSHG",
         window_start=date(2026, 8, 20),
@@ -228,7 +229,7 @@ def test_unknown_snapshot_version_is_rejected(tmp_path):
     generation_id = _craft_legacy_v1_snapshot(tmp_path)
     path = tmp_path / "adjustments" / "snapshots" / "600000.XSHG" / generation_id / "manifest.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
-    manifest["snapshot_version"] = 3
+    manifest["snapshot_version"] = 4
     path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(StoreContractError, match="unsupported adjustment snapshot version"):
         AdjustmentSnapshotReader(tmp_path).read_manifest("600000.XSHG", generation_id)

@@ -30,4 +30,4 @@ Reviewed replacement cases
 | Zhongjing Technology / `003026.XSHE`, transfer only | 2024-07-18 | `qss=23.97` | `31.14 / 1.2993115 = 23.9665` |
 | Anker Innovations / `300866.XSHE`, cash bonus transfer | 2024-05-24 | `qss=69.69` | `(92.60 - 2.00) / 1.30 = 69.69` |
 
-The ex-date SZSE historical quote field `qss` is the exchange's prior-close/reference-price field. All four responses are captured with SHA-256 values in `golden-provenance.v2.json`. Generic open/high/low/close prices are never substituted for this field.
+The ex-date SZSE historical quote field `qss` is the exchange's prior-close/reference-price field. All four responses are captured with SHA-256 values in `golden-provenance.v2.json`; `golden-provenance.v3.json` carries the same four cases verbatim under the XBSE-widened schema (pendding 6, 2026-10-12), so no new evidence is claimed there. Generic open/high/low/close prices are never substituted for this field.

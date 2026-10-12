@@ -427,3 +427,13 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 未夸大声明：归档的 23 个 pilot 分区是在本改动之前灌入的，它们的 route coverage 当时仍是 `unverified`——`pilot-record.json` 的 `ingest.calendar` 已如实写明，并说明该链路现在默认独立日历；`bar_session_gap` 本身仍是内部一致性检查，改的只是"会话表另有独立来源可复核"。
 
 实测数字：`bash scripts/run_gate.sh`（uv，单格本地 macOS arm64 / Python 3.12）`806 passed / 22 skipped / 0 failed`（22 为 qlib 门控，本地 skip、CI `qlib-runtime` 运行）；本批新增 14 例（`tests/test_eastmoney_calendar.py` 8 + `tests/test_pipeline_v2.py` 6），另 9a 的 10 例在 `tests/test_real_data_policy.py`。
+
+### 8.10 pendding 6 收尾（二）：XBSE 正则开新版本（2026-10-12）
+
+| 项 | 判定与处置 | 锁 |
+|---|---|---|
+| 已发布契约只认 XSHG/XSHE，与 `index_membership_row.v1`（含 XBSE）不一致 | 真缺口：`.XBSE` 标的能进 universe/分区（pendding 9 已做），却进不了 `adjustment_snapshot`/`golden_provenance` 的 manifest——用中证全指这类含北交所成分的 universe 跑复权链路时，快照会在写侧被 schema 拒。按 AGENTS.md"放宽属语义变更"开 **v3**，不原地改 v1/v2 | test_xbse_widening_lands_as_v3_not_an_in_place_edit（v3 接受 `920098.XBSE`；同一 payload 标成 v2 被拒）；`contract-negative-cases.json` 新增 `xbse_suffix_is_not_part_of_v2` 与 `unknown_suffix_stays_rejected` |
+| 版本分派一处遗漏就会静默拒绝旧快照 | 事实核对：`SNAPSHOT_SCHEMA_BY_VERSION` 是唯一分派点，`LATEST_SNAPSHOT_VERSION` 只影响**写**；v1/v2 仍可读，且 `select_visible_generation` 的血缘闸门（`adj_factor.exchange_v2`）不变，故 v2/v3 快照可等价消费。U3 的"原地翻转"教训不重演 | test_snapshot_store_writes_the_latest_version_and_reader_roundtrips；test_unknown_snapshot_version_is_rejected 改用版本 4（原先用 3 探测未知版本，3 现在合法） |
+| 新版本只加分支、不加证据 | 自 CR 约束：`golden-provenance.v3.json` 与 v2 **逐字相同**，只改 `provenance_version`——v3 买到的只是"允许 `.XBSE`"这一条 schema 语义，不新增任何官方证据；北交所案例本身的取证仍未做，已在文档写明 | test 断言 v3 fixture 的四例与 v2 一致；`specs/layers/contracts/adjustment-official-source-access-v1.md` 已注明 |
+
+实测数字：`bash scripts/run_gate.sh`（uv，单格本地 macOS arm64 / Python 3.12）`807 passed / 22 skipped / 0 failed`（新增 3 例：`test_xbse_widening_lands_as_v3_not_an_in_place_edit`，以及 v3 进入既有参数化/负例表后多出的 2 条）。未夸大声明：v3 不新增官方证据（`golden-provenance.v3.json` 与 v2 逐字同例），北交所案例的逐案官方参考价取证仍未做；`select_visible_generation` 的公式血缘闸门未变，故 v2/v3 快照可等价消费。

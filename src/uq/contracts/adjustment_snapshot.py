@@ -28,8 +28,20 @@ _SESSION_COLUMNS = ["session_date"]
 # manifest's snapshot_version. Snapshots store raw exchange events, which are
 # version-agnostic, so a legacy v1 document can be re-exported by re-deriving
 # with the v2 deriver over the same events.
-SNAPSHOT_SCHEMA_BY_VERSION = {1: "adjustment_snapshot.v1.json", 2: "adjustment_snapshot.v2.json"}
-LATEST_SNAPSHOT_VERSION = 2
+#
+# pendding 6 (2026-10-12): v3 widens the instrument pattern to the Beijing
+# exchange (``.XBSE``, matching index_membership_row.v1) so a CSI-all style
+# universe can carry BSE members. Widening a pattern is a semantic change, so
+# it gets its own version rather than editing v1/v2 in place: both older
+# versions stay readable, and v2 keeps rejecting ``.XBSE`` for anyone who
+# pinned it. The formula lineage is unchanged (still adj_factor.exchange_v2),
+# so v2 and v3 snapshots are equally consumable.
+SNAPSHOT_SCHEMA_BY_VERSION = {
+    1: "adjustment_snapshot.v1.json",
+    2: "adjustment_snapshot.v2.json",
+    3: "adjustment_snapshot.v3.json",
+}
+LATEST_SNAPSHOT_VERSION = 3
 # cr.md U6/U17: the only formula lineage the factor side may consume. v1
 # documents stay readable (audit/re-export) but are rejected at the
 # consumption seam below instead of being silently consumed under v2

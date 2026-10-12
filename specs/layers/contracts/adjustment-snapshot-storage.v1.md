@@ -14,8 +14,17 @@ $UQ_DATA_ROOT/
           sessions.csv
 ```
 
-`manifest.json` conforms to `adjustment_snapshot.v1.json`. Artifact paths in the
-manifest are relative to the generation directory and MUST be checksum-bound.
+`manifest.json` conforms to the schema named by its own `snapshot_version`:
+`adjustment_snapshot.v1.json`, `adjustment_snapshot.v2.json` (current write
+version) or `adjustment_snapshot.v3.json` — v3 only widens the instrument
+pattern to the Beijing exchange (`.XBSE`) and keeps the v2 formula lineage, so
+older documents stay readable and a v2-pinned consumer still rejects `.XBSE`
+(pendding 6, 2026-10-12). Artifact paths in the manifest are relative to the
+generation directory and MUST be checksum-bound.
+
+Instrument suffixes: `.XSHG` / `.XSHE` in v1–v3, plus `.XBSE` in v3. The
+suffix set matches `index_membership_row.v1` so a CSI-all style universe can
+carry BSE members in both places.
 
 ## Visibility / as-of
 

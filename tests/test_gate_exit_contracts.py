@@ -67,6 +67,7 @@ def test_adjustment_snapshot_generation_is_stable():
     for schema_name, fixture_name in (
         ("adjustment_snapshot.v1.json", "adjustment-snapshot-v1-valid.json"),
         ("adjustment_snapshot.v2.json", "adjustment-snapshot-v2-valid.json"),
+        ("adjustment_snapshot.v3.json", "adjustment-snapshot-v3-valid.json"),
     ):
         payload = json.loads((FIXTURES / fixture_name).read_text())
         payload["generation_id"] = adjustment_snapshot_generation(payload)
@@ -128,6 +129,7 @@ def test_all_contract_negative_fixtures():
         "canonical_migration.v1.json": _migration_valid(),
         "adjustment_snapshot.v1.json": json.loads((FIXTURES / "adjustment-snapshot-v1-valid.json").read_text()),
         "adjustment_snapshot.v2.json": json.loads((FIXTURES / "adjustment-snapshot-v2-valid.json").read_text()),
+        "adjustment_snapshot.v3.json": json.loads((FIXTURES / "adjustment-snapshot-v3-valid.json").read_text()),
         "factor_manifest.v1.json": json.loads((FIXTURES / "factor-manifest-v1-valid.json").read_text()),
         "universe_snapshot.v1.json": _universe_valid(),
         "quality_report.v1.json": _quality_valid(),
@@ -293,3 +295,31 @@ def test_adjustment_golden_provenance_v2_certification_accepts_direct_official_r
     uncertified["cases"][0]["reference_price_evidence"]["kind"] = "derived-formula"
     with pytest.raises(Exception):
         validate_contract("adjustment_golden_provenance.v2.json", uncertified)
+
+
+def test_xbse_widening_lands_as_v3_not_an_in_place_edit():
+    # pendding 6: the released v1/v2 instrument patterns only accept XSHG/XSHE,
+    # so a Beijing member could not enter an adjustment snapshot or be named in
+    # golden provenance. Widening the pattern is a semantic change, so it is a
+    # new version and v2 keeps rejecting .XBSE.
+    snapshot = json.loads((FIXTURES / "adjustment-snapshot-v3-valid.json").read_text())
+    assert snapshot["instrument"] == "920098.XBSE"
+    validate_contract("adjustment_snapshot.v3.json", snapshot)
+    v2_snapshot = copy.deepcopy(snapshot)
+    v2_snapshot["snapshot_version"] = 2
+    with pytest.raises(Exception):
+        validate_contract("adjustment_snapshot.v2.json", v2_snapshot)
+
+    provenance_v3 = json.loads((FIXTURES / "adjustment/golden-provenance.v3.json").read_text())
+    assert provenance_v3["provenance_version"] == 3
+    validate_contract("adjustment_golden_provenance.v3.json", provenance_v3)
+    # Same evidence, one BSE instrument: the payload carries no new claims, it
+    # only proves the widened pattern is what v3 buys.
+    widened = copy.deepcopy(provenance_v3)
+    widened["cases"] = copy.deepcopy(provenance_v3["cases"][:1])
+    widened["cases"][0]["instrument"] = "920098.XBSE"
+    validate_contract("adjustment_golden_provenance.v3.json", widened)
+    narrowed = copy.deepcopy(widened)
+    narrowed["provenance_version"] = 2
+    with pytest.raises(Exception):
+        validate_contract("adjustment_golden_provenance.v2.json", narrowed)
