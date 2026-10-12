@@ -1,195 +1,195 @@
 {
- "layer": "paper_execution_research_integration",
- "record_version": 1,
- "records": [
-  {
-   "path": "config/research-stage-plan-review-anchor.v1.json",
-   "sha256": "0231b8fdb1862830e9e4963aa36cba62fcc2bdbc359f8ccc586cb54a2dc5d934"
-  },
-  {
-   "path": "config/research-stage-plan-review-anchor.v3.json",
-   "sha256": "a307ca19eb4acfc0ca156e67cb8f15c74ee6e7cbf46b93ffe5068cafb2d426f0"
-  },
-  {
-   "path": "config/schemas/contracts/paper_execution_template.v1.json",
-   "sha256": "59d6a65958b4a55a84eb9911e27c6837d8544ddd689942ec6d9bc5fb5383e1b9"
-  },
-  {
-   "path": "config/schemas/contracts/research_run_request_v3.json",
-   "sha256": "bde91b6e06e8b5e9d6fa0b0b7c55ddc47c116ebe09b2430e2d1e1a0233a746a1"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-missing-calendar-binding.json",
-   "sha256": "652f17b8ff7657bd1fd76c6eb004f33329107ba94a68f62c4124c80422a3452f"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-unknown-template-field.json",
-   "sha256": "b692f85277ed990b97dfbd2df376fda12983c47dc78969d519eecabf3d4e2799"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-valid.json",
-   "sha256": "1094f0e5c8344e9052008633af315d6ff1d2c7883167018841addc03bf263a4d"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/gate-reports/gate-report.json",
-   "sha256": "e2efab5422a374fb0bd11bf5a8bda87801a41e57f6836813c27c069e46f62e3c"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt",
-   "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt.sha256",
-   "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/phase-record.json",
-   "sha256": "cc4ed2e2113135f064b717bd76334575d05418eb18d42ffd2bf3845f2fbb1048"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.11/gate-report.json",
-   "sha256": "62604b8440b8dfdb4cab882e4b15b8b16d7c428840d0cb70653a5443156e115d"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.11/requirements.lock.txt",
-   "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.11/requirements.lock.txt.sha256",
-   "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.12/gate-report.json",
-   "sha256": "38cf3af8b67cdec1e5882decc4c2eb97328079c9c5d02ddbc56e95aba3663068"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.12/requirements.lock.txt",
-   "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.12/requirements.lock.txt.sha256",
-   "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.13/gate-report.json",
-   "sha256": "ffcecc427b942d7faeede0dbbf4604cc61732e8593a998468e1f5145d94622b7"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.13/requirements.lock.txt",
-   "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.13/requirements.lock.txt.sha256",
-   "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.11/gate-report.json",
-   "sha256": "080550224bd40fcf736dd13705246a44e49cd294b1edc3156ce6f6e421571803"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.11/requirements.lock.txt",
-   "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.11/requirements.lock.txt.sha256",
-   "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.12/gate-report.json",
-   "sha256": "7ebbc23fd787b8a49606d264ed18f024860828b64f20546bf94d783730f7e1f5"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.12/requirements.lock.txt",
-   "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.12/requirements.lock.txt.sha256",
-   "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.13/gate-report.json",
-   "sha256": "a2bb5b6fba081b722d02ad1296c5a89c6e647afff4d9264042683f404181d1b0"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.13/requirements.lock.txt",
-   "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.13/requirements.lock.txt.sha256",
-   "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.11/gate-report.json",
-   "sha256": "d5c92e94b58554479912e6a23c89656dd5bece42005b02aa88cbed1e05d66693"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.11/requirements.lock.txt",
-   "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.11/requirements.lock.txt.sha256",
-   "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.12/gate-report.json",
-   "sha256": "885e24c0a8b8366699c4f5e1ce9c3cec4823ff43c04a2f1f6d7f7b0229248284"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.12/requirements.lock.txt",
-   "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.12/requirements.lock.txt.sha256",
-   "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.11/gate-report.json",
-   "sha256": "e3308d7562fb7591b564e769c80e5b69d00c86d6772f4fbb7d11de1dd74ab02f"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.11/requirements.lock.txt",
-   "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.11/requirements.lock.txt.sha256",
-   "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.12/gate-report.json",
-   "sha256": "7e1e73d1819672a669295684612f95588d132567d97bce7c54f0e42f4c5b3321"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.12/requirements.lock.txt",
-   "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
-  },
-  {
-   "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.12/requirements.lock.txt.sha256",
-   "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
-  },
-  {
-   "path": "specs/layers/paper-execution-research-integration-plan.md",
-   "sha256": "deca2df52ef98f603fe5ffee7692607ceb36e6570ecfb644943253da4404c23a"
-  },
-  {
-   "path": "src/uq/contracts/model_layer.py",
-   "sha256": "4d0645d0c23f5d54d95bab8f16f976746705932d56f90bfdaf1ce18a91e9e182"
-  },
-  {
-   "path": "src/uq/research_chain/contracts.py",
-   "sha256": "c45d657398c329251ed80b8fd5d84cfb1be8ddb476e77af13812d87b84a2f803"
-  },
-  {
-   "path": "src/uq/research_chain/resolver.py",
-   "sha256": "37324bc756108dc43dd18fef8cd6b119cb238079be330b6f38f96205ac1bedab"
-  },
-  {
-   "path": "src/uq/research_chain/runner.py",
-   "sha256": "a8c849b7f857e63b3d700d681c2e4964bd38cc71a62092730dffe89596744b9b"
-  },
-  {
-   "path": "tests/test_paper_execution_research_integration_phase0.py",
-   "sha256": "3921fd96fbaf9e68d774cf5644f0a23f88343e8336287d24c9a0e93dd6eaf82c"
-  }
- ],
- "status": "in_progress"
+  "layer": "paper_execution_research_integration",
+  "record_version": 1,
+  "records": [
+    {
+      "path": "config/research-stage-plan-review-anchor.v1.json",
+      "sha256": "0231b8fdb1862830e9e4963aa36cba62fcc2bdbc359f8ccc586cb54a2dc5d934"
+    },
+    {
+      "path": "config/research-stage-plan-review-anchor.v3.json",
+      "sha256": "a307ca19eb4acfc0ca156e67cb8f15c74ee6e7cbf46b93ffe5068cafb2d426f0"
+    },
+    {
+      "path": "config/schemas/contracts/paper_execution_template.v1.json",
+      "sha256": "59d6a65958b4a55a84eb9911e27c6837d8544ddd689942ec6d9bc5fb5383e1b9"
+    },
+    {
+      "path": "config/schemas/contracts/research_run_request_v3.json",
+      "sha256": "bde91b6e06e8b5e9d6fa0b0b7c55ddc47c116ebe09b2430e2d1e1a0233a746a1"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-missing-calendar-binding.json",
+      "sha256": "652f17b8ff7657bd1fd76c6eb004f33329107ba94a68f62c4124c80422a3452f"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-negative-unknown-template-field.json",
+      "sha256": "b692f85277ed990b97dfbd2df376fda12983c47dc78969d519eecabf3d4e2799"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/fixtures/research_run_request_v3-valid.json",
+      "sha256": "1094f0e5c8344e9052008633af315d6ff1d2c7883167018841addc03bf263a4d"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/gate-reports/gate-report.json",
+      "sha256": "e2efab5422a374fb0bd11bf5a8bda87801a41e57f6836813c27c069e46f62e3c"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/gate-reports/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/phase-record.json",
+      "sha256": "cc4ed2e2113135f064b717bd76334575d05418eb18d42ffd2bf3845f2fbb1048"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.11/gate-report.json",
+      "sha256": "62604b8440b8dfdb4cab882e4b15b8b16d7c428840d0cb70653a5443156e115d"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.11/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.11/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.12/gate-report.json",
+      "sha256": "38cf3af8b67cdec1e5882decc4c2eb97328079c9c5d02ddbc56e95aba3663068"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.12/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.12/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.13/gate-report.json",
+      "sha256": "ffcecc427b942d7faeede0dbbf4604cc61732e8593a998468e1f5145d94622b7"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.13/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-macos-latest-3.13/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.11/gate-report.json",
+      "sha256": "080550224bd40fcf736dd13705246a44e49cd294b1edc3156ce6f6e421571803"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.11/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.11/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.12/gate-report.json",
+      "sha256": "7ebbc23fd787b8a49606d264ed18f024860828b64f20546bf94d783730f7e1f5"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.12/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.12/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.13/gate-report.json",
+      "sha256": "a2bb5b6fba081b722d02ad1296c5a89c6e647afff4d9264042683f404181d1b0"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.13/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/gate-report-ubuntu-latest-3.13/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.11/gate-report.json",
+      "sha256": "d5c92e94b58554479912e6a23c89656dd5bece42005b02aa88cbed1e05d66693"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.11/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.11/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.12/gate-report.json",
+      "sha256": "885e24c0a8b8366699c4f5e1ce9c3cec4823ff43c04a2f1f6d7f7b0229248284"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.12/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-macos-latest-3.12/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.11/gate-report.json",
+      "sha256": "e3308d7562fb7591b564e769c80e5b69d00c86d6772f4fbb7d11de1dd74ab02f"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.11/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.11/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.12/gate-report.json",
+      "sha256": "7e1e73d1819672a669295684612f95588d132567d97bce7c54f0e42f4c5b3321"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.12/requirements.lock.txt",
+      "sha256": "84b4a2802324c158700fcf3a736891df365b30396eb9d148f484ec20e63c6934"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/remote-final-head/qlib-gate-report-ubuntu-latest-3.12/requirements.lock.txt.sha256",
+      "sha256": "4f01abd05c621764f2a7572632cdc95b57e79e56d14876f72bd0bd1a3f637993"
+    },
+    {
+      "path": "specs/layers/paper-execution-research-integration-plan.md",
+      "sha256": "f12712da386a51d260d8152782d408a10f67d0368837ded28dda8cc2083ccf99"
+    },
+    {
+      "path": "src/uq/contracts/model_layer.py",
+      "sha256": "52f9c386e188018f9d15df070c104879eb52b44ae77b731e4c7aec9bbe831e4a"
+    },
+    {
+      "path": "src/uq/research_chain/contracts.py",
+      "sha256": "103dbbc859ec3e8ed2e1eec68e8cd2358521416dcf16ba4f8b558702de7fe0a5"
+    },
+    {
+      "path": "src/uq/research_chain/resolver.py",
+      "sha256": "ec3a390f2827310f0fb24226d1af734b33b268918af16a90f0e7672f0609d00e"
+    },
+    {
+      "path": "src/uq/research_chain/runner.py",
+      "sha256": "663c076d0ddbbfaf88c5d82476938fe2d910b8700f640803c62d7bcc31e39d29"
+    },
+    {
+      "path": "tests/test_paper_execution_research_integration_phase0.py",
+      "sha256": "3921fd96fbaf9e68d774cf5644f0a23f88343e8336287d24c9a0e93dd6eaf82c"
+    }
+  ],
+  "status": "in_progress"
 }

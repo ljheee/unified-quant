@@ -1,0 +1,20 @@
+{
+  "schema_version": "phase-0r-golden",
+  "stage_plans": {
+    "v3": "11de3ef29be11f7fe495f9a299f6fa763457f956e61f3b08022f2791faf9ca10",
+    "v4": "fde194784e09d281087006d36800e70cdd0098d7f134f773896e3784e3ea796d",
+    "v5": "b48725f3bcdaade3721a47038235fdc92dced5a04ba51c1910e5d7bece1f136b"
+  },
+  "stage_order": [
+    "resolve_request",
+    "factor_computation",
+    "dataset_preparation",
+    "qlib_export",
+    "model_training",
+    "prediction_publication",
+    "portfolio_construction",
+    "backtest_execution",
+    "paper_execution",
+    "result_reconciliation"
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "template_version": "2.0.0",
+  "status": "reviewed",
+  "mode": "paper",
+  "market": "cn_a",
+  "state_mode_policy": "initial_then_continuation",
+  "lot_size": 100,
+  "quantity_policy": {
+    "board_lot": 100,
+    "minimum_order_quantity": 100,
+    "partial_fills": false,
+    "sell_before_buy": true,
+    "enforce_t1": true,
+    "minimum_holding_rule": "preserve_one_lot",
+    "insufficient_cash_policy": "round_down_to_lot"
+  },
+  "fee_policy": {
+    "buy_commission_rate": 0.0003,
+    "sell_commission_rate": 0.0003,
+    "sell_stamp_tax_rate": 0.001,
+    "transfer_fee_rate": 1e-05,
+    "minimum_commission": 5.0,
+    "currency_precision": 2
+  },
+  "price_policy": {
+    "order_pricing_basis": "decision_close_estimate",
+    "limit_tolerance_absolute": 0.01,
+    "limit_tolerance_relative": 0.001,
+    "execution_window": "open"
+  },
+  "initial_state": {
+    "cash": 1000000.0,
+    "holdings": [],
+    "valuation_price_basis": "decision_close_estimate"
+  },
+  "market_data_binding": {
+    "family": "bars_daily_v2",
+    "window_start": "2025-01-01",
+    "window_end": "2025-12-31",
+    "set_digest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "member_count": 1
+  },
+  "calendar_binding": {
+    "family": "trading_calendar_snapshot_v1",
+    "window_start": "2025-01-01",
+    "window_end": "2025-12-31",
+    "set_digest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "member_count": 1
+  },
+  "suspension_binding": {
+    "family": "suspension_snapshot_v1",
+    "window_start": "2025-01-01",
+    "window_end": "2025-12-31",
+    "set_digest_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "member_count": 1
+  },
+  "corporate_action_binding": {
+    "family": "dividend_event_v1",
+    "window_start": "2025-01-01",
+    "window_end": "2025-12-31",
+    "set_digest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "member_count": 1
+  },
+  "risk_policy_binding": {
+    "family": "risk_policy_v1",
+    "generation_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "manifest_digest_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "data_delay_policy": "use_latest_available",
+  "data_delay_reason": "T+1 execution on open",
+  "serialization_profiles": {
+    "manifest": "json-numpy-v1",
+    "payload": "parquet-v1"
+  }
+}

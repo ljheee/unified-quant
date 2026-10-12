@@ -52,12 +52,14 @@ _QUALITY_BOUND_FIELDS = {
     "qlib_init_receipt": {"quality_report_checksum_sha256", "resolved_provider_uri_sha256", "cache_root"},
     "prediction_set": {"quality_report_checksum_sha256"},
 }
-_MODEL_CONTRACT_FAMILIES = {*_SCHEMA_NAMES, "model_quality_report"}
+_MODEL_CONTRACT_FAMILIES = {*_SCHEMA_NAMES, "model_quality_report", "paper_execution_template_v2"}
 _RESEARCH_SCHEMA_NAMES = {
     "research_run_request",
     "research_run_request_v2",
     "research_run_request_v3",
     "research_run_request_v4",
+    "research_run_request_v5",
+
     "research_run_state",
     "research_run_result",
     "model_definition_template",
@@ -73,6 +75,7 @@ _RESEARCH_IDENTITY_EXCLUDED_FIELDS = {
     "research_run_request_v2": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
     "research_run_request_v3": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
     "research_run_request_v4": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
+    "research_run_request_v5": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
     "research_run_state": {"state_content_generation_id", "manifest_digest_sha256"},
     "research_run_result": {
         "result_content_generation_id", "manifest_digest_sha256",
@@ -296,6 +299,8 @@ def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
         return
     if schema_name == "model_quality_report":
         validate_contract("model_quality_report.v2.json", payload)
+    elif schema_name == "paper_execution_template_v2":
+        validate_contract("paper_execution_template_v2.json", payload)
     elif schema_name in _SCHEMA_NAMES:
         validate_contract(f"{schema_name}.v1.json", payload)
     else:
@@ -376,6 +381,25 @@ def research_stage_plan_v4_sha256() -> str:
     })
 
 
+def research_stage_plan_v5_sha256() -> str:
+    """Return the externally reviewed Research Chain stage-plan v5 digest."""
+    return sha256_json({
+        "schema_version": "v5",
+        "stage_plan": [
+            "resolve_request",
+            "factor_computation",
+            "dataset_preparation",
+            "qlib_export",
+            "model_training",
+            "prediction_publication",
+            "portfolio_construction",
+            "backtest_execution",
+            "paper_execution",
+            "result_reconciliation",
+        ],
+    })
+
+
 def _without_physical_path(value: Any) -> Any:
     if isinstance(value, list):
         return [_without_physical_path(item) for item in value]
@@ -420,7 +444,7 @@ def research_contract_identities(
         content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
     elif schema_name == "portfolio_definition_template":
         content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
-    elif schema_name in {"research_run_request", "research_run_request_v2", "research_run_request_v3", "research_run_request_v4"}:
+    elif schema_name in {"research_run_request", "research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5"}:
         content_field, digest_field = "request_content_generation_id", "manifest_digest_sha256"
     elif schema_name == "research_run_state":
         content_field, digest_field = "state_content_generation_id", "manifest_digest_sha256"
@@ -580,7 +604,7 @@ class ModelContractLoader:
         if schema_name in _RESEARCH_SCHEMA_NAMES:
             _reject_non_finite(payload)
             validate_contract(
-                f"{schema_name}.json" if schema_name in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4"}
+                f"{schema_name}.json" if schema_name in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "paper_execution_template_v2"}
                 else f"{schema_name}.v1.json", payload
             )
             if schema_name == "research_run_result":
@@ -598,6 +622,7 @@ class ModelContractLoader:
                 "research_run_request_v2": "request_content_generation_id",
                 "research_run_request_v3": "request_content_generation_id",
                 "research_run_request_v4": "request_content_generation_id",
+                "research_run_request_v5": "request_content_generation_id",
                 "research_run_state": "state_content_generation_id",
                 "research_run_result": "result_content_generation_id",
                 "quality_decision": "decision_checksum_sha256",
@@ -635,6 +660,7 @@ class ModelContractLoader:
                 "research_run_request_v2": "manifest_digest_sha256",
                 "research_run_request_v3": "manifest_digest_sha256",
                 "research_run_request_v4": "manifest_digest_sha256",
+                "research_run_request_v5": "manifest_digest_sha256",
                 "research_run_state": "manifest_digest_sha256",
                 "research_run_result": "manifest_digest_sha256",
             }[schema_name]
@@ -645,6 +671,8 @@ class ModelContractLoader:
             raise ContractError(f"unknown model contract family: {schema_name}")
         _reject_non_finite(payload)
         validate_model_contract(schema_name, payload)
+        if schema_name == "paper_execution_template_v2":
+            return
         if schema_name in _PAPER_EXECUTION_FAMILIES:
             expected_generation, expected_digest = paper_execution_identities(
                 payload, schema_name=schema_name

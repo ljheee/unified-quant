@@ -22,3 +22,5 @@ data/
 qlib_data/
 
 .supervisor/
+venv312/
+.claude/

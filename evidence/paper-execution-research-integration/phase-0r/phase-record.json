@@ -1,0 +1,23 @@
+{
+ "layer": "paper_execution_research_integration",
+ "phase": "0R",
+ "status": "in_progress",
+ "acceptance_rows": [
+  {"id": "PE5", "status": "passed", "test_ids": ["test_paper_execution_template_v2_and_request_v5_validate", "test_request_v5_validates"]},
+  {"id": "PE6", "status": "passed", "test_ids": ["test_request_v5_rejects_superseded_stage_plan"]},
+  {"id": "PE7", "status": "passed", "test_ids": ["test_state_and_result_widening_is_compatibility_preserving"]},
+  {"id": "PE8", "status": "passed", "test_ids": ["test_research_stage_plan_golden_vectors_are_persisted"]},
+  {"id": "PE9", "status": "passed", "test_ids": ["test_template_v2_requires_initial_state_or_bound_state"]},
+  {"id": "PE10", "status": "passed", "test_ids": ["test_set_binding_digest_recomputation_and_drift"]},
+  {"id": "PE11", "status": "passed", "test_ids": ["test_paper_quality_checks_match_registry_allowed_checks"]},
+  {"id": "PE12", "status": "passed", "test_ids": ["test_paper_execution_negative_fixtures_fail_closed"]}
+ ],
+ "blocked_by": ["final HEAD gate report generation after commit"],
+ "exit_criteria": {
+  "unified_gate_passes": "pending gate run",
+  "ten_cell_remote_matrix": "pending CI run",
+  "v1_v2_v3_v4_unchanged": "passed (golden digests unchanged in lock tests)",
+  "v5_exclusive_paper_execution": "passed (v5 rejects v3/v4 digest and review type)",
+  "fixtures_golden_vectors_phase_record": "passed (persisted under phase-0r/)"
+ }
+}

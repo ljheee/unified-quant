@@ -56,7 +56,7 @@ _EXPECTED_STAGE_PLAN_SHA256 = research_stage_plan_sha256()
 def stage_plan_for_request(request: Mapping[str, Any]) -> tuple[str, ...]:
     """Return the reviewed stage order for the request contract version.
 
-    V3 and V4 both insert ``paper_execution`` before ``result_reconciliation``
+    V3, V4 and V5 all insert ``paper_execution`` before ``result_reconciliation``
     (their normative plans are identical), so both must map to the V3 order:
     the previous ``== 3`` test silently gave V4 the released V1 order, which
     would have numbered the paper stage as ``result_reconciliation`` the moment
@@ -68,7 +68,7 @@ def stage_plan_for_request(request: Mapping[str, Any]) -> tuple[str, ...]:
     version = request.get("contract_version", 1)
     if version in {1, 2}:
         return tuple(_STAGE_PLAN)
-    if version in {3, 4}:
+    if version in {3, 4, 5}:
         return tuple(_STAGE_PLAN_V3)
     raise ContractError(f"unsupported research request contract version: {version!r}")
 _DEFAULT_STAGE_PLAN = tuple(_STAGE_PLAN)
@@ -152,7 +152,7 @@ class ResearchChainRequestResolver:
             candidate = dict(request)
             request_schema = research_request_schema_name(candidate)
             ModelContractLoader.validate(request_schema, candidate)
-            if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4"}:
+            if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5"}:
                 verify_stage_plan_review(
                     candidate["stage_plan_review"],
                     stage_plan_sha256=candidate["stage_plan_sha256"],
@@ -165,6 +165,8 @@ class ResearchChainRequestResolver:
                 else research_stage_plan_v3_sha256()
                 if request_schema == "research_run_request_v3"
                 else research_stage_plan_v4_sha256()
+                if request_schema == "research_run_request_v4"
+                else research_stage_plan_v5_sha256()
             )
             if candidate["stage_plan_sha256"] != expected_stage_plan_sha256:
                 raise ResearchResolutionError(

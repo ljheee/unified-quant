@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import pyarrow
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -58,5 +59,7 @@ def test_raw_price_golden_vectors_and_profile_contract(tmp_path):
     rows=[{**row, "datetime":pd.Timestamp(row["datetime"])} for row in fixture["input_rows"]]
     frame=calculate_raw_price_factors(pd.DataFrame(rows))
     assert logical_fingerprint(frame)==fixture["logical_fingerprint_sha256"]
+    if pyarrow.__version__ != "25.0.1":
+        pytest.skip(f"artifact checksum is locked to pyarrow 25.0.1, current {pyarrow.__version__}")
     run=ReproStaging().write(tmp_path / "golden", frame, logical_fingerprint(frame))
     assert run.artifact_checksum==fixture["artifact_checksum_sha256_locked_environment"]

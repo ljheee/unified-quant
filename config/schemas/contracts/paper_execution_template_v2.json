@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Research chain paper execution template v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "template_version",
+    "status",
+    "mode",
+    "market",
+    "state_mode_policy",
+    "lot_size",
+    "quantity_policy",
+    "fee_policy",
+    "price_policy",
+    "initial_state",
+    "market_data_binding",
+    "calendar_binding",
+    "suspension_binding",
+    "corporate_action_binding",
+    "risk_policy_binding",
+    "data_delay_policy",
+    "data_delay_reason",
+    "serialization_profiles"
+  ],
+  "properties": {
+    "template_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "status": {
+      "const": "reviewed"
+    },
+    "mode": {
+      "const": "paper"
+    },
+    "market": {
+      "const": "cn_a"
+    },
+    "state_mode_policy": {
+      "const": "initial_then_continuation"
+    },
+    "lot_size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "quantity_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "board_lot",
+        "minimum_order_quantity",
+        "partial_fills",
+        "sell_before_buy",
+        "enforce_t1",
+        "minimum_holding_rule",
+        "insufficient_cash_policy"
+      ],
+      "properties": {
+        "board_lot": {"type": "integer", "minimum": 1},
+        "minimum_order_quantity": {"type": "integer", "minimum": 1},
+        "partial_fills": {"const": false},
+        "sell_before_buy": {"const": true},
+        "enforce_t1": {"const": true},
+        "minimum_holding_rule": {"const": "preserve_one_lot"},
+        "insufficient_cash_policy": {"const": "round_down_to_lot"}
+      }
+    },
+    "fee_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "buy_commission_rate",
+        "sell_commission_rate",
+        "sell_stamp_tax_rate",
+        "transfer_fee_rate",
+        "minimum_commission",
+        "currency_precision"
+      ],
+      "properties": {
+        "buy_commission_rate": {"type": "number", "minimum": 0},
+        "sell_commission_rate": {"type": "number", "minimum": 0},
+        "sell_stamp_tax_rate": {"type": "number", "minimum": 0},
+        "transfer_fee_rate": {"type": "number", "minimum": 0},
+        "minimum_commission": {"type": "number", "minimum": 0},
+        "currency_precision": {"type": "integer", "minimum": 0, "maximum": 8}
+      }
+    },
+    "price_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order_pricing_basis",
+        "limit_tolerance_absolute",
+        "limit_tolerance_relative",
+        "execution_window"
+      ],
+      "properties": {
+        "order_pricing_basis": {"enum": ["decision_close_estimate", "execution_open_replay"]},
+        "limit_tolerance_absolute": {"type": "number", "minimum": 0},
+        "limit_tolerance_relative": {"type": "number", "minimum": 0},
+        "execution_window": {"const": "open"}
+      }
+    },
+    "initial_state": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cash", "holdings", "valuation_price_basis"],
+          "properties": {
+            "cash": {"type": "number", "minimum": 0},
+            "holdings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["instrument", "quantity"],
+                "properties": {
+                  "instrument": {"type": "string", "pattern": "^[0-9]{6}\\.(XSHG|XSHE|XBSE)$"},
+                  "quantity": {"type": "integer", "minimum": 0}
+                }
+              }
+            },
+            "valuation_price_basis": {"const": "decision_close_estimate"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["continuation_binding"],
+          "properties": {
+            "continuation_binding": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["family", "generation_id", "manifest_digest_sha256"],
+              "properties": {
+                "family": {"const": "paper_portfolio_state_v1"},
+                "generation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "manifest_digest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "market_data_binding": {
+      "$ref": "#/$defs/partition_set_binding"
+    },
+    "calendar_binding": {
+      "$ref": "#/$defs/partition_set_binding"
+    },
+    "suspension_binding": {
+      "$ref": "#/$defs/partition_set_binding"
+    },
+    "corporate_action_binding": {
+      "$ref": "#/$defs/partition_set_binding"
+    },
+    "risk_policy_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "generation_id", "manifest_digest_sha256"],
+      "properties": {
+        "family": {"const": "risk_policy_v1"},
+        "generation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "manifest_digest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "data_delay_policy": {"type": "string", "minLength": 1},
+    "data_delay_reason": {"type": "string", "minLength": 1},
+    "serialization_profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "payload"],
+      "properties": {
+        "manifest": {"type": "string", "minLength": 1},
+        "payload": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "partition_set_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "window_start",
+        "window_end",
+        "set_digest_sha256",
+        "member_count"
+      ],
+      "properties": {
+        "family": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+        "window_start": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "window_end": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "set_digest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "member_count": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}
