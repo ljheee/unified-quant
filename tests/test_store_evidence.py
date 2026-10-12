@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 from uq.contracts.index_membership import IndexMembershipStore
+from uq.contracts.dividend_events import DividendEventStore
 from uq.contracts.schema import load_schema
 from uq.store.pit_store import CanonicalStore
 
@@ -133,6 +134,62 @@ def test_membership_inventory_refuses_tampered_members(tmp_path):
     members.write_text("instrument\n000009.XSHE\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="drifted from manifest"):
         module.membership_inventory(store, "a500", tmp_path)
+
+
+def _dividend_store(tmp_path: Path, *, ann_date=date(2026, 2, 26)) -> Path:
+    store = DividendEventStore(tmp_path / "dividend-store")
+    store.publish(
+        ann_date=ann_date,
+        source="tushare:dividend",
+        source_fetched_at=datetime(2026, 3, 8, 9, 0, tzinfo=timezone(timedelta(hours=8))),
+        frame=pd.DataFrame(
+            [
+                {
+                    "ts_code": "600000.SH",
+                    "end_date": "20251231",
+                    "ann_date": ann_date.strftime("%Y%m%d"),
+                    "div_proc": "预案",
+                    "stk_div": 0.0,
+                    "stk_bo_rate": None,
+                    "stk_co_rate": None,
+                    "cash_div": None,
+                    "cash_div_tax": 0.12,
+                    "record_date": None,
+                    "ex_date": None,
+                    "pay_date": None,
+                    "div_listdate": None,
+                    "imp_ann_date": None,
+                }
+            ]
+        ),
+    )
+    return tmp_path / "dividend-store"
+
+
+def test_dividend_inventory_pins_partitions(tmp_path):
+    store = _dividend_store(tmp_path)
+    inventory = module.dividend_inventory(store, date(2026, 2, 1), date(2026, 2, 28), tmp_path)
+    assert inventory["partition_count"] == 1
+    assert inventory["event_count"] == 1
+    record = inventory["records"][0]
+    partition = store / "dividend_events/2026-02-26"
+    assert record["manifest_sha256"] == module._sha256(partition / "manifest.json")
+    assert record["events_sha256"] == module._sha256(partition / "events.csv")
+    assert not Path(record["manifest_path"]).is_absolute()
+
+
+def test_dividend_inventory_refuses_tampered_events(tmp_path):
+    store = _dividend_store(tmp_path)
+    events = store / "dividend_events/2026-02-26/events.csv"
+    events.write_bytes(events.read_bytes().replace(b"0.12", b"0.99"))
+    with pytest.raises(SystemExit, match="drifted from manifest"):
+        module.dividend_inventory(store, None, None, tmp_path)
+
+
+def test_dividend_inventory_refuses_windows_without_partitions(tmp_path):
+    store = _dividend_store(tmp_path)
+    with pytest.raises(SystemExit):
+        module.dividend_inventory(store, date(2026, 5, 1), date(2026, 5, 31), tmp_path)
 
 
 def test_index_refuses_to_record_itself(tmp_path):

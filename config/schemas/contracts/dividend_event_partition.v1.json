@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/dividend_event_partition.v1.json",
+  "title": "Dividend disclosure partition v1 (announcement-anchored PIT)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "partition_version",
+    "ann_date",
+    "source",
+    "source_fetched_at",
+    "event_count",
+    "instrument_count",
+    "field_units",
+    "events_artifact",
+    "generation_id"
+  ],
+  "properties": {
+    "partition_version": {
+      "const": 1
+    },
+    "ann_date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_fetched_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "event_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "instrument_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "field_units": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stk_div", "stk_bo_rate", "stk_co_rate", "cash_div", "cash_div_tax"],
+      "properties": {
+        "stk_div": {"type": "string", "minLength": 1},
+        "stk_bo_rate": {"type": "string", "minLength": 1},
+        "stk_co_rate": {"type": "string", "minLength": 1},
+        "cash_div": {"type": "string", "minLength": 1},
+        "cash_div_tax": {"type": "string", "minLength": 1}
+      }
+    },
+    "events_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "row_count", "checksum_sha256", "columns"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!\\.\\.?$)[A-Za-z0-9._-]+$"
+        },
+        "row_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "checksum_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 15,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

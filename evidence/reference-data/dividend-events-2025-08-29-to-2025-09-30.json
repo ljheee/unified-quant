@@ -1,0 +1,265 @@
+{
+  "record_version": 1,
+  "kind": "dividend_event_inventory",
+  "store_root": "data/dividend-store",
+  "window_start": "2025-08-29",
+  "window_end": "2025-09-30",
+  "partition_count": 28,
+  "event_count": 3337,
+  "verification": "partition manifest validated against dividend_event_partition.v1, ann_date/record_id re-derived from the artifact bytes, per-row record_id recomputed through DividendEventStore.read_events",
+  "note": "the store root is gitignored; these digests are re-derivable by re-running scripts/fetch_dividend_events.py for the same window",
+  "records": [
+    {
+      "ann_date": "2025-08-29",
+      "manifest_path": "data/dividend-store/dividend_events/2025-08-29/manifest.json",
+      "manifest_sha256": "2c7182ed5fcb9f1d01158eb7190755d0e545b4ad551f8a70787830327d70087c",
+      "generation_id": "894b999518ecb65419458e0130cccb720b5f7942cfd588682ff3d67565dc2a99",
+      "events_sha256": "6b4befac785e597b4bc05e667a4b9c6f5a29219083fb0013fe434387094379dd",
+      "event_count": 1710,
+      "instrument_count": 895
+    },
+    {
+      "ann_date": "2025-08-30",
+      "manifest_path": "data/dividend-store/dividend_events/2025-08-30/manifest.json",
+      "manifest_sha256": "dbac5d623210f2b44c8d8d9ef8e335772da500c35f00c1c3f3514310694abe3d",
+      "generation_id": "b531223b0babc501dd90472ec23aa217d819f922ee883c9823f7f1ad1f2b17a7",
+      "events_sha256": "d900b54f9423515ff3774ca6b0fd139f44d4a855c82bdd49b7fa5ac3ed3f429d",
+      "event_count": 1248,
+      "instrument_count": 628
+    },
+    {
+      "ann_date": "2025-08-31",
+      "manifest_path": "data/dividend-store/dividend_events/2025-08-31/manifest.json",
+      "manifest_sha256": "c2ca4ed3d1da85affe578a02b6d9f438d3f2134827dc091d2aeaa61350bdd015",
+      "generation_id": "f4ab5d934be14f58c7f91c98b47698eef196913113047cb768dc40c3b8997b6a",
+      "events_sha256": "f59b56f0373f5dcc4e675b6e64d42854a9d0b41b27560a74a21f8852c22a730f",
+      "event_count": 1,
+      "instrument_count": 1
+    },
+    {
+      "ann_date": "2025-09-01",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-01/manifest.json",
+      "manifest_sha256": "843bc79dfef2e03bccc92ec82e115ae5e7272d09445e16ab15c3bf30beb3c35f",
+      "generation_id": "646df6da11a607a7dcb92f148f93a7c5910b89aa83e4146b4d914e0252b0ced2",
+      "events_sha256": "9847241d780ef5bcb1bc00690d95d791a5920ad774686eaeddde34d990a2f396",
+      "event_count": 3,
+      "instrument_count": 3
+    },
+    {
+      "ann_date": "2025-09-02",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-02/manifest.json",
+      "manifest_sha256": "74ec018f20a62dfb0b83d2e7d6c575b8ab33367d3e4153394a9b6fb0d7e93bcf",
+      "generation_id": "943f7d2418e8946558d7e6880389d691edf198dffd464b9e668ed8661cf4f7d1",
+      "events_sha256": "5abee42d28e6dfcf520d2768807da9919618c7a1ecce35a63bfcf3f82a8c81d6",
+      "event_count": 13,
+      "instrument_count": 13
+    },
+    {
+      "ann_date": "2025-09-03",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-03/manifest.json",
+      "manifest_sha256": "e9b0857815a25a2839dc89898724373b9eea0e95ca70a77512fecf7da655c6ed",
+      "generation_id": "051db0f815b86f2fc04771f8bf60cc19cda1f476e12fca6398edde5be353a440",
+      "events_sha256": "65b6a1bddf1a309b6d5552c1d0926aa1ccdad198df99055b35b85bd83cfebc36",
+      "event_count": 6,
+      "instrument_count": 6
+    },
+    {
+      "ann_date": "2025-09-04",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-04/manifest.json",
+      "manifest_sha256": "8a660bf9eb5183e7ab3cef6671875d7fdf472bcee1d8d613bff3e6104bc0c2ed",
+      "generation_id": "eb74800e6bf3cfd638266743d90b727064f8ddaa3750423757607952a6dc80fc",
+      "events_sha256": "d12c5d25d5c8c1fe6afc5df7a58700b90ca007609acfb5bed3e586ee3a070744",
+      "event_count": 6,
+      "instrument_count": 6
+    },
+    {
+      "ann_date": "2025-09-05",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-05/manifest.json",
+      "manifest_sha256": "186289df9647a15357498b7b04cba4389e97af2fe0dbbe990b35aa0ec56b8bc3",
+      "generation_id": "db51921b614f7a1c73114b62406cbd163c1b60b3cfa8d0e938ca71d4d8d80ad8",
+      "events_sha256": "3d69cb0872da101298187055028e47e792435c4380370f75a05fd2b205a62a2f",
+      "event_count": 7,
+      "instrument_count": 7
+    },
+    {
+      "ann_date": "2025-09-06",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-06/manifest.json",
+      "manifest_sha256": "ddfd2073aa5709c3c105eedc8c65400397fd48b6579b8fc5ef2444f732b739c6",
+      "generation_id": "f3748feca0faba7ea7847f650f48356215c72b30b03b5e02052a4e85447ebf1a",
+      "events_sha256": "d300d2c87c8ed2626dfd876e85416e9d18c0da749011c7bbf82d2603126afbe1",
+      "event_count": 12,
+      "instrument_count": 10
+    },
+    {
+      "ann_date": "2025-09-08",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-08/manifest.json",
+      "manifest_sha256": "00216b8a5f50d91fb9952d207e80b5bc63f0a105c0721f3cc233d06107ce3107",
+      "generation_id": "94676aa1f79d6be0824f422cea858035a162466e41b64df5b0f9747b26cdfaf9",
+      "events_sha256": "e1ef4993f50f14da06a0a799d18372f52ae8010206ebd40bcb75d78a2047c85b",
+      "event_count": 9,
+      "instrument_count": 9
+    },
+    {
+      "ann_date": "2025-09-09",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-09/manifest.json",
+      "manifest_sha256": "b48986b942ccc49687af4672815275c8acc120dc08f7be2bc3a8900d310e2e4c",
+      "generation_id": "605918d5911e4fb9df03ffe450709ee5e58c021d09e249dd6065713f3ddfd5b8",
+      "events_sha256": "4ed997ef52436ff2551f37fb7fa545fcefc394191b061e33224af668244c9d21",
+      "event_count": 24,
+      "instrument_count": 24
+    },
+    {
+      "ann_date": "2025-09-10",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-10/manifest.json",
+      "manifest_sha256": "c1be15d1920a19d84a99da04cfe92866b740de7627faed47986a2899cfe4daa4",
+      "generation_id": "6b8e378a5ce09d851b4f0122920f4e37c6654243bec6becf749890bdd3e94368",
+      "events_sha256": "6e485729474f22568a96108d9a272b4cc645c45a27fe5e2136a04845299383d8",
+      "event_count": 19,
+      "instrument_count": 19
+    },
+    {
+      "ann_date": "2025-09-11",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-11/manifest.json",
+      "manifest_sha256": "ef40780e6e53abe978b9c153f3176bdcbce48cfa5a707421461906d86eae9f02",
+      "generation_id": "db40a01a7265f526c43123ecc8c4276c1697a11fe48eccad0cfe43af896fd865",
+      "events_sha256": "f121ddb272d59fb0840ad213230619913b3b1d52960942ff5fe1ed8b12f8d438",
+      "event_count": 28,
+      "instrument_count": 28
+    },
+    {
+      "ann_date": "2025-09-12",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-12/manifest.json",
+      "manifest_sha256": "5c84f69b170ffa60437918f07318af53c9c42bced309d642b5def15dadbbf839",
+      "generation_id": "d456fe88a81463fda0d93ca43933e1e6ab51b9af7a6529784846bc596f0bb6b6",
+      "events_sha256": "8243a097ba41c462c7554c71d9110c5be6abbdb51ee717431825d2b20460e84c",
+      "event_count": 26,
+      "instrument_count": 26
+    },
+    {
+      "ann_date": "2025-09-13",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-13/manifest.json",
+      "manifest_sha256": "6f85212e3e8ed426f453fd865e47a2e1144f6969a41d4d6b276a920fce1089e0",
+      "generation_id": "f51e51e7ac4998db68a7b53ffddcd695635c6e72bb7b4f7a6c303ebc12fdefe7",
+      "events_sha256": "2bc878a07e2e2ab739974ff9fa31117e1414b807ef172671b55565b7baeee4e9",
+      "event_count": 51,
+      "instrument_count": 51
+    },
+    {
+      "ann_date": "2025-09-15",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-15/manifest.json",
+      "manifest_sha256": "04b80a0b7bfe6a50cc1a6663a881180caf8d27835076e5e51b05fb8281f0f549",
+      "generation_id": "308686f36a6bdf2028e825a4f1aeb9c3d24240ca77e19945a539a3332856ef7d",
+      "events_sha256": "ab715875c769f031893c00a4acb5477e4eebd653bbc138f94d4fba55b73f7f76",
+      "event_count": 22,
+      "instrument_count": 22
+    },
+    {
+      "ann_date": "2025-09-16",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-16/manifest.json",
+      "manifest_sha256": "67cae4748567bd19beae3bfaece98ab12a650f1bd1878df5df1b96e8587a5448",
+      "generation_id": "e41c5b1771ff3d7d0eac5777eda6b4b9f25747c49fd7270d1fcdabfc2e241c53",
+      "events_sha256": "fe74dd40452b1733ef60752a20b2cf2d224b84985829d069ad10e9b36ce857fa",
+      "event_count": 60,
+      "instrument_count": 60
+    },
+    {
+      "ann_date": "2025-09-17",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-17/manifest.json",
+      "manifest_sha256": "e349f7c746b654c4da04a134e3c5b1995ae7f7baf032395ccfe5e9b3cff9e816",
+      "generation_id": "d4eb062ece4ee81dc504f5d9d90b3aa04a19bc7c57369220d619ccd01856da04",
+      "events_sha256": "5857b937878429ed21e96e73e87cd15ae7d0f8bd9f1d96aa8d85e1369e989e9b",
+      "event_count": 28,
+      "instrument_count": 28
+    },
+    {
+      "ann_date": "2025-09-18",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-18/manifest.json",
+      "manifest_sha256": "14ca2381a5c7a2c9e62c56ecb76bd136f2a1f68661e8a355544b705bc277caa9",
+      "generation_id": "839de2eeb7428e75485a724de0525f783cdd70bfe508f11f766bca0291a268b8",
+      "events_sha256": "893cedd8833b437ad3d8d1bd13c598e757adad6e938328dc40732529127b04ea",
+      "event_count": 9,
+      "instrument_count": 9
+    },
+    {
+      "ann_date": "2025-09-19",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-19/manifest.json",
+      "manifest_sha256": "73b5c5ba1fed0ce33969580d27c7e5fc549749d8556e9605073f181464af1512",
+      "generation_id": "fca2facf4e46802b074780475feab518618b94e64537f328d84d6c2bb010bf51",
+      "events_sha256": "046e72baf48de58c85e164a962e04e5b3a41d75343f90ad1834b34e15387fbb4",
+      "event_count": 15,
+      "instrument_count": 15
+    },
+    {
+      "ann_date": "2025-09-20",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-20/manifest.json",
+      "manifest_sha256": "a5ad63a5fa5ad0d4286d9a84c26ad0b1439bdc258f393c97a3ec2e3435a002c3",
+      "generation_id": "4836dc155506019c8a5176a67b52b7d0523ee7200a4c8700b1acefd70502abc6",
+      "events_sha256": "9f37e362005501fe5d02a6930ce3bba4c0829c8543636dff5a39aef6a379c5bf",
+      "event_count": 11,
+      "instrument_count": 11
+    },
+    {
+      "ann_date": "2025-09-23",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-23/manifest.json",
+      "manifest_sha256": "935cfae718725ad55eed1ab2f7d69f2dcb86d79acec60c85f95e0674fe4d1dac",
+      "generation_id": "c358c8b25eecc17bea92a02821068fb97010627fe3e8a0dd5b589fc63e329597",
+      "events_sha256": "083adc94d9f5d449e68c1cf395b26447bb4788a95ef20c213e65e67af93556c8",
+      "event_count": 7,
+      "instrument_count": 7
+    },
+    {
+      "ann_date": "2025-09-24",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-24/manifest.json",
+      "manifest_sha256": "d0dc6e6f66591839688f806f4fdda6245ac0625504f1828b05b0121474a2c1cd",
+      "generation_id": "1fe8a66d2f162711f9d5a41b19948bbf21f2eeed3000ed709fe57f7ae29f6e5c",
+      "events_sha256": "a7c93ca628afeb34e0e2113c5c6a4aa62dc06e6fb426596ca5f7ef1c6844a908",
+      "event_count": 3,
+      "instrument_count": 3
+    },
+    {
+      "ann_date": "2025-09-25",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-25/manifest.json",
+      "manifest_sha256": "9eae1196d54bbc7e86d5474ce2fc9b4545c3f8cad6b90635d973063c9c0a88d7",
+      "generation_id": "e0b05060be0322c0381085c651487f6ffb8e537777fab7635267ce7a505ede3e",
+      "events_sha256": "57195ab3f8f76d368e61fd2aca194873561af33f211281926d1f1f812132ccc7",
+      "event_count": 3,
+      "instrument_count": 3
+    },
+    {
+      "ann_date": "2025-09-26",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-26/manifest.json",
+      "manifest_sha256": "24200d42680839eb8644c97ae1bba4284a923aadaca6cbfe9c5f30a270c0266d",
+      "generation_id": "53f56525d2a9bf9738bfd4294015baf890eab3cf514c851c2454dd70f50414a5",
+      "events_sha256": "b2ebf41abba7c42184ee78a9b0603a4571ebf7a0a590c5b2d55598139a014f8f",
+      "event_count": 6,
+      "instrument_count": 6
+    },
+    {
+      "ann_date": "2025-09-27",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-27/manifest.json",
+      "manifest_sha256": "7b398526c645d60406c25eb8a3539138d731b130d3e5c10dbe1b1387415a38ee",
+      "generation_id": "3b8356b100d16db7c65e291e70f6986cea9a68a3d67607ee2a7a7b11a9e2dd56",
+      "events_sha256": "30fa7a2b6ba23acd881d9ec287ba090fdaad8343af4526f75c58ef7191c7865e",
+      "event_count": 4,
+      "instrument_count": 4
+    },
+    {
+      "ann_date": "2025-09-29",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-29/manifest.json",
+      "manifest_sha256": "0b48422ee9003dcb68cb7f12470c461b0e8b0b322a442441316774ac18b24d62",
+      "generation_id": "746781c475fb46bd9a7776ebbda2dd238bd186925bc4da4cb4aaeebbd5219c6d",
+      "events_sha256": "905ba48b3d76de6bacca6a846d4df113eacb5f295506483c1d9805ff69bbdd8c",
+      "event_count": 1,
+      "instrument_count": 1
+    },
+    {
+      "ann_date": "2025-09-30",
+      "manifest_path": "data/dividend-store/dividend_events/2025-09-30/manifest.json",
+      "manifest_sha256": "bb44f037259e70858929e5125926bbb21847168c89e9f5fb80881e91526ced23",
+      "generation_id": "ae01655a6cb4af28e17a74aa279a4fdd2e2b9bf416dbc1e2109462b37cd086fe",
+      "events_sha256": "9893acb196cda83a94b653d5ed6a74e27242a080695f58978188240ecefed871",
+      "event_count": 5,
+      "instrument_count": 5
+    }
+  ]
+}

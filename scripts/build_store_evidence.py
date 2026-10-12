@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from uq.contracts.index_membership import IndexMembershipStore
+from uq.contracts.dividend_events import DividendEventStore
 from uq.contracts.schema import load_schema
 from uq.errors import ContractError
 from uq.store.reader import ManifestFirstReader
@@ -222,6 +223,68 @@ def membership_inventory(store: Path, universe_id: str, repo_root: Path) -> dict
     }
 
 
+def dividend_inventory(
+    store: Path,
+    start: dt.date | None,
+    end: dt.date | None,
+    repo_root: Path,
+) -> dict[str, Any]:
+    store_reader = DividendEventStore(store)
+    partitions = [
+        ann_date
+        for ann_date in store_reader.list_partitions()
+        if (start is None or ann_date >= start) and (end is None or ann_date <= end)
+    ]
+    if not partitions:
+        raise SystemExit(f"no dividend partitions in {store} for {start}..{end}")
+    records: list[dict[str, Any]] = []
+    for ann_date in partitions:
+        manifest_path = store / "dividend_events" / ann_date.isoformat() / "manifest.json"
+        manifest = _governed(
+            "validate dividend partition manifest",
+            manifest_path,
+            lambda: store_reader.read_manifest(ann_date),
+        )
+        artifact = manifest["events_artifact"]
+        artifact_path = store / "dividend_events" / ann_date.isoformat() / artifact["path"]
+        artifact_sha256 = _sha256(artifact_path)
+        if artifact_sha256 != artifact["checksum_sha256"]:
+            raise SystemExit(f"dividend events digest drifted from manifest: {artifact_path}")
+        events = _governed("read back dividend events", artifact_path, lambda: store_reader.read_events(ann_date))
+        if len(events) != artifact["row_count"]:
+            raise SystemExit(f"dividend events row count drift: {artifact_path}")
+        records.append(
+            {
+                "ann_date": ann_date.isoformat(),
+                "manifest_path": _repo_relative(manifest_path, repo_root),
+                "manifest_sha256": _sha256(manifest_path),
+                "generation_id": manifest["generation_id"],
+                "events_sha256": artifact_sha256,
+                "event_count": artifact["row_count"],
+                "instrument_count": manifest["instrument_count"],
+            }
+        )
+    return {
+        "record_version": 1,
+        "kind": "dividend_event_inventory",
+        "store_root": _repo_relative(store, repo_root),
+        "window_start": None if start is None else start.isoformat(),
+        "window_end": None if end is None else end.isoformat(),
+        "partition_count": len(records),
+        "event_count": sum(record["event_count"] for record in records),
+        "verification": (
+            "partition manifest validated against dividend_event_partition.v1, "
+            "ann_date/record_id re-derived from the artifact bytes, per-row record_id "
+            "recomputed through DividendEventStore.read_events"
+        ),
+        "note": (
+            "the store root is gitignored; these digests are re-derivable by "
+            "re-running scripts/fetch_dividend_events.py for the same window"
+        ),
+        "records": records,
+    }
+
+
 def evidence_index(
     layer: str,
     records: list[str],
@@ -262,7 +325,7 @@ def evidence_index(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--kind", choices=("bars", "membership", "index"), required=True)
+    parser.add_argument("--kind", choices=("bars", "membership", "dividend", "index"), required=True)
     parser.add_argument("--store", type=Path, default=None)
     parser.add_argument("--universe-id", default=None)
     parser.add_argument("--start", type=dt.date.fromisoformat, default=None)
@@ -287,6 +350,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.store is None or args.universe_id is None:
             raise SystemExit("--kind membership also requires --store and --universe-id")
         payload = membership_inventory(args.store, args.universe_id, REPO_ROOT)
+    elif args.kind == "dividend":
+        if args.store is None:
+            raise SystemExit("--kind dividend also requires --store")
+        payload = dividend_inventory(args.store, args.start, args.end, REPO_ROOT)
     else:
         if not args.record:
             raise SystemExit("--kind index requires at least one --record")
