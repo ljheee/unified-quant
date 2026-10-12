@@ -426,21 +426,21 @@ def test_governed_trading_days_come_from_the_published_calendar(tmp_path):
 def test_cli_build_runner_wires_membership_governance_into_the_dataset_stage(tmp_path):
     import importlib.util
 
-    if importlib.util.find_spec("joblib") is None:
+    # `_build_runner` imports the Qlib-backed trainer, so this runs only in the
+    # qlib CI cells (same gate as the sibling provider-wiring test).
+    if importlib.util.find_spec("joblib") is None or importlib.util.find_spec("qlib") is None:
         pytest.skip("model runtime extras are unavailable")
     from uq.research_chain.cli import _build_runner
     from uq.research_chain.resolver import FileResearchRunStore
 
-    run_store = FileResearchRunStore(tmp_path)
     store = IndexMembershipStore(tmp_path / "membership")
-    run_store_cls = FileResearchRunStore
     runner = _build_runner(
         project_root=ROOT,
         data_root=tmp_path,
-        run_store=run_store_cls(tmp_path),
+        run_store=FileResearchRunStore(tmp_path),
         membership_store=store,
         trading_calendar=CALENDAR,
     )
     assert runner.dataset_adapter.membership_store is store
     assert runner.dataset_adapter.trading_calendar == CALENDAR
-    assert run_store.root == tmp_path
+    assert runner.run_store.root == tmp_path
