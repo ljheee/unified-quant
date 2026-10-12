@@ -117,3 +117,96 @@ def test_unknown_missing_defaults_to_rejected_and_is_switchable():
 
 def test_suspension_evidence_is_in_expected_missing_set():
     assert "suspended_expected_missing" in AkShareLifecycleProvider.STATUS_EXPECTED_MISSING
+
+
+class _BseLifecycle(_FakeLifecycle):
+    """AkShare rosters stubbed, Beijing roster injected (pendding item 9a)."""
+
+    BSE_ROSTER = {"920438": date(2025, 3, 17), "430047": None, "839719": date(2024, 1, 4)}
+
+    def _bj_codes(self):
+        return dict(self.BSE_ROSTER)
+
+
+def test_beijing_listing_before_its_listing_date_is_expected_missing():
+    provider = _BseLifecycle({"600000"})
+    result = provider.classify_missing(
+        date(2025, 1, 2), ["920438.XBSE"], ("akshare", "tushare_bse")
+    )
+    assert result["920438.XBSE"] == "not_listed_expected_missing"
+
+
+def test_beijing_gap_inside_the_listing_window_stays_fail_closed():
+    provider = _BseLifecycle({"600000"})
+    result = provider.classify_missing(
+        date(2025, 8, 21), ["920438.XBSE"], ("akshare", "tushare_bse")
+    )
+    assert result["920438.XBSE"] == "unknown_requires_review"
+
+
+def test_beijing_symbol_without_a_published_listing_date_stays_fail_closed():
+    provider = _BseLifecycle({"600000"})
+    result = provider.classify_missing(
+        date(2025, 1, 2), ["430047.XBSE"], ("akshare", "tushare_bse")
+    )
+    assert result["430047.XBSE"] == "unknown_requires_review"
+
+
+def test_beijing_symbol_absent_from_the_roster_stays_fail_closed():
+    # No Beijing delisting feed exists at this data tier, so "delisted" and
+    # "never listed" are indistinguishable and neither may be excused.
+    provider = _BseLifecycle({"600000"})
+    result = provider.classify_missing(
+        date(2025, 1, 2), ["832000.XBSE"], ("akshare", "tushare_bse")
+    )
+    assert result["832000.XBSE"] == "unknown_requires_review"
+
+
+def test_non_beijing_prefix_on_the_bse_suffix_stays_fail_closed():
+    provider = _BseLifecycle({"600000"})
+    result = provider.classify_missing(
+        date(2025, 1, 2), ["123456.XBSE"], ("akshare", "tushare_bse")
+    )
+    assert result["123456.XBSE"] == "unknown_requires_review"
+
+
+def test_beijing_roster_is_only_consulted_when_declared():
+    provider = _BseLifecycle({"600000"})
+    result = provider.classify_missing(date(2025, 1, 2), ["920438.XBSE"], ("akshare",))
+    assert result["920438.XBSE"] == "unknown_requires_review"
+
+
+def test_beijing_roster_failure_stays_fail_closed():
+    class _Broken(_BseLifecycle):
+        def _bj_codes(self):
+            raise RuntimeError("upstream unavailable")
+
+    provider = _Broken({"600000"})
+    result = provider.classify_missing(
+        date(2025, 1, 2), ["920438.XBSE"], ("akshare", "tushare_bse")
+    )
+    assert result["920438.XBSE"] == "unknown_requires_review"
+
+
+def test_akshare_failure_still_classifies_beijing_from_its_own_roster():
+    class _NoAkshare(_BseLifecycle):
+        def _listed_codes(self):
+            raise RuntimeError("akshare unavailable")
+
+    provider = _NoAkshare(set())
+    result = provider.classify_missing(
+        date(2025, 1, 2), ["920438.XBSE", "600000.XSHG"], ("akshare", "tushare_bse")
+    )
+    assert result["920438.XBSE"] == "not_listed_expected_missing"
+    assert result["600000.XSHG"] == "unknown_requires_review"
+
+
+def test_bse_source_name_is_declared_on_the_provider():
+    assert AkShareLifecycleProvider.bse_source_name == "tushare_bse"
+
+
+def test_verified_only_contract_declares_the_beijing_roster():
+    schema = load_schema("config/schemas/bars_daily.research-v1.yaml")
+    contract = load_dataset_contract("config/datasets/bars_daily.research-v1.yaml", schema)
+    assert contract.row_policy["verified_only"] is True
+    assert AkShareLifecycleProvider.bse_source_name in contract.row_policy["lifecycle_auxiliary_sources"]

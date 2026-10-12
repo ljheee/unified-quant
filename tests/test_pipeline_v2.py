@@ -8,10 +8,12 @@ import pandas as pd
 import pytest
 
 from uq.adapters.tushare import TushareAdapter
+from uq.adapters.eastmoney import EastMoneySessionProvider
 from uq.contracts.config import load_dataset_contract
 from uq.contracts.index_membership import IndexMembershipStore
 from uq.contracts.schema import load_schema
 from uq.errors import ContractError
+from uq.market.calendar import TradingCalendar
 from uq.pipeline.daily import DailyIngestPipeline, IngestReport, build_tushare_v2_pipeline
 from uq.routing.router import SourceRouter
 from uq.sources.fetch import FetchResult, FetchStatus
@@ -25,7 +27,7 @@ TRADE_DATE = date(2026, 3, 2)
 INSTRUMENTS = ["600000.XSHG", "000001.XSHE"]
 
 
-def _pipeline(root: Path, adapters: dict, **overrides) -> DailyIngestPipeline:
+def _pipeline(root: Path, adapters: dict, calendar=None, **overrides) -> DailyIngestPipeline:
     contract = load_dataset_contract(CONTRACT_PATH, load_schema(SCHEMA_PATH))
     options = {"run_health_probe": False}
     options.update(overrides)
@@ -33,7 +35,7 @@ def _pipeline(root: Path, adapters: dict, **overrides) -> DailyIngestPipeline:
         root,
         SCHEMA_PATH,
         CONTRACT_PATH,
-        SourceRouter(contract, adapters),
+        SourceRouter(contract, adapters, calendar=calendar),
         **options,
     )
 
@@ -88,6 +90,62 @@ def test_builders_default_to_the_repository_root(tmp_path):
     pipeline = build_tushare_v2_pipeline(tmp_path, run_health_probe=False)
     assert pipeline.schema.version == "v2"
     assert pipeline.contract.primary_source == "tushare"
+
+
+def test_v2_builder_wires_an_independent_calendar_by_default(tmp_path):
+    # pendding item 6: the v2 link used to have no calendar at all, so route
+    # coverage could never resolve past "unverified".
+    pipeline = build_tushare_v2_pipeline(tmp_path, run_health_probe=False)
+    assert pipeline.router.calendar is not None
+    assert pipeline.router.calendar.provenance == "eastmoney_index_kline_v1"
+
+
+def test_v2_builder_calendar_is_explicitly_disableable(tmp_path):
+    pipeline = build_tushare_v2_pipeline(tmp_path, run_health_probe=False, independent_calendar=False)
+    assert pipeline.router.calendar is None
+
+
+def test_v2_route_coverage_is_complete_with_an_independent_calendar(tmp_path):
+    calendar = TradingCalendar(sessions={TRADE_DATE}, provenance="fixture_independent_calendar")
+    report = _pipeline(tmp_path, _v2_adapters(), calendar=calendar).run(TRADE_DATE, INSTRUMENTS)
+    assert report.status == "published", report.errors
+    assert not [item for item in report.warnings if "route coverage" in item]
+    assert report.provenance["calendar"] == "fixture_independent_calendar"
+
+
+def test_v2_route_coverage_without_a_calendar_stays_unverified(tmp_path):
+    report = _pipeline(tmp_path, _v2_adapters()).run(TRADE_DATE, INSTRUMENTS)
+    assert report.status == "published", report.errors
+    assert any("route coverage is unverified" in item for item in report.warnings)
+    assert report.provenance["calendar"] is None
+
+
+def test_v2_run_fails_closed_when_the_independent_calendar_is_unreachable(tmp_path):
+    def unreachable(url, timeout, user_agent):
+        raise OSError("connection refused")
+
+    provider = EastMoneySessionProvider(opener=unreachable)
+    calendar = TradingCalendar(provider=provider, provenance=provider.provenance)
+    report = _pipeline(tmp_path, _v2_adapters(), calendar=calendar).run(TRADE_DATE, INSTRUMENTS)
+    assert report.status == "source_upstream_error"
+    assert report.retryable is True
+    assert any("unreachable" in error for error in report.errors)
+    assert not list((tmp_path / "canonical").glob("**/*")) if (tmp_path / "canonical").exists() else True
+
+
+def test_v2_run_records_the_calendar_evidence_in_provenance(tmp_path):
+    def opener(url, timeout, user_agent):
+        body = {"rc": 0, "data": {"klines": [f"{TRADE_DATE.isoformat()},4000.00"]}}
+        return json.dumps(body).encode()
+
+    provider = EastMoneySessionProvider(opener=opener)
+    calendar = TradingCalendar(provider=provider, provenance=provider.provenance)
+    report = _pipeline(tmp_path, _v2_adapters(), calendar=calendar).run(TRADE_DATE, INSTRUMENTS)
+    assert report.status == "published", report.errors
+    evidence = report.provenance["calendar_evidence"]
+    assert evidence["provenance"] == "eastmoney_index_kline_v1"
+    assert evidence["certified_end"] == TRADE_DATE.isoformat()
+    assert len(evidence["payload_sha256"]) == 64
 
 
 def test_v2_publishes_from_tushare_with_reference_fields(tmp_path):

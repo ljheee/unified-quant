@@ -39,10 +39,18 @@
       "adj_factor"
     ],
     "run_reports": "uq-ingest writes one report per session into <bars_root>/runs/<run_id>.json (gitignored); the partition manifest carries the same identities, which bars-inventory.json pins",
-    "pilot_driver": "the window itself came from an inline per-session loop over build_tushare_v2_pipeline; uq-ingest daily --pipeline v2 now reproduces that path from the membership store"
+    "pilot_driver": "the window itself came from an inline per-session loop over build_tushare_v2_pipeline; uq-ingest daily --pipeline v2 now reproduces that path from the membership store",
+    "calendar": "the archived partitions were ingested before build_tushare_v2_pipeline carried an independent calendar, so their route coverage was unverified; the link now reads sessions from eastmoney_index_kline_v1 by default and records the provider's payload digest in every ingest report provenance"
   },
   "readiness": {
     "status": "passed",
+    "min_sessions_per_instrument": 17,
+    "label_horizon_sessions": 5,
+    "independent_calendar": {
+      "provenance": "eastmoney_index_kline_v1",
+      "sessions_agree": 23,
+      "checked": "every session in the window is present in both the tushare trade_cal list and the EastMoney index session list"
+    },
     "blocking_findings": [],
     "informational_findings": [
       {
@@ -55,7 +63,7 @@
   },
   "limitations": [
     "publish_lag_days=5 is an assumption, not a measurement: index_weight exposes no visibility timestamp, so membership visibility is a monthly approximation with an unverified lag (pendding item 1 owns the measurement).",
-    "the trading calendar comes from the same vendor as the bars (tushare trade_cal), so bar_session_gap proves internal consistency, not vendor-independent session coverage.",
+    "the readiness window's session list still comes from the bars vendor (tushare trade_cal); the archived report now cross-checks it against an EastMoney index session list (independent_calendar_verified, 23/23 sessions agree), but bar_session_gap itself remains an internal-consistency check.",
     "the v2 pipeline publishes unvalidated lineage: every field records compared_rows=0 and no validated_by source, so no cross-source corroboration backs these partitions.",
     "the delisting exemption is conservative. At 2000 tushare points stock_basic does not return out_date and namechange carries no record for 601989, so only members with zero bars in the window are excused; partial gaps stay blocking.",
     "23 sessions with a 5-session label horizon is a smoke-training window, not a research-grade backtest window.",
@@ -69,7 +77,7 @@
   "reproduction": [
     "scripts/fetch_index_membership.py --preset a500 --store data/a500-store --start 2025-05-01 --end 2026-09-30",
     "for each session: uq-ingest daily --date <session> --data-root data/bars-a500-store --pipeline v2 --membership-root data/a500-store --universe-id a500",
-    "scripts/validate_training_readiness.py --bars-root data/bars-a500-store --membership-root data/a500-store --universe-id a500 --start 2025-08-29 --end 2025-09-30 --min-sessions 17 --label-horizon 5 --output evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",
+    "scripts/validate_training_readiness.py --bars-root data/bars-a500-store --membership-root data/a500-store --universe-id a500 --start 2025-08-29 --end 2025-09-30 --min-sessions 17 --label-horizon 5 --independent-calendar --output evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",
     "scripts/build_store_evidence.py --kind bars --store data/bars-a500-store --universe-id a500 --start 2025-08-29 --end 2025-09-30 --out evidence/a500-pilot/2025-08-29-to-2025-09-30/bars-inventory.json",
     "scripts/build_store_evidence.py --kind membership --store data/a500-store --universe-id a500 --out evidence/a500-membership/evidence-index.json"
   ],

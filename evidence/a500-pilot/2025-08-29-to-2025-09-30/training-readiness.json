@@ -35,6 +35,23 @@
   "universe_id": "a500",
   "notes": {
     "calendar_provenance": "tushare:trade_cal:SSE",
+    "min_sessions_per_instrument": 17,
+    "label_horizon_sessions": 5,
+    "max_null_rate": 0.0,
+    "skip_suspensions": false,
+    "skip_delistings": false,
+    "independent_calendar_provenance": "eastmoney_index_kline_v1",
+    "independent_calendar_evidence": {
+      "provenance": "eastmoney_index_kline_v1",
+      "secid": "1.000300",
+      "url": "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000300&fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5&fields2=f51%2Cf53&klt=101&fqt=0&beg=20240725&end=20261012",
+      "fetched_at": "2026-10-12T07:32:24.849798+00:00",
+      "payload_sha256": "867f0d0d27fd97acf6e819a99fc6723499f0ed147a90014957f9687c95814f05",
+      "sessions": 534,
+      "certified_start": "2024-07-25",
+      "certified_end": "2026-10-12"
+    },
+    "independent_calendar_verified": true,
     "suspension_provenance": "tushare:suspend_d(23 sessions)",
     "suspension_sessions": [
       "2025-08-29",

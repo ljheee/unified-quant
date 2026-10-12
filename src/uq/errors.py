@@ -14,3 +14,17 @@ class CapabilityGapError(ContractError):
 
 class PartialDataNotRequestedError(ContractError):
     pass
+
+
+class IndependentCalendarError(ContractError):
+    """The independent trading calendar could not be verified.
+
+    Raised by calendar providers wired into the ingest router. A transport,
+    parse or coverage failure must fail the run: degrading to an empty session
+    set would silently satisfy the router's ``observed_dates >=
+    expected_dates`` comparison and let unverified coverage publish as
+    complete.
+    """
+
+    status = "upstream_error"
+    retryable = True

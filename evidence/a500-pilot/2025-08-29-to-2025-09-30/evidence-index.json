@@ -34,11 +34,11 @@
     },
     {
       "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/pilot-record.json",
-      "sha256": "5fda11f182364d0740a0987390f7f206347e42967b8c1f63f14cbf66d905e949"
+      "sha256": "62ecf1be51317baabce9faa4fa9c585d3eab9cac2216c63154f910d8a49b3d6a"
     },
     {
       "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",
-      "sha256": "ca341247387bdb2f4d07f871a79dc9356123a3feef9d1be7a22e4190bc222be6"
+      "sha256": "c91d11369d6b6234351904fe4013f6e8ef22d20473585fd5e046dfe8130e9457"
     },
     {
       "path": "scripts/build_store_evidence.py",
@@ -50,7 +50,7 @@
     },
     {
       "path": "scripts/validate_training_readiness.py",
-      "sha256": "a82eb2feb578f4467ea1a78e6c643fdbe31a34ffd4587146e58555b5761c52c8"
+      "sha256": "5311ce7c61da063e21d042f8a5f9cf6dbc05a986a3164637f70ba461aa423e3d"
     },
     {
       "path": "src/uq/cli.py",

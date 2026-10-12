@@ -5,9 +5,11 @@ bars_daily partitions through the manifest-first reader, then evaluates the
 cross-input conditions a training run silently depends on. Exit code 0 means the
 window is trainable; 1 means at least one rule blocked it.
 
-Caveat: the trading calendar comes from the same vendor as the primary bars, so
-``bar_session_gap`` proves internal consistency, not vendor-independent session
-coverage. See pendding.md ("v2 链路尚无独立交易日历").
+By default the trading calendar still comes from the primary bars vendor
+(Tushare ``trade_cal``), so ``bar_session_gap`` proves internal consistency.
+Pass ``--independent-calendar`` to additionally verify every session against an
+EastMoney-derived index session list; the run is rejected if that source is
+unreachable, stale, or the two calendars disagree.
 """
 
 from __future__ import annotations
@@ -179,17 +181,62 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--exchange", default="SSE")
+    parser.add_argument(
+        "--independent-calendar",
+        action="store_true",
+        help="cross-check every session against an EastMoney index session list",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
 
     schema = load_schema(args.schema)
     adapter = Tushare2kAdapter()
-    notes: dict[str, Any] = {"calendar_provenance": f"tushare:trade_cal:{args.exchange}"}
+    notes: dict[str, Any] = {
+        "calendar_provenance": f"tushare:trade_cal:{args.exchange}",
+        # The verdict depends on these thresholds, so the report carries them
+        # rather than relying on the caller's command line: the A500 pilot runs
+        # with --min-sessions 17 (below the 60-session research default) because
+        # its 23-session smoke window cannot satisfy the default.
+        "min_sessions_per_instrument": args.min_sessions,
+        "label_horizon_sessions": args.label_horizon,
+        "max_null_rate": args.max_null_rate,
+        "skip_suspensions": args.skip_suspensions,
+        "skip_delistings": args.skip_delistings,
+    }
     try:
         sessions = sorted(adapter.trade_dates(args.start.isoformat(), args.end.isoformat(), exchange=args.exchange))
     except ContractError as exc:
         print(json.dumps({"status": "configuration_failure", "error": str(exc)}, ensure_ascii=False))
         return 2
+
+    if args.independent_calendar:
+        from uq.adapters.eastmoney import EastMoneySessionProvider
+
+        try:
+            provider = EastMoneySessionProvider()
+            independent_sessions = sorted(provider.between(args.start, args.end))
+            evidence = provider.evidence
+        except (ContractError, RuntimeError) as exc:
+            print(json.dumps({"status": "configuration_failure", "error": str(exc)}, ensure_ascii=False))
+            return 2
+        notes["independent_calendar_provenance"] = provider.provenance
+        notes["independent_calendar_evidence"] = evidence
+        if set(sessions) != set(independent_sessions):
+            missing = sorted(set(sessions) - set(independent_sessions))
+            extra = sorted(set(independent_sessions) - set(sessions))
+            print(
+                json.dumps(
+                    {
+                        "status": "configuration_failure",
+                        "error": "independent calendar disagrees with the primary session calendar",
+                        "missing_from_independent": [value.isoformat() for value in missing],
+                        "extra_in_independent": [value.isoformat() for value in extra],
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return 2
+        notes["independent_calendar_verified"] = True
 
     bars = _bars_for_sessions(ManifestFirstReader(args.bars_root), schema, sessions, notes)
     membership = _members_by_session(IndexMembershipStore(args.membership_root), args.universe_id, sessions, notes)

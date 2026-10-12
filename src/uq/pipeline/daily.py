@@ -116,6 +116,8 @@ def build_tushare_v2_pipeline(
     project_root: Path | None = None,
     run_health_probe: bool = True,
     require_cross_validation: bool = False,
+    independent_calendar: bool = True,
+    calendar: object | None = None,
 ) -> DailyIngestPipeline:
     """Build the bars_daily v2 pipeline: Tushare primary, TDX close/volume comparator.
 
@@ -124,18 +126,32 @@ def build_tushare_v2_pipeline(
     the ownership order inverts relative to the research-v1 builders: Tushare
     is the primary source and TDX can only act as the OHLCV comparator.
 
-    Deliberately not wired yet: an independent trading calendar (coverage stays
-    ``unverified`` and the report warns) and the Mootdx XDXR dividend path that
-    cross-checks ``adj_factor``. Both are tracked in ``pendding.md``.
+    The router is given a vendor-independent session calendar by default
+    (:class:`~uq.adapters.eastmoney.EastMoneySessionProvider`, read from index
+    bars), which lets route coverage resolve to ``complete`` instead of the
+    previous permanent ``unverified``. The provider fails closed: an
+    unreachable, stale or short answer raises rather than shortening the
+    expected session set. Pass ``independent_calendar=False`` to run without a
+    calendar (coverage stays ``unverified`` and the report warns), or pass an
+    explicit ``calendar`` to inject one.
+
+    Still deliberately not wired: the Mootdx XDXR dividend path that
+    cross-checks ``adj_factor`` (tracked in ``pendding.md``).
     """
     from ..adapters.mootdx_source import MootdxSourceAdapter
     from ..adapters.tushare_2k import Tushare2kAdapter
+    from ..market.calendar import TradingCalendar
     from ..routing.router import SourceRouter
 
     project_root = project_root or Path(__file__).resolve().parents[3]
     schema_path = project_root / "config/schemas/bars_daily.v2.yaml"
     contract_path = project_root / "config/datasets/bars_daily.v2.yaml"
     contract = load_dataset_contract(contract_path, load_schema(schema_path))
+    if calendar is None and independent_calendar:
+        from ..adapters.eastmoney import EastMoneySessionProvider
+
+        provider = EastMoneySessionProvider()
+        calendar = TradingCalendar(provider=provider, provenance=provider.provenance)
     # TDX is registered only when its comparison is actually required. The
     # router selects any registered ``compare_with`` source, so always wiring
     # TDX made every v2 run pay the TDX server retry/backoff cost even though
@@ -147,7 +163,7 @@ def build_tushare_v2_pipeline(
         root,
         schema_path,
         contract_path,
-        SourceRouter(contract, adapters),
+        SourceRouter(contract, adapters, calendar=calendar),
         run_health_probe=run_health_probe,
         require_cross_validation=require_cross_validation,
     )
@@ -278,6 +294,16 @@ class DailyIngestPipeline:
             end=trade_date.isoformat(),
             fields=requested_fields,
         )
+        # The calendar provider records what it actually certified (payload
+        # digest, certified session span) when the router queried it; pin that
+        # in the report so coverage completeness is auditable after the fact.
+        calendar = self.router.calendar
+        # Evidence lives on the provider (the calendar itself is a thin
+        # wrapper); a sessions-only calendar carries none.
+        evidence_owner = getattr(calendar, "provider", None) or calendar
+        calendar_evidence = getattr(evidence_owner, "evidence", None)
+        if calendar_evidence:
+            provenance["calendar_evidence"] = calendar_evidence
         raw_capture = bool((self.contract.row_policy or {}).get("raw_capture", True))
         source_results: dict[str, FetchResult] = dict(route.results)
         frames: dict[str, pd.DataFrame] = {}

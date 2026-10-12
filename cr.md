@@ -408,3 +408,22 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 实测（真实 store，不是构造）：A500 2025-08-29~09-30，23 个会话；窗口内 219 条实施披露 → 29 只标的有可分派事件 → **29/29 快照发布、0 拒绝**，最差 `max_abs_diff=8.2e-4`（601866），全部在 0.01 元/股分辨率内；证据 `evidence/reference-data/adjustment-chain-2025-08-29-to-2025-09-30.json`。
 
 未覆盖：配股不在 Tushare `dividend` 端点内（`peigu/peigujia` 恒 0，已在 provenance 声明）；快照自身的不可变性/篡改用例沿用既有 runtime 测试；本链路只解决"因子侧有受治理的复权 lineage"，尚未把快照挂进 `FactorEngine.execute(factor_set='adjusted')` 的调用方（research_chain 的 v3/v4 执行路径，见 pendding 4c）。
+
+### 8.9 pendding 6 收尾：v2 独立交易日历 + 9a 北交所名单（2026-10-12）
+
+本批关闭 pendding 6 的两条独立后续项中的第一条（v2 链路独立交易日历），并带上已完成的 9a（lifecycle 北交所名单）。
+
+| 项 | 判定与处置 | 锁 |
+|---|---|---|
+| v2 路由**永远**拿不到 `complete` | 真缺陷（根因）：`build_tushare_v2_pipeline` 解包成 `SourceRouter(contract, adapters)`，从不传 `calendar`，而 `SourceRouter.__init__` 在 `calendar is None` 时直接置 `self.calendar=None`；覆盖率判定读 `self.calendar.between(...)`，于是覆盖率恒为 `unverified`（`pendding.md` 里"v2 链路尚无独立交易日历"的机械原因）。research-v1 的交叉校验 builder 早已传 akshare 日历，只有 v2 漏了 | tests/test_pipeline_v2.py::test_v2_route_coverage_is_complete_with_an_independent_calendar（有历 → 无 unverified 警告）/ ..._without_a_calendar_stays_unverified |
+| 日历可得性：akshare 不在任何 extra 里 | 事实核对：`uv.lock` 与 CI 的 `--extra dev --extra real` 都不含 akshare，本地也不可导入——照搬 v1 的 akshare 日期会把 v2 的既有可用通路（A500 pilot 就是这么灌的）改成"无 akshare 即失败"。改为新增零依赖的 `EastMoneySessionProvider`（沪深300指数日K→会话集合），厂商上真正独立于 Tushare/TDX，且不引入新依赖 | tests/test_eastmoney_calendar.py（8 例，含解析/缓存/证据） |
+| 失败模式会**静默**放宽置信度 | 真缺陷（设计时即堵住）：覆盖率判据是 `observed_dates >= expected_dates`，若日历不可达/为空就返回空集合，判据会真空成立并把未验证覆盖率报成 `complete`。provider 因此 fail-closed：不可达、非 JSON、无 klines、**窗口末端超出已发布最新会话**一律抛 `IndependentCalendarError`（`status=upstream_error`、`retryable=True`），并由 `IngestReport` 落成 `source_upstream_error`、不落分区 | tests/test_eastmoney_calendar.py::{test_failed_transport_fails_closed, test_empty_payload_never_empties_the_expected_sessions, test_window_past_the_newest_published_session_fails_closed}；tests/test_pipeline_v2.py::test_v2_run_fails_closed_when_the_independent_calendar_is_unreachable |
+| 覆盖率"完成"事后不可审计 | 自 CR 发现：报告 provenance 只记日历名字，不记它到底依据了什么。provider 暴露 `evidence`（payload_sha256、认证区间、会话数、URL），`DailyIngestPipeline._provenance` 把它写进每份 ingest report 的 `calendar_evidence` | tests/test_pipeline_v2.py::test_v2_run_records_the_calendar_evidence_in_provenance |
+| 就绪门的会话表仍是同商 | 真缺口（部分收口）：`validate_training_readiness.py` 的会话来自 Tushare `trade_cal`，与 bars 同商，`bar_session_gap` 只证内部一致。新增 `--independent-calendar`：用同一 provider 复核窗口内每个会话，不一致即退出码 2；报告 `notes` 另记 `min_sessions_per_instrument`/`label_horizon_sessions`/`max_null_rate`/`skip_*`（阈值此前只在 pilot-record 的 reproduction 里，报告本体不可自证） | 真实重跑（见下）；`--min-sessions 17` 与 pilot-record.reproduction 一致 |
+| 9a：`.XBSE` 一律 `unknown_requires_review` | 已知缺口补齐：AkShare 无北交所名单，故 lifecycle 对北交所代码只能 fail-closed。新增 `tushare_bse` 辅助源（Tushare `stock_basic(exchange=BSE)`，实测 2000 积分可用：349 只、全部带 `list_date`、前缀全为 92），仅对 `.XBSE` 查询；缺席早于上市日才豁免，名单内缺口/无 `list_date`/名单外一律仍 fail-closed（无北交所退市源，退市与未上市不可区分） | tests/test_real_data_policy.py（+10 例，含 AkShare 故障时北交所名单仍独立可用） |
+
+实测（不是构造）：① 真实 v2 ingest（真实 Tushare + 真实 EastMoney）2025-09-02 两只标的 → `status=published`、`warnings=[]`（此前必有 `route coverage is unverified`）、provenance `calendar=eastmoney_index_kline_v1`、`calendar_evidence.payload_sha256=730c7ab6…`、认证区间 `2024-07-29..2026-10-12`、`sessions=532`（该 scratch 分区已删，不入库）。② 就绪门重跑 A500 2025-08-29~09-30（`--min-sessions 17 --label-horizon 5 --independent-calendar`）→ 仍 `passed`、仅 `delisted_members_excluded` informational、`independent_calendar_verified=true`（23/23 会话两历一致），`evidence/a500-pilot/.../training-readiness.json` 已按此次运行刷新，`evidence-index.json` 由生成器重导。
+
+未夸大声明：归档的 23 个 pilot 分区是在本改动之前灌入的，它们的 route coverage 当时仍是 `unverified`——`pilot-record.json` 的 `ingest.calendar` 已如实写明，并说明该链路现在默认独立日历；`bar_session_gap` 本身仍是内部一致性检查，改的只是"会话表另有独立来源可复核"。
+
+实测数字：`bash scripts/run_gate.sh`（uv，单格本地 macOS arm64 / Python 3.12）`806 passed / 22 skipped / 0 failed`（22 为 qlib 门控，本地 skip、CI `qlib-runtime` 运行）；本批新增 14 例（`tests/test_eastmoney_calendar.py` 8 + `tests/test_pipeline_v2.py` 6），另 9a 的 10 例在 `tests/test_real_data_policy.py`。

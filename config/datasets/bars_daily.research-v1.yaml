@@ -14,7 +14,9 @@ primary_source: tdx
 row_policy:
   verified_only: true
   allow_unverified: false
-  lifecycle_auxiliary_sources: [akshare, adata]
+  # tushare_bse adds the Beijing roster (AkShare has no BSE name list);
+  # pendding item 9a. It is consulted only for .XBSE instruments.
+  lifecycle_auxiliary_sources: [akshare, tushare_bse, adata]
   allow_unknown_missing: false
   raw_capture: true
 cross_validation:
