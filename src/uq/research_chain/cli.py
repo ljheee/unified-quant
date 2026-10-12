@@ -40,6 +40,7 @@ from .adapters import (
 )
 from ..contracts.index_membership import IndexMembershipStore
 from ..execution.market_dataset_publisher import MarketDatasetPublisher
+from .contracts import research_request_schema_name
 from .resolver import FileResearchRunStore, ResearchChainRequestResolver
 from .runner import ResearchChainRunner
 
@@ -120,7 +121,10 @@ def uq_research_run(argv: list[str] | None = None) -> int:
 
 
 def _dry_run(request: dict[str, Any], *, data_root: Path) -> dict[str, Any]:
-    ModelContractLoader.validate("research_run_request", request)
+    # Route by contract version: a v2..v5 request has its own schema name, and
+    # hardcoding the v1 schema rejected every later version at the CLI boundary
+    # even though the runner's dry-run path is version-aware.
+    ModelContractLoader.validate(research_request_schema_name(request), request)
     runner = ResearchChainRunner.__new__(ResearchChainRunner)
     runner.factor_adapter = None
     runner.dataset_adapter = None

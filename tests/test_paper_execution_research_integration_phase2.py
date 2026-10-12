@@ -55,3 +55,36 @@ def test_stage_adapter_continuation_rejects_template_initial_state(tmp_path: Pat
     adapter = PaperExecutionStageAdapter(template)
     with pytest.raises(ContractError, match="continuation binding requires"):
         adapter.initial_holdings_and_cash()
+
+
+def test_cli_dry_run_routes_v5_to_its_schema(tmp_path, capsys):
+    """The CLI dry-run must route by contract version, not the hardcoded v1 schema.
+
+    Before the fix a v5 request was rejected at the CLI boundary
+    (`ModelContractLoader.validate("research_run_request", ...)`) even though the
+    runner dry-run path is version-aware, so no v5 request could ever be
+    published or inspected through the documented entry point.
+    """
+    import json
+
+    from uq.research_chain.cli import uq_research_run
+
+    root = Path(__file__).resolve().parents[1]
+    fixture = (
+        root
+        / "evidence/paper-execution-research-integration/phase-0r/fixtures"
+        / "research_run_request_v5-valid.json"
+    )
+    data_root = tmp_path / "data"
+    exit_code = uq_research_run([
+        "--project-root", str(root),
+        "--data-root", str(data_root),
+        "--mode", "dry-run",
+        "--request-json", str(fixture),
+    ])
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "dry_run_published"
+    assert data_root.joinpath("research_runs", "requests").exists()
+    assert data_root.joinpath("research_runs", "states").exists()
+    assert not data_root.joinpath("research_runs", "results").exists()
