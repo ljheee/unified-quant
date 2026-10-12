@@ -85,7 +85,16 @@
     "report": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/gate-report.json",
     "requirements_lock": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/requirements.lock.txt",
     "requirements_lock_sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127",
-    "scope": "single local cell (macOS arm64 / Python 3.12); the remote six-cell matrix is a release gate, not a pilot-archive gate, and was not re-run for this evidence-only commit",
+    "scope": "single local cell (macOS arm64 / Python 3.12); the per-cell gate artifacts of the remote matrix are not archived here -- see remote_ci for what the remote run covers",
     "evidence_commit_bound": "HEAD_evidence_only"
+  },
+  "remote_ci": {
+    "result": "passed",
+    "run_id": 38197992719,
+    "url": "https://github.com/ljheee/unified-quant/actions/runs/38197992719",
+    "commit_bound": "55c478a9f663cba88be6d4b12b5083ea0027d74a",
+    "jobs_passed": 11,
+    "coverage": "six base cells (macOS/Ubuntu x Python 3.11-3.13) plus four qlib-runtime cells plus f4-certification",
+    "note": "aggregated per-cell gate artifacts were not archived here; the pilot archive claims the local gate report, and this entry records the remote run as corroborating status only"
   }
 }
