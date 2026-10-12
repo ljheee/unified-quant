@@ -3,10 +3,45 @@
   "index_code": "000510.SH",
   "store_root": "data/a500-store",
   "pit_precision": "monthly_approximation",
-  "snapshot_count": 14,
+  "snapshot_count": 17,
+  "earliest_visible_date": "2025-06-10",
+  "verification": "manifest validated against index_membership.v1, members digest recomputed from bytes and members re-read through IndexMembershipStore",
+  "note": "the store root is gitignored; these digests are re-derivable by re-running scripts/fetch_index_membership.py for the same window",
   "records": [
     {
+      "snapshot_date": "2025-05-30",
+      "visible_from": "2025-06-10",
+      "publish_lag_days": 5,
+      "manifest_path": "data/a500-store/index_membership/a500/2025-05-30/manifest.json",
+      "manifest_sha256": "b5e5151d7fe82d43a715071cd42435bb863da6ca3d14fb3dd9db5afce44a3896",
+      "generation_id": "240a76b336ba55fafa2208fa2d6ab79ebce1c3a0dfa1f7354c150ab8f53c9d4d",
+      "members_sha256": "126626d8b5a18fb95e3466c6ed519af0030367792cc4803bf8cba1f9e41d6ea3",
+      "row_count": 500
+    },
+    {
+      "snapshot_date": "2025-06-30",
+      "visible_from": "2025-07-08",
+      "publish_lag_days": 5,
+      "manifest_path": "data/a500-store/index_membership/a500/2025-06-30/manifest.json",
+      "manifest_sha256": "9b3eea8150bc81952fa0292f753be8fe0ea9eef13025a9e1b2e4b7cab8c08589",
+      "generation_id": "92bda3872396bd321e249ce564793e1598d612c7ec2c707ac8e85b97f3d819c6",
+      "members_sha256": "9125da79419bc3f7f71edf24925a2cfb816be65f811b949cf48c49842b08ed8d",
+      "row_count": 500
+    },
+    {
+      "snapshot_date": "2025-07-31",
+      "visible_from": "2025-08-08",
+      "publish_lag_days": 5,
+      "manifest_path": "data/a500-store/index_membership/a500/2025-07-31/manifest.json",
+      "manifest_sha256": "61c7e5031d3a8aa521c0e79609de54f1e9dbb99cea501b5ce2fe7794434c4201",
+      "generation_id": "20152e858526a882b513766c76f7530f3eef7bfdca9af170e7cb578ef25d6307",
+      "members_sha256": "9125da79419bc3f7f71edf24925a2cfb816be65f811b949cf48c49842b08ed8d",
+      "row_count": 500
+    },
+    {
       "snapshot_date": "2025-08-29",
+      "visible_from": "2025-09-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2025-08-29/manifest.json",
       "manifest_sha256": "217b3e6f6999789ca9f2782c50803628eaaae35e2a26ff1c47e3ac2dd5cb95a7",
       "generation_id": "ff3f5f100492a3351aa7429e6998f277e1613217580dfe187725cee89aa760f5",
@@ -15,6 +50,8 @@
     },
     {
       "snapshot_date": "2025-09-30",
+      "visible_from": "2025-10-16",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2025-09-30/manifest.json",
       "manifest_sha256": "3e79ae21aeaa3fa000819d4d06352c31024745e1509b5c235b24253a1da2c4ea",
       "generation_id": "28380f29b7901e59fe2b96b324cb1610756cf493081fdeabadce2ada38aaa5b7",
@@ -23,6 +60,8 @@
     },
     {
       "snapshot_date": "2025-10-31",
+      "visible_from": "2025-11-10",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2025-10-31/manifest.json",
       "manifest_sha256": "96ddadfc0adb23bd9df0680034402ac46d0cdaed0b0200ea7bec371094df658a",
       "generation_id": "d7bdc622a23b7feb59cd06af9cf4045817f6aab8e37f70ded22bb36643c0bafe",
@@ -31,6 +70,8 @@
     },
     {
       "snapshot_date": "2025-11-28",
+      "visible_from": "2025-12-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2025-11-28/manifest.json",
       "manifest_sha256": "18749e874b78cd204aadccf32d8e8af6f704e70de76b68b3711c18fe82432469",
       "generation_id": "756cbdccdb9b27c38a3ec6a44959de9b7ce29d62300f9c083a95c5bc233ae87d",
@@ -39,6 +80,8 @@
     },
     {
       "snapshot_date": "2025-12-31",
+      "visible_from": "2026-01-12",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2025-12-31/manifest.json",
       "manifest_sha256": "fd3fe7399d8f5a16222ad3c7961b88ee75dcabd4614003f49f83c935019198f5",
       "generation_id": "7072a6783d0096634799179bc34d286be349a386c12ee044b01d25af7c461458",
@@ -47,6 +90,8 @@
     },
     {
       "snapshot_date": "2026-01-30",
+      "visible_from": "2026-02-09",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2026-01-30/manifest.json",
       "manifest_sha256": "7abad6bbdb1869366a45bc5f3d4d97a44b32879a65e98703c37df4cc1ad6b6a3",
       "generation_id": "ad7051378c03ee3176db79469a984bb2809c4dd150a750d354cb8ce496a28f3d",
@@ -55,6 +100,8 @@
     },
     {
       "snapshot_date": "2026-02-27",
+      "visible_from": "2026-03-09",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2026-02-27/manifest.json",
       "manifest_sha256": "3db8e533e10b7efc16af1a190b22f3a82d7c51ee855c720a1647a99ef304165a",
       "generation_id": "c0d443402b7cc4c8ffb981be774d8aca29b9d5b4580b5e13a5778133d59d39d8",
@@ -63,6 +110,8 @@
     },
     {
       "snapshot_date": "2026-03-31",
+      "visible_from": "2026-04-09",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2026-03-31/manifest.json",
       "manifest_sha256": "c7ef5e19f2e16f375b40ff72349c87766199edfdd9122eae6f8d5592078da222",
       "generation_id": "78362e4d0a6fae2ea565263a9b4059f0a850682fb2942824da207ec2e23de35a",
@@ -71,6 +120,8 @@
     },
     {
       "snapshot_date": "2026-04-30",
+      "visible_from": "2026-05-13",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2026-04-30/manifest.json",
       "manifest_sha256": "576ad0fc2935f6fc4de1ae96810e280b06f882c143563c7a461bbcd2d24d8797",
       "generation_id": "3c1621374d0956de6f5e427fd6a7af756c80d92231b3fc74c3a16517ba18292d",
@@ -79,6 +130,8 @@
     },
     {
       "snapshot_date": "2026-05-29",
+      "visible_from": "2026-06-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2026-05-29/manifest.json",
       "manifest_sha256": "54c7617858eeee42d88919f79428d47d5d3639b597ba564722e77d2b6319f50f",
       "generation_id": "c823039145573bdb1a3a826727ea21b04f2af443651f165317d2785c66e1e27f",
@@ -87,6 +140,8 @@
     },
     {
       "snapshot_date": "2026-06-30",
+      "visible_from": "2026-07-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2026-06-30/manifest.json",
       "manifest_sha256": "5ae0c1b9da2553b689454515cdfb71bcc36d964a97b4b91c57e01bf1429955fb",
       "generation_id": "f1576ec034a386a0863ff699500faf2e006a19f829eb5ad634e0a068c030d806",
@@ -95,6 +150,8 @@
     },
     {
       "snapshot_date": "2026-07-31",
+      "visible_from": "2026-08-10",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2026-07-31/manifest.json",
       "manifest_sha256": "b25953e55dbc160a954df41e199d8aee10aa4ac2c92cbbc3463cbcd98178c991",
       "generation_id": "481451c8259fb65abccd95ac116b1e8cfded4655738bcd72176a3c5cab1c1064",
@@ -103,6 +160,8 @@
     },
     {
       "snapshot_date": "2026-08-31",
+      "visible_from": "2026-09-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2026-08-31/manifest.json",
       "manifest_sha256": "8c6169e3058b351c6d348fa12179e333b8c6d05261b02393a45b81fc1ab21a8b",
       "generation_id": "f46e6ffcd22160dea6a09d479a8d97696118930fbcdd56590fef80f5723a3ecb",
@@ -111,6 +170,8 @@
     },
     {
       "snapshot_date": "2026-09-30",
+      "visible_from": "2026-10-15",
+      "publish_lag_days": 5,
       "manifest_path": "data/a500-store/index_membership/a500/2026-09-30/manifest.json",
       "manifest_sha256": "379d70a28dd4bdbda1050bda44cb09cc0f7fde60ca32f0847f27dfb7d4a300c3",
       "generation_id": "9e07ceb86101784bd78bb61bdb8b4885e418a28e0f91b10a885085dfcfb829e7",

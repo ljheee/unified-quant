@@ -1,0 +1,66 @@
+{
+  "status": "passed",
+  "window_start": "2025-08-29",
+  "window_end": "2025-09-30",
+  "sessions": 23,
+  "members": 500,
+  "instruments_with_bars": 499,
+  "usable_label_end": "2025-09-23",
+  "metrics": {
+    "instruments_delisted_excluded": 1.0,
+    "null_rate.instrument": 0.0,
+    "null_rate.session_date": 0.0,
+    "null_rate.open": 0.0,
+    "null_rate.high": 0.0,
+    "null_rate.low": 0.0,
+    "null_rate.close": 0.0,
+    "null_rate.volume": 0.0,
+    "null_rate.amount": 0.0,
+    "null_rate.status": 0.0,
+    "null_rate.adj_factor": 0.0,
+    "sessions": 23.0,
+    "members": 500.0,
+    "instruments_with_bars": 499.0
+  },
+  "findings": [
+    {
+      "code": "delisted_members_excluded",
+      "detail": "1 members have no bars in the window and tushare:stock_basic(list_status=D) marks them delisted",
+      "instruments": [
+        "601989.XSHG"
+      ],
+      "severity": "informational"
+    }
+  ],
+  "universe_id": "a500",
+  "notes": {
+    "calendar_provenance": "tushare:trade_cal:SSE",
+    "suspension_provenance": "tushare:suspend_d(23 sessions)",
+    "suspension_sessions": [
+      "2025-08-29",
+      "2025-09-01",
+      "2025-09-02",
+      "2025-09-03",
+      "2025-09-04",
+      "2025-09-05",
+      "2025-09-08",
+      "2025-09-09",
+      "2025-09-10",
+      "2025-09-11",
+      "2025-09-12",
+      "2025-09-15",
+      "2025-09-16",
+      "2025-09-17",
+      "2025-09-18",
+      "2025-09-19",
+      "2025-09-22",
+      "2025-09-23",
+      "2025-09-24",
+      "2025-09-25",
+      "2025-09-26",
+      "2025-09-29",
+      "2025-09-30"
+    ],
+    "delisted_universe_size": 339
+  }
+}

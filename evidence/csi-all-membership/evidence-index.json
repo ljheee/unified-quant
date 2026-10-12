@@ -4,9 +4,14 @@
   "store_root": "data/csi-all-store",
   "pit_precision": "monthly_approximation",
   "snapshot_count": 21,
+  "earliest_visible_date": "2025-02-12",
+  "verification": "manifest validated against index_membership.v1, members digest recomputed from bytes and members re-read through IndexMembershipStore",
+  "note": "the store root is gitignored; these digests are re-derivable by re-running scripts/fetch_index_membership.py for the same window",
   "records": [
     {
       "snapshot_date": "2025-01-27",
+      "visible_from": "2025-02-12",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-01-27/manifest.json",
       "manifest_sha256": "e3f0ee6fe1f01e95dc5494189605f7ae42d539f00326015c3b0429b817ecb1eb",
       "generation_id": "ddada644a5eac7d49d55a4a5d502ad3fe28fb3cab3bbe6d4d078f90dfe1011be",
@@ -15,6 +20,8 @@
     },
     {
       "snapshot_date": "2025-02-28",
+      "visible_from": "2025-03-10",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-02-28/manifest.json",
       "manifest_sha256": "cc8707b2014f9b8c20570feb8b198d37cbfd51b9dabc8825bae13660e6daa232",
       "generation_id": "ab4188484243addf0827b904d4a2a08c95a63a89d963f560362786bed779117d",
@@ -23,6 +30,8 @@
     },
     {
       "snapshot_date": "2025-03-31",
+      "visible_from": "2025-04-09",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-03-31/manifest.json",
       "manifest_sha256": "a10703d470e81a6f49f2f57908b621946c1989b4f3b9458dc45acb943c3f7165",
       "generation_id": "f4a7db8171ad98ea5eb1b587e9c4dc9578e9142ec93df844feeafcadb77fdf60",
@@ -31,6 +40,8 @@
     },
     {
       "snapshot_date": "2025-04-30",
+      "visible_from": "2025-05-13",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-04-30/manifest.json",
       "manifest_sha256": "83b5a337aaded06a203840ef6113816beb20046d438903476200857cfb01a99d",
       "generation_id": "771175db046fd8bdc88888fb49f85686d6c2b087f55b04fc3c76cc9b8e674028",
@@ -39,6 +50,8 @@
     },
     {
       "snapshot_date": "2025-05-30",
+      "visible_from": "2025-06-10",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-05-30/manifest.json",
       "manifest_sha256": "8d3ab04d818211ba79eff923b370a17b86c4b2eaf6979c8e4b2480574ff46a31",
       "generation_id": "83e0d408fb7edaea27efeb2b86bad385c9a7316e2a387675d117eaf92c2b25b3",
@@ -47,6 +60,8 @@
     },
     {
       "snapshot_date": "2025-06-30",
+      "visible_from": "2025-07-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-06-30/manifest.json",
       "manifest_sha256": "a526e4013d3322caaca5c872dd383484520ece3fc836350cd4c142ef8d625297",
       "generation_id": "f96d5194e75b44c275147b5257df3d45778b6239583774c2cf190e11f819295f",
@@ -55,6 +70,8 @@
     },
     {
       "snapshot_date": "2025-07-31",
+      "visible_from": "2025-08-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-07-31/manifest.json",
       "manifest_sha256": "b0fa5d00ea2e1b9889072d5b2617a19ac34c303f2f3f57603ae0f9bc8f6a977b",
       "generation_id": "a3570ac88975422b5e4052f9d187a462bfc4eb15a13396a0039129e2c0524267",
@@ -63,6 +80,8 @@
     },
     {
       "snapshot_date": "2025-08-29",
+      "visible_from": "2025-09-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-08-29/manifest.json",
       "manifest_sha256": "bcbf1a130f370dee2a80aac6fffdee615dc525d986f889411c56b29a35734573",
       "generation_id": "3100e27a27492e7d18f5909a05aeceb6ec591dd9ff9837a7a6e692259cd3761d",
@@ -71,6 +90,8 @@
     },
     {
       "snapshot_date": "2025-09-30",
+      "visible_from": "2025-10-16",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-09-30/manifest.json",
       "manifest_sha256": "6d2afc667442855825c380d562919caa6c3d69337f32a857f60aca929458af7d",
       "generation_id": "4ba57dcb82c640cbb0c12f9271752aa242a457e98bf7242e1c1a69a4c54d4d20",
@@ -79,6 +100,8 @@
     },
     {
       "snapshot_date": "2025-10-31",
+      "visible_from": "2025-11-10",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-10-31/manifest.json",
       "manifest_sha256": "0c07e6110626f8011a580a6233794dae226b395f0e6bbd058795a7d7f5a36e7a",
       "generation_id": "1f9392e0e39d6b0dc5485f19f569130db71232f106c09072dfd0d5dd266d9fe6",
@@ -87,6 +110,8 @@
     },
     {
       "snapshot_date": "2025-11-28",
+      "visible_from": "2025-12-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-11-28/manifest.json",
       "manifest_sha256": "f48c67c2911c80ec6664d8c141eaf6ecae6b4f72df18ebfe12d27e244b0e6557",
       "generation_id": "edc1acca6a119841152b033dff1c24b23e543716a1717137f2af70f18e53bab1",
@@ -95,6 +120,8 @@
     },
     {
       "snapshot_date": "2025-12-31",
+      "visible_from": "2026-01-12",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2025-12-31/manifest.json",
       "manifest_sha256": "f5b024ee0023e3ac005f529054cd4b11fe7db1b4cab9c50e266821f79f23eda4",
       "generation_id": "5ba3d0d5458cb5e45120980ad341157b5d2a84710d59fb6cacb29afcec62283a",
@@ -103,6 +130,8 @@
     },
     {
       "snapshot_date": "2026-01-30",
+      "visible_from": "2026-02-09",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2026-01-30/manifest.json",
       "manifest_sha256": "3f624129dadfea6f47c60fc38a7541dd5313718bb208fdc0b71bbd7c59e034b4",
       "generation_id": "69cac586f48757e71b913fec08495b09941fe41a59fc7718a5a34f2fb3379dea",
@@ -111,6 +140,8 @@
     },
     {
       "snapshot_date": "2026-02-27",
+      "visible_from": "2026-03-09",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2026-02-27/manifest.json",
       "manifest_sha256": "b20589f6a90b26582d2cb12438f0e52a73af055f9d7a6a51b6d2ea89ce27b120",
       "generation_id": "25cbe6fce236a8ba126ebb235d702cba979d04d967bf1e42c7e8c6dd4b55121f",
@@ -119,6 +150,8 @@
     },
     {
       "snapshot_date": "2026-03-31",
+      "visible_from": "2026-04-09",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2026-03-31/manifest.json",
       "manifest_sha256": "aab046b46fc4f07bba37278140f2f5b133eef0daf10e0efd41798a80c8eb08d9",
       "generation_id": "82630ab7c8b749729f5d199d82afe28952da29b59b23e8b0b5407edefb86601b",
@@ -127,6 +160,8 @@
     },
     {
       "snapshot_date": "2026-04-30",
+      "visible_from": "2026-05-13",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2026-04-30/manifest.json",
       "manifest_sha256": "cfbee6101371c45004641a8978b9b6b82a3a10b909757f1150e18d68498581a7",
       "generation_id": "3de1eb73653e7416b8fd2d41e101e81e66b4c45732c6734f6887b0a282019c93",
@@ -135,6 +170,8 @@
     },
     {
       "snapshot_date": "2026-05-29",
+      "visible_from": "2026-06-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2026-05-29/manifest.json",
       "manifest_sha256": "a10f8f5150024cb9158ca33549a9657a1204077f8dccd1f88b0ba3fe999d62d9",
       "generation_id": "72cb270c78c065ce51cb24db4757232b6cfd808e795d2944c202779fdef29f54",
@@ -143,6 +180,8 @@
     },
     {
       "snapshot_date": "2026-06-30",
+      "visible_from": "2026-07-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2026-06-30/manifest.json",
       "manifest_sha256": "890e7a9f3789325752496340791f17506e7dc9adb97f45e99c0331748befbff8",
       "generation_id": "b1af4542d52afffc693852d6a295f0b5ca45374033dcfdf2e1ec441cb85d0028",
@@ -151,6 +190,8 @@
     },
     {
       "snapshot_date": "2026-07-31",
+      "visible_from": "2026-08-10",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2026-07-31/manifest.json",
       "manifest_sha256": "ed7d32b85762eafdbfba753c099e1ab3a6f6a775f2a19a1ed06886e888834146",
       "generation_id": "4205f886b78345d7e0629594b88ad7afdc5538ef8130a44b2bc255ad59778226",
@@ -159,6 +200,8 @@
     },
     {
       "snapshot_date": "2026-08-31",
+      "visible_from": "2026-09-08",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2026-08-31/manifest.json",
       "manifest_sha256": "f170ce8b91484752248c41df8f8eb9c38bd23545bb3ae35babc2d36a8cfd5176",
       "generation_id": "ff0d8bdb8b23b700a95a83cc5bf6782e8223a4dc739b0e66eb6f9374e1065796",
@@ -167,6 +210,8 @@
     },
     {
       "snapshot_date": "2026-09-30",
+      "visible_from": "2026-10-15",
+      "publish_lag_days": 5,
       "manifest_path": "data/csi-all-store/index_membership/csi-all/2026-09-30/manifest.json",
       "manifest_sha256": "04dc04b7cf85fc677c17ffedae332b1bde9ff7db07593f2bcd92436eff3cc46d",
       "generation_id": "362d576af97498af7202e4283c35d7bb308182aabb96a5c6ea7038e6a3470700",

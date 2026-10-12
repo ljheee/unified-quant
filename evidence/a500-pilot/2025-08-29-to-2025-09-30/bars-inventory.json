@@ -1,0 +1,475 @@
+{
+  "record_version": 1,
+  "kind": "bars_daily_inventory",
+  "universe_id": "a500",
+  "dataset": "bars_daily",
+  "schema_version": "v2",
+  "store_root": "data/bars-a500-store",
+  "window_start": "2025-08-29",
+  "window_end": "2025-09-30",
+  "partition_count": 23,
+  "verification": "manifest digest + data digest recomputed from bytes, partition re-read through ManifestFirstReader with checksum verification",
+  "note": "the store root is gitignored; these digests are re-derivable by re-ingesting the same window and re-running this script",
+  "records": [
+    {
+      "session_date": "2025-08-29",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-08-29/manifest.json",
+      "manifest_sha256": "00c9f40d69eabebe934594117ae48c7b9b13b45f914f0d51132479972bd02509",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-08-29/data.parquet",
+      "data_sha256": "1eec692332f950b1e373bf7bd4162a2c36d07238fca09832d4e3f23b664055a4",
+      "generation_id": "9358cda9df96e7e082e2f3d5bb43a4df0b8fa0566ab787ad5f79630cc3d8fbc1",
+      "row_count": 499,
+      "run_id": "937fb254-1434-46c2-996e-dba53f787d77",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "5bb22758c207b2afb7c6ada03e3928176ab7592c4cbf0b23274c9d7b02cf2665",
+      "trust_anchor_sha256": "4977f50174699302756320d28909d9cac73e71924bc0279b24b892551464e061",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-01",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-01/manifest.json",
+      "manifest_sha256": "8fd993cd3eb9266208c987d32f5b672e792444d6aa842ef87dfbd2c4cef8e5c6",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-01/data.parquet",
+      "data_sha256": "a2fd8099f2dd28f2b485a73f15e3738d95aaee602642a2d65090628945f3f0b5",
+      "generation_id": "dca6be9dfbad56708e1a7760840879ac4d97c0f3f17d3de7d83e65b595dbc3d1",
+      "row_count": 498,
+      "run_id": "c8a8a7e6-2862-4842-88ad-3b506cd6cb11",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "814f687b0c8b77ec46e9bcdf59760466c8be99f13914e43236bcaaf122d0e000",
+      "trust_anchor_sha256": "81992164fefcb44707ee796d7e7aaf6bb4b1922b83c2df20f21c083e6bb55820",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-02",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-02/manifest.json",
+      "manifest_sha256": "053cba6438b4b42211b0f9d70550b7de02cdb9ba6089f6f95cf254490261c5e3",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-02/data.parquet",
+      "data_sha256": "61a8f351af34db2a63e168bf5015cadf11ccdd43b04aa52aac71e9959d66e546",
+      "generation_id": "a8beb2a7866f840b36dd26314a0b5bc9de31aab2007f167478ffbef5bc0a0aba",
+      "row_count": 498,
+      "run_id": "08e5f104-b2a6-4ddb-b692-50003bc10174",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "d08ad130db70aa649466d0fdfcfb3ceaad836d9948f09d82151be29c23f3b1aa",
+      "trust_anchor_sha256": "c0a94ac6df5a2393dc0b01c3e6d2f12bf188e6a0c24407362989aa67fa26b8be",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-03",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-03/manifest.json",
+      "manifest_sha256": "413ad7d855f074202fb9b672ce03b20a85f2c23201bfd60f37bc33160a2b8197",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-03/data.parquet",
+      "data_sha256": "201ff8c99ba0930d8cd6179439362811c5e2a12b2f8282ecb16b24e8bdd53617",
+      "generation_id": "13b7d8e677ab58bd9e75174c3651009b62e775bb1b95b3f7ea6a62d52699a6a5",
+      "row_count": 498,
+      "run_id": "aa2af76a-2fed-49d3-82ac-08dd7ef9e2a4",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "960b6b0f979588118e07ba5b049ec00c5396993a7980101f66f764c7ba6c109b",
+      "trust_anchor_sha256": "d573b55bd7b574186fa8084509bca87caf48a190124d505f440a5480c06035f1",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-04",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-04/manifest.json",
+      "manifest_sha256": "068705532e7e62c2a1a8eb2944fe1339533c2077bd98688a960d65cc28f20e3d",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-04/data.parquet",
+      "data_sha256": "819494465126628035a443787c4bd912f72be36761d30d1818c8332924e44022",
+      "generation_id": "72423b29ac0ba504a836b91a876bad743c17e2e6e25c97c5c1a575c2f51c94f4",
+      "row_count": 498,
+      "run_id": "a5fa57d4-007e-4085-aa20-80a1377c2915",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "2a86eaaf4fcc2309d34ac02df9794347afcd4605e6236052397860bed162e2a0",
+      "trust_anchor_sha256": "81bc2263880549b595008febedfb09e715f9e171c9da27a9583e254d8c7ee261",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-05",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-05/manifest.json",
+      "manifest_sha256": "55f3df8af3046c282087337a6dbfee7089bcba82e0c0502bce43d4db0f69ef2e",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-05/data.parquet",
+      "data_sha256": "93c27a09ea2c3580fe6e53188ff6d4991e784463a76ff2a5aa0e66d010d3c63f",
+      "generation_id": "4cbc980df43d8fd78289be930822c85c5d6ae8542da0c0aa19e389417dab63c5",
+      "row_count": 498,
+      "run_id": "983eff89-ebb3-4e9e-996e-164c24500669",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "90977303ec005e0e8668755e007d9dd93c04591b2a32562e790f274311b180a0",
+      "trust_anchor_sha256": "d20efc568601abcc9ca8276d28411364ddc35d5f970ce95c5f9bf3e584abb0f8",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-08",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-08/manifest.json",
+      "manifest_sha256": "f1491b9e9b33fc6736f8b42dfea8be6ec1034fa9fa849a584f83db2cb2268f87",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-08/data.parquet",
+      "data_sha256": "82e8261d3fdc8abed167b9013561d4e484f9c7488b3f4e4799a613bfd5a659b0",
+      "generation_id": "5a0c9c3face4bd07ceedd0ac23e07a1d70def02056ae8211e490e31105f31a28",
+      "row_count": 498,
+      "run_id": "f3123d51-f1e1-42c1-b1d8-7a9c05414ef7",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "b05d48e0de6e5946caa23db6a08445a93997234cdd34b314bff65b355bdc8c7c",
+      "trust_anchor_sha256": "b3ac190e2c252011ab1f365ea22099034bc9d60500077ab3784fb622f52497fd",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-09",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-09/manifest.json",
+      "manifest_sha256": "5c1047eb356f57685ed334e95905408f42554cff4f677530cd96d1af0f9a414f",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-09/data.parquet",
+      "data_sha256": "39251ee7dda1ce36704c99c50230f153494f07dd71b618b82bb85cb988952bcc",
+      "generation_id": "c42a8d50a863b325f36bc597e302548f01237c3ae5bd1b800f9848f6c8d6b5b3",
+      "row_count": 499,
+      "run_id": "b9ead21a-4f61-485a-b61a-83f267c67555",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "2d00ede8b577732b8bb5a982d69d3a92aae2cceb66e2e38ccbb7734156f21db4",
+      "trust_anchor_sha256": "5050fc5ffe0b35c9de2d2aa897c453906ebdeb69d2d4f84d1a8680e9d8919823",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-10",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-10/manifest.json",
+      "manifest_sha256": "641be0c98ae862df96ac579838d0d79e48d8dc01a49c02c2cbb535ecbb784680",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-10/data.parquet",
+      "data_sha256": "37971ec27294dea263fd52f53b3ca84bebb3523e4c111e26b755496fab9dd66a",
+      "generation_id": "6b2bf1131e68ffa73e1b0ebcd9052af24c8a3868a5093e3da468dc34799bb09e",
+      "row_count": 499,
+      "run_id": "b974d009-0dec-4e57-9248-79c9100ac6f4",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "fbae54d0bdde3db85b56d6288d1e1a94cdc8cf25ec4945df866a5ba635d8e5b1",
+      "trust_anchor_sha256": "7f866acc1216118bb5ce820151e3db886d1de20539e247876fd14a260e0ab174",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-11",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-11/manifest.json",
+      "manifest_sha256": "66f0239f8c85eafb166db9e7f0960abca7a748228d278f79dd34d36fdd192902",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-11/data.parquet",
+      "data_sha256": "ab5c15b0cfe790e7f3f7bc2e407705202d42c87f5272f02eb13bba1cec4f6b71",
+      "generation_id": "5a134599cf3157d292ffbb3e1b5ef9350f3f1bfc95d29f6410ccccad0f5c2fc0",
+      "row_count": 499,
+      "run_id": "c4ef3f07-e45a-4386-a03b-48220201eb3b",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "182986b4d3b36a626f99533f4862246fdbc05b2add168434cad45330b29cd940",
+      "trust_anchor_sha256": "b59d6724258f9ee0aaafff34ddd49aa9b461fd29e782f0d34bff4b406deff1bf",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-12",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-12/manifest.json",
+      "manifest_sha256": "037ff342dcd33174542f9a645f5b1775f0c98fd76010d40993c57d73509eadc0",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-12/data.parquet",
+      "data_sha256": "ac221196909279024d3b11be94fafa1a5047f56119f46e4b45a5233b99413f4d",
+      "generation_id": "fd4f1c4a160761778092ec2c05aa16097f5fff7c7bc1dc3774cd34773be0d68b",
+      "row_count": 499,
+      "run_id": "310a933e-81ba-4d28-b1d8-288565c4645b",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "b46d0af8fa4ab0c4aa2fbfd1040d5542ed373f886d65a6510a3a0912d4a82e3f",
+      "trust_anchor_sha256": "c32565c442768640edb79c88218c2c6061d310f787c27a0a8ed7a72791b4d3ac",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-15",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-15/manifest.json",
+      "manifest_sha256": "ba1e93d0d6b17407e75847f24606a796f0da3187888a83f0d74e1302f8b740f8",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-15/data.parquet",
+      "data_sha256": "8da1428067d27083a798439d1917ac489ff42a8ed5b93c251a30cd3ab20fb960",
+      "generation_id": "9d0296f0afab60983f072b980a91a051cf2ff8a9740609a6e69c181ebbeab072",
+      "row_count": 499,
+      "run_id": "94c0a9da-e067-46d0-8bcb-eb32526528be",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "44c0677c2770c968d41db790a8d223f872c712dfbf779faa3ff38c4e6d8d0a3d",
+      "trust_anchor_sha256": "c4366c348da6580997e9a4bb90e406d8bc642cc343eb189c3ee71ce2c07d8320",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-16",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-16/manifest.json",
+      "manifest_sha256": "6d0351a0d7ed47b968180664270f188129c9618a4aa643f4f2feb458f86e441d",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-16/data.parquet",
+      "data_sha256": "52fe2b91543c0b210abe92167a6b72d76409a7073e7b025843dc091feaad129f",
+      "generation_id": "e9671e4034bd096dac852be445c17729800003f5e5b3d4495a89bff10cb3c2b5",
+      "row_count": 499,
+      "run_id": "eaa355aa-de4c-4e96-ab55-471e0e61fc71",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "bd279de2e8690654310be9c99677847d21d4f2e28c27ae88a4c524d1106f2ae2",
+      "trust_anchor_sha256": "bd517fbea9cdc8375d4f829d1f4ffb2cb639f020f3d8430b8642ed54482502f3",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-17",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-17/manifest.json",
+      "manifest_sha256": "86542417764c43c100a19a6e8b3eb8af52c44c6273b752d5097aa01d5984516a",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-17/data.parquet",
+      "data_sha256": "fd92bc2372a171467d56d3fb09e89e2adbd3e3ffe7787e9478c2341e5f9541fa",
+      "generation_id": "7141cb9d4860ad1d038c203229f38274717b0846a29452bfe235a7d4a6d634e0",
+      "row_count": 499,
+      "run_id": "736fe5fa-6bca-4f38-aa9d-8064f7a6cf0d",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "18112bdc94c728f8ce710fa5ed176aa69c0dc9d6371ed8f9b05bffca2cedb741",
+      "trust_anchor_sha256": "d27843fd2aeff9e1d28e6ed7a444a8c6ca94ffffe62a7bdf8b3411f01e3b603d",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-18",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-18/manifest.json",
+      "manifest_sha256": "e239fe1a5fd1ebc6da33f35f023028dd26d821c696d8a5d1cd7283de304e6fa3",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-18/data.parquet",
+      "data_sha256": "737ef4d85f061044b2db5a8c50bb074af752255ce4f592b5357132c5b96fce2e",
+      "generation_id": "d0b8cc177c6d92e89a96b0ef7559f6e30e1393fecb931ac429f772e0e883b819",
+      "row_count": 499,
+      "run_id": "3e12674c-6e71-4281-a40b-b2131658fcad",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "944d87aa400aacc77e68ec88f29f4b21a2c0c4aba2217debf66cb9eae5f61881",
+      "trust_anchor_sha256": "bf1777b3d03519e292aa37353c6ea14861d4b2f77c193c9cd3ac9ff85c22ec4e",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-19",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-19/manifest.json",
+      "manifest_sha256": "dbd8bf0bc052b5ffaacbf6d40d626f5d3520b03c3e5cea1fb3a2af79b1fd5641",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-19/data.parquet",
+      "data_sha256": "51af0657c5f2c84400ba1344d2b1a019a77d2dcc8156a70f3902e7a639e43e7e",
+      "generation_id": "47e406f3b2c62c2b0d86da8976f189e48f041dc6c1a7cd887f278d32b0d8b6ef",
+      "row_count": 499,
+      "run_id": "5a3d50f2-aca1-4288-bee0-c34defe2d604",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "233118019ec873b37a592e416333b9d259747aabc56c169608b95b6ea427053d",
+      "trust_anchor_sha256": "83634173dc9da9571295e44e6220eb032b378e723ddd52616be2dbc323823183",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-22",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-22/manifest.json",
+      "manifest_sha256": "01719d0af08f4e20cd2c938a072ce5a18987027d259bb97aab7f3b4cc74c0611",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-22/data.parquet",
+      "data_sha256": "2b57f1a94de1460fbbbc3400319c961d84ce72a98a51af0384ae612e90dc71a0",
+      "generation_id": "c8625e5af4198a4c8b701f3d95f2e440b58cec129a5aa7250b9265e507e4c9d6",
+      "row_count": 499,
+      "run_id": "6eaf14e2-ad68-4fc5-a74e-d6306feee0f9",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "d4b015b35aa8d26027b9ff6d2948c4ffd3f337c3b8ddc317386ee5958f162bea",
+      "trust_anchor_sha256": "051f78f0a78b6251541b99b8aed2a5b311cd09afb7eab8145556e18903065172",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-23",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-23/manifest.json",
+      "manifest_sha256": "2f00df66f18256a78ed1fb7294eb24e5152a82f62ccbf97fe107d57adfe86b82",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-23/data.parquet",
+      "data_sha256": "f5944006e91983b7ad8409c0a4f2c1e9fc2a80081e3e596b37c378844955fa35",
+      "generation_id": "b86ef6c1eaa3e14e021f7822db8654987899afb08ff2868d4c7d1caf45176cb0",
+      "row_count": 499,
+      "run_id": "d7f9a838-7721-4a88-b9e6-3633f6acfdfc",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "920de9749b95da52fa9ae6b623d97c2173da38675740a19635ee9454393f65a2",
+      "trust_anchor_sha256": "6697e5d6e823e961e28447f1fdea997068d7239fdfbb68fa81ebd9706835b6a7",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-24",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-24/manifest.json",
+      "manifest_sha256": "43b7122121dcf89c6c1e4fd1a715860c281ee1c962ca6405cc67b948e695d8d1",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-24/data.parquet",
+      "data_sha256": "d2642d05d17362e98cd128899e46b2e7e37c44f502e080301bc19128e906698d",
+      "generation_id": "0c4a0dfc9b51d6aac066fa57f44a0306359dbdeda59d18537bc7a681bc1fe891",
+      "row_count": 499,
+      "run_id": "f1940d2b-405a-4a44-b565-6b79b8e067cc",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "8ec1cc77ce9f5add5080a78e95d8605cc8bfd2697e68a76300be2fa33c3c79fc",
+      "trust_anchor_sha256": "fa55bd518cd74dabd92e73c666440dcc1d5f99f5a4be2fd72841af7852ba9f99",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-25",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-25/manifest.json",
+      "manifest_sha256": "e9165a6a54cd5d45d874ccc5d26547d3ef1491c83b3efcf19dcc54a4e4a47eae",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-25/data.parquet",
+      "data_sha256": "e05e9da3cf7d3f1b2fd276e3aac26dc08ca63ee267d89e7115b0571f50f1fac5",
+      "generation_id": "70a84e411810903ef7237040e659882e72abdf0fdc780cf15fb85e432c6c076a",
+      "row_count": 498,
+      "run_id": "8e3ef364-8096-477c-8c43-83879f2eac3d",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "de5c860cd0ae13c8b3deba4f800c6d62f3860320f9fb9ac3acce9cdb50bb5806",
+      "trust_anchor_sha256": "9a0c0821f47956a9b085964b86514fc3feb19d830f50863a624e7552396ccb84",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-26",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-26/manifest.json",
+      "manifest_sha256": "39db2f9afd16cf07fb4fc71ceeac8c17905913408c7ce542ab6592396000f49d",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-26/data.parquet",
+      "data_sha256": "87552311e996c4f3d1200da9b0442618981d8bb48741763254334273b0f39dd4",
+      "generation_id": "34fd0295092992356ff43f0e770d7eec1c0c9e6d510fd918dc1e551920ff2c6c",
+      "row_count": 498,
+      "run_id": "5e71fc72-798a-417f-b72c-29e0a3aed795",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "c3627da72e2ede350beb558de05cf8d37bd29d3b3567f5266cbc1ddf27107765",
+      "trust_anchor_sha256": "9b9eea0074ba609e6965fdc0058c8bf551d0967f5a68d06c0557a5de45a0de3e",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-29",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-29/manifest.json",
+      "manifest_sha256": "9082baa726028d7733516749acbb15afe1e7ca772445c410227492ab372e4904",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-29/data.parquet",
+      "data_sha256": "8ecf325e5542c93ac3e2292cbe7c8857e4f844f1fecb037c75a2edda389e495b",
+      "generation_id": "3758962bb754d4dfa8e0e971366f944d5b3f20cadddc1a0fbb0bfd4a863128f5",
+      "row_count": 498,
+      "run_id": "f5489a05-4649-4150-b965-dd94139583d1",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "618cba81516eed4d0f8dd244efa59d578ca2c8b481517966c2f833dd14dbfd52",
+      "trust_anchor_sha256": "b9ce747d9b31bf227c9d69889b81a139aea524d50ab53a6dd34ff49308762a6a",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    },
+    {
+      "session_date": "2025-09-30",
+      "manifest_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-30/manifest.json",
+      "manifest_sha256": "a508229c1aab6723e33e06a040e7856b5732dd03408b7eab0e818f538c7bfa19",
+      "data_path": "data/bars-a500-store/canonical/bars_daily/v2/date=2025-09-30/data.parquet",
+      "data_sha256": "7db6cb064abd2ad4754156f25c1ee58ed7e6ac59fd0f9c5aad826c2bc8ff1e89",
+      "generation_id": "7f4cc9a8a28b968619e1e6788b3e6a0e9219742444962cad9033bd24bdac17b8",
+      "row_count": 498,
+      "run_id": "0c2c431c-dde3-40fe-9f8c-17bc8db2988c",
+      "code_fingerprint": "4030f4b30ee99ef3a891bca70d9714d36fc7121e8a2818c93847f4252f532e7e",
+      "schema_checksum_sha256": "51b9a17ddf44a65ca0816495f622e4a13f28e4c96b5c9e5ff1fac20c0c766e38",
+      "quality_report_checksum": "1c307318621c9f954f4c146b846c50e0b236e1f05ff8baf1212e2f262299b269",
+      "trust_anchor_sha256": "d2ca7fb7d0d49669333ff1c6a82c36fbea320e7bb4dc02edbb24c56789e9bcf7",
+      "source_versions": {
+        "tushare": "tushare.pro"
+      },
+      "sources": [
+        "tushare"
+      ]
+    }
+  ]
+}

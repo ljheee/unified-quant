@@ -1,0 +1,79 @@
+{
+  "record_version": 1,
+  "layer": "a500_pilot_ingest",
+  "subject": "A500 full-membership daily bars pilot, 2025-08-29..2025-09-30 (pendding item 8)",
+  "status": "passed",
+  "window": {
+    "start": "2025-08-29",
+    "end": "2025-09-30",
+    "sessions": 23,
+    "usable_label_end": "2025-09-23"
+  },
+  "universe": {
+    "universe_id": "a500",
+    "index_code": "000510.SH",
+    "pit_precision": "monthly_approximation",
+    "publish_lag_days": 5,
+    "snapshot_count": 17,
+    "earliest_visible_date": "2025-06-10",
+    "members": 500
+  },
+  "stores": {
+    "bars_root": "data/bars-a500-store",
+    "membership_root": "data/a500-store",
+    "tracked": false,
+    "note": "both roots are gitignored generated data; the digest inventories beside this record are the reviewable artifact"
+  },
+  "ingest": {
+    "pipeline": "uq.pipeline.daily.build_tushare_v2_pipeline",
+    "primary_source": "tushare",
+    "partitions": 23,
+    "rows_min": 498,
+    "rows_max": 499,
+    "rows_total": 11467,
+    "instruments_with_bars": 499,
+    "fields": [
+      "status",
+      "limit_up",
+      "limit_down",
+      "adj_factor"
+    ],
+    "run_reports": "uq-ingest writes one report per session into <bars_root>/runs/<run_id>.json (gitignored); the partition manifest carries the same identities, which bars-inventory.json pins",
+    "pilot_driver": "the window itself came from an inline per-session loop over build_tushare_v2_pipeline; uq-ingest daily --pipeline v2 now reproduces that path from the membership store"
+  },
+  "readiness": {
+    "status": "passed",
+    "blocking_findings": [],
+    "informational_findings": [
+      {
+        "code": "delisted_members_excluded",
+        "instrument": "601989.XSHG",
+        "reason": "no bars in the window and tushare stock_basic(list_status=D) marks it delisted"
+      }
+    ],
+    "max_field_null_rate": 0.0
+  },
+  "limitations": [
+    "publish_lag_days=5 is an assumption, not a measurement: index_weight exposes no visibility timestamp, so membership visibility is a monthly approximation with an unverified lag (pendding item 1 owns the measurement).",
+    "the trading calendar comes from the same vendor as the bars (tushare trade_cal), so bar_session_gap proves internal consistency, not vendor-independent session coverage.",
+    "the v2 pipeline publishes unvalidated lineage: every field records compared_rows=0 and no validated_by source, so no cross-source corroboration backs these partitions.",
+    "the delisting exemption is conservative. At 2000 tushare points stock_basic does not return out_date and namechange carries no record for 601989, so only members with zero bars in the window are excused; partial gaps stay blocking.",
+    "23 sessions with a 5-session label horizon is a smoke-training window, not a research-grade backtest window.",
+    "corporate actions are carried as the vendor adj_factor only; there is no XDXR/dividend cross-check importer because the derived multiplier could not be reconciled against authoritative reference prices."
+  ],
+  "artifacts": {
+    "training_readiness": "evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",
+    "bars_inventory": "evidence/a500-pilot/2025-08-29-to-2025-09-30/bars-inventory.json",
+    "membership_index": "evidence/a500-membership/evidence-index.json"
+  },
+  "reproduction": [
+    "scripts/fetch_index_membership.py --preset a500 --store data/a500-store --start 2025-05-01 --end 2026-09-30",
+    "for each session: uq-ingest daily --date <session> --data-root data/bars-a500-store --pipeline v2 --membership-root data/a500-store --universe-id a500",
+    "scripts/validate_training_readiness.py --bars-root data/bars-a500-store --membership-root data/a500-store --universe-id a500 --start 2025-08-29 --end 2025-09-30 --min-sessions 17 --label-horizon 5 --output evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",
+    "scripts/build_store_evidence.py --kind bars --store data/bars-a500-store --universe-id a500 --start 2025-08-29 --end 2025-09-30 --out evidence/a500-pilot/2025-08-29-to-2025-09-30/bars-inventory.json",
+    "scripts/build_store_evidence.py --kind membership --store data/a500-store --universe-id a500 --out evidence/a500-membership/evidence-index.json"
+  ],
+  "local_gate": {
+    "result": "pending_final_head_run"
+  }
+}

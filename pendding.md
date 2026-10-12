@@ -44,9 +44,10 @@
   - 未做:`adjustment_snapshot`/`golden_provenance` 等已发布契约的 instrument 正则仍只允许 XSHG/XSHE,与 `index_membership_row.v1`(含 XBSE)不一致;放宽属语义变更,需按规则开新版本。
 - [x] 7. 20 只烟雾测试(2025-08-29 至 2025-09-30)端到端跑通。
   - 已完成(2026-10-12):A500 前 20 只成员 × 23 个交易日,`build_tushare_v2_pipeline` 23/23 分区发布,`status/limit_up/limit_down/adj_factor` 全部就位,就绪门全字段空值率 0。
-- [ ] 8. 500 只端到端与证据归档到 `evidence/`。
+- [x] 8. 500 只端到端与证据归档到 `evidence/`。
   - 已做(2026-10-12):A500 全 500 只成员 × 23 个交易日灌入本地 canonical store `data/bars-a500-store/`(gitignored,可重灌),23/23 分区发布,行数为 499(其余为停牌缺失);为补齐窗口,`data/a500-store/` 已追加 2025-05-30/06-30/07-31 三个月度快照,最早可见日提前到 2025-06-10。
-  - 未做:把 ingest report 与就绪门 JSON 归档进 `evidence/`(目前只落在 `/tmp`,不属于可交付证据)。
+  - 已做(2026-10-12):证据归档到 `evidence/a500-pilot/2025-08-29-to-2025-09-30/` —— `pilot-record.json`(结论/口径/限制)、`training-readiness.json`(就绪门原样输出,`status=passed`)、`bars-inventory.json`(23 个分区的 manifest/data sha256、generation、row_count、run_id、code_fingerprint、schema/quality/trust-anchor 摘要)、`evidence-index.json`。canonical store 是 gitignored 的,故归档的是**可重导的摘要清单**而非数据本身;清单由 `scripts/build_store_evidence.py` 生成,生成时逐分区经 `ManifestFirstReader` 复读并校验 checksum,不匹配即拒绝出稿。`evidence/a500-membership/evidence-index.json` 同步从 14 个快照补到 17 个(旧记录 digest 无漂移),`csi-all` 一并换用同一生成器。
+  - 修缺陷:`uq-ingest daily` 此前只接 research-v1(硬编码 `build_tdx_pipeline`/`build_tushare_crosscheck_pipeline` + `config/universe/research-whitelist.txt`),v2 pilot 只能靠内联循环驱动,即"500 只端到端"不可从仓库复现。现加 `--pipeline {v1,v2}`(默认 v1 不变)、`--membership-root`、`--universe-id`:v2 成员逐日从 PIT membership store 解析;缺参 `parser.error`,快照尚不可见时 `configuration_failure` 且不落任何分区。ingest report 每会话写入 `<bars_root>/runs/<run_id>.json`(gitignored),其身份字段已进 `bars-inventory.json`。
   - 就绪门口径(2026-10-12 补):`suspensions`(来自 `suspend_d`,仅查询"有标的缺日线的会话")启用后区分三态 —— 全窗停牌(计入 `instruments_fully_suspended`)、可交易日数不足(`limited_tradable_history`, remedy 是拉长窗口)、日线确实缺失(`unexplained_bar_gap`, remedy 是修 ingest)。另有 `suspension_bar_conflict`(停牌日却有日线)。全窗口 A500 实测:批次缺口修复后仅剩 1 条 `unexplained_bar_gap`,即 601989。
   - 已做(2026-10-12):退市标的改判。`TushareAdapter.delisted_instruments()` 取 `stock_basic(list_status=D)`,就绪门据此把"整窗零日线且已退市"的成员记为 informational 的 `delisted_members_excluded`(不阻断),其余缺口仍为 blocking。同时引入 finding 严重度(`blocking`/`informational`),`status` 只看 blocking。
   - 实测否证了先前"接 `out_date` 即可"的设想:2000 积分下 `stock_basic` 即使显式传 `fields=...,out_date` 仍不返回该列(仅 ts_code/name/list_date/list_status);`namechange` 对 601989 无退市记录;`stk_premarket` 无权限。因此**拿不到退市日期**,只能做保守判定:仅当该标的在本窗口完全没有日线时才豁免;有部分缺口仍按缺陷处理。若将来需要精确到日,需要更高积分或交易所公告源。
