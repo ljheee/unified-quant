@@ -391,4 +391,20 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 
 实测数字（不是推算）：`bash scripts/run_gate.sh`（uv，单格本地 macOS arm64 / Python 3.12）在 `be672b8` 上 `766 passed / 22 skipped / 0 failed`（22 为 qlib 门控，本地 skip、CI `qlib-runtime` 运行）；归档报告与 requirements 同 HEAD，`pilot-record.local_gate.commit_bound` 已回绑 `be672b8`。dividend 真实窗口 A500 2025-08-29~09-30：28 个公告日、3337 条记录、证据清单由 `--kind dividend` 逐分区 governed 复读生成（`evidence/reference-data/dividend-events-2025-08-29-to-2025-09-30.json`）。
 
-未夸大声明：联动断言校验的是"声明的因子分区"，不重算特征本身；dividend store 是原始披露记录，**尚未**被复权链路消费——`XdxrAdjustmentDeriver` 仍只被测试调用，接入生产需要按 ex_date 取 `pre_close` 并定义"实施"记录选择规则（继续留在 pendding 6）；`publish_lag_days=5` 仍是未实测假设。
+未夸大声明：联动断言校验的是"声明的因子分区"，不重算特征本身；`publish_lag_days=5` 仍是未实测假设。（dividend store 当时尚未被复权链路消费，已在 §8.8 补齐。）
+
+### 8.8 dividend → 复权生产链路（2026-10-12，覆盖 87a6759/45dc5e3 之后的未提交切片）
+
+本批把 `XdxrAdjustmentDeriver` 从"只有测试调用"接到生产：`DividendEventStore → implemented_events → XdxrAdjustmentDeriver → AdjustmentSnapshotStore`，并新增逐标的审查报告与批量脚本。
+
+| 缺陷 | 判定与处置 | 锁 |
+|---|---|---|
+| 已实现快照**不可能**被选中（真实阻断） | `AdjustmentSnapshotReader.select_visible_generation` 要求 `sessions.csv` 等于 `pd.date_range(start,end,freq='D')`，即覆盖窗口内**每个自然日**；而 deriver 的 sessions 是交易日。任何跨周末窗口（真实窗口都有）都会被判 `invalid adjustment snapshot session coverage`——快照能写、永远选不中，生产链路必然不可用。改为与 save 侧同口径：严格递增、且首尾等于声明窗口（manifest checksum 仍钉住整张表） | tests/test_adjustment_chain.py::test_snapshot_publishes_and_is_selectable_across_a_weekend（周末间隙）+ 既有 runtime 用例 |
+| 派生表 checksum 无法与快照对齐 | `AdjustmentDerivation` 只回传 `effective_date_table_checksum`，不回传表本身；producer 若自行重建 effective 表，任何一格差异都会让快照 checksum 与 factor 侧声明漂移。给 dataclass 补 `effective_dates` 字段，直接用 deriver 自己的表落盘 | 同一用例断言 `source_event_id` 逐行等于披露记录 id |
+| 单位口径靠推断 | Tushare `cash_div/stk_div` 是**每股**还是每 10 股，直接决定因子错 10 倍。实测 CATL 2022 年度（每股现金 2.52 + 每股转增 0.8）复现官方 2023-04-26 比例 0.55214，确认为每股 → 映射 ×10 | tests/test_adjustment_chain.py::test_bonus_and_cash_use_per_share_rates_times_ten |
+| provider 口径不一致 | A500 窗口 219 条实施披露中 3 只（601866/002831/300003）用公告金额算出的因子与 Tushare 自身 `adj_factor` 差 1.6e-4~8.2e-4；折合现金 0.002~0.0096 元/股，量级正是交易所参考价的 0.01 元分辨率，非映射错误。容差取实测最差之上的 1e-3，并把 `price_scale_gap_cny`/`within_public_resolution` 写进结果，超差仍 fail-closed | tests/test_adjustment_chain.py::test_provider_divergence_refuses_to_derive |
+| 复权链路无端到端闸门 | 新增 `scripts/build_dividend_adjustments.py`：批量派生+发布+出报告，任一标的被拒即 exit 1（不是日志） | test_script_reports_and_exit_code_follow_refusals / test_script_refuses_a_window_without_bars |
+
+实测（真实 store，不是构造）：A500 2025-08-29~09-30，23 个会话；窗口内 219 条实施披露 → 29 只标的有可分派事件 → **29/29 快照发布、0 拒绝**，最差 `max_abs_diff=8.2e-4`（601866），全部在 0.01 元/股分辨率内；证据 `evidence/reference-data/adjustment-chain-2025-08-29-to-2025-09-30.json`。
+
+未覆盖：配股不在 Tushare `dividend` 端点内（`peigu/peigujia` 恒 0，已在 provenance 声明）；快照自身的不可变性/篡改用例沿用既有 runtime 测试；本链路只解决"因子侧有受治理的复权 lineage"，尚未把快照挂进 `FactorEngine.execute(factor_set='adjusted')` 的调用方（research_chain 的 v3/v4 执行路径，见 pendding 4c）。

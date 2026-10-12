@@ -1,0 +1,811 @@
+{
+  "record_version": 1,
+  "kind": "dividend_adjustment_chain",
+  "window": {
+    "start": "2025-08-29",
+    "end": "2025-09-30",
+    "sessions": 23
+  },
+  "stores": {
+    "bars_root": "data/bars-a500-store",
+    "dividend_root": "data/dividend-store",
+    "adjustment_root": "data/adjustment-store",
+    "tracked": false,
+    "note": "store roots are gitignored; the snapshot generation ids below are the reviewable identity"
+  },
+  "tolerance": 0.001,
+  "instruments_considered": 29,
+  "published": 29,
+  "refused": 0,
+  "provider_reconciliation": {
+    "max_abs_diff": 0.0008221228593363605,
+    "worst_instrument": "601866.XSHG",
+    "all_within_public_resolution": true
+  },
+  "records": [
+    {
+      "instrument": "000538.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "55d1a3bc666241316d849407fdb0da91b1e592cc5cd6650d0d13a6502c036c9f",
+      "events": [
+        {
+          "ex_date": "2025-09-24",
+          "cash_per_ten": 10.19,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "a7ec0639e92c134dbec2f09d04129d9067a1f23e1a0fba4ed72a7af1afb070fb"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 1.671104882294827e-05,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9824098049369929,
+        "provider_factor": 0.98239309388817,
+        "price_scale_gap_cny": 0.0009622221912253614,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "000887.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "c719aa58c10901568cc056f5c2f2b03afbe1ddfee7625651012c1b504c956626",
+      "events": [
+        {
+          "ex_date": "2025-09-30",
+          "cash_per_ten": 0.5,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "f360e4c187bc282139cdf9b428610dec3119b5027c4aa84df8858a3217dacd9e"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 3.6952649311583485e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9980491611392899,
+        "provider_factor": 0.9980454658743587,
+        "price_scale_gap_cny": 8.576709905218527e-05,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "002352.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "92e92ad2c1cb86ee1ae53efa96a494058972429908b599b57f17a052212ed98a",
+      "events": [
+        {
+          "ex_date": "2025-09-16",
+          "cash_per_ten": 4.6000000000000005,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "fa092f3747e5b94d72a30ab6c9314c023928b8ba4208baec17eb7964bd1c753d"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 4.063374011598064e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9889582333173308,
+        "provider_factor": 0.9889622966913424,
+        "price_scale_gap_cny": 0.00018110457969692574,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "002409.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "eaf0869031e4540956d43fcddefb6af00eb9955935bf027ee1effe82135e6ec8",
+      "events": [
+        {
+          "ex_date": "2025-09-25",
+          "cash_per_ten": 3.2,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "f4688fd9a604e1f0152f1f97e4dc162f78e6b98b5487a2a5b247b6638f31831d"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 1.1477639904611259e-05,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9955043551559428,
+        "provider_factor": 0.9955158327958474,
+        "price_scale_gap_cny": 0.0006890027234738139,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "002558.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "baa2b92d84a0b38faab5bdea42d93fa82949aeb3217d8f335472dfcd0a3c058d",
+      "events": [
+        {
+          "ex_date": "2025-09-23",
+          "cash_per_ten": 1.5,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "ddfc75a2709597f17e43493fcfa91df11f0611d0938f4665d57d4c01402a533d"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 5.177330599570595e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9966555183946488,
+        "provider_factor": 0.9966606957252484,
+        "price_scale_gap_cny": 0.00016360364694643082,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "002831.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "982a801436e658a800356917d7a17a03a93fc711b8052a0716b4c92ee1085e9a",
+      "events": [
+        {
+          "ex_date": "2025-09-23",
+          "cash_per_ten": 4.3,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "d8dabeef78fada0d3a3d5f93043b781ae89c1279cda254a767c5775e178f7642"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 0.0003613839447053069,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9837735849056604,
+        "provider_factor": 0.9841349688503657,
+        "price_scale_gap_cny": 0.009439348635702616,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "300003.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "7d3d85d7ce1daa07f08706756d81fb68ab4dcd9a8fbdb660b4fdbd8811f31bd9",
+      "events": [
+        {
+          "ex_date": "2025-09-23",
+          "cash_per_ten": 1.6275,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "f3ccd59e6e775aef308b92499430615d5acff0aaa6c67a3ee339ec6b3499067d"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 0.00016032626577366926,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9909783813747229,
+        "provider_factor": 0.9911387076404966,
+        "price_scale_gap_cny": 0.003047802312357453,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "300033.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "554a3cce2333e7b6d274ab6cf4fada9228f725c29ed05d4855cb3971fb30e7fa",
+      "events": [
+        {
+          "ex_date": "2025-09-23",
+          "cash_per_ten": 1.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "569ec731e9003bfde31dd8389541fb7ddba2dd98e9bac57906d8cbc41decdd44"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 3.180308345562821e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9997290046340207,
+        "provider_factor": 0.9997321849423663,
+        "price_scale_gap_cny": 0.001313912589885824,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "300442.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "6e2275fcf10ce252516a7e167e3f4328fb7fa81322d047f4868be647e418388c",
+      "events": [
+        {
+          "ex_date": "2025-09-25",
+          "cash_per_ten": 3.995,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "fc01971470d3078f0140d3a6d83e3853427fb0cba506fce27b4e934230f21987"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 3.314338463644706e-05,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.992631870158613,
+        "provider_factor": 0.9925987267739765,
+        "price_scale_gap_cny": 0.001954465392011283,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "300573.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "aca19ed9dcb2626560d83e8be1157e0bfe7269e232480f6db2c89ddffee88fbd",
+      "events": [
+        {
+          "ex_date": "2025-09-24",
+          "cash_per_ten": 7.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "298d54b24b1dc87502bd961e2c6dd76b8f4c638427f796afe14480b80eef8ba8"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 5.500555102289084e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9894243843480888,
+        "provider_factor": 0.9894298849031911,
+        "price_scale_gap_cny": 0.00037200254156781075,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "300628.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "bb82a3c5b0de8da7959e3c292cc7ca258b6d63c9bdaf8f94d5c553af71bbee8c",
+      "events": [
+        {
+          "ex_date": "2025-09-29",
+          "cash_per_ten": 5.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "89508efafdfbf70c9f44e1e7a422bd9abccce37fa5a9f08e9a1d4ca0055ee0cc"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 5.458503876676346e-07,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9868282402528978,
+        "provider_factor": 0.9868276944025102,
+        "price_scale_gap_cny": 2.062768614995991e-05,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "300751.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "98893c59e44af40ab321c8f83802cff22dacca2505650dc843c4f901eff105e5",
+      "events": [
+        {
+          "ex_date": "2025-09-17",
+          "cash_per_ten": 5.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "cf7189d658fb151226dc41f59ec8b4e9e220e6bf0957e5ec51ae6fe203902773"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 3.7282199911725655e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9944927855490693,
+        "provider_factor": 0.9944965137690605,
+        "price_scale_gap_cny": 0.000336881958402353,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "300866.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "1e707e2d42be92fa3032ed359680502935bac0b11387743a228d6076089a9196",
+      "events": [
+        {
+          "ex_date": "2025-09-10",
+          "cash_per_ten": 7.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "ec4dfca3333809c7e3c47e10471b75e42cf86960727f58469adc29389ff409cd"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 2.9053776603671366e-05,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9948071216617211,
+        "provider_factor": 0.9947780678851175,
+        "price_scale_gap_cny": 0.004074211093132835,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "300896.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "56cf5553da47d0acbc94b1c206e075942e4520bd86361a0fb95272df89b6b19e",
+      "events": [
+        {
+          "ex_date": "2025-09-26",
+          "cash_per_ten": 12.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "87792dba81efb7c695879d0502370cb6e2d48f2223179068420da26917990e95"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 1.345129956986657e-05,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9933719966859984,
+        "provider_factor": 0.9933854479855683,
+        "price_scale_gap_cny": 0.002609283090562717,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "301381.XSHE",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "6cb5b43ae6e353baa44bde76ff89d401b500792def307308fdd3c8106db7ddf6",
+      "events": [
+        {
+          "ex_date": "2025-09-24",
+          "cash_per_ten": 2.5,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "f89287f07a98b731a391cd4ff97bc452dacafef2487a3717e396911bc27c98d3"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 1.637854341529632e-05,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9897456931911403,
+        "provider_factor": 0.989729314647725,
+        "price_scale_gap_cny": 0.0003727756481321443,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "600096.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "2c200edc1cf9fc942955eec94aba5b3def24934e82a6627e3c85d86ac32843c3",
+      "events": [
+        {
+          "ex_date": "2025-09-19",
+          "cash_per_ten": 2.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "1bcdbb408cae4c13e11a0961b8efd3388608f41e4de840b6d64fece01ef398ea"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 6.641709778154592e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9922480620155039,
+        "provider_factor": 0.992254703725282,
+        "price_scale_gap_cny": 0.00018072092306358644,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "600177.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "0a55f3bcaf36b9dcf2f45a73109b7cd19059f3be71621ef7159dc6e2a7e582d3",
+      "events": [
+        {
+          "ex_date": "2025-09-12",
+          "cash_per_ten": 0.8,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "3671e66b99c04d51752ff091823cb5c142043d6da9f56cf0e37fa2104ee00aca"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 1.4503523149134168e-07,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9891451831750339,
+        "provider_factor": 0.9891450381398024,
+        "price_scale_gap_cny": 1.0863138838701493e-06,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "600183.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "0dbecf73fa291f49eb5f87fd9c7293cb4224f428dc31515b02f87c79eb795076",
+      "events": [
+        {
+          "ex_date": "2025-09-25",
+          "cash_per_ten": 4.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "4b9e381e6b956aebb03fdd5a842ede95e1a4a57a1e1779378927a80f88d414e2"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 1.9240540980458576e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9928952042628775,
+        "provider_factor": 0.9928971283169755,
+        "price_scale_gap_cny": 0.00010245588072094192,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "600188.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "0fd9bea375d18c2a8fab6a1610b8dadcb30b55638357edf61966a052b270ecfd",
+      "events": [
+        {
+          "ex_date": "2025-09-16",
+          "cash_per_ten": 1.7999999999999998,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "72f5df4e1ef0dc56e1ed691ee7a21faa4f166555e5c3dc535bbe8fc703642b8d"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 3.93366714179777e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9865571321882002,
+        "provider_factor": 0.9865531985210584,
+        "price_scale_gap_cny": 5.0940989486281116e-05,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "600219.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "be69f3f4bd817c16a657c858fbc889885d2753b67bf5a9c3e0b7519af6010bd1",
+      "events": [
+        {
+          "ex_date": "2025-09-25",
+          "cash_per_ten": 0.4,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "d21e537793c79555ce47144f2411c3aad2ac60fa78402b487590696dd694e9bd"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 1.1102230246251565e-16,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9895833333333334,
+        "provider_factor": 0.9895833333333333,
+        "price_scale_gap_cny": 4.507505479978135e-16,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "600325.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "fbc37523ebd122fb8317ee674212fc05bbab70845c4790f77d03384182ee0a69",
+      "events": [
+        {
+          "ex_date": "2025-09-11",
+          "cash_per_ten": 0.2,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "793042196acca624222478900553cb4c4927cd1217f96348a01b9ea1c907487a"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 8.291275706007184e-07,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9963702359346643,
+        "provider_factor": 0.9963710650622349,
+        "price_scale_gap_cny": 4.361211021359779e-06,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "600346.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "3bc4115a3fa6c2d230a30eaa7e82d06bb56459335db88dd3e6c1126c0b3cb730",
+      "events": [
+        {
+          "ex_date": "2025-09-24",
+          "cash_per_ten": 0.8,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "4d431ea775fbab51fabeac0991d71e1c1c5fb11783b1c725b70ac6c798fc6bed"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 4.32472094236136e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9951397326852978,
+        "provider_factor": 0.9951354079643554,
+        "price_scale_gap_cny": 7.615833579498355e-05,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "600352.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "f2a07590d1bd037897e1fa8dad6593b70cb741cf082536dd4070a2c736fa501a",
+      "events": [
+        {
+          "ex_date": "2025-09-24",
+          "cash_per_ten": 2.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "596150d29674a87626557120902cc0c74a8d6e34388b13ad10e603d6cc47af97"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 1.1297190772863175e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9800598205383849,
+        "provider_factor": 0.9800609502574622,
+        "price_scale_gap_cny": 1.1929833456143513e-05,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "600436.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "7e1a2718067eb980a461d312a54167a21885025a09b82d1feb9bc8b8ccf7a9f2",
+      "events": [
+        {
+          "ex_date": "2025-09-30",
+          "cash_per_ten": 14.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "c4a54cdabe327697a1e1523f0739c1609855f025e2b954c7b5c08f19dafc43ec"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 3.0844378628991365e-07,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9929264349232013,
+        "provider_factor": 0.9929267433669876,
+        "price_scale_gap_cny": 6.453260896757573e-05,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "601360.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "a4b35be7bc2e0efcc97f7e70f79febad4aa15d4c0b262cac0f38d29af30b416d",
+      "events": [
+        {
+          "ex_date": "2025-09-30",
+          "cash_per_ten": 1.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "322b96493be57d20330c0a2563d5aba73880b90897da0f2bdabd760fa1f4a078"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 1.8753574634988723e-05,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9910071942446044,
+        "provider_factor": 0.9909884406699694,
+        "price_scale_gap_cny": 0.00021754146576586917,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "601866.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "eaa28007b14287cc0b58450601824861e5dc1cd6f607bfc77f6db1a98bc3fb1f",
+      "events": [
+        {
+          "ex_date": "2025-09-26",
+          "cash_per_ten": 0.21999999999999997,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "16f63f40b25bafe44afbb0a494059a32bccedeafd0404d99c46849aeb6f33644"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 0.0008221228593363605,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9913385826771655,
+        "provider_factor": 0.9921607055365018,
+        "price_scale_gap_cny": 0.002079970834120992,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "603288.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "20267b4930277b8060f3c0ec63547e4707d2adcf9a62a22290910bace194f4b0",
+      "events": [
+        {
+          "ex_date": "2025-09-24",
+          "cash_per_ten": 2.6,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "61b7cff9cc3c70581c760e9f918cab96a3abf1b7a247c49579cc10ce50cc920d"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 5.0405223241956065e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9933842239185751,
+        "provider_factor": 0.9933892644408993,
+        "price_scale_gap_cny": 0.00020887924511466593,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "603939.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "a602a0d6632f8921817c180cd3a7b1083224487443412af88ce54d86d9e5c4ea",
+      "events": [
+        {
+          "ex_date": "2025-09-17",
+          "cash_per_ten": 3.0,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "b6dc8d2edfa1efce4593e410767a7aed4a900ddc014665f04e8ed426d8be9dc9"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 4.890992408412842e-06,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9883900928792569,
+        "provider_factor": 0.9883852018868485,
+        "price_scale_gap_cny": 0.00011611215977572087,
+        "within_public_resolution": true
+      }
+    },
+    {
+      "instrument": "688002.XSHG",
+      "window_start": "2025-08-29",
+      "window_end": "2025-09-30",
+      "sessions": 23,
+      "snapshot_generation_id": "eb58028046e470f30bf191854d2c7ad5726de9c95e72b7b143486f19fcfe81ce",
+      "events": [
+        {
+          "ex_date": "2025-09-26",
+          "cash_per_ten": 0.8,
+          "bonus_per_ten": 0.0,
+          "source_record_id": "84734ca16c111726ac80aeaa8572eb113c4a111fd24c09f31d58885c64c96c09"
+        }
+      ],
+      "dropped": [],
+      "provider_check": {
+        "status": "passed",
+        "tolerance": 0.001,
+        "compared_sessions": 23,
+        "max_abs_diff": 4.720434262472928e-05,
+        "worst_session": "2025-08-29",
+        "derived_factor": 0.9990666199976665,
+        "provider_factor": 0.9991138243402913,
+        "price_scale_gap_cny": 0.0036205730793167357,
+        "within_public_resolution": true
+      }
+    }
+  ],
+  "refusals": []
+}
