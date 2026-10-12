@@ -1,0 +1,11 @@
+{
+ "layer": "paper_execution_research_integration",
+ "phase": 3,
+ "status": "in_progress",
+ "acceptance_rows": [
+  {"id": "PE25", "status": "passed", "test_ids": ["test_paper_outputs_reconciled_in_result"]},
+  {"id": "PE26", "status": "passed", "test_ids": ["test_paper_result_binding_tampering_rejected"]},
+  {"id": "PE27", "status": "passed", "test_ids": ["test_paper_failure_hides_accepted_result"]}
+ ],
+ "blocked_by": ["final HEAD gate report generation after commit"]
+}

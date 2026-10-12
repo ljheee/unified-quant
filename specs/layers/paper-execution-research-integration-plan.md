@@ -357,9 +357,9 @@ target test and stay `planned` until it exists.
 | PE22 | 2 | reject reasons preserved: `suspended`, `limit_up`, `limit_down`, `insufficient_cash`, `t1_not_sellable` | existing paper-execution suite (`test_execution_reject_reasons`) | `passed` |
 | PE23 | 2 | refused risk decision stops the stage and hides later dates | existing paper-execution suite (risk refusal tests) | `passed` |
 | PE24 | 2 | v5 execution enabled and refusal lock replaced | `test_v5_execution_enabled_v3_v4_refused` | `passed` |
-| PE25 | 3 | result binds all 4N paper outputs, re-read verified | `test_paper_outputs_reconciled_in_result` | `planned` |
-| PE26 | 3 | missing, extra, unordered, duplicated, tampered bindings rejected | `test_paper_result_binding_tampering_rejected` | `planned` |
-| PE27 | 3 | failed run publishes no accepted result | `test_paper_failure_hides_accepted_result` | `planned` |
+| PE25 | 3 | result binds all 4N paper outputs, re-read verified | `test_paper_outputs_reconciled_in_result` | `passed` |
+| PE26 | 3 | missing, extra, unordered, duplicated, tampered bindings rejected | `test_paper_result_binding_tampering_rejected` | `passed` |
+| PE27 | 3 | failed run publishes no accepted result | `test_paper_failure_hides_accepted_result` | `passed` |
 | PE28 | 4 | local gate and Qlib gate on final HEAD | `.gate/gate-report.json` plus the Qlib cell | `planned` |
 | PE29 | 4 | remote ten-cell matrix on final HEAD, per-cell reports archived | CI run artifacts under the phase evidence directory | `planned` |
 | PE30 | 4 | evidence index freshness and self-hash exclusion | `test_evidence_indexes_are_fresh_and_never_index_themselves` | `planned` |
