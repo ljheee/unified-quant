@@ -75,11 +75,11 @@
   ],
   "local_gate": {
     "result": "passed",
-    "commit_bound": "dbe753b5737f8a4c22c99950e4008b874b3d8d68",
+    "commit_bound": "be672b895a9be6d9ba7a0d8fdc8dfffe68c1a75c",
     "runner": "uv",
     "platform": "macOS-26.3-arm64-arm-64bit",
     "python_version": "3.12.13",
-    "tests_passed": 731,
+    "tests_passed": 766,
     "tests_skipped": 22,
     "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
     "report": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/gate-report.json",

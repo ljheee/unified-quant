@@ -376,3 +376,19 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 复核性验证（不是推断）：`bars-inventory.json` 与 `evidence/a500-membership/evidence-index.json` 用改后脚本从活 store 重导，与已提交版本 `diff` 为空（逐字节可重导）；`pilot-record` 的 11 项数字与三份 artifact 逐条比对一致；归档的 `requirements.lock.txt` 无绝对路径/凭据；`paper-execution` 索引只改 4 条 digest（`layer/record_version/status` 未动，47 条记录）。
 
 一条真实但**非本批引入**的治理弱点（登记后续项）：canonical manifest 的 `trust_anchor_sha256` 只是 `sha256(generation_id)`，而 `generation_id` 由 manifest 自身内容哈希得到——读侧不做外部校验，故 `lineage`/`source_versions`/`run_id` 这类"声明性"字段被改写后，重算 generation+anchor 即可自洽（数据字节、行列、dtype、row_count 仍被交叉校验，改不动）。本窗口的实际缓解是外部锚定链已存在：`evidence-index.json`(tracked) → `bars-inventory.json`(tracked) → 每分区 `manifest_sha256`，篡改本地 manifest 可通过"重跑生成器 + 与 tracked 文件 diff"检出。把 generation 改为内容重算或接入外部签名锚定，属 manifest 语义变更，需按规则开新版本。
+
+### 8.7 pendding 5 联动断言 + pendding 6 dividend importer（2026-10-12，覆盖 87a6759 + 45dc5e3）
+
+本批交付与自 CR 发现（均为本批自身引入，未混入无关改动）：
+
+| 项 | 判定与处置 | 锁 |
+|---|---|---|
+| 因子/label 联动无门禁 | **可达缺口**：就绪门查了 bars/成员/停牌，却从不校验声明的因子分区是否越过 `usable_label_end`。新增 `assess_factor_label_linkage`（越窗 / 晚启动 / 空因子层 / 读到 label 之后四类 fail-closed），窗口本身不满足 horizon 时静默；`--factor-partition-set` 接入 CLI，新增 `factor_sessions`/`label_only_sessions` metrics | tests/test_training_readiness.py（15→27 例），真实 store 实测 passed/blocked 两态 |
+| 联动规则把 `window_start` 当成交易日 | 自 CR 发现：月末/月初窗口起点常为周末/假期，原判定 `factor_values[0] > window_start` 会误报。改为与"窗口内首个会话"比较，并补月首非交易日用例 | test_linkage_allows_a_month_start_window |
+| dividend 主键不唯一 | 实测同 `(ts_code,end_date,div_proc,ann_date)` 仍重复 34 行/17 组，且是内容修订（`cash_div_tax` 0→0.02）而非重复投递。改为**公告日为分区键 + 规范化整行 canonical SHA-256 为 `record_id`**：字节级重复收敛，内容修订各留一条 | test_identical_rows_collapse_but_revisions_survive；A500 实测 1714→1710 |
+| 契约必填列把派生列当上游列 | 自 CR 发现（被本批测试抓到）：`required` 集合含派生 `instrument`，真实 Tushare 帧只有 `ts_code`，首版会直接拒绝全部输入。改为「原始列集合减去派生列，再并上 `ts_code`」 | 21 例 store 测试 + 真实数据抓出 |
+| 披露阶段枚举漏 `预披露` | 真实数据打回（脚本首次实跑即失败）：Tushare 实际有 4 个阶段。已从"预披露/预案/股东大会通过/实施"取值并补用例；未知阶段仍 fail-closed | test_pre_disclosure_stage_is_a_disclosure_record；实测 2025-08 全月枚举确认恰为 4 值 |
+
+实测数字（不是推算）：`bash scripts/run_gate.sh`（uv，单格本地 macOS arm64 / Python 3.12）在 `be672b8` 上 `766 passed / 22 skipped / 0 failed`（22 为 qlib 门控，本地 skip、CI `qlib-runtime` 运行）；归档报告与 requirements 同 HEAD，`pilot-record.local_gate.commit_bound` 已回绑 `be672b8`。dividend 真实窗口 A500 2025-08-29~09-30：28 个公告日、3337 条记录、证据清单由 `--kind dividend` 逐分区 governed 复读生成（`evidence/reference-data/dividend-events-2025-08-29-to-2025-09-30.json`）。
+
+未夸大声明：联动断言校验的是"声明的因子分区"，不重算特征本身；dividend store 是原始披露记录，**尚未**被复权链路消费——`XdxrAdjustmentDeriver` 仍只被测试调用，接入生产需要按 ex_date 取 `pre_close` 并定义"实施"记录选择规则（继续留在 pendding 6）；`publish_lag_days=5` 仍是未实测假设。
