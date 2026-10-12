@@ -334,8 +334,9 @@ Exit criteria:
 ### Phase 4 - Release evidence - exited
 
 Exited with the release evidence. The local gate report, the per-cell remote artifacts, the release
-record, the phase record, the marker and the evidence index live under
-`evidence/paper-execution-research-integration/release/`.
+record, the release phase record (this phase's record, holding PE28-PE30), the marker and the
+evidence index live under `evidence/paper-execution-research-integration/release/`;
+`phase-4/phase-record.json` is a superseded pointer to that record.
 
 Deliverables:
 

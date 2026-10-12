@@ -28,6 +28,10 @@
       "sha256": "cb157fdd046192b291ea523fcb2fff0ac40e630edeaeb6eb7901f4e10ae68edf"
     },
     {
+      "path": "evidence/paper-execution-research-integration/phase-4/phase-record.json",
+      "sha256": "2ef5f3cdba56af69af522a8492070e414119e447c81454c1d29d9108d546304b"
+    },
+    {
       "path": "evidence/paper-execution-research-integration/release/MARKER.md",
       "sha256": "83a2f075d1fcb9986daadf1e763367f396caea8efd198c8d73870cab1917e88a"
     },

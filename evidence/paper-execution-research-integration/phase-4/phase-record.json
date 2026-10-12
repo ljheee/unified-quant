@@ -1,17 +1,7 @@
 {
- "layer": "paper_execution_research_integration",
- "phase": 4,
- "status": "in_progress",
- "acceptance_rows": [
-  {"id": "PE28", "status": "passed", "test_ids": [".gate/gate-report.json (local, 835 passed)"]},
-  {"id": "PE29", "status": "passed", "test_ids": ["remote ten-cell CI 38241517980 on df36913 (all passed)"]},
-  {"id": "PE30", "status": "passed", "test_ids": ["test_evidence_indexes_are_fresh_and_never_index_themselves"]}
- ],
- "blocked_by": ["release marker after evidence commit"],
- "remote_gate": {
-   "result": "passed",
-   "commit_bound": "df36913ec67497fc97d3419e6f183e3067f29b1d",
-   "ci_run_id": 38241517980,
-   "cells": ["macos-3.11", "macos-3.12", "macos-3.13", "ubuntu-3.11", "ubuntu-3.12", "ubuntu-3.13", "qlib-macos-3.11", "qlib-macos-3.12", "qlib-ubuntu-3.11", "qlib-ubuntu-3.12"]
- }
+  "layer": "paper_execution_research_integration",
+  "note": "Phase 4 is the release-evidence phase, so its acceptance rows (PE28-PE30) and gate bindings live in the release record alongside the archived evidence. This pointer is kept so historical references to phase-4/ do not resolve to a stale in-progress record.",
+  "phase": 4,
+  "status": "superseded",
+  "superseded_by": "evidence/paper-execution-research-integration/release/phase-record.json"
 }
