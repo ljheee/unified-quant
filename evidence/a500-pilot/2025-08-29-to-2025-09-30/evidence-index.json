@@ -21,8 +21,20 @@
       "sha256": "85e7bb8f34d9138c12a0de8fb210ed1bfd850fb8d6ad2c02e9cd0227b37512e1"
     },
     {
+      "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/gate-report.json",
+      "sha256": "ce0f6e4b21ebe58dffea749acb37c5447bd90b253a9acc41e7ec5c5a432aada5"
+    },
+    {
+      "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/requirements.lock.txt",
+      "sha256": "c3eab19ab9f526c43f2319fd44062ed0e1c9aeaea1ff6bc014c4b91ff78fb127"
+    },
+    {
+      "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/gate-reports/requirements.lock.txt.sha256",
+      "sha256": "95817d9eba841b7df62d3aba445dee21922c21b8f710b712d472085c2d0442f6"
+    },
+    {
       "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/pilot-record.json",
-      "sha256": "d8cf11ab508d53d15747a667fbb77caba15da82a9a4af3ac87f809d4fbad0b61"
+      "sha256": "a413ed16711b4cfd43be7bcc1ffb8e8997c92bb77832ba7bce6d26cb4a706921"
     },
     {
       "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",

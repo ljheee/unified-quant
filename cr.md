@@ -345,3 +345,18 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 未改动项与理由：`research_chain/adapters.py:435` 的 `{passed, warning}` 作用于 **factor_v1 owning report**——该族不走模型评审 registry（无 binding_type 条目），其状态语义由因子侧 quality_policy 决定（factors/store.py:161/:560 已按策略区分 passed/双态）。把模型 registry 套上去会误拒因子报告；因子侧「策略→状态」映射与模型 registry 统一为单一治理口径，登记为后续项，非本批缺陷。
 
 `src/uq/contracts/model_layer.py` 变更后按约定重钉 `paper-execution-research-integration/phase-0` 索引记录。全量测试 632 passed / 22 skipped(22 个为 qlib 门控,本地 skip、在 CI `qlib-runtime` 单元运行)。此前写的 654 为 passed+skipped 合计,口径有误,已更正。
+
+### 8.5 A500 pilot 证据收尾与自 CR（2026-10-12，覆盖 0755cae 之后的 dfc8237 + 23cb49a）
+
+自 CR 在本批发现并处理的真实缺陷（含首版生成器自身的缺陷）：
+
+| 缺陷 | 判定与处置 | 锁 |
+|---|---|---|
+| `uq-ingest daily` 只接 research-v1（builder 与 `research-whitelist.txt` 均硬编码） | **可达缺陷**：500 只 pilot 由此无法从仓库复现，"端到端"证据只能靠内联循环。新增 `--pipeline v2` + `--membership-root/--universe-id`，成员逐日走 PIT membership store；缺参 `parser.error`，快照不可见 `configuration_failure` 且不落分区。默认仍 v1，既有行为不变 | tests/test_pipeline_v2.py 三条 CLI 用例（wiring / 缺参 / 未见快照 fail-closed） |
+| `evidence/a500-membership/evidence-index.json` 记 14 个快照、store 实为 17 | 证据滞后（回填 2025-05-30/06-30/07-31 后未刷）。改为生成器重导，旧 14 条 digest 逐条复验**无漂移** | scripts/build_store_evidence.py 出稿前逐条经 governed reader 校验 |
+| 生成器首版对 store 相对路径调 `Path.relative_to(REPO_ROOT)` | 首版自身缺陷：直接 `ValueError` 崩。改为先 `resolve()` 再相对化，仓库外路径 fail closed | 生成器实跑（bars 23 分区 / membership 17+21） |
+| 生成器首版调私有 `IndexMembershipStore._snapshot_dates` | 依赖私有 API。改为脚本侧只做"目录发现"，manifest/members 一律经 `read_manifest/read_members` 校验；非日期目录名直接失败，避免暂存目录被静默跳过 | 同上 |
+| pilot 记录把 builder 模块写成 `uq.pipeline.builders` | 文档错。实际在 `uq.pipeline.daily`（已核 `rg`），并补 run report 落点 `<bars_root>/runs/<run_id>.json` 与"pilot 由内联循环产出"的诚实声明 | 人工核对 |
+| `paper-execution-research-integration/phase-0` 索引 4 条 stale digest | 源码前进后未重钉（`model_layer.py`、`research_chain/{contracts,resolver,runner}.py`）。按既有重钉约定重钉，`phase-record.remote_gate` 绑定不动 | test_evidence_indexes_are_fresh_and_never_index_themselves；test_phase_0_evidence_index_hashes_are_complete（两条此前失败的测试现绿） |
+
+未夸大声明：pilot 归档的 `local_gate` 为**单格本地**（macOS arm64 / Python 3.12，runner=uv，绑定 `23cb49a`），远程六格矩阵属 release gate 未为此重跑；`publish_lag_days=5` 仍是未实测假设；v2 分区 lineage 全部 `compared_rows=0`（无对照源佐证）。全量测试 742 collected / 720 passed / 22 skipped / 0 failed（22 为 qlib 门控，本地 skip、CI `qlib-runtime` 单元运行）。
