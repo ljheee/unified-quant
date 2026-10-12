@@ -748,6 +748,7 @@ class ResearchChainRunner:
         )
         stage_records.append(resolution_state["stage_records"][-1])
         stage_plan = stage_plan_for_request(plan.request)
+        self._reverify_input_sets(plan)
         for stage in stage_plan[1:-1]:
             bindings = self._stage_bindings(plan, stage)
             if not bindings:
@@ -989,6 +990,36 @@ class ResearchChainRunner:
         if document["manifest_digest_sha256"] != binding.manifest_digest_sha256:
             raise ContractError("Qlib init receipt manifest digest mismatch")
         return dict(document)
+
+    def _reverify_input_sets(self, plan: ResolvedExecutionPlan) -> None:
+        """Re-bind v4/v5 set bindings to their owning stores at reconciliation.
+
+        The membership and factor-partition sets are resolved once at resolve time,
+        but the raw artifacts stay on disk for the whole run.  Re-deriving both sets
+        here (before any stage output is read back) means a store mutated after
+        resolution fails the run instead of silently publishing a result whose input
+        lineage no longer matches the request.  The inputs are immutable, so one
+        re-verification per reconciliation covers every stage readback.
+        """
+        if plan.request.get("contract_version") not in {4, 5}:
+            return
+        membership_store = getattr(self.dataset_adapter, "membership_store", None)
+        trading_calendar = getattr(self.dataset_adapter, "trading_calendar", None)
+        if membership_store is None or trading_calendar is None:
+            raise ContractError(
+                "v4/v5 reconciliation requires a governed membership store and trading calendar"
+            )
+        from .membership_input import verify_request_input_sets
+
+        try:
+            verify_request_input_sets(
+                plan.request,
+                membership_store=membership_store,
+                factor_store=self.factor_adapter.store,
+                trading_days=trading_calendar,
+            )
+        except ContractError as exc:
+            raise ContractError(f"input set readback verification failed: {exc}") from exc
 
     def _readback(self, binding) -> None:
         family = binding.output_family

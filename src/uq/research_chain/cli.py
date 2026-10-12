@@ -4,8 +4,9 @@ import argparse
 import json
 import math
 import subprocess
+from datetime import date
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
@@ -37,6 +38,8 @@ from .adapters import (
     PredictionStageAdapter,
     QlibExportStageAdapter,
 )
+from ..contracts.index_membership import IndexMembershipStore
+from ..execution.market_dataset_publisher import MarketDatasetPublisher
 from .resolver import FileResearchRunStore, ResearchChainRequestResolver
 from .runner import ResearchChainRunner
 
@@ -66,6 +69,18 @@ def uq_research_run(argv: list[str] | None = None) -> int:
     parser.add_argument("--quality-decisions-json", type=Path)
     parser.add_argument("--scores-json", type=Path)
     parser.add_argument("--decision-provider-json", type=Path)
+    parser.add_argument(
+        "--membership-root",
+        type=Path,
+        default=None,
+        help="index membership store root; enables the v5 PIT membership-filtered dataset stage",
+    )
+    parser.add_argument(
+        "--market-dataset-root",
+        type=Path,
+        default=None,
+        help="MarketDatasetPublisher root; supplies the governed trading calendar and v5 paper inputs",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -91,6 +106,8 @@ def uq_research_run(argv: list[str] | None = None) -> int:
                 provider_document=provider_document,
                 project_root=args.project_root,
                 data_root=args.data_root,
+                membership_root=args.membership_root,
+                market_dataset_root=args.market_dataset_root,
             )
     except (ContractError, OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
         status = getattr(exc, "reason", "configuration_failure")
@@ -255,7 +272,41 @@ def _load_scores(document: Any) -> dict[str, pd.DataFrame]:
     return scores
 
 
-def _build_runner(*, project_root: Path, data_root: Path, run_store: FileResearchRunStore):
+def _governed_trading_days(publisher: MarketDatasetPublisher, request: Mapping[str, Any]) -> list[date]:
+    """Derive the research window sessions from the published governed calendar.
+
+    The calendar is a Phase 0.5 ``trading_calendar_snapshot_v1`` family; every
+    partition overlapping the research window contributes its ``session_dates``.
+    A window without any covering calendar snapshot fails closed rather than
+    silently widening or narrowing the observed session set.
+    """
+    window_start = date.fromisoformat(request["window_start_date"])
+    window_end = date.fromisoformat(request["window_end_date"])
+    days: set[date] = set()
+    for partition_date in publisher.list_partition_dates("trading_calendar_snapshot_v1"):
+        manifest = publisher.read_manifest("trading_calendar_snapshot_v1", partition_date)
+        start = date.fromisoformat(manifest["window_start"])
+        end = date.fromisoformat(manifest["window_end"])
+        if end < window_start or start > window_end:
+            continue
+        days.update(
+            day
+            for day in (date.fromisoformat(value) for value in manifest.get("session_dates", []))
+            if window_start <= day <= window_end
+        )
+    if not days:
+        raise ContractError("no governed trading calendar snapshot covers the research window")
+    return sorted(days)
+
+
+def _build_runner(
+    *,
+    project_root: Path,
+    data_root: Path,
+    run_store: FileResearchRunStore,
+    membership_store: IndexMembershipStore | None = None,
+    trading_calendar: Sequence[date] | None = None,
+):
     factor_store = FactorStore(data_root, FactorRegistry(project_root))
     feature_store_root = data_root / "governed"
     universe_store = UniverseSnapshotStore(data_root)
@@ -268,6 +319,8 @@ def _build_runner(*, project_root: Path, data_root: Path, run_store: FileResearc
         preprocessing_store=FeaturePreprocessingStore(feature_store_root),
         dataset_writer=DatasetWriter(data_root),
         run_store=run_store,
+        membership_store=membership_store,
+        trading_calendar=trading_calendar,
     )
     from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
     from uq.models.qlib_runtime import QlibRuntimeTrainer
@@ -321,6 +374,8 @@ def _execute(
     project_root: Path,
     data_root: Path,
     provider_document: dict[str, Any] | None = None,
+    membership_root: Path | None = None,
+    market_dataset_root: Path | None = None,
 ) -> dict[str, Any]:
     if not isinstance(decisions_document.get("quality_decisions"), dict):
         raise ContractError("quality decisions document requires quality_decisions")
@@ -341,15 +396,38 @@ def _execute(
         }
     scores = _load_scores(scores_document)
     run_store = FileResearchRunStore(data_root)
-    runner = _build_runner(project_root=project_root, data_root=data_root, run_store=run_store)
-    resolver = ResearchChainRequestResolver({
-        "factor_partition": runner.factor_adapter.store,
-        "universe_snapshot": runner.dataset_adapter.universe_store,
-        "adjusted_price_dataset": runner.dataset_adapter.adjusted_price_store,
-        "label_set": runner.dataset_adapter.label_store,
-        "feature_preprocessing": runner.dataset_adapter.preprocessing_store,
-        "backtest_config": runner.backtest_adapter.backtest_config_store,
-    })
+    membership_store = IndexMembershipStore(membership_root) if membership_root is not None else None
+    market_publisher = (
+        MarketDatasetPublisher(market_dataset_root) if market_dataset_root is not None else None
+    )
+    if membership_store is not None and market_publisher is not None:
+        trading_calendar = _governed_trading_days(market_publisher, request)
+    elif membership_store is not None or market_publisher is not None:
+        raise ContractError(
+            "--membership-root and --market-dataset-root must be provided together"
+        )
+    else:
+        trading_calendar = None
+    runner = _build_runner(
+        project_root=project_root,
+        data_root=data_root,
+        run_store=run_store,
+        membership_store=membership_store,
+        trading_calendar=trading_calendar,
+    )
+    resolver = ResearchChainRequestResolver(
+        {
+            "factor_partition": runner.factor_adapter.store,
+            "universe_snapshot": runner.dataset_adapter.universe_store,
+            "adjusted_price_dataset": runner.dataset_adapter.adjusted_price_store,
+            "label_set": runner.dataset_adapter.label_store,
+            "feature_preprocessing": runner.dataset_adapter.preprocessing_store,
+            "backtest_config": runner.backtest_adapter.backtest_config_store,
+        },
+        membership_store=membership_store,
+        trading_calendar=trading_calendar,
+        market_dataset_store=market_publisher,
+    )
     try:
         plan = resolver.resolve(
             request,

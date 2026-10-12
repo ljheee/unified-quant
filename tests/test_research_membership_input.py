@@ -1,5 +1,6 @@
 import json
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from pathlib import Path
 
 import pandas as pd
@@ -265,3 +266,181 @@ def test_earlier_request_versions_resolve_without_membership_governance():
         provider_config_ref="provider.json",
     )
     assert plan.request["contract_version"] != 4
+
+
+def test_v5_contract_version_inputs_verify_the_membership_sets(tmp_path):
+    # pendding 4c: v5 carries the same required set bindings as v4, so the
+    # dispatch must run the PIT membership check for v5 too.  Before the fix the
+    # dispatch was `request_schema == "research_run_request_v4"` only, and a v5
+    # request would flow to result_reconciliation with unverified input sets.
+    from uq.research_chain.resolver import ResearchChainRequestResolver, ResearchResolutionError
+
+    request, membership_store, factor_store, _days, _first, _second = _fixture(tmp_path)
+    resolver = ResearchChainRequestResolver(
+        {"factor_partition": factor_store},
+        membership_store=membership_store,
+        trading_calendar=CALENDAR,
+        market_dataset_store=SimpleNamespace(),
+    )
+
+    paper_checks: list[object] = []
+    resolver._verify_v5_paper_bindings = paper_checks.append  # type: ignore[assignment]
+
+    valid = _bind(dict(request), membership_store, factor_store)
+    resolver._verify_contract_version_inputs("research_run_request_v5", valid)
+    assert paper_checks == [valid]
+
+    tampered = _bind(dict(request), membership_store, factor_store)
+    tampered["factor_partition_set_binding"]["set_digest_sha256"] = "9" * 64
+    with pytest.raises(ResearchResolutionError) as failure:
+        resolver._verify_contract_version_inputs("research_run_request_v5", tampered)
+    assert failure.value.reason == "input_tampered"
+
+
+def test_v5_contract_version_inputs_require_membership_governance(tmp_path):
+    from uq.research_chain.resolver import ResearchChainRequestResolver, ResearchResolutionError
+
+    request, membership_store, factor_store, _days, _first, _second = _fixture(tmp_path)
+    request = _bind(request, membership_store, factor_store)
+    resolver = ResearchChainRequestResolver({"factor_partition": factor_store})
+    with pytest.raises(ResearchResolutionError) as failure:
+        resolver._verify_contract_version_inputs("research_run_request_v5", request)
+    assert failure.value.reason == "request_invalid"
+    assert "governed trading calendar" in failure.value.detail
+
+
+def test_reconciliation_reverifies_input_sets_before_readback(tmp_path):
+    # pendding 4c: the per-stage readback must re-bind the membership and factor
+    # partition sets, so a store mutated after resolve-time verification cannot
+    # publish a result whose input lineage no longer matches the request.
+    from types import SimpleNamespace
+
+    from uq.research_chain.runner import ResearchChainRunner
+
+    request, membership_store, factor_store, _days, _first, _second = _fixture(tmp_path)
+    bound = _bind(request, membership_store, factor_store)
+    runner = ResearchChainRunner.__new__(ResearchChainRunner)
+    runner.factor_adapter = SimpleNamespace(store=factor_store)
+    runner.dataset_adapter = SimpleNamespace(
+        membership_store=membership_store, trading_calendar=CALENDAR
+    )
+    plan = SimpleNamespace(request={**bound, "contract_version": 5})
+    runner._reverify_input_sets(plan)
+
+    bound["factor_partition_set_binding"]["set_digest_sha256"] = "9" * 64
+    with pytest.raises(ContractError, match="input set readback verification failed"):
+        runner._reverify_input_sets(SimpleNamespace(request={**bound, "contract_version": 5}))
+
+
+def test_reconciliation_skips_input_set_reverification_for_v1_and_needs_governance():
+    from types import SimpleNamespace
+
+    from uq.research_chain.runner import ResearchChainRunner
+    from uq.errors import ContractError as _ContractError
+
+    runner = ResearchChainRunner.__new__(ResearchChainRunner)
+    runner.dataset_adapter = SimpleNamespace()
+    runner.factor_adapter = SimpleNamespace(store=object())
+    runner._reverify_input_sets(SimpleNamespace(request={"contract_version": 1}))
+    with pytest.raises(_ContractError, match="governed membership store and trading calendar"):
+        runner._reverify_input_sets(SimpleNamespace(request={"contract_version": 5}))
+
+
+def test_dataset_stage_adapter_consumes_the_membership_filtered_frame(tmp_path, monkeypatch):
+    # pendding 4c: the dataset stage must read the per-day visible-member frame,
+    # not the raw factor partition, whenever a governed membership store is wired.
+    from uq.research_chain import adapters as adapters_module
+
+    request, membership_store, factor_store, _days, _first, _second = _fixture(tmp_path)
+    bound = _bind(request, membership_store, factor_store)
+    adapter = adapters_module.DatasetStageAdapter.__new__(adapters_module.DatasetStageAdapter)
+    adapter.factor_store = factor_store
+    adapter.membership_store = membership_store
+    adapter.trading_calendar = CALENDAR
+
+    captured: dict[str, object] = {}
+
+    def _fake_filtered(request, *, membership_store, factor_store, trading_days):
+        captured["called"] = True
+        from uq.research_chain.membership_input import filtered_factor_frame as real
+
+        return real(
+            request,
+            membership_store=membership_store,
+            factor_store=factor_store,
+            trading_days=trading_days,
+        )
+
+    monkeypatch.setattr(adapters_module, "filtered_factor_frame", _fake_filtered)
+    plan = SimpleNamespace(
+        request={**bound, "contract_version": 5},
+        stage_bindings=(),
+    )
+    frame = adapters_module.DatasetStageAdapter._read_factor_frame(adapter, plan, None)
+    assert captured["called"] is True
+    assert set(frame["instrument"]) <= {"600000.XSHG", "000001.XSHE", "600519.XSHG"}
+
+
+def test_v4_v5_dataset_stage_requires_governed_membership(tmp_path):
+    from types import SimpleNamespace
+
+    from uq.research_chain import adapters as adapters_module
+
+    adapter = adapters_module.DatasetStageAdapter.__new__(adapters_module.DatasetStageAdapter)
+    adapter.membership_store = None
+    adapter.trading_calendar = None
+    adapter.factor_store = SimpleNamespace()
+    plan = SimpleNamespace(request={"contract_version": 5}, stage_bindings=())
+    with pytest.raises(ContractError, match="governed membership store"):
+        adapters_module.DatasetStageAdapter._read_factor_frame(adapter, plan, None)
+
+
+def test_governed_trading_days_come_from_the_published_calendar(tmp_path):
+    # pendding 4c: the runtime calendar must be a governed artifact, not a
+    # re-derived vendor calendar.  Overlapping calendar partitions contribute
+    # sessions and a window with no covering snapshot fails closed.
+    from uq.execution.market_dataset_publisher import MarketDatasetPublisher
+    from uq.research_chain.cli import _governed_trading_days
+
+    publisher = MarketDatasetPublisher(tmp_path / "market")
+    sessions = [date(2025, 6, 3), date(2025, 6, 4), date(2025, 6, 5)]
+    publisher.publish_calendar_snapshot(
+        partition_date=date(2025, 6, 30),
+        window_start=date(2025, 6, 1),
+        window_end=date(2025, 6, 30),
+        sessions=sessions,
+        primary_source="tushare:trade_cal",
+        independent_source="eastmoney_index_kline_v1",
+    )
+    days = _governed_trading_days(
+        publisher, {"window_start_date": "2025-06-04", "window_end_date": "2025-06-30"}
+    )
+    assert days == [date(2025, 6, 4), date(2025, 6, 5)]
+
+    with pytest.raises(ContractError, match="no governed trading calendar snapshot"):
+        _governed_trading_days(
+            publisher, {"window_start_date": "2025-08-01", "window_end_date": "2025-08-31"}
+        )
+
+
+def test_cli_build_runner_wires_membership_governance_into_the_dataset_stage(tmp_path):
+    import importlib.util
+
+    if importlib.util.find_spec("joblib") is None:
+        pytest.skip("model runtime extras are unavailable")
+    from uq.research_chain.cli import _build_runner
+    from uq.research_chain.resolver import FileResearchRunStore
+
+    run_store = FileResearchRunStore(tmp_path)
+    store = IndexMembershipStore(tmp_path / "membership")
+    run_store_cls = FileResearchRunStore
+    runner = _build_runner(
+        project_root=ROOT,
+        data_root=tmp_path,
+        run_store=run_store_cls(tmp_path),
+        membership_store=store,
+        trading_calendar=CALENDAR,
+    )
+    assert runner.dataset_adapter.membership_store is store
+    assert runner.dataset_adapter.trading_calendar == CALENDAR
+    assert run_store.root == tmp_path

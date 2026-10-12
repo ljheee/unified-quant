@@ -263,10 +263,7 @@ class ResearchChainRequestResolver:
                 data_checksum_sha256=data_checksum,
             ))
 
-        if request_schema == "research_run_request_v4":
-            self._verify_v4_input_sets(candidate)
-        if request_schema == "research_run_request_v5":
-            self._verify_v5_paper_bindings(candidate)
+        self._verify_contract_version_inputs(request_schema, candidate)
 
         execution_plan = {
             "schema_version": "v1",
@@ -290,6 +287,21 @@ class ResearchChainRequestResolver:
             stage_bindings=tuple(stage_bindings),
             resolved_execution_plan_sha256=sha256_json(execution_plan),
         )
+
+    def _verify_contract_version_inputs(
+        self, request_schema: str, candidate: dict[str, Any]
+    ) -> None:
+        """Verify the extra input sets a contract version declares.
+
+        v5 is v4 plus the paper-execution template, so it carries the same required
+        `index_membership_binding` / `factor_partition_set_binding` and must bind them
+        to their owning stores exactly as v4 does; a v5 run must not skip the PIT
+        membership check merely because its paper bindings resolve first.
+        """
+        if request_schema in {"research_run_request_v4", "research_run_request_v5"}:
+            self._verify_v4_input_sets(candidate)
+        if request_schema == "research_run_request_v5":
+            self._verify_v5_paper_bindings(candidate)
 
     def _verify_v5_paper_bindings(self, candidate: dict[str, Any]) -> None:
         """Resolve template-v2 paper bindings against the published market-data store."""
@@ -322,11 +334,11 @@ class ResearchChainRequestResolver:
 
 
     def _verify_v4_input_sets(self, request: dict[str, Any]) -> None:
-        """Bind a v4 request to the point-in-time membership and factor partition sets."""
+        """Bind a v4/v5 request to the point-in-time membership and factor partition sets."""
         if self.membership_store is None or self.trading_calendar is None:
             raise ResearchResolutionError(
                 "request_invalid",
-                "v4 requests require an index membership store and a governed trading calendar",
+                "v4/v5 requests require an index membership store and a governed trading calendar",
             )
         factor_store = self.stores_by_output_family.get("factor_partition")
         if factor_store is None:

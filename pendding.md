@@ -8,19 +8,27 @@
 - 详细生效规则与限制见下文"A500 成分:月度近似方案"。
 
 待办(按依赖顺序):
-- [ ] 1. 实测 `index_weight` 发布滞后,确定 `publish_lag_days`;未实测前使用 5 个交易日并标注为假设。
+- [x] 1. 实测 `index_weight` 发布滞后,确定 `publish_lag_days`。
+  - 结论(2026-10-12):`index_weight` **没有任何可见时间字段**,且只返回每月月末一个 `trade_date` 的快照,因此滞后无法事后回溯测量,只能**向前观测**。已实现可复跑探针 `scripts/measure_index_weight_lag.py`(逐日运行会把观测追加到 `evidence/reference-data/index-weight-lag-observations.json`),首条观测:2026-10-12 查询时最新可得快照为 `2026-09-30`、当月(10 月)快照不可得 → 该快照的可见滞后 `<= 3` 个会话;且**当月快照在月内不可得**,证明快照只在月末之后才发布。
+  - 决定:`PUBLISH_LAG_DAYS = 5` 保留,但性质从"未实测假设"升级为"高于已实测上界的保守值"——5 > 3,只会把快照的可用时间推迟、绝不会提前暴露,故不会引入前视;注释与证据路径已写入 `scripts/fetch_index_membership.py`。若未来需要更紧的界,继续累积该探针观测即可逐月收紧。
 - [x] 2. 定义月度快照 raw artifact 与 manifest 契约(主键 `(snapshot_date, instrument)`,记录 `source_fetched_at`、SHA-256、`publish_lag_days`、`visible_from`)。
 - [x] 3. 改造 `scripts/fetch_index_membership.py`:写入不可变快照 artifact(经 `IndexMembershipStore`),不再输出 CSV 作为训练输入。脚本与测试已完成;正式 store 为 `data/a500-store/`,待用该路径正式拉取后勾选。
 - [x] 9. 北交所 instrument 支持:新增 `.XBSE` 后缀(映射、`StaticUniverseLoader` 正则、`index_membership_row.v1` 正则),并补测试。`adjustment_snapshot`/`golden_provenance` 已发布契约未改动。
   - [x] 9a. lifecycle 的北交所名单已接入(2026-10-12):`AkShareLifecycleProvider` 新增 `tushare_bse` 辅助源,经 Tushare `stock_basic(exchange=BSE)` 取北交所现挂名单(实测 2000 积分可用:349 只、全部带 `list_date`,当前代码前缀全为 `92`)。分类规则仍保守:名单里有 `list_date` 且缺口早于上市日 → `not_listed_expected_missing`;名单内缺口、无 `list_date`、名单外(退市与未上市不可区分,无北交所退市源)、非 43/83/87/92 前缀 → 一律 `unknown_requires_review` fail-closed;`research-v1` 的 `lifecycle_auxiliary_sources` 已加入 `tushare_bse`(仅对 `.XBSE` 查询)。测试 `tests/test_real_data_policy.py` 新增 10 例(含 AkShare 故障时北交所名单仍独立可用)。
-- [ ] 4. `as_of` 查询接入 research_chain(拆分为子步骤,按序实施):
+- [x] 4. `as_of` 查询接入 research_chain(拆分为子步骤,按序实施):
   - 4a. [已完成] 绑定模型(已决定:快照集合绑定,方案 1;基础模块 `build_membership_set` / `verify_membership_set` 已实现并测试,尚未接入 resolver):
     - 新增绑定类型 `index_membership_set`,字段:`universe_id`、`index_code`、`window_start`、`window_end`、`snapshots`(按 `snapshot_date` 升序的列表,每项含 `snapshot_date`、`visible_from`、`generation_id`、`manifest_digest_sha256`、`members_checksum_sha256`)、`set_digest_sha256`。
     - `set_digest_sha256` = canonical JSON 的 SHA-256,覆盖 `snapshots` 全部字段与窗口;任何快照增删或内容变化都会改变集合 digest。
     - 窗口覆盖校验:窗口内每个交易日必须存在 `visible_from <= 该日` 的快照,否则拒绝(fail-closed)。
     - 旧 `universe_snapshot` v1 绑定保持不变,新旧绑定通过 `family` 区分,不互相替换。
   - 4b. [已完成:绑定校验已接入 resolver;按日过滤函数已实现并有测试,待 v4 执行路径开启后挂载到 dataset 阶段] `src/uq/research_chain/membership_input.py`:`verify_request_input_sets` 由 store 重建两类集合并与请求摘要比对;`filtered_factor_frame` 对每个交易日取该日可见成员(每个快照只读一次成员)并与当日因子分区求交。
-  - 4c. [阻断:v4/v3 执行路径未开启] resolver 的 v4 分支已校验两个集合摘要(`_verify_v4_input_sets`);**未接入**:runner `_readback` 与 model/backtest 阶段消费 `filtered_factor_frame`(4b 已实现并有 11 项测试)这一挂载点,以及每阶段读回时的集合摘要复核——它们只能在 v3/v4 执行路径开启后才有意义。阻塞项不是缺陷,而是 `specs/layers/paper-execution-research-integration-plan.md` 的 Phase 1–3(resolver 解析 execution/calendar/suspension/corporate-action/initial-state/risk-policy 绑定 → `PaperExecutionStageAdapter` → result reconciliation),该计划 Phase 0 已 exited、Phase 1 可开工。已做(2026-10-12,本批可落地的部分):`stage_plan_for_request` 原先只按 `== 3` 分派,V4 会**静默退回 V1 舞台顺序**(缺 `paper_execution`),一旦 v4 执行放开,舞台编号/列表/结果路径都会错位——现改为 {1,2}→V1、{3,4}→V3、未知版本 fail-closed;并补 fail-closed 锁测试,确认 `runner._validate_plan` 对 v3/v4 仍直接拒绝(不允许"跳过 paper_execution 也算执行成功")。测试 `tests/test_research_v4_contract.py` +2。
+  - 4c. [已完成 2026-10-12] 执行路径挂载与读回复核。v3/v4 运行时仍按设计 fail-closed 拒绝;真正可执行的版本是 **v5**(= v4 + paper execution 模板),因此按 v5 收口:
+    - resolver:`resolve()` 现在对 `research_run_request_v5` 也跑集合摘要校验(抽成 `_verify_contract_version_inputs`,v4/v5 同一分支)。此前 v5 只校验 paper 绑定、**不校验** required 的 `index_membership_binding`/`factor_partition_set_binding`,等于漏掉 PIT 成员检查。
+    - dataset 阶段:`DatasetStageAdapter._read_factor_frame` 抽成独立方法;v4/v5 一律走 `filtered_factor_frame`,且**缺治理输入直接报错**(此前 membership_store 为 None 会静默退回原始因子分区,会放进当日不在指数内的标的)。
+    - runner:`_reconcile` 在发布结果前调用 `_reverify_input_sets`,对 v4/v5 用 owning store 重新推导两类集合摘要;resolve 之后若 store 被改动,run 直接失败,不再发布与请求血缘不符的结果。输入不可变,故一次复核即覆盖每个阶段的读回。
+    - CLI:`uq-research-run` 新增 `--membership-root` 与 `--market-dataset-root`(必须成对);治理交易日历不再来自厂商实时日历,而是从已发布的 `trading_calendar_snapshot_v1` 家族(`MarketDatasetPublisher`)按研究窗口取会话(`_governed_trading_days`,无覆盖即 fail-closed),并把它同时交给 dataset 阶段与 resolver。
+    - 测试:`tests/test_research_membership_input.py` 新增 7 项(v5 分派校验、v5 缺治理即拒、读回复核拒篡改、v1 跳过复核、dataset 阶段消费过滤帧、v4/v5 缺治理即拒、治理日历派生与 fail-closed、CLI runner 接线)。
+    - 仍未接线(非本项欠账):CLI 的 v5 dry-run(`_dry_run` 只校验 v1 请求)与真实 `MarketDatasetPublisher` 数据面(Phase 0.5 家族目前只有测试写入,没有生产脚本);v5 端到端因此仍以测试/库调用方式验证。
   - 4d. [已完成] `tests/test_research_membership_input.py`(11 项):跨月窗口逐日成员、快照日当天不可见、成员字节篡改、两个集合摘要漂移、窗口早于首个可见快照 fail closed、绑定窗口与请求窗口不一致、resolver 治理参数缺失、v1/v3 解析不受影响。
   - 不变量:任何训练窗口内的每个交易日,成员只能来自 `visible_from <= 该交易日` 的快照。
 - [x] 5. 训练前覆盖校验 fail-closed(成员数 500、Alpha158 每只至少 60 个交易日、5 日 label 需未来数据、adj_factor/涨跌停/停牌/上市退市字段缺失率)。

@@ -205,6 +205,27 @@ execute 的命令形状如下，仅作结构说明：
 
 但这只是格式示例。真实 execute 还要求分数对应的 universe、factor、dataset、model artifact 和 quality decision 都能被解析。
 
+### 论文执行(v5 请求)的两个额外参数
+
+`contract_version: 5` 的请求(带 `paper_execution_template`)额外要求两个治理输入,必须成对提供:
+
+```bash
+.venv/bin/uq-research-run \
+  --project-root "$PWD" \
+  --data-root "$DATA_ROOT" \
+  --mode execute \
+  --request-json /path/to/request-v5.json \
+  --quality-decisions-json /path/to/quality-decisions.json \
+  --scores-json /path/to/scores.json \
+  --membership-root "$DATA_ROOT/a500-store" \
+  --market-dataset-root "$DATA_ROOT/market-datasets"
+```
+
+- `--membership-root`:已发布的指数成分快照 store(v5 数据集阶段按"当日可见成员"过滤因子,缺它直接报错,不会静默退回原始因子分区)。
+- `--market-dataset-root`:Phase 0.5 的 `MarketDatasetPublisher` store。研究窗口的交易日历由此处的 `trading_calendar_snapshot_v1` 家族导出;窗口没有覆盖到的日历快照会 fail-closed。
+
+只提供其中一个会报 `--membership-root and --market-dataset-root must be provided together`。
+
 ## 7. 结果在哪里看
 
 ### 数据入库结果

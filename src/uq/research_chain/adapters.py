@@ -22,6 +22,7 @@ from ..models.feature_preprocessing import FeaturePreprocessorBuilder
 from ..models.features import FeatureSchemaBuilder, FeatureSchemaValidator
 from ..portfolio.builder import PortfolioBuilder, PortfolioDefinitionBinding, TargetWeightStore
 from .contracts import PublishedState
+from .membership_input import filtered_factor_frame
 from .owning_contracts import (
     AdjustedPriceDatasetStore,
     BacktestConfigStore,
@@ -227,6 +228,28 @@ class DatasetStageAdapter:
         self.membership_store = membership_store
         self.trading_calendar = list(trading_calendar) if trading_calendar is not None else None
 
+    def _read_factor_frame(self, plan: ResolvedExecutionPlan, factor_binding) -> pd.DataFrame:
+        """Select the factor frame the dataset stage is allowed to consume.
+
+        v4/v5 requests declare an `index_membership_binding`, so their dataset must be
+        built from the per-day visible-member intersection; a missing governed
+        membership store is a hard failure rather than a silent fallback to the raw
+        partition, which would admit members that were not in the index on that day.
+        """
+        if plan.request.get("contract_version") in {4, 5}:
+            if self.membership_store is None or self.trading_calendar is None:
+                raise ContractError(
+                    "v4/v5 dataset stage requires a governed membership store and trading calendar"
+                )
+            return filtered_factor_frame(
+                plan.request,
+                membership_store=self.membership_store,
+                factor_store=self.factor_store,
+                trading_days=self.trading_calendar,
+            )
+        _, factor_frame = self.factor_store.read_partition(factor_binding.generation_id)
+        return factor_frame
+
     def run(
         self,
         plan: ResolvedExecutionPlan,
@@ -251,21 +274,7 @@ class DatasetStageAdapter:
             raise ContractError("factor binding manifest digest mismatch")
         if factor_manifest["data_checksum_sha256"] != factor_binding.data_checksum_sha256:
             raise ContractError("factor binding data checksum mismatch")
-        from .membership_input import filtered_factor_frame
-
-        if (
-            plan.request.get("contract_version") in {4, 5}
-            and self.membership_store is not None
-            and self.trading_calendar is not None
-        ):
-            factor_frame = filtered_factor_frame(
-                plan.request,
-                membership_store=self.membership_store,
-                factor_store=self.factor_store,
-                trading_days=self.trading_calendar,
-            )
-        else:
-            _, factor_frame = self.factor_store.read_partition(factor_binding.generation_id)
+        factor_frame = self._read_factor_frame(plan, factor_binding)
 
         universe_manifest = self.universe_store.read_manifest(universe_binding.generation_id)
         if universe_manifest["generation_id"] != universe_binding.generation_id:
