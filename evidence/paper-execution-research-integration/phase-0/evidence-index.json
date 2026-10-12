@@ -168,7 +168,7 @@
     },
     {
       "path": "specs/layers/paper-execution-research-integration-plan.md",
-      "sha256": "71e6617e066eab6dff2060053a36cd8fbdcf2af45256febfb3c1b61a5da4191b"
+      "sha256": "0cc70e0289de56a02d0b2628f54c622dda6fb7dc8c96c1e75307de7b553db91d"
     },
     {
       "path": "src/uq/contracts/model_layer.py",
@@ -180,7 +180,7 @@
     },
     {
       "path": "src/uq/research_chain/resolver.py",
-      "sha256": "ec3a390f2827310f0fb24226d1af734b33b268918af16a90f0e7672f0609d00e"
+      "sha256": "eceb6dd1aae336a2331d8d12d9fe093b5151cec58458e69447034ca2da123680"
     },
     {
       "path": "src/uq/research_chain/runner.py",

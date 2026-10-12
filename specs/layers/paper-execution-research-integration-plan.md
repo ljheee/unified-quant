@@ -349,9 +349,9 @@ target test and stay `planned` until it exists.
 | PE14 | 0.5 | suspension snapshot primary source is bars `status` | `test_suspension_snapshot_primary_source_is_bars_status` | `passed` |
 | PE15 | 0.5 | corporate-action set from dividend partitions | `test_corporate_action_set_digest_recomputes_from_dividend_store` | `passed` |
 | PE16 | 0.5 | window before first visible snapshot fails closed | `test_window_before_first_visible_snapshot_fails_closed` | `passed` |
-| PE17 | 1 | paper bindings resolve from published stores | `test_paper_bindings_resolve_from_published_stores` | `planned` |
-| PE18 | 1 | missing or tampered input fails closed before compute | `test_paper_input_tampering_fails_closed_before_compute` | `planned` |
-| PE19 | 1 | v1/v2 resolver behaviour unchanged | existing v1/v2 resolver suite | `planned` |
+| PE17 | 1 | paper bindings resolve from published stores | `test_paper_bindings_resolve_from_published_stores` | `passed` |
+| PE18 | 1 | missing or tampered input fails closed before compute | `test_missing_paper_binding_fails_closed`, `test_tampered_paper_input_fails_closed_before_compute`, `test_v5_without_market_store_fails_closed` | `passed` |
+| PE19 | 1 | v1/v2 resolver behaviour unchanged | `test_v1_v2_resolver_behaviour_unchanged` | `passed` |
 | PE20 | 2 | one-date initial paper execution end to end | `test_paper_stage_one_date_initial` | `planned` |
 | PE21 | 2 | multi-date continuation state lineage | `test_paper_stage_multi_date_continuation_lineage` | `planned` |
 | PE22 | 2 | reject reasons preserved: `suspended`, `limit_up`, `limit_down`, `insufficient_cash`, `t1_not_sellable` | `test_paper_stage_reject_reasons_preserved` | `planned` |

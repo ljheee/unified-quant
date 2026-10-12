@@ -132,6 +132,7 @@ class ResearchChainRequestResolver:
         *,
         membership_store: Any | None = None,
         trading_calendar: Sequence[date] | None = None,
+        market_dataset_store: Any | None = None,
     ) -> None:
         if (membership_store is None) != (trading_calendar is None):
             raise ContractError(
@@ -140,6 +141,7 @@ class ResearchChainRequestResolver:
         self.stores_by_output_family = dict(stores_by_output_family)
         self.membership_store = membership_store
         self.trading_calendar = list(trading_calendar) if trading_calendar is not None else None
+        self.market_dataset_store = market_dataset_store
 
     def resolve(
         self,
@@ -263,6 +265,8 @@ class ResearchChainRequestResolver:
 
         if request_schema == "research_run_request_v4":
             self._verify_v4_input_sets(candidate)
+        if request_schema == "research_run_request_v5":
+            self._verify_v5_paper_bindings(candidate)
 
         execution_plan = {
             "schema_version": "v1",
@@ -286,6 +290,35 @@ class ResearchChainRequestResolver:
             stage_bindings=tuple(stage_bindings),
             resolved_execution_plan_sha256=sha256_json(execution_plan),
         )
+
+    def _verify_v5_paper_bindings(self, candidate: dict[str, Any]) -> None:
+        """Resolve template-v2 paper bindings against the published market-data store."""
+        template = candidate.get("paper_execution_template", {})
+        if not self.market_dataset_store:
+            raise ResearchResolutionError(
+                "request_invalid",
+                "v5 request requires a market_dataset_store for paper input resolution",
+            )
+        _PAPER_BINDING_FAMILIES = {
+            "market_data_binding": "bars_daily_v2",
+            "calendar_binding": "trading_calendar_snapshot_v1",
+            "suspension_binding": "suspension_snapshot_v1",
+            "corporate_action_binding": "dividend_event_v1",
+        }
+        from datetime import date as _date
+        for field, expected_family in _PAPER_BINDING_FAMILIES.items():
+            binding = template.get(field)
+            if not binding:
+                raise ResearchResolutionError("input_unresolved", f"missing paper binding: {field}")
+            try:
+                self.market_dataset_store.verify_set_binding(binding)
+            except ResearchResolutionError:
+                raise
+            except ContractError as exc:
+                detail = str(exc)
+                if "tampered" in detail or "mismatch" in detail:
+                    raise ResearchResolutionError("input_tampered", detail) from exc
+                raise ResearchResolutionError("input_unresolved", detail) from exc
 
 
     def _verify_v4_input_sets(self, request: dict[str, Any]) -> None:

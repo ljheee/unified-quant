@@ -1,0 +1,16 @@
+{
+ "layer": "paper_execution_research_integration",
+ "phase": 1,
+ "status": "in_progress",
+ "acceptance_rows": [
+  {"id": "PE17", "status": "passed", "test_ids": ["test_paper_bindings_resolve_from_published_stores"]},
+  {"id": "PE18", "status": "passed", "test_ids": ["test_missing_paper_binding_fails_closed", "test_tampered_paper_input_fails_closed_before_compute", "test_v5_without_market_store_fails_closed"]},
+  {"id": "PE19", "status": "passed", "test_ids": ["test_v1_v2_resolver_behaviour_unchanged"]}
+ ],
+ "blocked_by": ["final HEAD gate report generation after commit"],
+ "exit_criteria": {
+  "resolver_produces_paper_execution_plan": "passed",
+  "missing_tampered_fail_closed": "passed",
+  "v1_v2_v3_v4_unchanged": "passed (existing suite green)"
+ }
+}
