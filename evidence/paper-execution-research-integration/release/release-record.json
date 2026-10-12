@@ -4,11 +4,11 @@
     "paper stage re-check of index_membership_binding membership (Open Decision 1)"
   ],
   "evidence_commit": "HEAD_evidence_only",
-  "final_implementation_commit": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+  "final_implementation_commit": "a76e89eeb9aeced723b12704d47880febfdab4e0",
   "layer": "paper_execution_research_integration",
   "local_gate": {
     "command": "uv sync --locked --extra dev --extra real && uv run --no-sync python -m pytest",
-    "commit_bound": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+    "commit_bound": "a76e89eeb9aeced723b12704d47880febfdab4e0",
     "path": "evidence/paper-execution-research-integration/release/local-gate-report.json",
     "platform": "macOS-26.3-arm64-arm-64bit",
     "python_version": "3.12.13",
@@ -36,9 +36,9 @@
   "record_version": 1,
   "release": "v0.1",
   "remote_gate": {
-    "aggregated_path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/aggregated-gates.json",
-    "cells_root": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339",
-    "commit_bound": "f8fe690e2dc71e3069ce9692ac3418a0bb6ba435",
+    "aggregated_path": "evidence/paper-execution-research-integration/release/final-head-ci/38253299816/aggregated-gates.json",
+    "cells_root": "evidence/paper-execution-research-integration/release/final-head-ci/38253299816",
+    "commit_bound": "a76e89eeb9aeced723b12704d47880febfdab4e0",
     "covered_cells": [
       "macos-latest/3.11",
       "macos-latest/3.12",
@@ -52,14 +52,14 @@
       "ubuntu-latest/3.12/qlib"
     ],
     "result": "passed",
-    "run_id": "38252277339",
-    "run_path": "evidence/paper-execution-research-integration/release/final-head-ci/38252277339/run.json",
+    "run_id": "38253299816",
+    "run_path": "evidence/paper-execution-research-integration/release/final-head-ci/38253299816/run.json",
     "summary": {
       "failed": 0,
       "passed": 10,
       "total": 10
     },
-    "url": "https://github.com/ljheee/unified-quant/actions/runs/38252277339"
+    "url": "https://github.com/ljheee/unified-quant/actions/runs/38253299816"
   },
   "risk_limitations": [
     "The paper stage consumes only published governed market data; it does not create paper semantics, broker access, or live market data.",

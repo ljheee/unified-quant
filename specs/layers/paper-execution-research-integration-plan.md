@@ -2,8 +2,8 @@
 
 Status: **Released.** Phase 0 exited at `de26458`; Phases 0R, 0.5, 1, 2, 3 and the
 Phase 4 release evidence are exited at the final implementation commit
-`f8fe690e2dc71e3069ce9692ac3418a0bb6ba435`, certified by the local gate plus the
-ten-cell remote matrix (run `38252277339`) archived under
+`a76e89eeb9aeced723b12704d47880febfdab4e0`, certified by the local gate plus the
+ten-cell remote matrix (run `38253299816`) archived under
 `evidence/paper-execution-research-integration/release/`. The released
 `research_run_request.v1`/`.v2` contracts and stage plans `v1`/`v2` remain
 byte-for-byte compatible; nothing here changes them.
@@ -203,7 +203,7 @@ bindings). Those findings are Phase 0R work, not a reopened Phase 0.
 
 ### Phase 0R - Contract remediation - exited
 
-Exited at `f8fe690`; acceptance rows PE5-PE12 pass and the gate/remote evidence is
+Exited with the release evidence; acceptance rows PE5-PE12 pass and the gate/remote evidence is
 recorded in `phase-0r/phase-record.json`.
 
 Deliverables:
@@ -235,7 +235,7 @@ Exit criteria:
 
 ### Phase 0.5 - Governed market dataset publisher - exited
 
-Exited at `f8fe690`; acceptance rows PE13-PE16 pass and the gate/remote evidence is
+Exited with the release evidence; acceptance rows PE13-PE16 pass and the gate/remote evidence is
 recorded in `phase-0.5/phase-record.json`. This plan previously assumed governed calendar/suspension/corporate-action inputs. They
 exist as binding names only: `BacktestMarketDatasetStore` is read-only
 (`src/uq/research_chain/owning_contracts.py`) and the only writer of its physical layout
@@ -271,7 +271,7 @@ Exit criteria:
 
 ### Phase 1 - Runtime resolver - exited
 
-Exited at `f8fe690`; acceptance rows PE17-PE19 pass and the gate/remote evidence is
+Exited with the release evidence; acceptance rows PE17-PE19 pass and the gate/remote evidence is
 recorded in `phase-1/phase-record.json`.
 
 Deliverables:
@@ -292,7 +292,7 @@ Exit criteria:
 
 ### Phase 2 - Adapter - exited
 
-Exited at `f8fe690`; acceptance rows PE20-PE24 pass (PE23's stage-level refusal test
+Exited with the release evidence; acceptance rows PE20-PE24 pass (PE23's stage-level refusal test
 landed with this commit) and the gate/remote evidence is recorded in
 `phase-2/phase-record.json`. The per-date risk decision is produced by
 `RiskPolicyOrderSubmissionSource` from a reviewed policy (portfolio-level
@@ -315,7 +315,7 @@ Exit criteria:
 
 ### Phase 3 - Result reconciliation
 
-Exited at `f8fe690`; acceptance rows PE25-PE27 pass and the gate/remote evidence is
+Exited with the release evidence; acceptance rows PE25-PE27 pass and the gate/remote evidence is
 recorded in `phase-3/phase-record.json`.
 
 Deliverables:
@@ -333,7 +333,7 @@ Exit criteria:
 
 ### Phase 4 - Release evidence - exited
 
-Exited at `f8fe690`. The local gate report, the per-cell remote artifacts, the release
+Exited with the release evidence. The local gate report, the per-cell remote artifacts, the release
 record, the phase record, the marker and the evidence index live under
 `evidence/paper-execution-research-integration/release/`.
 
@@ -397,7 +397,7 @@ target test and stay `planned` until it exists.
 | PE26 | 3 | missing, extra, unordered, duplicated, tampered bindings rejected | `test_paper_result_binding_tampering_rejected`, `test_reconcile_paper_bindings_rejects_incomplete_and_duplicated`, `test_reconcile_paper_bindings_rejects_cross_date_execution_id_mix` | `passed` |
 | PE27 | 3 | failed run publishes no accepted result | `test_paper_failure_hides_accepted_result` | `passed` |
 | PE28 | 4 | local gate and Qlib gate on final HEAD | `evidence/paper-execution-research-integration/release/local-gate-report.json` (remote Qlib cells cover the Qlib extras) | `passed` |
-| PE29 | 4 | remote ten-cell matrix on final HEAD, per-cell reports archived | `evidence/paper-execution-research-integration/release/final-head-ci/38252277339/aggregated-gates.json` | `passed` |
+| PE29 | 4 | remote ten-cell matrix on final HEAD, per-cell reports archived | `evidence/paper-execution-research-integration/release/final-head-ci/38253299816/aggregated-gates.json` | `passed` |
 | PE30 | 4 | evidence index freshness and self-hash exclusion | `test_evidence_indexes_are_fresh_and_never_index_themselves` | `passed` |
 
 ## 5. Execution Rules
