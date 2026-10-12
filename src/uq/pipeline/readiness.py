@@ -102,6 +102,7 @@ def assess_readiness(
     suspension_provenance: str = "unspecified",
     delisted: Collection[str] | None = None,
     delisted_provenance: str = "unspecified",
+    factor_sessions: Sequence[date] | None = None,
 ) -> ReadinessReport:
     """Evaluate the cross-input conditions a training run depends on."""
     session_values = sorted(set(sessions))
@@ -328,6 +329,22 @@ def assess_readiness(
     metrics["sessions"] = float(len(session_values))
     metrics["members"] = float(len(members))
     metrics["instruments_with_bars"] = float(len(with_bars))
+    if factor_sessions is not None:
+        findings.extend(
+            assess_factor_label_linkage(
+                window_start=window_start,
+                window_end=window_end,
+                sessions=session_values,
+                label_horizon_sessions=label_horizon_sessions,
+                factor_sessions=factor_sessions,
+            )
+        )
+        factor_values = sorted(set(factor_sessions))
+        metrics["factor_sessions"] = float(len(factor_values))
+        if usable_label_end is not None:
+            metrics["label_only_sessions"] = float(
+                len([value for value in session_values if value > usable_label_end])
+            )
     return ReadinessReport(
         window_start=window_start,
         window_end=window_end,
@@ -345,6 +362,74 @@ def _usable_label_end(sessions: Sequence[date], label_horizon_sessions: int) -> 
     if label_horizon_sessions < 0 or len(sessions) <= label_horizon_sessions:
         return None
     return sessions[len(sessions) - label_horizon_sessions - 1]
+
+
+def assess_factor_label_linkage(
+    *,
+    window_start: date,
+    window_end: date,
+    sessions: Sequence[date],
+    label_horizon_sessions: int,
+    factor_sessions: Sequence[date],
+) -> tuple[ReadinessFinding, ...]:
+    """Assert the feature side of the sample never reaches past the label side.
+
+    A decision date ``t`` is trainable only when bars exist through ``t +
+    label_horizon``, so the last trainable decision date is
+    ``usable_label_end``. The factor partitions are the feature side of that
+    sample: partitions past that date describe decision dates whose labels
+    cannot be completed, and partitions that start late silently shrink the
+    first trainable dates. Both are fail-closed here because neither shows up
+    as a data defect anywhere else.
+
+    When the window itself cannot satisfy the horizon the horizon rule already
+    reports it, so this returns nothing rather than double-reporting.
+    """
+    session_values = sorted(set(sessions))
+    usable_label_end = _usable_label_end(session_values, label_horizon_sessions)
+    if usable_label_end is None:
+        return ()
+    factor_values = sorted(set(factor_sessions))
+    if not factor_values:
+        return (
+            ReadinessFinding(
+                "no_factor_sessions",
+                "the factor layer declares no sessions for this window, so the run would "
+                "train on nothing",
+            ),
+        )
+    findings: list[ReadinessFinding] = []
+    outside = [value for value in factor_values if value < window_start or value > window_end]
+    if outside:
+        findings.append(
+            ReadinessFinding(
+                "factor_session_outside_window",
+                f"{len(outside)} factor sessions fall outside {window_start}..{window_end}: "
+                + ",".join(value.isoformat() for value in outside[:10]),
+            )
+        )
+    # The window can begin on a weekend/holiday; requiring a factor session on
+    # that literal date would mis-block month-start windows.
+    in_window = [value for value in session_values if value >= window_start]
+    if in_window and factor_values[0] > in_window[0]:
+        findings.append(
+            ReadinessFinding(
+                "factor_starts_after_window",
+                f"the factor layer starts at {factor_values[0]} after the first session "
+                f"{in_window[0]} in the window, so the earliest decision dates have no features",
+            )
+        )
+    beyond = [value for value in factor_values if value > usable_label_end]
+    if beyond:
+        findings.append(
+            ReadinessFinding(
+                "factor_reads_past_label_end",
+                f"{len(beyond)} factor sessions fall after {usable_label_end}, the last decision "
+                f"date whose {label_horizon_sessions}-session label is complete "
+                f"(first: {beyond[0]}); those samples cannot be labeled",
+            )
+        )
+    return tuple(findings)
 
 
 def sessions_by_instrument(frame: pd.DataFrame) -> dict[str, set[date]]:

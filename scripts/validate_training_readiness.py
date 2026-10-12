@@ -112,8 +112,43 @@ def _suspensions_for_gaps(
     return suspensions
 
 
+def _read_factor_partition_set(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"unreadable factor partition set {path}: {exc}") from exc
+
+
+def factor_sessions_from_document(document: Any) -> list[dt.date]:
+    """Session dates a declared factor partition set covers.
+
+    Accepts the ``factor_partition_set`` binding document produced by
+    ``uq.factors.partition_set.build_factor_partition_set`` (``partitions`` of
+    ``partition_date``) or a bare list of ISO dates, so a caller that has not
+    built the binding yet can still assert the linkage.
+    """
+    raw: Any = None
+    if isinstance(document, dict):
+        raw = document.get("partitions", document.get("factor_sessions"))
+    elif isinstance(document, list):
+        raw = document
+    if not isinstance(raw, list) or not raw:
+        raise SystemExit(
+            "factor partition set must be a non-empty list or an object with 'partitions'/'factor_sessions'"
+        )
+    sessions: list[dt.date] = []
+    for item in raw:
+        value = item.get("partition_date") if isinstance(item, dict) else item
+        if not isinstance(value, str):
+            raise SystemExit(f"factor partition entry has no date: {item!r}")
+        try:
+            sessions.append(dt.date.fromisoformat(value))
+        except ValueError as exc:
+            raise SystemExit(f"factor partition date is not ISO: {value!r}") from exc
+    return sorted(set(sessions))
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="validate-training-readiness")
     parser = argparse.ArgumentParser(prog="validate-training-readiness")
     parser.add_argument("--bars-root", type=Path, required=True, help="canonical store root")
     parser.add_argument("--membership-root", type=Path, required=True, help="index membership store root")
@@ -134,6 +169,15 @@ def main(argv: list[str] | None = None) -> int:
         help="do not query stock_basic(list_status=D); delisted members stay unexplained gaps",
     )
     parser.add_argument("--schema", type=Path, default=Path("config/schemas/bars_daily.v2.yaml"))
+    parser.add_argument(
+        "--factor-partition-set",
+        type=Path,
+        default=None,
+        help=(
+            "optional factor_partition_set binding JSON (or a bare list of dates): asserts the "
+            "feature side never reaches past the last labelable decision date"
+        ),
+    )
     parser.add_argument("--exchange", default="SSE")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -158,6 +202,14 @@ def main(argv: list[str] | None = None) -> int:
         delisted = adapter.delisted_instruments()
         delisted_provenance = "tushare:stock_basic(list_status=D)"
         notes["delisted_universe_size"] = len(delisted)
+    factor_sessions: list[dt.date] | None = None
+    if args.factor_partition_set is not None:
+        document = _read_factor_partition_set(args.factor_partition_set)
+        factor_sessions = factor_sessions_from_document(document)
+        notes["factor_partition_set"] = str(args.factor_partition_set)
+        notes["factor_sessions"] = len(factor_sessions)
+        if isinstance(document, dict) and document.get("set_digest_sha256"):
+            notes["factor_partition_set_digest"] = document["set_digest_sha256"]
 
     report = assess_readiness(
         window_start=args.start,
@@ -172,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         suspension_provenance=str(notes.get("suspension_provenance", "unspecified")),
         delisted=delisted,
         delisted_provenance=delisted_provenance,
+        factor_sessions=factor_sessions,
     )
     payload = report.to_json()
     payload["universe_id"] = args.universe_id

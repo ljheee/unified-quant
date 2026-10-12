@@ -1,10 +1,20 @@
 """Training readiness rules (pendding item 5): cross-input fail-closed checks."""
 
+import importlib.util
 from datetime import date, timedelta
+from pathlib import Path
 
 import pandas as pd
+import pytest
 
-from uq.pipeline.readiness import assess_readiness
+from uq.pipeline.readiness import assess_factor_label_linkage, assess_readiness
+
+_ROOT = Path(__file__).resolve().parents[1]
+_spec = importlib.util.spec_from_file_location(
+    "validate_training_readiness", _ROOT / "scripts" / "validate_training_readiness.py"
+)
+script = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(script)
 
 SESSIONS = [date(2026, 1, 1) + timedelta(days=offset) for offset in range(0, 40)]
 INSTRUMENTS = ["600000.XSHG", "000001.XSHE"]
@@ -214,3 +224,115 @@ def test_a_window_ending_on_a_non_trading_day_still_passes():
     # so the window boundary must not be treated as a missing session.
     report = _assess(_bars(), _members(), window_end=SESSIONS[-1] + timedelta(days=2))
     assert report.status == "passed", report.findings
+
+
+def _linkage(factor_sessions, **overrides):
+    options = {
+        "window_start": SESSIONS[0],
+        "window_end": SESSIONS[-1],
+        "sessions": SESSIONS,
+        "label_horizon_sessions": 5,
+        "factor_sessions": factor_sessions,
+    }
+    options.update(overrides)
+    return assess_factor_label_linkage(**options)
+
+
+def test_linkage_accepts_a_factor_layer_that_stops_at_the_label_end():
+    # Features for every decision date whose 5-session label fits inside the
+    # window: the sample index is exactly [SESSIONS[0], usable_label_end].
+    usable = SESSIONS[-6]
+    assert _linkage([day for day in SESSIONS if day <= usable]) == ()
+
+
+def test_linkage_blocks_factor_sessions_past_the_label_end():
+    findings = _linkage(SESSIONS)
+    assert [item.code for item in findings] == ["factor_reads_past_label_end"]
+    # the tail is exactly the sessions whose labels cannot be completed
+    assert SESSIONS[-6].isoformat() in findings[0].detail
+    assert SESSIONS[-5].isoformat() in findings[0].detail
+
+
+def test_linkage_blocks_a_late_factor_start():
+    # Warmup that silently drops the first decision dates is sample shrinkage,
+    # not a data defect anywhere else.
+    findings = _linkage([day for day in SESSIONS[1:] if day <= SESSIONS[-6]])
+    assert [item.code for item in findings] == ["factor_starts_after_window"]
+    assert SESSIONS[1].isoformat() in findings[0].detail
+
+
+def test_linkage_allows_a_month_start_window():
+    # The requested window may begin on a holiday; the factor layer only needs
+    # to cover the first trading session in the window.
+    assert (
+        _linkage(
+            [day for day in SESSIONS if day <= SESSIONS[-6]],
+            window_start=SESSIONS[0] - timedelta(days=1),
+            window_end=SESSIONS[-1],
+        )
+        == ()
+    )
+
+
+def test_linkage_blocks_sessions_outside_the_window():
+    findings = _linkage([SESSIONS[0] - timedelta(days=1)] + [day for day in SESSIONS if day <= SESSIONS[-6]])
+    assert [item.code for item in findings] == ["factor_session_outside_window"]
+    # a future session trips both rules, which is expected: it is outside the
+    # window *and* past the last labelable decision date
+    both = _linkage([SESSIONS[0], date(2027, 1, 1)])
+    assert {item.code for item in both} == {"factor_session_outside_window", "factor_reads_past_label_end"}
+
+
+def test_linkage_stays_silent_when_the_horizon_rule_already_fires():
+    # a window too short for the horizon is already reported by the horizon
+    # rule, so the linkage layer stays silent instead of double-reporting
+    assert _linkage(SESSIONS[:4]) == ()
+
+
+def test_linkage_blocks_an_empty_factor_layer():
+    findings = _linkage([])
+    assert [item.code for item in findings] == ["no_factor_sessions"]
+
+
+def test_readiness_reports_the_linkage_and_the_label_only_tail():
+    # SESSIONS[-5:] carry bars purely so the labels of the decision dates can be
+    # resolved; that is the boundary the linkage rule protects.
+    report = _assess(
+        _bars(),
+        _members(),
+        factor_sessions=[day for day in SESSIONS if day <= SESSIONS[-6]],
+    )
+    assert report.status == "passed", report.findings
+    assert report.metrics["factor_sessions"] == float(len(SESSIONS) - 5)
+    assert report.metrics["label_only_sessions"] == 5.0
+
+    blocked = _assess(_bars(), _members(), factor_sessions=SESSIONS)
+    assert blocked.status == "blocked"
+    assert "factor_reads_past_label_end" in {item.code for item in blocked.findings}
+
+
+def test_script_accepts_binding_partitions_and_bare_dates(tmp_path):
+    binding = tmp_path / "factor-set.json"
+    binding.write_text(
+        '{"partitions": [{"partition_date": "2026-01-05"}, {"partition_date": "2026-01-06"}]}',
+        encoding="utf-8",
+    )
+    assert script.factor_sessions_from_document(script._read_factor_partition_set(binding)) == [
+        date(2026, 1, 5),
+        date(2026, 1, 6),
+    ]
+    assert script.factor_sessions_from_document(["2026-01-06", "2026-01-05", "2026-01-05"]) == [
+        date(2026, 1, 5),
+        date(2026, 1, 6),
+    ]
+
+
+def test_script_rejects_malformed_partition_sets(tmp_path):
+    with pytest.raises(SystemExit, match="unreadable factor partition set"):
+        script._read_factor_partition_set(tmp_path / "missing.json")
+    with pytest.raises(SystemExit, match="non-empty"):
+        script.factor_sessions_from_document({"partitions": []})
+    with pytest.raises(SystemExit, match="no date"):
+        script.factor_sessions_from_document([{"other": 1}])
+    with pytest.raises(SystemExit, match="not ISO"):
+        script.factor_sessions_from_document(["2026/01/05"])
