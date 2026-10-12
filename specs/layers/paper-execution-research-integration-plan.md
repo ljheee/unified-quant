@@ -345,10 +345,10 @@ target test and stay `planned` until it exists.
 | PE10 | 0R | set digest recomputation matches, drift rejected | `test_set_binding_digest_recomputation_and_drift` | `passed` |
 | PE11 | 0R | quality helper emits the exact four registry checks | `test_paper_quality_checks_match_registry_allowed_checks` | `passed` |
 | PE12 | 0R | negative fixtures: schema rejection and manifest tampering | `test_paper_execution_negative_fixtures_fail_closed` | `passed` |
-| PE13 | 0.5 | calendar snapshot published and cross-checked | `test_trading_calendar_snapshot_publish_and_crosscheck` | `planned` |
-| PE14 | 0.5 | suspension snapshot primary source is bars `status` | `test_suspension_snapshot_primary_source_is_bars_status` | `planned` |
-| PE15 | 0.5 | corporate-action set from dividend partitions | `test_corporate_action_set_digest_recomputes_from_dividend_store` | `planned` |
-| PE16 | 0.5 | window before first visible snapshot fails closed | `test_market_dataset_publishing_window_before_visibility_fails_closed` | `planned` |
+| PE13 | 0.5 | calendar snapshot published and cross-checked | `test_calendar_snapshot_publish_and_crosscheck` | `passed` |
+| PE14 | 0.5 | suspension snapshot primary source is bars `status` | `test_suspension_snapshot_primary_source_is_bars_status` | `passed` |
+| PE15 | 0.5 | corporate-action set from dividend partitions | `test_corporate_action_set_digest_recomputes_from_dividend_store` | `passed` |
+| PE16 | 0.5 | window before first visible snapshot fails closed | `test_window_before_first_visible_snapshot_fails_closed` | `passed` |
 | PE17 | 1 | paper bindings resolve from published stores | `test_paper_bindings_resolve_from_published_stores` | `planned` |
 | PE18 | 1 | missing or tampered input fails closed before compute | `test_paper_input_tampering_fails_closed_before_compute` | `planned` |
 | PE19 | 1 | v1/v2 resolver behaviour unchanged | existing v1/v2 resolver suite | `planned` |

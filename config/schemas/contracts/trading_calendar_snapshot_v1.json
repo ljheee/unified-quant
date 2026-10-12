@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Trading calendar snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "snapshot_version",
+    "family",
+    "generation_id",
+    "manifest_digest_sha256",
+    "window_start",
+    "window_end",
+    "session_dates",
+    "primary_source",
+    "independent_source",
+    "cross_check_result",
+    "row_count",
+    "data_checksum_sha256",
+    "serialization_profile"
+  ],
+  "properties": {
+    "snapshot_version": {"const": "1.0.0"},
+    "family": {"const": "trading_calendar_snapshot_v1"},
+    "generation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "manifest_digest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "window_start": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "window_end": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "session_dates": {
+      "type": "array",
+      "minItems": 0,
+      "items": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+    },
+    "primary_source": {"type": "string", "minLength": 1},
+    "independent_source": {"type": "string", "minLength": 1},
+    "cross_check_result": {"enum": ["agreement", "divergence"]},
+    "row_count": {"type": "integer", "minimum": 0},
+    "data_checksum_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "serialization_profile": {"type": "string", "minLength": 1}
+  }
+}

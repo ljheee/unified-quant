@@ -1,0 +1,18 @@
+{
+ "layer": "paper_execution_research_integration",
+ "phase": "0.5",
+ "status": "in_progress",
+ "acceptance_rows": [
+  {"id": "PE13", "status": "passed", "test_ids": ["test_calendar_snapshot_publish_and_crosscheck"]},
+  {"id": "PE14", "status": "passed", "test_ids": ["test_suspension_snapshot_primary_source_is_bars_status"]},
+  {"id": "PE15", "status": "passed", "test_ids": ["test_corporate_action_set_digest_recomputes_from_dividend_store"]},
+  {"id": "PE16", "status": "passed", "test_ids": ["test_window_before_first_visible_snapshot_fails_closed"]}
+ ],
+ "blocked_by": ["final HEAD gate report generation after commit"],
+ "exit_criteria": {
+  "input_bindings_resolve": "passed (set digest recomputation verified in PE15)",
+  "tampering_flips_set_digest": "passed (member tampering test in PE15)",
+  "window_before_first_visible_fails_closed": "passed (PE16)",
+  "evidence_archived": "pending gate run"
+ }
+}
