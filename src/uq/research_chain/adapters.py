@@ -213,6 +213,8 @@ class DatasetStageAdapter:
         preprocessing_store: FeaturePreprocessingStore,
         dataset_writer: DatasetWriter,
         run_store: FileResearchRunStore,
+        membership_store: Any | None = None,
+        trading_calendar: Sequence[date] | None = None,
     ) -> None:
         self.factor_store = factor_store
         self.adjusted_price_store = adjusted_price_store
@@ -222,6 +224,8 @@ class DatasetStageAdapter:
         self.preprocessing_store = preprocessing_store
         self.dataset_writer = dataset_writer
         self.run_store = run_store
+        self.membership_store = membership_store
+        self.trading_calendar = list(trading_calendar) if trading_calendar is not None else None
 
     def run(
         self,
@@ -247,7 +251,21 @@ class DatasetStageAdapter:
             raise ContractError("factor binding manifest digest mismatch")
         if factor_manifest["data_checksum_sha256"] != factor_binding.data_checksum_sha256:
             raise ContractError("factor binding data checksum mismatch")
-        _, factor_frame = self.factor_store.read_partition(factor_binding.generation_id)
+        from .membership_input import filtered_factor_frame
+
+        if (
+            plan.request.get("contract_version") in {4, 5}
+            and self.membership_store is not None
+            and self.trading_calendar is not None
+        ):
+            factor_frame = filtered_factor_frame(
+                plan.request,
+                membership_store=self.membership_store,
+                factor_store=self.factor_store,
+                trading_days=self.trading_calendar,
+            )
+        else:
+            _, factor_frame = self.factor_store.read_partition(factor_binding.generation_id)
 
         universe_manifest = self.universe_store.read_manifest(universe_binding.generation_id)
         if universe_manifest["generation_id"] != universe_binding.generation_id:
