@@ -42,7 +42,7 @@
     },
     {
       "path": "scripts/build_store_evidence.py",
-      "sha256": "2f733c0c2ff40d65b68ade87cffa56c34b1ebb18eaff6bc888ade10afc403a46"
+      "sha256": "a9b4ea9ebbabdd91da6781403703927d4c087301339faa49c8f7ec16cbbd3d51"
     },
     {
       "path": "scripts/fetch_index_membership.py",

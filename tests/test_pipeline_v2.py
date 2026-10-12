@@ -279,12 +279,50 @@ def test_cli_v2_resolves_members_from_the_membership_store(tmp_path, monkeypatch
     assert report["rows"] == 2
 
 
-def test_cli_v2_requires_governed_membership_inputs(tmp_path, monkeypatch):
+def test_cli_v2_requires_governed_membership_inputs(tmp_path, monkeypatch, capsys):
     from uq import cli
 
     monkeypatch.setenv("UQ_SKIP_HEALTH_PROBE", "1")
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as exit_info:
         cli.uq_ingest(["daily", "--date", "2025-10-14", "--data-root", str(tmp_path), "--pipeline", "v2"])
+    assert exit_info.value.code == 2
+    usage_error = capsys.readouterr().err
+    assert "--membership-root" in usage_error and "--universe-id" in usage_error
+
+
+def test_cli_v2_persists_the_ingest_run_report(tmp_path, monkeypatch, capsys):
+    # The pilot archive cites <bars_root>/runs/<run_id>.json as the durable
+    # per-session ingest report, so the v2 path has to actually write it.
+    from uq import cli
+
+    calls: dict = {}
+    monkeypatch.setattr(cli, "build_tushare_v2_pipeline", lambda *args, **kwargs: _StubPipeline(calls))
+    _membership_store(tmp_path / "membership", date(2025, 9, 30), ("000001.XSHE", "600000.XSHG"))
+
+    code = cli.uq_ingest(
+        [
+            "daily",
+            "--date",
+            "2025-10-14",
+            "--data-root",
+            str(tmp_path / "bars"),
+            "--pipeline",
+            "v2",
+            "--membership-root",
+            str(tmp_path / "membership"),
+            "--universe-id",
+            "a500",
+        ]
+    )
+    assert code == 0, capsys.readouterr().out
+    capsys.readouterr()
+    reports = list((tmp_path / "bars/runs").glob("*.json"))
+    assert len(reports) == 1
+    recorded = json.loads(reports[0].read_text(encoding="utf-8"))
+    assert recorded["status"] == "published"
+    assert recorded["rows"] == 2
+    assert recorded["run_id"].startswith("2025-10-14-")
+    assert recorded["recorded_at"]
 
 
 def test_cli_v2_fails_closed_when_membership_is_not_visible_yet(tmp_path, monkeypatch, capsys):

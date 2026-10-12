@@ -5,6 +5,7 @@ inventories, so its fail-closed behaviour is governance, not plumbing.
 """
 
 import importlib.util
+import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -93,6 +94,19 @@ def test_bars_inventory_refuses_stray_partition_directories(tmp_path):
     store = _bars_store(tmp_path)
     (store / "canonical/bars_daily/v2/date=2026-03-02.staging.deadbeef").mkdir()
     with pytest.raises(SystemExit, match="unexpected partition directory"):
+        module.bars_inventory(store, "a500", date(2026, 3, 1), date(2026, 3, 3), SCHEMA_PATH, tmp_path)
+
+
+def test_bars_inventory_refuses_a_manifest_the_reader_will_not_accept(tmp_path):
+    # A manifest whose row_count no longer matches its bytes keeps its own
+    # trust anchor (anchor = sha256(generation_id)), so the governed readback is
+    # what catches it. The producer must turn that into a refusal, not a traceback.
+    store = _bars_store(tmp_path)
+    manifest_path = store / "canonical/bars_daily/v2/date=2026-03-02/manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["row_count"] = 1
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+    with pytest.raises(SystemExit, match="inventory refused"):
         module.bars_inventory(store, "a500", date(2026, 3, 1), date(2026, 3, 3), SCHEMA_PATH, tmp_path)
 
 

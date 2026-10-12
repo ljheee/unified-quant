@@ -359,6 +359,20 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 | pilot 记录把 builder 模块写成 `uq.pipeline.builders` | 文档错。实际在 `uq.pipeline.daily`（已核 `rg`），并补 run report 落点 `<bars_root>/runs/<run_id>.json` 与"pilot 由内联循环产出"的诚实声明 | 人工核对 |
 | `paper-execution-research-integration/phase-0` 索引 4 条 stale digest | 源码前进后未重钉（`model_layer.py`、`research_chain/{contracts,resolver,runner}.py`）。按既有重钉约定重钉，`phase-record.remote_gate` 绑定不动 | test_evidence_indexes_are_fresh_and_never_index_themselves；test_phase_0_evidence_index_hashes_are_complete（两条此前失败的测试现绿） |
 
-| 索引生产者可产出被禁止的形态 | 自 CR 发现：`scripts/build_store_evidence.py --kind index` 允许把 `--out` 自身写进记录（正是 8.4 刚清理过的"自我引用永不可验"形态），也允许重复记录。改为生产侧直接拒绝（self-record / duplicate / 非仓库内路径 / 缺失文件），不再只靠 `test_evidence_indexes_are_fresh_and_never_index_themselves` 事后拦截；同时把 `repo_root` 由模块常量改为显式参数，使 fail-closed 分支可测 | tests/test_store_evidence.py（9 例：bars/membership digest 正确性、篡改 data.parquet 与 members.csv 均拒绝、暂存目录残留拒绝、空窗口拒绝、self-record/duplicate/越界/缺失拒绝） |
+| 索引生产者可产出被禁止的形态 | 自 CR 发现：`scripts/build_store_evidence.py --kind index` 允许把 `--out` 自身写进记录（正是 8.4 刚清理过的"自我引用永不可验"形态），也允许重复记录。改为生产侧直接拒绝（self-record / duplicate / 非仓库内路径 / 缺失文件），不再只靠 `test_evidence_indexes_are_fresh_and_never_index_themselves` 事后拦截；同时把 `repo_root` 由模块常量改为显式参数，使 fail-closed 分支可测 | tests/test_store_evidence.py（10 例：bars/membership digest 正确性、篡改 data.parquet 与 members.csv 均拒绝、manifest 语义被改而 anchor 仍自洽时由读回捕获、暂存目录残留拒绝、空窗口拒绝、self-record/duplicate/越界/缺失拒绝） |
 
 未夸大声明：pilot 归档的 `local_gate` 为**单格本地**（macOS arm64 / Python 3.12，runner=uv，绑定 `23cb49a`）；远程矩阵在同 HEAD 自然跑绿（run 38197992719，11 jobs：6 base + 4 qlib-runtime + f4-certification），但**未按格归档** gate artifact，故 `remote_ci` 只记状态与绑定 commit，不当作 per-cell 证据；`publish_lag_days=5` 仍是未实测假设；v2 分区 lineage 全部 `compared_rows=0`（无对照源佐证）。全量测试 751 collected / 729 passed / 22 skipped / 0 failed（22 为 qlib 门控，本地 skip、CI `qlib-runtime` 单元运行）。
+
+### 8.6 整体 CR（2026-10-12，覆盖 dfc8237…67e39ff 全部 7 个提交）
+
+再审一遍本批全部改动，发现并修掉 3 处（均为本批自身引入或本批可锁）：
+
+| 项 | 判定与处置 | 锁 |
+|---|---|---|
+| `bars_inventory` 读 `manifest.get("data_file", "data.parquet")` | 幻影键：canonical manifest 从未有 `data_file`（写侧固定 `data.parquet`）。当前无害，但它把"清单里出现同名字段"变成可左右读路径的开关。改为写侧常量 `BARS_DATA_FILE` | 现有 digest 用例覆盖 |
+| governed 读回的 `ContractError` 裸逸 | 真缺陷：`ManifestFirstReader.read` / `read_manifest` / `read_members` 抛的 ContractError 未被包装，出稿脚本以 traceback 退出，运维拿不到"拒绝归档"这一句结论。新增 `_governed()` 统一转 `SystemExit` 并带上被拒对象与原因 | test_bars_inventory_refuses_a_manifest_the_reader_will_not_accept |
+| CLI 断言不足以支撑记录里的声明 | `pilot-record` 声称每会话 ingest report 落 `<bars_root>/runs/<run_id>.json`，但原 3 例无一验证 v2 路径真的写文件；缺参用例只断 `SystemExit` 不锁提示内容。补 2 例（写盘内容与 run_id 前缀、退出码 2 与提示含两个缺失参数） | tests/test_pipeline_v2.py（15 例） |
+
+复核性验证（不是推断）：`bars-inventory.json` 与 `evidence/a500-membership/evidence-index.json` 用改后脚本从活 store 重导，与已提交版本 `diff` 为空（逐字节可重导）；`pilot-record` 的 11 项数字与三份 artifact 逐条比对一致；归档的 `requirements.lock.txt` 无绝对路径/凭据；`paper-execution` 索引只改 4 条 digest（`layer/record_version/status` 未动，47 条记录）。
+
+一条真实但**非本批引入**的治理弱点（登记后续项）：canonical manifest 的 `trust_anchor_sha256` 只是 `sha256(generation_id)`，而 `generation_id` 由 manifest 自身内容哈希得到——读侧不做外部校验，故 `lineage`/`source_versions`/`run_id` 这类"声明性"字段被改写后，重算 generation+anchor 即可自洽（数据字节、行列、dtype、row_count 仍被交叉校验，改不动）。本窗口的实际缓解是外部锚定链已存在：`evidence-index.json`(tracked) → `bars-inventory.json`(tracked) → 每分区 `manifest_sha256`，篡改本地 manifest 可通过"重跑生成器 + 与 tracked 文件 diff"检出。把 generation 改为内容重算或接入外部签名锚定，属 manifest 语义变更，需按规则开新版本。

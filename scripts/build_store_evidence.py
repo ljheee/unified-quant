@@ -30,9 +30,19 @@ from typing import Any
 
 from uq.contracts.index_membership import IndexMembershipStore
 from uq.contracts.schema import load_schema
+from uq.errors import ContractError
 from uq.store.reader import ManifestFirstReader
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+BARS_DATA_FILE = "data.parquet"
+
+
+def _governed(action: str, path: Path, call):
+    """A rejected governed read is a refusal to archive, not a traceback."""
+    try:
+        return call()
+    except ContractError as exc:
+        raise SystemExit(f"inventory refused: cannot {action} {path}: {exc}") from exc
 
 
 def _sha256(path: Path) -> str:
@@ -97,11 +107,11 @@ def bars_inventory(
             continue
         manifest_path = directory / "manifest.json"
         manifest = _read_manifest(manifest_path)
-        data_path = directory / manifest.get("data_file", "data.parquet")
+        data_path = directory / BARS_DATA_FILE
         data_sha256 = _sha256(data_path)
         if data_sha256 != manifest.get("data_checksum_sha256"):
             raise SystemExit(f"data digest drifted from manifest: {data_path}")
-        frame = reader.read(schema, session)
+        frame = _governed("read back partition", directory, lambda: reader.read(schema, session))
         if len(frame) != manifest["row_count"]:
             raise SystemExit(
                 f"readback row count {len(frame)} != manifest row_count "
@@ -165,14 +175,18 @@ def membership_inventory(store: Path, universe_id: str, repo_root: Path) -> dict
     index_code = ""
     pit_precision = ""
     for snapshot_date in snapshot_dates:
-        manifest = store_reader.read_manifest(universe_id, snapshot_date)
         manifest_path = base / snapshot_date.isoformat() / "manifest.json"
+        manifest = _governed(
+            "validate snapshot manifest",
+            manifest_path,
+            lambda: store_reader.read_manifest(universe_id, snapshot_date),
+        )
         artifact = manifest["members_artifact"]
         artifact_path = base / snapshot_date.isoformat() / artifact["path"]
         artifact_sha256 = _sha256(artifact_path)
         if artifact_sha256 != artifact["checksum_sha256"]:
             raise SystemExit(f"members digest drifted from manifest: {artifact_path}")
-        members = store_reader.read_members(universe_id, snapshot_date)
+        members = _governed("read back members", artifact_path, lambda: store_reader.read_members(universe_id, snapshot_date))
         if len(members) != artifact["row_count"]:
             raise SystemExit(f"members row count drift: {artifact_path}")
         index_code = str(manifest["index_code"])
