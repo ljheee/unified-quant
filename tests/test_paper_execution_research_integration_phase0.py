@@ -93,7 +93,7 @@ def test_v3_stage_plan_and_contract_version_are_aligned() -> None:
         "model_training", "prediction_publication", "portfolio_construction",
         "backtest_execution", "paper_execution", "result_reconciliation",
     ]
-    assert stage_plan_for_request({"contract_version": 3}) == expected
+    assert list(stage_plan_for_request({"contract_version": 3})) == expected
     assert list(stage_plan_for_request({"contract_version": 1})) == expected[:8] + expected[-1:]
 
     required = {

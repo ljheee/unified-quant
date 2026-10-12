@@ -437,3 +437,17 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 | 新版本只加分支、不加证据 | 自 CR 约束：`golden-provenance.v3.json` 与 v2 **逐字相同**，只改 `provenance_version`——v3 买到的只是"允许 `.XBSE`"这一条 schema 语义，不新增任何官方证据；北交所案例本身的取证仍未做，已在文档写明 | test 断言 v3 fixture 的四例与 v2 一致；`specs/layers/contracts/adjustment-official-source-access-v1.md` 已注明 |
 
 实测数字：`bash scripts/run_gate.sh`（uv，单格本地 macOS arm64 / Python 3.12）`807 passed / 22 skipped / 0 failed`（新增 3 例：`test_xbse_widening_lands_as_v3_not_an_in_place_edit`，以及 v3 进入既有参数化/负例表后多出的 2 条）。未夸大声明：v3 不新增官方证据（`golden-provenance.v3.json` 与 v2 逐字同例），北交所案例的逐案官方参考价取证仍未做；`select_visible_generation` 的公式血缘闸门未变，故 v2/v3 快照可等价消费。
+
+### 8.11 pendding 4c：能落地的那一半（2026-10-12）
+
+4c 的剩余部分**不是缺陷而是依赖**：它要的挂载点（runner `_readback`、model/backtest 阶段消费 `filtered_factor_frame`、每阶段集合摘要复核）只有在 v3/v4 执行路径开启后才有语义，而开启它等于执行 `paper-execution-research-integration-plan` 的 Phase 1–3（resolver 解析 execution/calendar/suspension/corporate-action/initial-state/risk-policy 绑定 → `PaperExecutionStageAdapter` → result reconciliation）。本批只落可落地且可验证的部分，并把依赖写成机械事实。
+
+| 项 | 判定与处置 | 锁 |
+|---|---|---|
+| `stage_plan_for_request` 对 V4 静默退回 V1 顺序 | 真缺陷（潜伏）：分派只看 `== 3`，V4 落到 `else` 分支拿到未含 `paper_execution` 的 V1 顺序。V4 的 normative plan 与 V3 相同（都插 `paper_execution` 于 `result_reconciliation` 前），因此一旦 v4 执行放开，`_state_relative_path` 编号、`list_state_snapshots` 顺序、失败态的 `failed_stage` 推导都会错位。改为显式映射 {1,2}→V1、{3,4}→V3，未知版本直接 `ContractError`（不再"猜成 V1"） | test_v4_and_v3_share_the_stage_order_and_unknown_versions_fail_closed |
+| "v4 未开启"当时没有机械锁 | 自 CR 发现：`runner._validate_plan` 的 `research request v3/v4 paper-execution runtime is not enabled` 一句没有任何测试钉住，删掉守卫不会有测试变红——而删掉它意味着 v3/v4 请求会在**没有 paper_execution 阶段**的情况下跑完整条链并发布结果。补 fail-closed 锁 | test_v3_and_v4_execution_are_refused_until_the_paper_runtime_lands |
+
+
+实测数字：`bash scripts/run_gate.sh`（uv，单格本地 macOS arm64 / Python 3.12）`809 passed / 22 skipped / 0 failed`（22 为 qlib 门控，本地 skip、CI `qlib-runtime` 运行）；本批新增 2 例（`tests/test_research_v4_contract.py` 的 `test_v4_and_v3_share_the_stage_order_and_unknown_versions_fail_closed`、`test_v3_and_v4_execution_are_refused_until_the_paper_runtime_lands`）。
+
+未夸大声明：本批**没有**开启 v4 执行、没有新增 paper_execution 阶段输出、也没有把 `filtered_factor_frame` 接进任何生产调用点；`pendding.md` 的 4c 已从"[部分完成]"改为"[阻断:…Phase 1–3]"，并写明 4b 的函数"已实现并有测试"但"未挂载"。

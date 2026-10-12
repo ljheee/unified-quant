@@ -54,8 +54,23 @@ _EXPECTED_STAGE_PLAN_SHA256 = research_stage_plan_sha256()
 
 
 def stage_plan_for_request(request: Mapping[str, Any]) -> tuple[str, ...]:
-    """Return the reviewed stage order for the request contract version."""
-    return _STAGE_PLAN_V3 if request.get("contract_version") == 3 else tuple(_STAGE_PLAN)
+    """Return the reviewed stage order for the request contract version.
+
+    V3 and V4 both insert ``paper_execution`` before ``result_reconciliation``
+    (their normative plans are identical), so both must map to the V3 order:
+    the previous ``== 3`` test silently gave V4 the released V1 order, which
+    would have numbered the paper stage as ``result_reconciliation`` the moment
+    the V4 runtime is enabled. Unknown versions fail closed rather than being
+    guessed as V1.
+    """
+    # V3/V4 runtime execution is refused in runner._validate_plan; the mapping
+    # still has to be correct for state numbering, listing and the result path.
+    version = request.get("contract_version", 1)
+    if version in {1, 2}:
+        return tuple(_STAGE_PLAN)
+    if version in {3, 4}:
+        return tuple(_STAGE_PLAN_V3)
+    raise ContractError(f"unsupported research request contract version: {version!r}")
 _DEFAULT_STAGE_PLAN = tuple(_STAGE_PLAN)
 
 

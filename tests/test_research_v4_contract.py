@@ -39,3 +39,37 @@ def test_v4_request_schema_is_registered_but_runtime_stays_disabled():
     Draft202012Validator.check_schema(schema)
     assert "index_membership_binding" in schema["required"]
     assert schema["properties"]["stage_plan_review"]["properties"]["review_type"]["const"] == "research_stage_plan_v4_activation"
+
+
+def test_v4_and_v3_share_the_stage_order_and_unknown_versions_fail_closed():
+    # The stage plans of v3 and v4 are identical (both insert paper_execution);
+    # the mapping must not silently fall back to the released v1 order for v4,
+    # or every v4 state would be numbered as if paper_execution did not exist.
+    from uq.errors import ContractError
+    from uq.research_chain.resolver import stage_plan_for_request
+
+    assert stage_plan_for_request({"contract_version": 4}) == stage_plan_for_request(
+        {"contract_version": 3}
+    )
+    assert "paper_execution" in stage_plan_for_request({"contract_version": 4})
+    assert stage_plan_for_request({}) == stage_plan_for_request({"contract_version": 1})
+    assert stage_plan_for_request({"contract_version": 2}) == stage_plan_for_request({})
+    with pytest.raises(ContractError, match="contract version"):
+        stage_plan_for_request({"contract_version": 5})
+
+
+def test_v3_and_v4_execution_are_refused_until_the_paper_runtime_lands():
+    # Fail-closed lock for pendding 4c: the contract basis (request v3/v4,
+    # stage plan, input-set resolver branch) is live, but the paper-execution
+    # runtime stages of paper-execution-research-integration-plan are not. A
+    # v3/v4 run must be refused outright rather than executed while silently
+    # skipping paper_execution.
+    from types import SimpleNamespace
+
+    from uq.research_chain.runner import ResearchChainRunner
+
+    for version in (3, 4):
+        with pytest.raises(ContractError, match="paper-execution runtime is not enabled"):
+            ResearchChainRunner._validate_plan(
+                SimpleNamespace(), SimpleNamespace(request={"contract_version": version})
+            )
