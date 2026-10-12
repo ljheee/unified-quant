@@ -168,7 +168,7 @@
     },
     {
       "path": "specs/layers/paper-execution-research-integration-plan.md",
-      "sha256": "503be3dd254f1db82275bb0f5c4458cbb5a39eb7c5a3fc1198d210645bfa0abc"
+      "sha256": "8338e79720a785a253e25dd5a11a214ec3e9b43c8526e512e2c868f1e4cb073b"
     },
     {
       "path": "src/uq/contracts/model_layer.py",
