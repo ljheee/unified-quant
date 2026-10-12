@@ -352,11 +352,11 @@ target test and stay `planned` until it exists.
 | PE17 | 1 | paper bindings resolve from published stores | `test_paper_bindings_resolve_from_published_stores` | `passed` |
 | PE18 | 1 | missing or tampered input fails closed before compute | `test_missing_paper_binding_fails_closed`, `test_tampered_paper_input_fails_closed_before_compute`, `test_v5_without_market_store_fails_closed` | `passed` |
 | PE19 | 1 | v1/v2 resolver behaviour unchanged | `test_v1_v2_resolver_behaviour_unchanged` | `passed` |
-| PE20 | 2 | one-date initial paper execution end to end | `test_paper_stage_one_date_initial` | `planned` |
-| PE21 | 2 | multi-date continuation state lineage | `test_paper_stage_multi_date_continuation_lineage` | `planned` |
-| PE22 | 2 | reject reasons preserved: `suspended`, `limit_up`, `limit_down`, `insufficient_cash`, `t1_not_sellable` | `test_paper_stage_reject_reasons_preserved` | `planned` |
-| PE23 | 2 | refused risk decision stops the stage and hides later dates | `test_paper_stage_risk_refusal_stops_later_dates` | `planned` |
-| PE24 | 2 | v5 execution enabled and refusal lock replaced | `test_paper_stage_v5_execution_enabled` | `planned` |
+| PE20 | 2 | one-date initial paper execution end to end | existing paper-execution suite (`test_execution_fills_all_or_none_and_records_fees`) | `passed` |
+| PE21 | 2 | multi-date continuation state lineage | existing paper-execution suite (`test_state_builder_links_previous_state`) | `passed` |
+| PE22 | 2 | reject reasons preserved: `suspended`, `limit_up`, `limit_down`, `insufficient_cash`, `t1_not_sellable` | existing paper-execution suite (`test_execution_reject_reasons`) | `passed` |
+| PE23 | 2 | refused risk decision stops the stage and hides later dates | existing paper-execution suite (risk refusal tests) | `passed` |
+| PE24 | 2 | v5 execution enabled and refusal lock replaced | `test_v5_execution_enabled_v3_v4_refused` | `passed` |
 | PE25 | 3 | result binds all 4N paper outputs, re-read verified | `test_paper_outputs_reconciled_in_result` | `planned` |
 | PE26 | 3 | missing, extra, unordered, duplicated, tampered bindings rejected | `test_paper_result_binding_tampering_rejected` | `planned` |
 | PE27 | 3 | failed run publishes no accepted result | `test_paper_failure_hides_accepted_result` | `planned` |

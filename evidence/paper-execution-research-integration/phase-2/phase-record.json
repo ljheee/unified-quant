@@ -1,0 +1,13 @@
+{
+ "layer": "paper_execution_research_integration",
+ "phase": 2,
+ "status": "in_progress",
+ "acceptance_rows": [
+  {"id": "PE20", "status": "passed", "test_ids": ["test_execution_fills_all_or_none_and_records_fees"]},
+  {"id": "PE21", "status": "passed", "test_ids": ["test_state_builder_links_previous_state"]},
+  {"id": "PE22", "status": "passed", "test_ids": ["test_execution_reject_reasons"]},
+  {"id": "PE23", "status": "passed", "test_ids": ["risk_refusal_tests"]},
+  {"id": "PE24", "status": "passed", "test_ids": ["test_v5_execution_enabled_v3_v4_refused"]}
+ ],
+ "blocked_by": ["final HEAD gate report generation after commit"]
+}

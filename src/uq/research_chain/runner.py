@@ -293,8 +293,8 @@ class ResearchChainRunner:
             raise ContractError("research portfolio stage stopped by rejected risk decision")
 
     def _validate_plan(self, plan: ResolvedExecutionPlan) -> None:
-        if plan.request.get("contract_version") in {3, 4, 5}:
-            raise ContractError("research request v3/v4/v5 paper-execution runtime is not enabled")
+        if plan.request.get("contract_version") in {3, 4}:
+            raise ContractError("research request v3/v4 paper-execution runtime is not enabled")
         request_schema = research_request_schema_name(plan.request)
         if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5"}:
             verify_stage_plan_review(
