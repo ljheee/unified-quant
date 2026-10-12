@@ -42,7 +42,7 @@
     },
     {
       "path": "scripts/build_store_evidence.py",
-      "sha256": "a9b4ea9ebbabdd91da6781403703927d4c087301339faa49c8f7ec16cbbd3d51"
+      "sha256": "7ffabc35d2b333c2ddb089a7990d9b759f69a92d12f9045d61e19066f1eec2ec"
     },
     {
       "path": "scripts/fetch_index_membership.py",
@@ -50,7 +50,7 @@
     },
     {
       "path": "scripts/validate_training_readiness.py",
-      "sha256": "a214c89fabc4ad9ca7053b719e21f5b03c4b53f33c9d256b16d9a86990d6dd0b"
+      "sha256": "a82eb2feb578f4467ea1a78e6c643fdbe31a34ffd4587146e58555b5761c52c8"
     },
     {
       "path": "src/uq/cli.py",
@@ -58,7 +58,7 @@
     },
     {
       "path": "src/uq/pipeline/readiness.py",
-      "sha256": "68bf50eb67df2f589c9bff393b22fda51b09d0ea0cb42aec623407206ccf2828"
+      "sha256": "978d3ab66db3345c0cd4f240a3b595d7fa9b7fca10d964ce8c15c092e919beee"
     }
   ]
 }
