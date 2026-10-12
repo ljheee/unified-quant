@@ -39,10 +39,10 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _repo_relative(path: Path) -> str:
+def _repo_relative(path: Path, repo_root: Path) -> str:
     resolved = path.resolve()
     try:
-        return resolved.relative_to(REPO_ROOT).as_posix()
+        return resolved.relative_to(repo_root.resolve()).as_posix()
     except ValueError as exc:
         raise SystemExit(f"evidence paths must live inside the repository: {path}") from exc
 
@@ -83,6 +83,7 @@ def bars_inventory(
     start: dt.date,
     end: dt.date,
     schema_path: Path,
+    repo_root: Path,
 ) -> dict[str, Any]:
     schema = load_schema(schema_path)
     reader = ManifestFirstReader(store)
@@ -109,9 +110,9 @@ def bars_inventory(
         records.append(
             {
                 "session_date": session.isoformat(),
-                "manifest_path": _repo_relative(manifest_path),
+                "manifest_path": _repo_relative(manifest_path, repo_root),
                 "manifest_sha256": _sha256(manifest_path),
-                "data_path": _repo_relative(data_path),
+                "data_path": _repo_relative(data_path, repo_root),
                 "data_sha256": data_sha256,
                 "generation_id": manifest["generation_id"],
                 "row_count": manifest["row_count"],
@@ -138,7 +139,7 @@ def bars_inventory(
         "universe_id": universe_id,
         "dataset": "bars_daily",
         "schema_version": schema.version,
-        "store_root": _repo_relative(store),
+        "store_root": _repo_relative(store, repo_root),
         "window_start": start.isoformat(),
         "window_end": end.isoformat(),
         "partition_count": len(records),
@@ -154,7 +155,7 @@ def bars_inventory(
     }
 
 
-def membership_inventory(store: Path, universe_id: str) -> dict[str, Any]:
+def membership_inventory(store: Path, universe_id: str, repo_root: Path) -> dict[str, Any]:
     store_reader = IndexMembershipStore(store)
     base = store / "index_membership" / universe_id
     if not base.is_dir():
@@ -181,7 +182,7 @@ def membership_inventory(store: Path, universe_id: str) -> dict[str, Any]:
                 "snapshot_date": snapshot_date.isoformat(),
                 "visible_from": str(manifest["visible_from"]),
                 "publish_lag_days": manifest["publish_lag_days"],
-                "manifest_path": _repo_relative(manifest_path),
+                "manifest_path": _repo_relative(manifest_path, repo_root),
                 "manifest_sha256": _sha256(manifest_path),
                 "generation_id": manifest["generation_id"],
                 "members_sha256": artifact_sha256,
@@ -191,7 +192,7 @@ def membership_inventory(store: Path, universe_id: str) -> dict[str, Any]:
     return {
         "universe_id": universe_id,
         "index_code": index_code,
-        "store_root": _repo_relative(store),
+        "store_root": _repo_relative(store, repo_root),
         "pit_precision": pit_precision,
         "snapshot_count": len(records),
         "earliest_visible_date": store_reader.earliest_visible_date(universe_id).isoformat(),
@@ -207,16 +208,34 @@ def membership_inventory(store: Path, universe_id: str) -> dict[str, Any]:
     }
 
 
-def evidence_index(layer: str, records: list[str], status: str, note: str) -> dict[str, Any]:
+def evidence_index(
+    layer: str,
+    records: list[str],
+    status: str,
+    note: str,
+    index_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    """Pin tracked files. An index that records itself can never verify (writing
+    the record changes the file), so the producer refuses it instead of leaving
+    the ban to a test."""
+    relative_index = _repo_relative(index_path, repo_root)
     entries: list[dict[str, str]] = []
+    seen: set[str] = set()
     for raw in records:
         path = Path(raw)
         if path.is_absolute() or ".." in path.parts:
             raise SystemExit(f"evidence records must be repo-relative: {raw}")
-        target = REPO_ROOT / path
+        relative = path.as_posix()
+        if relative == relative_index:
+            raise SystemExit(f"an evidence index cannot record itself: {relative}")
+        if relative in seen:
+            raise SystemExit(f"duplicate evidence record: {relative}")
+        target = (repo_root / path).resolve()
         if not target.is_file():
             raise SystemExit(f"missing evidence record: {raw}")
-        entries.append({"path": path.as_posix(), "sha256": _sha256(target)})
+        seen.add(relative)
+        entries.append({"path": relative, "sha256": _sha256(target)})
     entries.sort(key=lambda entry: entry["path"])
     return {
         "layer": layer,
@@ -249,15 +268,15 @@ def main(argv: list[str] | None = None) -> int:
         missing = [name for name in ("store", "universe_id", "start", "end") if getattr(args, name) is None]
         if missing:
             raise SystemExit(f"--kind bars also requires: {', '.join('--' + item.replace('_', '-') for item in missing)}")
-        payload = bars_inventory(args.store, args.universe_id, args.start, args.end, args.schema)
+        payload = bars_inventory(args.store, args.universe_id, args.start, args.end, args.schema, REPO_ROOT)
     elif args.kind == "membership":
         if args.store is None or args.universe_id is None:
             raise SystemExit("--kind membership also requires --store and --universe-id")
-        payload = membership_inventory(args.store, args.universe_id)
+        payload = membership_inventory(args.store, args.universe_id, REPO_ROOT)
     else:
         if not args.record:
             raise SystemExit("--kind index requires at least one --record")
-        payload = evidence_index(args.layer, args.record, args.status, args.note)
+        payload = evidence_index(args.layer, args.record, args.status, args.note, args.out, REPO_ROOT)
 
     _write(args.out, payload)
     counted = payload.get("partition_count", payload.get("snapshot_count", len(payload["records"])))
