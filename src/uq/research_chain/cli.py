@@ -40,6 +40,16 @@ from .adapters import (
 )
 from ..contracts.index_membership import IndexMembershipStore
 from ..execution.market_dataset_publisher import MarketDatasetPublisher
+from ..execution.market_source import PublishedPaperMarketData
+from ..execution.risk_source import RiskPolicyOrderSubmissionSource
+from ..execution.stage_adapter import PaperExecutionStageAdapter
+from ..execution.stores import (
+    ExecutionConfigStore,
+    ExecutionResultStore,
+    OrderPlanStore,
+    PaperPortfolioStateStore,
+)
+from ..risk.stores import RiskDecisionStore
 from .contracts import research_request_schema_name
 from .resolver import FileResearchRunStore, ResearchChainRequestResolver
 from .runner import ResearchChainRunner
@@ -77,6 +87,12 @@ def uq_research_run(argv: list[str] | None = None) -> int:
         help="index membership store root; enables the v5 PIT membership-filtered dataset stage",
     )
     parser.add_argument(
+        "--paper-risk-documents-json",
+        type=Path,
+        default=None,
+        help="governed risk documents (policy/policy_review/state/state_payload) for v5 paper execution",
+    )
+    parser.add_argument(
         "--market-dataset-root",
         type=Path,
         default=None,
@@ -109,6 +125,7 @@ def uq_research_run(argv: list[str] | None = None) -> int:
                 data_root=args.data_root,
                 membership_root=args.membership_root,
                 market_dataset_root=args.market_dataset_root,
+                paper_risk_documents_path=args.paper_risk_documents_json,
             )
     except (ContractError, OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
         status = getattr(exc, "reason", "configuration_failure")
@@ -258,6 +275,10 @@ _BINDING_TYPE_BY_FAMILY = {
     "target_weights": "target_weights_v1",
     "backtest_config": "backtest_config_v1",
     "backtest_result": "backtest_result_v1",
+    "execution_config": "execution_config_v1",
+    "order_plan": "order_plan_v1",
+    "execution_result": "execution_result_v1",
+    "paper_portfolio_state": "paper_portfolio_state_v1",
     "research_run_result": "research_run_result_v1",
 }
 
@@ -310,6 +331,7 @@ def _build_runner(
     run_store: FileResearchRunStore,
     membership_store: IndexMembershipStore | None = None,
     trading_calendar: Sequence[date] | None = None,
+    paper_adapter: Any | None = None,
 ):
     factor_store = FactorStore(data_root, FactorRegistry(project_root))
     feature_store_root = data_root / "governed"
@@ -367,6 +389,7 @@ def _build_runner(
             market_dataset_store=BacktestMarketDatasetStore(data_root),
         ),
         run_store=run_store,
+        paper_adapter=paper_adapter,
     )
 
 
@@ -380,6 +403,7 @@ def _execute(
     provider_document: dict[str, Any] | None = None,
     membership_root: Path | None = None,
     market_dataset_root: Path | None = None,
+    paper_risk_documents_path: Path | None = None,
 ) -> dict[str, Any]:
     if not isinstance(decisions_document.get("quality_decisions"), dict):
         raise ContractError("quality decisions document requires quality_decisions")
@@ -412,12 +436,42 @@ def _execute(
         )
     else:
         trading_calendar = None
+    paper_adapter = None
+    paper_risk_source = None
+    if request.get("contract_version") == 5:
+        if market_publisher is None:
+            raise ContractError("research request v5 requires --market-dataset-root")
+        if paper_risk_documents_path is None:
+            raise ContractError("research request v5 requires --paper-risk-documents-json")
+        paper_root = data_root / "paper-execution"
+        market = PublishedPaperMarketData(
+            market_publisher,
+            window_start=date.fromisoformat(request["window_start_date"]),
+            window_end=date.fromisoformat(request["window_end_date"]),
+        )
+        paper_adapter = PaperExecutionStageAdapter(
+            request["paper_execution_template"],
+            market=market,
+            config_store=ExecutionConfigStore(paper_root),
+            plan_store=OrderPlanStore(paper_root),
+            result_store=ExecutionResultStore(paper_root),
+            state_store=PaperPortfolioStateStore(paper_root),
+            risk_decision_store=RiskDecisionStore(paper_root / "risk"),
+        )
+        documents = json.loads(paper_risk_documents_path.read_text(encoding="utf-8"))
+        paper_risk_source = RiskPolicyOrderSubmissionSource(
+            policy=documents["policy"],
+            policy_review=documents["policy_review"],
+            state=documents.get("state"),
+            state_payload=documents.get("state_payload"),
+        )
     runner = _build_runner(
         project_root=project_root,
         data_root=data_root,
         run_store=run_store,
         membership_store=membership_store,
         trading_calendar=trading_calendar,
+        paper_adapter=paper_adapter,
     )
     resolver = ResearchChainRequestResolver(
         {
@@ -456,6 +510,7 @@ def _execute(
         quality_decisions=decisions,
         scores_by_decision_date=scores,
         decision_dates=sorted(scores),
+        paper_risk_decision_source=paper_risk_source,
     )
     return {
         "status": "published",

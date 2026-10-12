@@ -209,9 +209,17 @@ def _publish_corporate_actions(
     skipped: list,
 ) -> list[dict]:
     manifests = []
-    for ex_date, (frame, event_count, generations) in sorted(
-        _corporate_actions(dividend_store, sessions, start=start, end=end).items()
-    ):
+    by_ex_date = _corporate_actions(dividend_store, sessions, start=start, end=end)
+    # Publish an (possibly empty) exclusion set for every session in the window:
+    # the paper execution config binds one corporate-action partition per
+    # decision date, so a session with no implemented ex-date still needs an
+    # artifact recording that nothing was excluded.
+    for session in sessions:
+        frame, event_count, generations = by_ex_date.get(
+            session.isoformat(),
+            (pd.DataFrame({"date": [], "instrument": []}), 0, []),
+        )
+        ex_date = session.isoformat()
         manifest = _attempt(
             lambda: publisher.publish_corporate_action_snapshot(
                 partition_date=dt.date.fromisoformat(ex_date),

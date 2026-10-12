@@ -87,6 +87,7 @@ class ResearchChainRunner:
         portfolio_adapter: PortfolioStageAdapter,
         backtest_adapter: BacktestStageAdapter,
         run_store: FileResearchRunStore,
+        paper_adapter: Any | None = None,
     ) -> None:
         self.factor_adapter = factor_adapter
         self.dataset_adapter = dataset_adapter
@@ -95,6 +96,7 @@ class ResearchChainRunner:
         self.prediction_adapter = prediction_adapter
         self.portfolio_adapter = portfolio_adapter
         self.backtest_adapter = backtest_adapter
+        self.paper_adapter = paper_adapter
         self.run_store = run_store
 
     def dry_run(
@@ -127,6 +129,7 @@ class ResearchChainRunner:
         artifact_decision_provider: Callable[[str], Mapping[str, Any]] | None = None,
         definition_decision_provider: Callable[..., Mapping[str, Any]] | None = None,
         risk_documents: Mapping[str, Any] | None = None,
+        paper_risk_decision_source: Callable[[str, str], Mapping[str, Any]] | None = None,
         created_at: str | None = None,
     ) -> ResearchRunOutcome:
         if plan.request.get("execution_mode") != "full_research_run":
@@ -182,6 +185,13 @@ class ResearchChainRunner:
                 quality_decisions=quality_decisions, created_at=created_at,
             )
             plan = self._plan_with_stage_outputs(plan, backtest_result.published_state.manifest_path)
+            if stage_plan_for_request(plan.request)[-2] == "paper_execution":
+                paper_result = self._run_paper(
+                    plan, runner_identity=runner_identity,
+                    quality_decisions=quality_decisions, created_at=created_at,
+                    risk_decision_source=paper_risk_decision_source,
+                )
+                plan = self._plan_with_stage_outputs(plan, paper_result.published_state.manifest_path)
             result = self._reconcile(
                 plan, runner_identity=runner_identity,
                 quality_decisions=quality_decisions, created_at=created_at,
@@ -691,6 +701,84 @@ class ResearchChainRunner:
         self.backtest_adapter.last_result = result
         return result
 
+    def _run_paper(
+        self,
+        plan: ResolvedExecutionPlan,
+        *,
+        runner_identity: Mapping[str, str],
+        quality_decisions: Mapping[str, Any],
+        created_at: str,
+        risk_decision_source: Callable[[str, str], Mapping[str, Any]] | None,
+    ) -> Any:
+        if self.paper_adapter is None:
+            raise ContractError("research request v5 requires a wired paper execution adapter")
+        if risk_decision_source is None:
+            raise ContractError("research request v5 requires a paper risk decision source")
+        portfolio_result = self.portfolio_adapter.last_result
+        decision_dates = sorted(portfolio_result.target_weight_manifests)
+        if not decision_dates:
+            raise ContractError("paper stage requires ordered target-weight decision dates")
+        universe_binding = self._binding(plan, "universe_snapshot")
+        universe_manifest = self.dataset_adapter.universe_store.read_manifest(
+            universe_binding.generation_id
+        )
+
+        def source(decision_date, config_generation_id, context):
+            return risk_decision_source(
+                decision_date,
+                config_generation_id,
+                {**dict(context), "universe": dict(universe_manifest)},
+            )
+
+        result = self.paper_adapter.run(
+            plan,
+            portfolio_stage_result=portfolio_result,
+            decision_dates=decision_dates,
+            market=self.paper_adapter.market,
+            quality_decisions={
+                family: self._subject_decision(quality_decisions, family)
+                for family in (
+                    "execution_config",
+                    "order_plan",
+                    "execution_result",
+                    "paper_portfolio_state",
+                )
+            },
+            run_store=self.run_store,
+            risk_decision_source=source,
+            runner_identity=dict(runner_identity),
+            created_at=created_at,
+        )
+        self.paper_adapter.last_result = result
+        return result
+
+    def _reconcile_paper_bindings(self, bindings: Sequence[Any]) -> None:
+        """Reject missing, extra, unordered or cross-date paper bindings."""
+        from ..execution.result_reconciliation import reconcile_paper_stage_bindings
+
+        if self.paper_adapter is None or getattr(self.paper_adapter, "last_result", None) is None:
+            raise ContractError("paper stage result is unavailable for reconciliation")
+        decision_dates = list(self.paper_adapter.last_result.decision_dates)
+        derived: list[dict[str, Any]] = []
+        for index, binding in enumerate(bindings):
+            decision_date = decision_dates[index // 4] if index // 4 < len(decision_dates) else None
+            parts = Path(binding.physical_path or "").parts
+            execution_id = parts[1] if len(parts) > 1 else ""
+            derived.append({
+                "output_family": binding.output_family,
+                "execution_id": execution_id,
+                "decision_date": decision_date,
+                "generation_id": binding.generation_id,
+                "manifest_digest_sha256": binding.manifest_digest_sha256,
+                "data_checksum_sha256": binding.data_checksum_sha256,
+                "physical_path": binding.physical_path,
+            })
+        reconcile_paper_stage_bindings(derived, decision_dates=decision_dates)
+        for offset in range(0, len(derived), 4):
+            group = derived[offset:offset + 4]
+            if len({item["execution_id"] for item in group}) != 1:
+                raise ContractError("paper bindings mix execution ids within one decision date")
+
     def _plan_with_stage_outputs(
         self, plan: ResolvedExecutionPlan, state_path: Path
     ) -> ResolvedExecutionPlan:
@@ -753,6 +841,8 @@ class ResearchChainRunner:
             bindings = self._stage_bindings(plan, stage)
             if not bindings:
                 raise ContractError(f"research stage output is missing: {stage}")
+            if stage == "paper_execution":
+                self._reconcile_paper_bindings(bindings)
             for binding in bindings:
                 self._readback(binding)
                 readback_status[binding.output_family] = "passed"
@@ -1075,6 +1165,17 @@ class ResearchChainRunner:
             manifest = self.backtest_adapter.backtest_result_store.read(generation_id)[0]
         elif family == "backtest_config":
             manifest = self.backtest_adapter.backtest_config_store.read_manifest(generation_id)
+        elif family in {"execution_config", "order_plan", "execution_result", "paper_portfolio_state"}:
+            if self.paper_adapter is None:
+                raise ContractError("paper stage adapter is unavailable for readback")
+            reader = {
+                "execution_config": self.paper_adapter.config_store.read,
+                "order_plan": self.paper_adapter.plan_store.read,
+                "execution_result": self.paper_adapter.result_store.read,
+                "paper_portfolio_state": self.paper_adapter.state_store.read,
+            }[family]
+            readback = reader(generation_id)
+            manifest = readback[0] if isinstance(readback, tuple) else readback
         else:
             raise ContractError(f"unsupported research output family: {family}")
         manifest_generation = manifest.get("run_content_generation_id", manifest.get("generation_id"))
@@ -1108,6 +1209,8 @@ class ResearchChainRunner:
             expected_checksum = manifest.get("manifest_digest_sha256")
         elif family == "feature_preprocessing":
             expected_checksum = manifest.get("output_frame_sha256")
+        elif family == "execution_config":
+            expected_checksum = manifest.get("manifest_digest_sha256")
         else:
             expected_checksum = manifest.get("data_checksum_sha256")
         if binding.data_checksum_sha256 and expected_checksum != binding.data_checksum_sha256:

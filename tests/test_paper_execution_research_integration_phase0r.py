@@ -80,9 +80,9 @@ def test_paper_execution_template_v2_and_request_v5_validate() -> None:
         "risk_policy_binding": {
             "family": "risk_policy_v1", "generation_id": "e" * 64, "manifest_digest_sha256": "f" * 64,
         },
-        "data_delay_policy": "use_latest_available",
+        "data_delay_policy": "delayed_replay",
         "data_delay_reason": "T+1 execution on open",
-        "serialization_profiles": {"manifest": "json-numpy-v1", "payload": "parquet-v1"},
+        "serialization_profiles": {"manifest": "json-canonical-v1", "payload": "parquet-v1"},
     }
     ModelContractLoader.validate("paper_execution_template_v2", template)
 

@@ -88,3 +88,48 @@ def test_cli_dry_run_routes_v5_to_its_schema(tmp_path, capsys):
     assert data_root.joinpath("research_runs", "requests").exists()
     assert data_root.joinpath("research_runs", "states").exists()
     assert not data_root.joinpath("research_runs", "results").exists()
+
+
+def test_cli_execute_v5_requires_governed_paper_inputs(tmp_path, capsys):
+    """A v5 execute run without the governed paper inputs must fail closed.
+
+    The paper stage reads market data from a ``MarketDatasetPublisher`` store and
+    a reviewed risk policy; without both the CLI must refuse the run rather than
+    silently skipping the paper stage.
+    """
+    import json
+
+    from uq.research_chain.cli import uq_research_run
+
+    root = Path(__file__).resolve().parents[1]
+    fixture = (
+        root
+        / "evidence/paper-execution-research-integration/phase-0r/fixtures"
+        / "research_run_request_v5-valid.json"
+    )
+    decisions_document = {
+        "quality_decisions": {
+            "factor_partition": {"placeholder": True},
+        }
+    }
+    decisions_path = tmp_path / "decisions.json"
+    decisions_path.write_text(json.dumps(decisions_document))
+    scores_path = tmp_path / "scores.json"
+    scores_path.write_text(json.dumps({
+        "contract_version": 1,
+        "schema_version": "1.0.0",
+        "scores_by_decision_date": {"2026-01-05": [{"instrument": "000001.XSHE", "score": 1.0}]},
+    }))
+
+    exit_code = uq_research_run([
+        "--project-root", str(root),
+        "--data-root", str(tmp_path / "data"),
+        "--mode", "execute",
+        "--request-json", str(fixture),
+        "--quality-decisions-json", str(decisions_path),
+        "--scores-json", str(scores_path),
+    ])
+    output = json.loads(capsys.readouterr().out)
+    assert exit_code != 0
+    assert output["status"] == "configuration_failure"
+    assert any("market-dataset-root" in error for error in output["errors"])

@@ -1,10 +1,24 @@
 # Paper Execution Research Integration Plan
 
-Status: **Phase 0 (v3 contract basis) exited at `de26458`; Phase 0R contract
-remediation implemented; Phase 0.5 next. Runtime phases 1-4 stay paused until
-Phase 0R exits with gate evidence and Phase 0.5 exit.** The released
+Status: **Phase 0 (v3 contract basis) exited at `de26458`; Phase 0R, Phase 0.5,
+Phase 1 and the Phase 2/3 runtime wiring are implemented; Phase 2/3 exit is
+pending a local gate and the ten-cell remote matrix on the final HEAD, and
+Phase 4 release evidence is not refreshed.** The released
 `research_run_request.v1`/`.v2` contracts and stage plans `v1`/`v2` remain
 byte-for-byte compatible; nothing here changes them.
+
+Implementation note (this revision): the paper stage is now mounted in
+`ResearchChainRunner` (`_run_paper`), the adapter publishes the ordered
+config/plan/result/state chain through `src/uq/execution/stores.py` and
+`src/uq/execution/stage_adapter.py`, the reconciliation path
+(`_reconcile` + `src/uq/execution/result_reconciliation.py`) accepts the 4N
+bindings, and the CLI wires the governed market-data reader plus a
+`RiskPolicyOrderSubmissionSource`. Three latent contract defects found while
+wiring were fixed: `paper_execution_template_v2` allowed `data_delay_policy` /
+`serialization_profiles` values that `execution_config` rejects; the state/result
+stage-order validator still mapped v4/v5 to the nine-stage V1 order; and
+`FileResearchRunStore.read_state` located states by the V1 stage number, so a
+published `paper_execution` state could never be read back.
 
 This plan extends the released Research Chain orchestrator so the released Paper
 Execution Layer runs as a governed stage. It is contract-first: no execution path opens
@@ -270,6 +284,12 @@ Exit criteria:
 
 ### Phase 2 - Adapter
 
+Status: adapter, runner mount and stores wiring implemented; exit pending gate
+evidence. The per-date risk decision is produced by
+`RiskPolicyOrderSubmissionSource` from a reviewed policy (portfolio-level
+evaluation re-scoped to `order_submission`); per-candidate-order refinement is
+deferred.
+
 Deliverables:
 
 1. `PaperExecutionStageAdapter` invoking only owning execution APIs.
@@ -285,6 +305,9 @@ Exit criteria:
 4. v5 execution is no longer refused, and the refusal lock becomes an enabled-path lock.
 
 ### Phase 3 - Result reconciliation
+
+Status: implemented and unit-tested through the runner; exit pending gate
+evidence.
 
 Deliverables:
 
@@ -352,16 +375,16 @@ target test and stay `planned` until it exists.
 | PE17 | 1 | paper bindings resolve from published stores | `test_paper_bindings_resolve_from_published_stores` | `passed` |
 | PE18 | 1 | missing or tampered input fails closed before compute | `test_missing_paper_binding_fails_closed`, `test_tampered_paper_input_fails_closed_before_compute`, `test_v5_without_market_store_fails_closed` | `passed` |
 | PE19 | 1 | v1/v2 resolver behaviour unchanged | `test_v1_v2_resolver_behaviour_unchanged` | `passed` |
-| PE20 | 2 | one-date initial paper execution end to end | existing paper-execution suite (`test_execution_fills_all_or_none_and_records_fees`) | `passed` |
-| PE21 | 2 | multi-date continuation state lineage | existing paper-execution suite (`test_state_builder_links_previous_state`) | `passed` |
+| PE20 | 2 | one-date initial paper execution through the runner-owned stores | `test_paper_stage_publishes_ordered_4n_bindings_across_two_dates` | `passed` |
+| PE21 | 2 | multi-date continuation state lineage and execution-id grouping | `test_paper_stage_publishes_ordered_4n_bindings_across_two_dates`, `test_paper_stage_is_idempotent_and_rejects_republish` | `passed` |
 | PE22 | 2 | reject reasons preserved: `suspended`, `limit_up`, `limit_down`, `insufficient_cash`, `t1_not_sellable` | existing paper-execution suite (`test_execution_reject_reasons`) | `passed` |
-| PE23 | 2 | refused risk decision stops the stage and hides later dates | existing paper-execution suite (risk refusal tests) | `passed` |
+| PE23 | 2 | refused risk decision stops the stage and hides later dates | `test_order_submission_source_fails_closed_on_blocking_decision` (source-level), stage-level refusal `planned` | `partial` |
 | PE24 | 2 | v5 execution enabled and refusal lock replaced | `test_v5_execution_enabled_v3_v4_refused` | `passed` |
-| PE25 | 3 | result binds all 4N paper outputs, re-read verified | `test_paper_outputs_reconciled_in_result` | `passed` |
-| PE26 | 3 | missing, extra, unordered, duplicated, tampered bindings rejected | `test_paper_result_binding_tampering_rejected` | `passed` |
+| PE25 | 3 | result binds all 4N paper outputs, re-read verified | `test_paper_outputs_reconciled_in_result`, `test_reconcile_paper_bindings_accepts_ordered_stage_bindings` | `passed` |
+| PE26 | 3 | missing, extra, unordered, duplicated, tampered bindings rejected | `test_paper_result_binding_tampering_rejected`, `test_reconcile_paper_bindings_rejects_incomplete_and_duplicated`, `test_reconcile_paper_bindings_rejects_cross_date_execution_id_mix` | `passed` |
 | PE27 | 3 | failed run publishes no accepted result | `test_paper_failure_hides_accepted_result` | `passed` |
-| PE28 | 4 | local gate and Qlib gate on final HEAD | `.gate/gate-report.json` (835 passed on `78826c0`) | `passed` |
-| PE29 | 4 | remote ten-cell matrix on final HEAD, per-cell reports archived | CI run `38241517980` on `df36913`, all ten cells passed | `passed` |
+| PE28 | 4 | local gate and Qlib gate on final HEAD | superseded — must be re-run on the Phase 2/3 HEAD | `stale` |
+| PE29 | 4 | remote ten-cell matrix on final HEAD, per-cell reports archived | superseded — must be re-run on the Phase 2/3 HEAD | `stale` |
 | PE30 | 4 | evidence index freshness and self-hash exclusion | `test_evidence_indexes_are_fresh_and_never_index_themselves` | `passed` |
 
 ## 5. Execution Rules
@@ -379,7 +402,9 @@ target test and stay `planned` until it exists.
 
 ## 6. Open Decisions
 
-1. Whether the paper stage must also honor `index_membership_binding` filtering. v4/v5
+1. **Open.** Whether the paper stage must also honor `index_membership_binding` filtering. The
+   current adapter does not re-check membership, so a target weight for a non-member
+   instrument reaches the paper stage if an upstream stage emitted one. v4/v5
    carry it, and Phase 1 resolves it for the factor stage only. Recommendation: reuse
    the same resolved membership sets for the paper universe check, otherwise a target
    weight for a non-member instrument reaches the paper stage after the factor stage

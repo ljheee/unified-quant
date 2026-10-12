@@ -61,7 +61,7 @@
     "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
   },
-  "manifest_digest_sha256": "6d3d569a1a3fce28a03f591f720758cf25608692fc46ad45342086155daf7d4d",
+  "manifest_digest_sha256": "fccfba37364408da02518a2deb56103b9db78227dc953a04364496d40d6c36da",
   "model_definition_template": {
     "algorithm": "qlib_linear",
     "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -118,7 +118,7 @@
     "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "weight_scheme": "top_n_equal_weight"
   },
-  "request_content_generation_id": "678e7adecdbef5f45cc8c47e39dcf9b84eff8e29fb82ce8b735c5cdd95f20568",
+  "request_content_generation_id": "b54fcd059c4f369b7182b72dabd8a2e0d77a252387f17bfa30aa20de179e60e7",
   "research_name": "adjusted_return_baseline",
   "run_id": "00000000-0000-4000-8000-000000000001",
   "run_visible_cutoff": "2026-01-30T15:00:00+08:00",
@@ -263,10 +263,10 @@
       "generation_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "manifest_digest_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     },
-    "data_delay_policy": "use_latest_available",
+    "data_delay_policy": "delayed_replay",
     "data_delay_reason": "T+1 execution on open",
     "serialization_profiles": {
-      "manifest": "json-numpy-v1",
+      "manifest": "json-canonical-v1",
       "payload": "parquet-v1"
     }
   },

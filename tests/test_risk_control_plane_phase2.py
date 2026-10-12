@@ -373,3 +373,101 @@ def test_duplicate_order_id_fails_closed():
     gate.evaluate_order(**kwargs)
     with pytest.raises(ContractError, match="duplicate or stale"):
         gate.evaluate_order(**kwargs)
+
+
+def test_order_submission_source_binds_governed_decision_to_config() -> None:
+    """The paper risk source re-scopes a governed portfolio decision per config."""
+    from tests.test_risk_control_plane_phase1 import (
+        _definition,
+        _policy,
+        _policy_review,
+        _target_weights,
+        _universe,
+    )
+    from uq.execution.risk_source import RiskPolicyOrderSubmissionSource
+    from uq.risk.contracts import risk_contract_identities
+    from uq.risk.publication import ConfigPublicationBinding
+
+    # A permissive policy (gross exposure 0.95 <= 1.0) yields an allow decision,
+    # which is the shape the paper execution config store requires.
+    policy = _policy()
+    policy["rules"][0]["threshold"] = 1.0
+    review = _policy_review(policy)
+    policy["approval_binding"] = {
+        "family": "risk_review_decision_v1",
+        "review_generation_id": review["generation_id"],
+        "review_manifest_digest_sha256": review["manifest_digest_sha256"],
+    }
+    policy["generation_id"], policy["manifest_digest_sha256"] = risk_contract_identities(
+        policy, schema_name="risk_policy"
+    )
+    definition = _definition()
+    universe = _universe()
+    target, frame = _target_weights(definition, universe)
+
+    source = RiskPolicyOrderSubmissionSource(policy=policy, policy_review=review)
+    generation = "a" * 64
+    decision = source(
+        "2026-01-05",
+        generation,
+        {
+            "execution_date": "2026-01-06",
+            "target_weights_manifest": target,
+            "target_weights_frame": frame,
+            "definition": definition,
+            "universe": universe,
+        },
+    )
+    assert decision["decision_scope"] == "order_submission"
+    assert decision["binding_config_generation_id"] == generation
+    assert decision["as_of_date"] == "2026-01-05"
+    assert decision["action"] == "allow"
+    expected_generation, expected_digest = risk_contract_identities(
+        decision, schema_name="risk_decision"
+    )
+    assert decision["generation_id"] == expected_generation
+    assert decision["manifest_digest_sha256"] == expected_digest
+
+    # The decision is already executable under the config publication binding.
+    ConfigPublicationBinding(decision=decision, config_generation_id=generation)
+
+
+def test_order_submission_source_fails_closed_on_blocking_decision() -> None:
+    """A blocking governed decision cannot authorize a config publication."""
+    from tests.test_risk_control_plane_phase1 import (
+        _definition,
+        _policy,
+        _policy_review,
+        _target_weights,
+        _universe,
+    )
+    from uq.execution.risk_source import RiskPolicyOrderSubmissionSource
+    from uq.risk.publication import ConfigPublicationBinding
+
+    policy = _policy()
+    review = _policy_review(policy)
+    definition = _definition()
+    universe = _universe()
+    target, frame = _target_weights(definition, universe)
+    decision = RiskPolicyOrderSubmissionSource(policy=policy, policy_review=review)(
+        "2026-01-05",
+        "a" * 64,
+        {
+            "execution_date": "2026-01-06",
+            "target_weights_manifest": target,
+            "target_weights_frame": frame,
+            "definition": definition,
+            "universe": universe,
+        },
+    )
+    assert decision["action"] == "block"
+    with pytest.raises(ContractError, match="not executable"):
+        ConfigPublicationBinding(decision=decision, config_generation_id="a" * 64)
+
+
+def test_order_submission_source_fails_closed_on_missing_context() -> None:
+    from uq.execution.risk_source import RiskPolicyOrderSubmissionSource
+
+    source = RiskPolicyOrderSubmissionSource(policy={}, policy_review={})
+    with pytest.raises(ContractError, match="missing context"):
+        source("2026-01-05", "a" * 64, {})

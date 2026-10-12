@@ -490,8 +490,14 @@ def research_contract_identities(
 def _validate_stage_record_order(
     stages: list[dict[str, Any]], *, require_complete: bool, payload: dict[str, Any] | None = None
 ) -> None:
+    # V3, V4 and V5 share the ten-stage order (paper_execution before
+    # result_reconciliation); only V1/V2 omit the paper stage.  The state/result
+    # enums were widened to 4/5 in Phase 0R but this mapping was left on V1, so
+    # any v4/v5 state with a paper_execution record was rejected.
     stage_order = (
-        _RESEARCH_STAGE_ORDER_V3 if payload.get("contract_version") == 3 else _RESEARCH_STAGE_ORDER_V1
+        _RESEARCH_STAGE_ORDER_V3
+        if payload.get("contract_version") in {3, 4, 5}
+        else _RESEARCH_STAGE_ORDER_V1
     )
     stages_seen: list[str] = []
     for record in stages:

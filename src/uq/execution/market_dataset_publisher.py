@@ -231,9 +231,12 @@ class MarketDatasetPublisher:
         _no_symlink(directory.parent)
         ordered = frame.sort_values("instrument").reset_index(drop=True)
         generation_ids = sorted(str(value) for value in source_generation_ids)
-        if not generation_ids or any(
-            not re.fullmatch(r"[0-9a-f]{64}", value) for value in generation_ids
-        ):
+        if any(not re.fullmatch(r"[0-9a-f]{64}", value) for value in generation_ids):
+            raise ContractError("corporate action partition requires source generation ids")
+        # An empty exclusion set (a session with no implemented ex-date) is a
+        # legitimate governed artifact: it records that nothing was excluded.
+        # A non-empty set must cite at least one source generation.
+        if not generation_ids and len(ordered) != 0:
             raise ContractError("corporate action partition requires source generation ids")
         directory.mkdir(parents=True, exist_ok=False)
         data_path = directory / "data.parquet"

@@ -480,9 +480,25 @@ class FileResearchRunStore:
         stage: str,
         manifest_digest_sha256: str,
     ) -> Mapping[str, Any]:
-        relative_path = _state_relative_path(request_content_generation_id, run_id, stage)
-        state = _read_json(self.root / relative_path)
-        ModelContractLoader.validate("research_run_state", state)
+        # Locate the snapshot by its own stage record rather than by the module
+        # default stage number: V3/V4/V5 number paper_execution at 08 while the
+        # default V1 order has no such stage, so a hardcoded lookup could never
+        # read a published paper_execution state back.
+        base = (
+            self.root / "research_runs" / "states"
+            / f"request={request_content_generation_id}" / f"run={run_id}"
+        )
+        if not base.exists():
+            raise ContractError(f"research state is unavailable: {stage}")
+        matches: list[Mapping[str, Any]] = []
+        for manifest_path in sorted(base.glob("stage=*/manifest.json")):
+            candidate = _read_json(manifest_path)
+            ModelContractLoader.validate("research_run_state", candidate)
+            if candidate["stage_records"][-1]["stage"] == stage:
+                matches.append(candidate)
+        if len(matches) != 1:
+            raise ContractError(f"research state for stage {stage} is missing or ambiguous")
+        state = matches[0]
         if state["manifest_digest_sha256"] != manifest_digest_sha256:
             raise ContractError("research state manifest digest mismatch")
         return state

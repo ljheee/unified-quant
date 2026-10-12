@@ -66,10 +66,10 @@
     "generation_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     "manifest_digest_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
   },
-  "data_delay_policy": "use_latest_available",
+  "data_delay_policy": "delayed_replay",
   "data_delay_reason": "T+1 execution on open",
   "serialization_profiles": {
-    "manifest": "json-numpy-v1",
+    "manifest": "json-canonical-v1",
     "payload": "parquet-v1"
   },
   "unknown_field": "should_reject"
