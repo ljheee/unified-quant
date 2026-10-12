@@ -360,9 +360,9 @@ target test and stay `planned` until it exists.
 | PE25 | 3 | result binds all 4N paper outputs, re-read verified | `test_paper_outputs_reconciled_in_result` | `passed` |
 | PE26 | 3 | missing, extra, unordered, duplicated, tampered bindings rejected | `test_paper_result_binding_tampering_rejected` | `passed` |
 | PE27 | 3 | failed run publishes no accepted result | `test_paper_failure_hides_accepted_result` | `passed` |
-| PE28 | 4 | local gate and Qlib gate on final HEAD | `.gate/gate-report.json` plus the Qlib cell | `planned` |
-| PE29 | 4 | remote ten-cell matrix on final HEAD, per-cell reports archived | CI run artifacts under the phase evidence directory | `planned` |
-| PE30 | 4 | evidence index freshness and self-hash exclusion | `test_evidence_indexes_are_fresh_and_never_index_themselves` | `planned` |
+| PE28 | 4 | local gate and Qlib gate on final HEAD | `.gate/gate-report.json` (835 passed on `78826c0`) | `passed` |
+| PE29 | 4 | remote ten-cell matrix on final HEAD, per-cell reports archived | CI run `38241517980` on `df36913`, all ten cells passed | `passed` |
+| PE30 | 4 | evidence index freshness and self-hash exclusion | `test_evidence_indexes_are_fresh_and_never_index_themselves` | `passed` |
 
 ## 5. Execution Rules
 
