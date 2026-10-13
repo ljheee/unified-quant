@@ -423,6 +423,27 @@ def test_governed_trading_days_come_from_the_published_calendar(tmp_path):
         )
 
 
+def test_governed_trading_days_fail_closed_on_partial_coverage(tmp_path):
+    # m11: a window only partly covered by governed snapshots must refuse,
+    # not silently return the covered subset as if it were complete.
+    from uq.execution.market_dataset_publisher import MarketDatasetPublisher
+    from uq.research_chain.cli import _governed_trading_days
+
+    publisher = MarketDatasetPublisher(tmp_path / "market")
+    publisher.publish_calendar_snapshot(
+        partition_date=date(2025, 6, 30),
+        window_start=date(2025, 6, 1),
+        window_end=date(2025, 6, 30),
+        sessions=[date(2025, 6, 3), date(2025, 6, 4), date(2025, 6, 5)],
+        primary_source="tushare:trade_cal",
+        independent_source="eastmoney_index_kline_v1",
+    )
+    with pytest.raises(ContractError, match="do not cover the paper window"):
+        _governed_trading_days(
+            publisher, {"window_start_date": "2025-06-04", "window_end_date": "2025-07-15"}
+        )
+
+
 def test_cli_build_runner_wires_membership_governance_into_the_dataset_stage(tmp_path):
     import importlib.util
 

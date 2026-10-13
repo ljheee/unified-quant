@@ -32,7 +32,7 @@
     },
     "primary_source": {"type": "string", "minLength": 1},
     "independent_source": {"type": "string", "minLength": 1},
-    "cross_check_result": {"enum": ["agreement", "divergence"]},
+    "cross_check_result": {"enum": ["agreement", "divergence", "skipped"]},
     "row_count": {"type": "integer", "minimum": 0},
     "data_checksum_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "serialization_profile": {"type": "string", "minLength": 1}

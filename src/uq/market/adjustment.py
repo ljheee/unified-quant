@@ -100,7 +100,10 @@ class XdxrAdjustmentDeriver:
             ).hexdigest(),
         }
         snapshot_id = hashlib.sha256(json.dumps(snapshot_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
-        table_checksum = hashlib.sha256(effective_table.to_csv(index=False).encode("utf-8")).hexdigest()
+        # explicit "\n": the declared checksum must be platform-deterministic
+        # and byte-identical to the serialization AdjustmentSnapshotStore.save
+        # persists (which writes with lineterminator="\n" and refuses drift).
+        table_checksum = hashlib.sha256(effective_table.to_csv(index=False, lineterminator="\n").encode("utf-8")).hexdigest()
         return AdjustmentDerivation(result, DERIVATION_VERSION, self.provenance, snapshot_id, table_checksum, effective_table)
 
     @staticmethod

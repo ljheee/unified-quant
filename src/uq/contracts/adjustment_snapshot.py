@@ -75,6 +75,7 @@ class AdjustmentSnapshotStore:
         events: pd.DataFrame,
         effective_dates: pd.DataFrame,
         sessions: list[date],
+        expected_effective_checksum: str | None = None,
     ) -> Path:
         try:
             date.fromisoformat(window_start.isoformat())
@@ -83,6 +84,10 @@ class AdjustmentSnapshotStore:
             raise ContractError("adjustment snapshot window contains invalid calendar dates") from exc
         if window_start > window_end:
             raise ContractError("adjustment snapshot window start exceeds end")
+        if list(events.columns) != _EVENT_COLUMNS:
+            raise ContractError("adjustment snapshot events columns do not match the exchange event contract")
+        if list(effective_dates.columns) != _EFFECTIVE_COLUMNS:
+            raise ContractError("adjustment snapshot effective-date columns do not match the contract")
         session_dates = sorted(set(sessions))
         if not session_dates or session_dates[0] != window_start or session_dates[-1] != window_end:
             raise ContractError("sessions do not cover adjustment snapshot window")
@@ -91,6 +96,11 @@ class AdjustmentSnapshotStore:
         sessions_frame = pd.DataFrame({"session_date": [value.isoformat() for value in session_dates]})
         event_content, event_checksum = _csv_checksum(events)
         effective_content, effective_checksum = _csv_checksum(effective_dates)
+        if expected_effective_checksum is not None and expected_effective_checksum != effective_checksum:
+            raise ContractError(
+                "declared effective-date checksum does not match the table being written; "
+                "publish the deriver's own effective-date table instead of a rebuilt one"
+            )
         _, sessions_checksum = _csv_checksum(sessions_frame)
 
         unsigned = {
@@ -203,6 +213,12 @@ class AdjustmentSnapshotReader:
             # window unselectable. Mirror the save-time invariant instead:
             # strictly increasing sessions that begin and end the declared
             # window (the manifest checksum still pins the exact list).
+            # Accepted gap (adjudicated 2026-10-12): this invariant does not
+            # check trading-day coverage against a session calendar, so a
+            # generation silently missing mid-window sessions stays
+            # selectable. Coverage is enforced upstream at the bars
+            # ingest/readiness layer; the checksum keeps the exact list
+            # auditable here.
             if sessions != sorted(set(sessions)):
                 raise ContractError("invalid adjustment snapshot session coverage")
             if not sessions or sessions[0] != window_start.isoformat() or sessions[-1] != window_end.isoformat():

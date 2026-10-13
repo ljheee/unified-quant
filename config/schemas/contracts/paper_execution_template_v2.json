@@ -225,16 +225,60 @@
       ]
     },
     "market_data_binding": {
-      "$ref": "#/$defs/partition_set_binding"
+      "allOf": [
+        {
+          "$ref": "#/$defs/partition_set_binding"
+        },
+        {
+          "properties": {
+            "family": {
+              "const": "bars_daily_v2"
+            }
+          }
+        }
+      ]
     },
     "calendar_binding": {
-      "$ref": "#/$defs/partition_set_binding"
+      "allOf": [
+        {
+          "$ref": "#/$defs/partition_set_binding"
+        },
+        {
+          "properties": {
+            "family": {
+              "const": "trading_calendar_snapshot_v1"
+            }
+          }
+        }
+      ]
     },
     "suspension_binding": {
-      "$ref": "#/$defs/partition_set_binding"
+      "allOf": [
+        {
+          "$ref": "#/$defs/partition_set_binding"
+        },
+        {
+          "properties": {
+            "family": {
+              "const": "suspension_snapshot_v1"
+            }
+          }
+        }
+      ]
     },
     "corporate_action_binding": {
-      "$ref": "#/$defs/partition_set_binding"
+      "allOf": [
+        {
+          "$ref": "#/$defs/partition_set_binding"
+        },
+        {
+          "properties": {
+            "family": {
+              "const": "dividend_event_v1"
+            }
+          }
+        }
+      ]
     },
     "risk_policy_binding": {
       "type": "object",

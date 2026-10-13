@@ -99,7 +99,17 @@ from uq.research_chain.runner import ResearchChainRunner  # noqa: E402
 
 class _PaperStub:
     def __init__(self, decision_dates: list[str]) -> None:
-        self.last_result = SimpleNamespace(decision_dates=decision_dates)
+        self.last_result = SimpleNamespace(
+            decision_dates=decision_dates,
+            bindings=[
+                {
+                    "output_family": binding.output_family,
+                    "generation_id": binding.generation_id,
+                    "manifest_digest_sha256": binding.manifest_digest_sha256,
+                }
+                for binding in _stage_bindings(decision_dates)
+            ],
+        )
 
 
 def _runner_with(decision_dates: list[str]) -> ResearchChainRunner:
@@ -161,4 +171,22 @@ def test_reconcile_paper_bindings_rejects_cross_date_execution_id_mix() -> None:
             quality_decision_checksum_sha256=original.quality_decision_checksum_sha256,
         )
     with pytest.raises(ContractError, match="mix execution ids"):
+        _runner_with(dates)._reconcile_paper_bindings(bindings)
+
+
+def test_reconcile_paper_bindings_rejects_bindings_tampered_after_publication() -> None:
+    """Bindings read back from the stage state must match the in-memory stage result."""
+    dates = ["2025-06-02", "2025-06-03"]
+    bindings = _stage_bindings(dates)
+    original = bindings[1]
+    bindings[1] = ResolvedStageBinding(
+        stage=original.stage,
+        output_family=original.output_family,
+        generation_id="0" * 64,
+        manifest_digest_sha256=original.manifest_digest_sha256,
+        data_checksum_sha256=original.data_checksum_sha256,
+        physical_path=original.physical_path,
+        quality_decision_checksum_sha256=original.quality_decision_checksum_sha256,
+    )
+    with pytest.raises(ContractError, match="generation_id does not match the published manifest"):
         _runner_with(dates)._reconcile_paper_bindings(bindings)

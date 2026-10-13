@@ -52,7 +52,13 @@ class MarketDatasetPublisher:
         sessions: Sequence[date],
         primary_source: str,
         independent_source: str,
+        cross_check_result: str = "agreement",
     ) -> dict[str, Any]:
+        if independent_source == "not_checked" and cross_check_result == "agreement":
+            raise ContractError(
+                "calendar snapshot cross-check was not performed; "
+                "record cross_check_result='skipped' instead of 'agreement'"
+            )
         directory = self._directory("trading_calendar_snapshot_v1", partition_date)
         if directory.exists():
             raise ContractError(f"calendar snapshot already published: {directory}")
@@ -79,7 +85,7 @@ class MarketDatasetPublisher:
             "session_dates": session_strings,
             "primary_source": primary_source,
             "independent_source": independent_source,
-            "cross_check_result": "agreement",
+            "cross_check_result": cross_check_result,
             "row_count": len(session_strings),
             "data_checksum_sha256": data_checksum,
             "serialization_profile": "parquet-v1",

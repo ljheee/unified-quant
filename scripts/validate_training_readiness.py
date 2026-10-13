@@ -242,11 +242,21 @@ def main(argv: list[str] | None = None) -> int:
     membership = _members_by_session(IndexMembershipStore(args.membership_root), args.universe_id, sessions, notes)
     suspensions: dict[str, list[dt.date]] | None = None
     if not args.skip_suspensions:
-        suspensions = _suspensions_for_gaps(adapter, sessions, membership, bars, notes)
+        # An upstream failure here must look like what it is - a gate that
+        # could not run - not like a blocked verdict with no report behind it.
+        try:
+            suspensions = _suspensions_for_gaps(adapter, sessions, membership, bars, notes)
+        except ContractError as exc:
+            print(json.dumps({"status": "configuration_failure", "error": str(exc)}, ensure_ascii=False))
+            return 2
     delisted: set[str] | None = None
     delisted_provenance = "unspecified"
     if not args.skip_delistings:
-        delisted = adapter.delisted_instruments()
+        try:
+            delisted = adapter.delisted_instruments()
+        except ContractError as exc:
+            print(json.dumps({"status": "configuration_failure", "error": str(exc)}, ensure_ascii=False))
+            return 2
         delisted_provenance = "tushare:stock_basic(list_status=D)"
         notes["delisted_universe_size"] = len(delisted)
     factor_sessions: list[dt.date] | None = None

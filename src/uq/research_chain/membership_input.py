@@ -25,8 +25,17 @@ class VerifiedInputSets:
 
 
 def _window_days(request: Mapping[str, Any], trading_days: Sequence[date]) -> list[date]:
-    start = date.fromisoformat(request["window_start_date"])
-    end = date.fromisoformat(request["window_end_date"])
+    # The request schema pins only the shape of these dates
+    # (^\d{4}-\d{2}-\d{2}$), not the calendar: "2026-99-99" passes validation.
+    # A bare ValueError would slip past the resolver's typed-error seam and
+    # surface at the CLI as an untyped configuration_failure.
+    try:
+        start = date.fromisoformat(request["window_start_date"])
+        end = date.fromisoformat(request["window_end_date"])
+    except ValueError as exc:
+        raise ContractError(
+            f"request window date is not a real calendar date: {exc}"
+        ) from exc
     if end < start:
         raise ContractError("research window end precedes start")
     days = [day for day in trading_days if start <= day <= end]

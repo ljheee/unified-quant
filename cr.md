@@ -340,7 +340,7 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 | 证据索引自我引用 | `paper-execution-research-integration/phase-0` 索引把自己登记成一条记录，其 sha256 逻辑上永不可验；测试用「跳过自身路径」的豁免掩盖而非删除。已删除自指记录并取消测试豁免 | test_evidence_indexes_are_fresh_and_never_index_themselves；test_paper_execution_research_integration_evidence 无条件验摘要 |
 | 读侧状态集合未随 R1 收紧（定位修正） | 原报为「重复策略口径」；实测更严重——prediction/target_weights/backtest_result 读路径**根本未查 registry**，只比硬编码 {passed, warning}，registry 收紧后仍会接受 warning 报告。新增单一来源 `reviewed_allowed_statuses(binding_type)`，替换 8 处硬编码(dataset_writer ×2、trainer、predictions ×2、portfolio/builder、backtest/engine、qlib_export 读路径);feature_preprocessing_v1（非 reject_all）仍合法接受 warning | test_reviewed_status_policy_has_a_single_source |
 | 证据索引新鲜度无守护 | 22 个索引结构各异（records/entries/items，仅 2 个带摘要），故按递归遍历任意 `{"path","sha256"}` 配对做全量校验：当前 96 对全部匹配、零自指;守护额外封堵 `./`/`..`/绝对路径自指、非法摘要长度、目录描述符缺失三类规避缝。索引结构统一属后续治理项 | test_evidence_indexes_are_fresh_and_never_index_themselves |
-| 研究链结果读侧残留(本轮 CR) | `research_chain/runner.py:813` 仍硬编码 `{passed, warning}`。经探针核实,registry 的 `validate_report` 已拒绝 warning,故这是**一致性残留(防御性收紧),非可达绕过**;改为 `reviewed_allowed_statuses("research_run_result_v1")`,纳入锁测试 | test_reviewed_status_policy_has_a_single_source(源码锁);test_reject_all_read_paths_reject_warning_reports_behaviorally(行为负例);已用突变验证两处回退均被锁测试捕获 |
+| 研究链结果读侧残留(本轮 CR) | `research_chain/runner.py:813` 仍硬编码 `{passed, warning}`。经探针核实,registry 的 `validate_report` 已拒绝 warning,故这是**一致性残留(防御性收紧),非可达绕过**;改为 `reviewed_allowed_statuses("research_run_result_v1")`,纳入锁测试 | test_reviewed_status_policy_has_a_single_source(源码锁);test_reviewed_registry_rejects_warning_status_for_passed_only_families(行为负例,2026-10-12 修复轮改名,原名 test_reject_all_read_paths_reject_warning_reports_behaviorally);test_model_qlib_export.py::test_warning_status_report_rejected_on_read(真实 store 读路径负例);已用突变验证两处回退均被锁测试捕获 |
 
 未改动项与理由：`research_chain/adapters.py:435` 的 `{passed, warning}` 作用于 **factor_v1 owning report**——该族不走模型评审 registry（无 binding_type 条目），其状态语义由因子侧 quality_policy 决定（factors/store.py:161/:560 已按策略区分 passed/双态）。把模型 registry 套上去会误拒因子报告；因子侧「策略→状态」映射与模型 registry 统一为单一治理口径，登记为后续项，非本批缺陷。
 
@@ -451,3 +451,61 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 实测数字：`bash scripts/run_gate.sh`（uv，单格本地 macOS arm64 / Python 3.12）`809 passed / 22 skipped / 0 failed`（22 为 qlib 门控，本地 skip、CI `qlib-runtime` 运行）；本批新增 2 例（`tests/test_research_v4_contract.py` 的 `test_v4_and_v3_share_the_stage_order_and_unknown_versions_fail_closed`、`test_v3_and_v4_execution_are_refused_until_the_paper_runtime_lands`）。
 
 未夸大声明：本批**没有**开启 v4 执行、没有新增 paper_execution 阶段输出、也没有把 `filtered_factor_frame` 接进任何生产调用点；`pendding.md` 的 4c 已从"[部分完成]"改为"[阻断:…Phase 1–3]"，并写明 4b 的函数"已实现并有测试"但"未挂载"。
+
+### 8.12 整体 CR（2026-10-12，覆盖 2e45e19..7970eec 全部 61 提交：pendding 1–9 关闭 + paper-execution Phases 0R–3）
+
+四路独立集群并行对抗审查（review 修复+membership/v5｜Tushare v2+就绪门｜dividend 复权链｜paper-execution 阶段），**全部 BLOCKER/MAJOR 由监工亲自复核**（读码 + 实跑复现），不接受代理单方面结论。基线：本地 862 passed / 23 skipped / 0 failed，HEAD CI 绿（run 38254476814）。
+
+**BLOCKER（1，亲自实跑复现）：**
+
+| 发现 | 锚点与判定 |
+|---|---|
+| v5 resolve 全线 NameError，本批交付的唯一可执行 paper 路径是死的 | `resolver.py:171` else 分支调用 `research_stage_plan_v5_sha256()` 但未导入（:12-22 只到 v4，函数在 `model_layer.py:384`；a2065fc 引入）。监工复现：`resolve(research_run_request_v5-valid.json)` → NameError。CLI `--mode execute` 任何 v5 请求 → exit 3；`docs/user-guide.md` 记录的流程实际不可运行。**绿门盲区**：无测试用 v5 走真 `resolve()`——membership 测试直调 `_verify_contract_version_inputs` 绕开崩溃点；唯一调 `resolve()` 的 phase-1 测试用裸 `except Exception` + 弱断言，**因崩溃而通过**，PE17 验收行由空测试支撑 |
+
+**MAJOR（6，全部亲自读码确认，M2 另有 fixture 佐证）：**
+
+| # | 发现 | 锚点 |
+|---|---|---|
+| M1 | `_verify_v5_paper_bindings` 迭代 `_PAPER_BINDING_FAMILIES` 却从不比对 `expected_family`（死变量）；四字段全绑日历族也过；phase-1 fixture 自己就把 market_data/corporate_action 绑成 suspension 族 | `resolver.py:314-326` |
+| M2 | 模板四大 paper 绑定在执行侧零消费（adapter 从 market source 现取 + `_restate_family` 改名）；绑定窗口从不与请求窗口比对。**佐证：自带合法 fixture 运行窗口 2025-12-01..2026-01-29，六个集合绑定全钉 2025-01-01..2025-12-31**——验收样本本身就是窗口不覆盖实例；membership/factor 有 resolve+reconcile 双重复核，paper 输入只有 resolve 时对一个执行时被忽略的绑定的校验 | `stage_adapter.py:396-407` |
+| M3 | `_daily_batch` 对 `response is None` 立即静默返回空帧（不重试不报错）；空帧路径有重试+UPSTREAM_ERROR，None 形态原样留着——d02c0ba 修的缺陷类经兄弟形态仍可达：短面板按 SUCCESS 发布 | `tushare.py:211-218` |
+| M4 | 就绪门按「并集成员 × 全部窗口会话」求缺口：v2 CLI 按日 as_of 灌数，调出指数的成分调出后无 bars，任何跨成员变动边界的训练窗口对**正确数据**报 `unexplained_bar_gap` blocking。修正口径注意：不能缩到「仅成员会话」——成员末期决策的 5 日 label 需要调出后的 label 尾段；正确口径为「成员会话 ∪ label horizon 尾段」或由 CLI 补灌尾段 | `readiness.py:143,:207` |
+| M5 | `risk_policy_binding` 模板必填（spec 称「指明本 run 经评审的 risk_policy generation」）但零强制：paper 阶段执行 risk store 当下任何策略，无人比对模板字段——评审钉 G1、执行用 G2，全链自洽不报 | `paper_execution_template_v2.json:21` vs 全树仅 v2 路径比对（`runner.py:259/:267`） |
+| M6 | 日历分区选择三种窗口过滤不一致：`sessions()` 重叠即收、`calendar_binding()` 只收 window_start 在窗内者（跨界分区服务了会话却被排除，甚至「会话照喂、run 照死」）、集合绑定按 partition_date 在窗内取——同一 run 三个 artifact 可各报一套日历血缘 | `market_source.py:39-51/90-102` |
+
+**MINOR（14）：** m1 reference 端点错误被拍平成不可重试 AUTH_FAILED（`tushare.py:290-292+353-354`）；m2 独立日历只守 newest 端，早于首根 K 线的窗口返回空会话集（`eastmoney.py:107-114`）；m3 空 instruments 触发整市场 `daily(ts_code=None)` 并可发布，目前只靠 membership 契约 `row_count>=1` 挡住（`tushare.py:277`）；m4 `bar_session_gap` 比计数不比集合（`readiness.py:158-165`）；m5 就绪门脚本 suspension/delisting 上游故障裸 traceback 退出（`validate_training_readiness.py:101-114`）；m6 非交易日 ex_date 事件静默不生效、容差内交叉校验照过（`adjustment.py:65-67`，影响被 1e-3 限界）；m7 ad2bea1 新不变量接受窗口中段缺交易日的快照（`adjustment_snapshot.py:206-209`）；m8 provider_check=skipped 仍发布且汇总行把 skipped 显示为 0.0（`build_dividend_adjustments.py:88-90`，测试祝福的有意行为）；m9 「行为锁」名不副实（只直调 `registry.validate_report`；配套源码锁经变异验证确实抓住两处历史回退，换序集合/反向断言可规避）；m10 已发布 `research_run_result/state.v1` 原地拓宽 contract_version 枚举（向后兼容、旧消费者 fail-closed、有计划书背书与兼容锁，但与「语义变更开新版本」字面规则不一致，**记为有意先例**）；m11 `_governed_trading_days` 部分覆盖静默收窄会话表（`cli.py:300-324`）；m12 `--skip-independent-calendar` 时 manifest 硬编码 `cross_check_result:"agreement"`（`market_dataset_publisher.py:82`）；m13 phase-0r 重名测试遮蔽，PE6 证据引用的断言路径从未在 CI 执行（`test_paper_execution_research_integration_phase0r.py:101/:123`）；m14 pendding 4c「仍未接线」双向过时（v5 dry-run 已通、生产 publisher 已存在；真正死的 v5 EXECUTE 反而没记）。
+
+**观察项（择要）：** factor_v1 适配器不对称（`adapters.py:462` 持有 manifest 却不按其 quality.policy 区分，reject_all 因子族的 warning 在 adapter 被接受、在 store 被拒）；无 `ResearchChainRunner.execute` 的 v5 端到端测试（pendding 已明示）；停牌源与 bars 同商（相关故障可掩盖 ingest 洞）；`verify_paper_binding_tampering` 为仅测试引用的生产模块死代码；风控拒绝决策在中止前先落 store（行为正确，宜注释防误「修」）；`_no_symlink` 拒绝 macOS 默认 tmpdir。
+
+**验证成立（四路一致 + 监工抽查）：** ① 读侧状态策略类缺陷**全数闭合**——19 个 registry 族全部经 registry 派生状态，dfc21cf 修复的 qlib_export 洞此前真实可达（`validate("model_quality_report")` 不查 registry），4e8c83e 修正正确（§8.4 原先把 runner.py:813 误记为 factor_v1，本批已自我纠正）；② pendding 4c 的 v5 治理缺口真实存在过且已闭合；③ 可执行性地图：v1/v2 可执行，v3/v4 行为锁拒绝，v5 可执行（V3 阶段序+paper 阶段，风控 block 即 halt 不透出后续日期）；④ dividend/复权链公告日锚定无前视、`ex_date>=ann_date` 代码强制、XBSE v3 干净开新版；⑤ 证据卫生：96 个 {path,sha256} 对全匹配零自指、release 索引 55 条 + phase-0 索引 47 条经代理重算匹配、无数据文件入库。
+
+**处置建议（监工口径）：** B1+M1/M2/M5/M6 同属「v5 paper 链路语义」一簇**必须同批修**——只修 B1 的 import 会把五个语义缺口从死代码变成活漏洞；M3/M4 独立可修；m12 建议随 v5 簇（评审信任面）；m13 改名即修复证据引用；m14 更正 pendding。
+
+未夸大声明：① B1/M1–M6 为监工亲自复核（B1 实跑复现，其余读码+M2 fixture 佐证）；MINOR/观察项为各路代理 CONFIRMED（多数注明 executed），监工未逐条复跑。② release 证据 55+47 条摘要匹配为代理重算结论，监工抽查了 freshness 守护测试全绿这一独立证据。③ 集群 A 留有三项「无法判定」（评审管道实际能否签发 reject_all 族的 warning 报告——决定 qlib:248 类闸门的生产载荷而非正确性；两个 registry 条目是否有规划消费方；phase-2 源码断言是否故意脆弱）。④ 本报告对 61 提交的覆盖按集群分工，evidence/docs-only 提交（约 20 个）只做绑定正确性抽查未逐行审。
+
+### 8.13 修复轮（2026-10-12，四路并行修复 §8.12 确认发现，全部未 commit 待用户裁决）
+
+四路各自修复自己 review 出的问题，严格文件分片无交叉，零 commit；B1+M1/M2/M5/M6 按 §8.12 建议同批落地。监工逐簇复核 diff 并对两处关键修复做了独立变异验证。
+
+| 簇 | 修复内容 | 验证 |
+|---|---|---|
+| A（评审/读侧残留） | 探针指纹记录改 `seen[date]=fingerprint`（`probe_index_weight_visibility.py:121`）；m9 行为锁补强——真实 store 读路径负例 + 决议信封负例；改名过宽测试为 `test_reviewed_registry_rejects_warning_status_for_passed_only_families` | 5 测试，变异验证（代理自报）；改名后 cr.md:343 旧引用已由监工更正 |
+| B（Tushare v2 + 就绪门） | M3 None 批次并入重试后报错路径、空请求零调用（`tushare.py:207-228`）；M4 就绪门必需集改为「成员日 ∪ label 尾段」（`readiness.py:213-271`，含整段停牌免尾段、部分缺口不豁免退市）；m1 ContractError 状态/retryable 不再拍平（:362-365）；m2 eastmoney 最老端守卫 + 认证区间载荷派生（`eastmoney.py:115-136`）；m4 集合比对（`readiness.py:158-185`）；m5 suspension/delisting 上游故障结构化 exit 2（`validate_training_readiness.py:247-259`）；O1 `_unsupported` 按请求推导版本 | 16 新测试。**监工变异验证**：`required=set(session_values)` 回退变异杀死 4 条新测试（rebalance 通过/member-span gap 命名/缺尾段阻断/joiner 归类），恢复后全绿。真实 store 复跑门输出与归档 training-readiness.json 逐字段一致（无 independent-calendar 一腿，见未决②）。a500-pilot 索引重钉 2 条（监工抽查 sha 匹配） |
+| C（dividend 复权链） | m6 非交易日 ex_date 在 chain 接缝拒绝（`adjustment_chain.py:311-329`）+ stk_div=bo+co 一致性 1e-9 外拒绝 + imp_ann_date<=ex_date + 逐分量负值检查；m8 provider_reconciliation 报告分 verified/skipped/skipped_instruments 三段，max_abs_diff 只覆盖 verified；m7 spec 标注 v3 现行写版本 + 接受窗口注释（`adjustment_snapshot.py:200-215`）；证据 instrument_count 从 verified 帧重算拒漂移；store.save 增 expected_effective_checksum + 写侧列校验；fetch 脚本逐日 source_fetched_at + 不可变跳过漂移告警 | 12 测试（代理自报 86/86 簇内）；a500-pilot 索引重钉 build_store_evidence.py 1 条 |
+| D（v5 paper 链路） | **B1** 补 `research_stage_plan_v5_sha256` 导入（`resolver.py:21`），phase-1 空测试重写为真实 store 端到端 resolve（六绑定+v5 计划摘要断言）；**M1** resolver 族比对 fail-closed（:335-340）+ 模板 schema 逐字段 family const（allOf 组合）+ phase-1 harness 按字段绑正确族；**M2** resolver 窗口覆盖校验（:341-350）+ adapter 发布前 `_verify_template_bindings` 复核 store（`stage_adapter.py:372`，先于任何 4N artifact）+ 三个 phase-0r fixture 重生成（绑定窗口覆盖运行窗口，身份摘要重算）；**M5** 逐决策日 risk_policy_binding 与模板严格相等（:252-256）；**M6** 日历分区统一谓词 `_calendar_partitions`（`market_source.py:39`：partition_date 在窗内 + 内容窗口 +1 邻接覆盖全窗），sessions()/calendar_binding(session) 同源；**m11** CLI `_governed_trading_days` 单源化委托 `PublishedPaperMarketData.sessions()`；**m12** cross_check_result 增 skipped、not_checked 不得记 agreement；**m13** 重名测试改名，PE6 引用路径恢复可执行；**OBS10** `_reconcile_paper_bindings` 与内存权威 bindings 比对+防篡改校验（`runner.py:782-793`）；**OBS13** 拒绝决策先落 store 的保护性注释 | **监工变异验证 B1**：删导入后新测试复现原 NameError（resolver.py:171），证明测试真走 v5 resolve；**监工核验** 重生成 fixture 四绑定窗口全部覆盖运行窗口且族正确。phase-0 索引重钉 resolver/runner 2 条、release 索引 PE17 引用改指新测试 1 条 |
+
+**用户复评追加修复（2026-10-13，监工实施）：**
+
+| 发现 | 修复 | 验证 |
+|---|---|---|
+| P1（低危真口子）：v5 链路 `date.fromisoformat` 未包 typed error——schema 日期只钉形状（`^\d{4}-\d{2}-\d{2}$`，无 `format:"date"`），`"2026-99-99"` 类形状合法非日期过校验后抛裸 ValueError，CLI（`cli.py:130`）取不到 `.reason` 降级为 configuration_failure，丢失 input_unresolved/request_invalid 语义。共两簇解析点：`resolver._verify_v5_paper_bindings` 的请求窗口与绑定窗口四处；**更早触达的** `membership_input._window_days`（v4/v5 输入集校验先于 paper 绑定校验执行） | resolver 请求窗口→request_invalid、绑定窗口→input_unresolved（`resolver.py:329-356`）；`_window_days` 抛 ContractError，由 `_verify_v4_input_sets` 既有接缝（`resolver.py:397-404`）转为 input_unresolved——避免 membership_input→resolver 循环导入 | 2 新测试（真 resolve 端到端 + 直调绑定校验，phase1 文件）。**监工变异验证**：两处 except 改 KeyError → 两测试分别以裸 ValueError 失败（`membership_input.py:33`/`resolver.py:352`），恢复后全绿。phase-0 索引 resolver.py 记录按约定重钉，freshness 绿 |
+| P2（极低危）：两个 negative fixture 的 identity 摘要无测试锁（只验拒绝理由） | `test_request_v5_rejects_superseded_stage_plan` 末尾对两 fixture 重算 `research_contract_identities` 并比对 pinned 值——内容编辑不刷 identity 即失败 | 随 phase0r 套件绿 |
+
+**全量套件**：监工独立复跑两轮均 exit 0（零失败）；D 末轮自报 932 collected / 909 passed / 23 skipped / 0 failed（qlib 门控 skip）。P1/P2 后全量一轮：仅 2 条 evidence-index stale-pin 失败（resolver.py 重钉前的预期状态），重钉后两条单独复跑全绿，其余 900+ 在该轮全过。
+
+**未决项（需用户裁决）：**
+1. **schema 原地拓宽（D 申报的范围外扩展）——已裁决（2026-10-13，用户授权监工定夺）：保留 `trading_calendar_snapshot_v1.json:35` 的 `cross_check_result` 枚举 +`"skipped"`，记为与 m10 同类的有意先例**。理由：① 该字段仓库内零消费方（仅 publisher 写、publish 脚本传，监工 grep 核实无读者穷举），对一个纯审计字段开 v2 强推版本分派是零行为收益的治理成本；② 拓宽向后兼容——旧记录全部仍合法，旧消费者 fail-closed（枚举外值被 schema 校验拒绝）而非误读，与 m10 兼容性形态一致；③ 已有写侧锁（`not_checked` 不得记 `agreement`）与两条行为测试充当兼容锁。**重访触发条件**：出现仓库外消费方按 schema 校验该字段，或 `cross_check_result` 获得语义消费者时，开 `trading_calendar_snapshot_v2`。
+2. **pilot 证据日历腿未复验**：修复轮期间 EastMoney 瞬时不可达（3 次探测 empty reply），`--independent-calendar` 全标记复跑未执行；B 以无标记复跑证明门输出语义逐字段不变。是否待 EastMoney 恢复后全标记刷新 a500-pilot 证据（须同步重钉索引），由用户定。
+3. **按设计未修**：O2（就绪门对大面积停牌的过宽报告，已有文档化限制）、O4（停牌源与 bars 同商，治理后续项）、A 的三项无法判定（§8.12 未夸大声明③）。
+
+未夸大声明：B1、M4、P1 的变异验证，fixture 窗口核验，cr.md:343 更正，两轮全量 exit 0，P1 后两簇 except 的变异杀伤确认与重钉后两条证据测试复绿为监工亲做；各簇测试计数与证据索引全量遍历结论为代理自报（B/D 的重钉经监工抽查匹配）；C 簇修复未做监工级变异验证（12 测试为代理自报，全量两轮 exit 0 覆盖其回归）。P1 的 `_window_days` 分支在 v5 路径上由 `_verify_v4_input_sets` 接缝报 input_unresolved（而非 resolver 内的 request_invalid），属接缝既有映射，监工未改其语义。

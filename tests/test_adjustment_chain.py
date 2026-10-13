@@ -1,5 +1,6 @@
 """Dividend disclosures -> adjustment snapshot production chain (pendding item 6)."""
 
+import dataclasses
 import datetime as dt
 import importlib.util
 import json
@@ -48,6 +49,7 @@ def _record(**overrides):
         "ex_date": "2026-08-20",
         "cash_div": 0.5,
         "cash_div_tax": 0.5,
+        "stk_div": None,
         "stk_bo_rate": None,
         "stk_co_rate": None,
         "record_id": "a" * 64,
@@ -94,7 +96,9 @@ def test_bonus_and_cash_use_per_share_rates_times_ten():
             "adj_factor": [0.552141, 1.0],
         }
     )
-    records = _records(_record(cash_div=2.52, cash_div_tax=2.52, stk_co_rate=0.8, ex_date="2026-08-20"))
+    records = _records(
+        _record(cash_div=2.52, cash_div_tax=2.52, stk_div=0.8, stk_co_rate=0.8, ex_date="2026-08-20")
+    )
     result = build_adjustment_chain(
         records=records, bars=bars, instrument=INSTRUMENT, window_start=rows[0], window_end=rows[1], tolerance=5e-4
     )
@@ -172,6 +176,86 @@ def test_ex_date_on_the_first_session_cannot_resolve_pre_close():
     with pytest.raises(ContractError, match="cannot resolve the pre-ex close"):
         build_adjustment_chain(
             records=records, bars=_bars(), instrument=INSTRUMENT, window_start=DATES[0], window_end=DATES[-1]
+        )
+
+
+def test_ex_date_on_a_non_session_day_is_refused():
+    # The deriver applies an event only when its ex-date is itself a session:
+    # a Saturday ex-date would be recorded in events.csv yet never move a
+    # factor, and the provider cross-check can only catch divergences larger
+    # than the tolerance. The chain must refuse instead of publishing a
+    # snapshot that contradicts its own effective-date table.
+    sessions = [dt.date(2026, 8, 17) + dt.timedelta(days=offset) for offset in range(8)]
+    sessions = [day for day in sessions if day.weekday() < 5]  # 08-17..08-21 + 08-24
+    bars = pd.DataFrame(
+        {
+            "instrument": [INSTRUMENT] * len(sessions),
+            "session_date": sessions,
+            "close": [10.0] * len(sessions),
+            "adj_factor": [1.0] * len(sessions),
+        }
+    )
+    records = _records(_record(ex_date="2026-08-22"))  # a Saturday
+    with pytest.raises(ContractError, match="fall outside the bar sessions"):
+        build_adjustment_chain(
+            records=records, bars=bars, instrument=INSTRUMENT, window_start=sessions[0], window_end=sessions[-1]
+        )
+
+
+def test_stk_div_must_match_the_bonus_breakdown():
+    # stk_div without a matching bo/co breakdown must not silently map to a
+    # zero bonus; consistent rows derive exactly the breakdown amounts.
+    events, _ = implemented_events(
+        _records(_record(stk_div=0.8, stk_co_rate=0.8)),
+        instrument=INSTRUMENT,
+        window_start=DATES[0],
+        window_end=DATES[-1],
+    )
+    assert events.iloc[0]["songzhuangu"] == pytest.approx(8.0)
+    with pytest.raises(ContractError, match="refusing to guess the breakdown"):
+        implemented_events(
+            _records(_record(stk_div=1.0, stk_co_rate=0.8)),
+            instrument=INSTRUMENT,
+            window_start=DATES[0],
+            window_end=DATES[-1],
+        )
+
+
+def test_implementation_announced_after_its_ex_date_is_refused():
+    with pytest.raises(ContractError, match="announced after its own ex-date"):
+        implemented_events(
+            _records(_record(imp_ann_date="2026-08-21", ex_date="2026-08-20")),
+            instrument=INSTRUMENT,
+            window_start=DATES[0],
+            window_end=DATES[-1],
+        )
+
+
+def test_a_negative_component_is_refused_before_summing():
+    # stk_bo_rate -0.5 + stk_co_rate 1.0 would sum to a positive bonus and
+    # slip past a post-sum check.
+    with pytest.raises(ContractError, match="negative stk_bo_rate"):
+        implemented_events(
+            _records(_record(stk_bo_rate=-0.5, stk_co_rate=1.0)),
+            instrument=INSTRUMENT,
+            window_start=DATES[0],
+            window_end=DATES[-1],
+        )
+
+
+def test_publish_refuses_a_drifted_effective_date_checksum(tmp_path):
+    result = build_adjustment_chain(
+        records=_records(_record()), bars=_bars(), instrument=INSTRUMENT, window_start=DATES[0], window_end=DATES[-1]
+    )
+    drifted = dataclasses.replace(
+        result,
+        derivation=dataclasses.replace(result.derivation, effective_date_table_checksum="0" * 64),
+    )
+    with pytest.raises(ContractError, match="declared effective-date checksum"):
+        publish_adjustment_snapshot(
+            tmp_path,
+            drifted,
+            visibility_time=dt.datetime(2026, 8, 21, 18, 0, tzinfo=dt.timezone(dt.timedelta(hours=8))),
         )
 
 
@@ -264,7 +348,7 @@ def test_script_refuses_a_window_without_bars(tmp_path):
         )
 
 
-def test_script_reports_and_exit_code_follow_refusals(tmp_path, monkeypatch):
+def _run_script(tmp_path, monkeypatch, bars):
     bars_root = tmp_path / "bars"
     canonical = bars_root / "canonical" / "bars_daily" / "v2" / f"date={DATES[0].isoformat()}"
     canonical.mkdir(parents=True)
@@ -300,9 +384,9 @@ def test_script_reports_and_exit_code_follow_refusals(tmp_path, monkeypatch):
     monkeypatch.setattr(script, "load_schema", lambda *a, **k: None)
     class _Reader:
         def read(self, schema, session):
-            return _bars()
+            return bars
     monkeypatch.setattr(script, "ManifestFirstReader", lambda *_: _Reader())
-    assert script.main(
+    exit_code = script.main(
         [
             "--bars-root", str(bars_root),
             "--dividend-root", str(records),
@@ -311,9 +395,35 @@ def test_script_reports_and_exit_code_follow_refusals(tmp_path, monkeypatch):
             "--end", DATES[-1].isoformat(),
             "--out", str(tmp_path / "report.json"),
         ]
-    ) == 0
-    report = json.loads((tmp_path / "report.json").read_text())
+    )
+    return exit_code, json.loads((tmp_path / "report.json").read_text())
+
+
+def test_script_reports_and_exit_code_follow_refusals(tmp_path, monkeypatch):
+    exit_code, report = _run_script(tmp_path, monkeypatch, _bars())
+    assert exit_code == 0
     assert report["published"] == 1
     assert report["refused"] == 0
     assert report["records"][0]["events"][0]["source_record_id"]
-    assert report["provider_reconciliation"]["all_within_public_resolution"] is True
+    reconciliation = report["provider_reconciliation"]
+    assert reconciliation["verified"] == 1
+    assert reconciliation["skipped"] == 0
+    assert reconciliation["skipped_instruments"] == []
+    assert reconciliation["all_within_public_resolution"] is True
+
+
+def test_script_report_surfaces_skipped_provider_checks_separately(tmp_path, monkeypatch):
+    # A snapshot published without official factors was never reconciled; the
+    # summary must surface it as skipped, not fold it into max_abs_diff as 0.0.
+    exit_code, report = _run_script(tmp_path, monkeypatch, _bars(factors=(None, None, None)))
+    assert exit_code == 0
+    assert report["published"] == 1
+    reconciliation = report["provider_reconciliation"]
+    assert reconciliation["verified"] == 0
+    assert reconciliation["skipped"] == 1
+    assert reconciliation["skipped_instruments"] == [
+        {"instrument": INSTRUMENT, "reason": "fewer than two official adj_factor observations"}
+    ]
+    assert reconciliation["max_abs_diff"] is None
+    assert reconciliation["worst_instrument"] is None
+    assert reconciliation["all_within_public_resolution"] is None

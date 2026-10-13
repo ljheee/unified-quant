@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
+import sys
 from pathlib import Path
 
 from uq.adapters.tushare_2k import Tushare2kAdapter
-from uq.contracts.dividend_events import DividendEventStore
+from uq.contracts.dividend_events import DividendEventStore, normalize_dividend_event_rows, render_events_csv
 from uq.errors import ContractError
 
 
@@ -26,10 +28,12 @@ def main() -> int:
     store = DividendEventStore(args.store)
     published: list[str] = []
     skipped: list[str] = []
-    fetched_at = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
+    drifted: list[str] = []
     day = start
     while day <= end:
         frame = adapter.dividend(ann_date=day.isoformat())
+        # each partition is stamped with its own fetch time, not the run's start
+        fetched_at = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
         if not frame.empty:
             try:
                 store.publish(
@@ -42,11 +46,31 @@ def main() -> int:
             except ContractError as exc:
                 if "immutable" not in str(exc):
                     raise
+                # The partition stays frozen (immutability stands), but the
+                # provider may have revised the rows since publication: compare
+                # the freshly normalized bytes and warn on drift instead of
+                # skipping silently.
+                document = store.read_manifest(day)
+                fresh_checksum = hashlib.sha256(
+                    render_events_csv(normalize_dividend_event_rows(frame, ann_date=day))
+                ).hexdigest()
+                if fresh_checksum != document["events_artifact"]["checksum_sha256"]:
+                    drifted.append(day.isoformat())
+                    print(
+                        f"WARNING: provider revised already-published partition {day.isoformat()}; "
+                        "the immutable store keeps the originally published bytes",
+                        file=sys.stderr,
+                    )
                 skipped.append(day.isoformat())
         day += dt.timedelta(days=1)
     print(
         json.dumps(
-            {"published": published, "already_present": skipped, "store": str(args.store)},
+            {
+                "published": published,
+                "already_present": skipped,
+                "content_drift": drifted,
+                "store": str(args.store),
+            },
             ensure_ascii=False,
             indent=2,
         )

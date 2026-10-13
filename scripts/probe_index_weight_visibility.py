@@ -8,8 +8,9 @@ read off the payload and cannot be reconstructed retroactively.  It can only be
 *observed forward in time*: run this probe once per trading day and it appends
 one JSONL record per newly seen ``(trade_date, fingerprint)`` pair.  ``event`` is
 ``first_seen`` the first time a snapshot appears and ``content_changed`` when
-Tushare revises a snapshot it had already published, so revisions are visible
-too.
+Tushare revises a snapshot it had already published — including a revision that
+reverts to earlier content, because each run compares against the latest
+recorded fingerprint, not the first.
 
 Every run also prints the per-snapshot lag upper bound: the number of governed
 sessions between a snapshot's trade date and the first observation that already
@@ -111,7 +112,13 @@ def main() -> int:
         for line in args.log.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 record = json.loads(line)
-                seen.setdefault(record["trade_date"], record["fingerprint"])
+                # Replay to the LATEST fingerprint per snapshot: the log is
+                # append-only chronological, so assignment tracks the most
+                # recent observation.  Pinning the first-seen fingerprint
+                # (setdefault) would miss a revision that reverts to it — an
+                # A→B→A sequence would record first_seen + content_changed but
+                # silently drop the final reverting change.
+                seen[record["trade_date"]] = record["fingerprint"]
 
     new_records: list[dict[str, object]] = []
     for trade_date, fingerprint in sorted(current.items()):

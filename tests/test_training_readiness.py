@@ -1,13 +1,18 @@
 """Training readiness rules (pendding item 5): cross-input fail-closed checks."""
 
 import importlib.util
-from datetime import date, timedelta
+import json
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
+from uq.contracts.index_membership import IndexMembershipStore
+from uq.contracts.schema import load_schema
+from uq.errors import ContractError
 from uq.pipeline.readiness import assess_factor_label_linkage, assess_readiness
+from uq.store.pit_store import CanonicalStore
 
 _ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location(
@@ -336,3 +341,239 @@ def test_script_rejects_malformed_partition_sets(tmp_path):
         script.factor_sessions_from_document([{"other": 1}])
     with pytest.raises(SystemExit, match="not ISO"):
         script.factor_sessions_from_document(["2026/01/05"])
+
+
+# --- per-session membership: the required bar span follows PIT membership ---
+
+HALF = len(SESSIONS) // 2
+
+
+def _rebalance_members():
+    """600000 holds the first half of the window, 000001 the second half."""
+    return {
+        session: (["600000.XSHG"] if offset < HALF else ["000001.XSHE"])
+        for offset, session in enumerate(SESSIONS)
+    }
+
+
+def test_a_rebalance_window_with_member_span_and_tail_bars_passes():
+    # The union-of-members view used to demand bars for every window session
+    # from every name that was ever a member, so a correct per-day-membership
+    # ingest could never pass a window crossing a rebalance. The required span
+    # is each name's member days plus its label tail.
+    horizon = 2
+    tail = SESSIONS[HALF:HALF + horizon]
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"], sessions=list(SESSIONS[:HALF]) + list(tail)),
+            _bars(instruments=["000001.XSHE"], sessions=SESSIONS[HALF:]),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        _rebalance_members(),
+        min_sessions_per_instrument=5,
+        label_horizon_sessions=horizon,
+        suspensions={},
+    )
+    assert report.status == "passed", report.findings
+
+
+def test_a_gap_inside_an_instruments_own_member_span_still_blocks():
+    horizon = 2
+    tail = SESSIONS[HALF:HALF + horizon]
+    kept = [session for session in list(SESSIONS[:HALF]) + list(tail) if session != SESSIONS[5]]
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"], sessions=kept),
+            _bars(instruments=["000001.XSHE"], sessions=SESSIONS[HALF:]),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        _rebalance_members(),
+        min_sessions_per_instrument=5,
+        label_horizon_sessions=horizon,
+        suspensions={},
+    )
+    assert report.status == "blocked"
+    gap = next(item for item in report.findings if item.code == "unexplained_bar_gap")
+    assert gap.instruments == ("600000.XSHG",)
+
+
+def test_a_missing_label_tail_blocks():
+    # 600000's bars stop at its last member day: every member day has a bar,
+    # but the forward labels of its final decisions cannot be computed.
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"], sessions=SESSIONS[:HALF]),
+            _bars(instruments=["000001.XSHE"], sessions=SESSIONS[HALF:]),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        _rebalance_members(),
+        min_sessions_per_instrument=5,
+        label_horizon_sessions=2,
+        suspensions={},
+    )
+    assert report.status == "blocked"
+    gap = next(item for item in report.findings if item.code == "unexplained_bar_gap")
+    assert gap.instruments == ("600000.XSHG",)
+
+
+def test_a_mid_window_joiner_with_short_history_blocks_as_warmup_insufficient():
+    # 000001 joins halfway through and only has its member days of history;
+    # the warmup-sufficiency rule must still refuse it (the remedy is a
+    # backfill, not a waiver).
+    horizon = 2
+    tail = SESSIONS[HALF:HALF + horizon]
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"], sessions=list(SESSIONS[:HALF]) + list(tail)),
+            _bars(instruments=["000001.XSHE"], sessions=SESSIONS[HALF:]),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        _rebalance_members(),
+        min_sessions_per_instrument=HALF + 1,
+        label_horizon_sessions=horizon,
+        suspensions={},
+    )
+    assert report.status == "blocked"
+    codes = {item.code for item in report.findings}
+    assert "limited_tradable_history" in codes
+    assert "insufficient_history" not in codes
+    limited = next(item for item in report.findings if item.code == "limited_tradable_history")
+    assert "000001.XSHE" in limited.instruments
+
+
+def test_a_member_halted_through_its_whole_span_needs_no_label_tail():
+    # A name suspended for every member day has no decision dates, so there is
+    # nothing to label: requiring the tail would report a gap on correct data.
+    members = _rebalance_members()
+    for session in SESSIONS[HALF:]:
+        members[session] = ["600000.XSHG", "000001.XSHE"]
+    report = _assess(
+        _bars(instruments=["000001.XSHE"]),
+        members,
+        min_sessions_per_instrument=5,
+        label_horizon_sessions=2,
+        suspensions={"600000.XSHG": list(SESSIONS)},
+    )
+    assert report.status == "passed", report.findings
+    assert report.metrics["instruments_fully_suspended"] == 1.0
+
+
+def test_bar_session_gap_compares_session_dates_not_counts():
+    # One declared session replaced by a date outside the declared calendar,
+    # keeping the distinct count equal: a count-only check passes this.
+    substitute = SESSIONS[-1] + timedelta(days=1)
+    assert substitute not in set(SESSIONS)
+    bars = _bars(sessions=list(SESSIONS[:-1]) + [substitute])
+    report = _assess(bars, _members())
+    assert report.status == "blocked"
+    finding = next(item for item in report.findings if item.code == "bar_session_gap")
+    assert SESSIONS[-1].isoformat() in finding.detail
+    assert substitute.isoformat() in finding.detail
+
+
+# --- validator script: auxiliary-source failures are configuration_failure ---
+
+_V2_SCHEMA = load_schema(_ROOT / "config/schemas/bars_daily.v2.yaml")
+_SCRIPT_SESSIONS = [date(2025, 10, 14), date(2025, 10, 15)]
+
+
+def _publish_bars_partition(root: Path, session: date, instruments) -> None:
+    CanonicalStore(root).publish(
+        schema=_V2_SCHEMA,
+        partition_date=session,
+        frame=_bars(instruments=list(instruments), sessions=[session]),
+        lineage={},
+        source_versions={"tushare": "test"},
+    )
+
+
+def _publish_membership(root: Path, codes) -> None:
+    IndexMembershipStore(root).publish(
+        universe_id="a500",
+        index_code="000510.SH",
+        source="tushare:index_weight:000510.SH",
+        source_fetched_at=datetime(2025, 10, 8, 9, 0, tzinfo=timezone(timedelta(hours=8))),
+        snapshot_date=date(2025, 9, 30),
+        publish_lag_days=2,
+        trading_days=[
+            date(2025, 10, 9),
+            date(2025, 10, 10),
+            date(2025, 10, 13),
+            date(2025, 10, 14),
+            date(2025, 10, 15),
+        ],
+        members=pd.DataFrame({"instrument": list(codes)}),
+    )
+
+
+class _ScriptAdapter:
+    def __init__(self, sessions, *, fail: str | None = None):
+        self._sessions = sessions
+        self._fail = fail
+
+    def trade_dates(self, start, end, exchange="SSE"):
+        return set(self._sessions)
+
+    def suspension(self, *, trade_date, suspend_type="S"):
+        if self._fail == "suspension":
+            raise ContractError("suspend_d failed: simulated upstream failure")
+        return pd.DataFrame()
+
+    def delisted_instruments(self):
+        if self._fail == "delisted":
+            raise ContractError("stock_basic failed: simulated upstream failure")
+        return set()
+
+
+def _script_args(bars_root: Path, membership_root: Path, output: Path) -> list[str]:
+    return [
+        "--bars-root", str(bars_root),
+        "--membership-root", str(membership_root),
+        "--universe-id", "a500",
+        "--start", "2025-10-14",
+        "--end", "2025-10-15",
+        "--schema", str(_ROOT / "config/schemas/bars_daily.v2.yaml"),
+        "--output", str(output),
+    ]
+
+
+def test_script_reports_configuration_failure_when_the_suspension_source_fails(tmp_path, monkeypatch, capsys):
+    bars_root = tmp_path / "bars"
+    # 000001 has no bars at all, so every session is a gap day and the gate
+    # must query suspend_d; a failure there used to escape as a raw traceback.
+    for session in _SCRIPT_SESSIONS:
+        _publish_bars_partition(bars_root, session, ["600000.XSHG"])
+    _publish_membership(tmp_path / "membership", ("600000.XSHG", "000001.XSHE"))
+    monkeypatch.setattr(script, "Tushare2kAdapter", lambda: _ScriptAdapter(_SCRIPT_SESSIONS, fail="suspension"))
+    code = script.main(_script_args(bars_root, tmp_path / "membership", tmp_path / "out.json"))
+    assert code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "configuration_failure"
+    assert "suspend_d" in payload["error"]
+
+
+def test_script_reports_configuration_failure_when_the_delisting_source_fails(tmp_path, monkeypatch, capsys):
+    bars_root = tmp_path / "bars"
+    for session in _SCRIPT_SESSIONS:
+        _publish_bars_partition(bars_root, session, ["600000.XSHG", "000001.XSHE"])
+    _publish_membership(tmp_path / "membership", ("600000.XSHG", "000001.XSHE"))
+    monkeypatch.setattr(script, "Tushare2kAdapter", lambda: _ScriptAdapter(_SCRIPT_SESSIONS, fail="delisted"))
+    code = script.main(
+        _script_args(bars_root, tmp_path / "membership", tmp_path / "out.json") + ["--skip-suspensions"]
+    )
+    assert code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "configuration_failure"
+    assert "stock_basic" in payload["error"]

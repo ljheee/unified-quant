@@ -175,6 +175,87 @@ def test_empty_batch_that_recovers_on_retry_publishes():
     assert client.daily_calls == 2
 
 
+class _NoneDroppingClient(_Client):
+    """Answers a batch with None, the other shape a dropped request can take."""
+
+    def __init__(self, *, recover_after: int | None = None, none_when_at_most: int | None = None):
+        super().__init__()
+        self.recover_after = recover_after
+        self.none_when_at_most = none_when_at_most
+        self.daily_calls = 0
+
+    def daily(self, ts_code, start_date, end_date):
+        self.daily_calls += 1
+        if self.recover_after is not None and self.daily_calls > self.recover_after:
+            return super().daily(ts_code, start_date, end_date)
+        if self.none_when_at_most is not None and ts_code is not None and len(ts_code.split(",")) > self.none_when_at_most:
+            return super().daily(ts_code, start_date, end_date)
+        return None
+
+
+def test_none_batch_is_retried_then_fails_closed():
+    client = _NoneDroppingClient()
+    result = _adapter(client).fetch("bars_daily", ["600000.XSHG", "000001.XSHE"], "2026-03-02", "2026-03-02", V2_FIELDS)
+    assert result.status is FetchStatus.UPSTREAM_ERROR
+    assert result.retryable is True
+    assert result.rows.empty
+    assert client.daily_calls == 2
+    assert "no rows for batch" in result.errors[0]
+
+
+def test_none_batch_that_recovers_on_retry_publishes():
+    client = _NoneDroppingClient(recover_after=1)
+    result = _adapter(client).fetch("bars_daily", ["600000.XSHG", "000001.XSHE"], "2026-03-02", "2026-03-02", V2_FIELDS)
+    assert result.status is FetchStatus.SUCCESS
+    assert client.daily_calls == 2
+
+
+def test_a_none_batch_in_a_multi_batch_fetch_fails_instead_of_publishing_short():
+    # 60 instruments are two daily batches (50 + 10). Before the fix a None
+    # from the second batch was appended as nothing and the run published the
+    # first batch alone as SUCCESS with only a warning - the same silently
+    # short panel the empty-frame guard was written to stop.
+    instruments = [f"6000{i:02d}.XSHG" for i in range(60)]
+    client = _NoneDroppingClient(none_when_at_most=10)
+    result = _adapter(client).fetch("bars_daily", instruments, "2026-03-02", "2026-03-02", V2_FIELDS)
+    assert result.status is FetchStatus.UPSTREAM_ERROR
+    assert result.retryable is True
+    assert result.rows.empty
+
+
+def test_an_empty_instrument_request_issues_no_provider_call():
+    # batches falls back to one empty batch; calling daily with ts_code=None
+    # there would fetch the whole market and hand back unrequested rows.
+    client = _Client()
+    result = _adapter(client).fetch("bars_daily", [], "2026-03-02", "2026-03-02", V2_FIELDS)
+    assert "daily" not in client.calls
+    assert result.rows.empty
+
+
+def test_a_rate_limited_reference_endpoint_keeps_its_retryable_status():
+    # _call classifies the failure and stamps the ContractError; the fetch
+    # error path used to re-map every ContractError to a non-retryable
+    # AUTH_FAILED, hiding a transient rate limit from retry automation.
+    class _RateLimitedClient(_Client):
+        def adj_factor(self, trade_date=None, ts_code=None, start_date=None, end_date=None):
+            raise Exception("抱歉，每分钟最多访问该接口200次")
+
+    result = _adapter(_RateLimitedClient()).fetch(
+        "bars_daily", ["600000.XSHG"], "2026-03-02", "2026-03-02", V2_FIELDS
+    )
+    assert result.status is FetchStatus.RATE_LIMITED
+    assert result.retryable is True
+    assert result.rows.empty
+
+
+def test_an_unsupported_dataset_carries_the_request_derived_version():
+    result = _adapter(_Client()).fetch(
+        "bars_weekly", ["600000.XSHG"], "2026-03-02", "2026-03-02", V2_FIELDS
+    )
+    assert result.status is FetchStatus.UNSUPPORTED_REQUEST
+    assert result.schema_version == "v2"
+
+
 def test_requested_instrument_missing_without_a_suspension_is_reported_not_blocked():
     client = _PartialClient()
     result = _adapter(client).fetch(

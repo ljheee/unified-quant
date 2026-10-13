@@ -11,8 +11,48 @@ import pytest
 from uq.errors import ContractError
 from uq.models.dataset_writer import DatasetWriter
 from uq.models.features import FeatureSchemaBuilder
-from uq.contracts.model_layer import create_reviewed_quality_decision
+from uq.contracts.model_layer import create_reviewed_quality_decision, review_signature, sha256_json
 from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
+
+_SIGNED_FIELDS = (
+    "report_version", "binding_type", "policy", "status", "checks",
+    "errors", "warnings", "key_id", "producer_code_fingerprint", "reviewer",
+)
+
+
+def _resign_decision(decision: dict, *, status: str) -> dict:
+    """Re-sign a raw reviewer decision with a different status.
+
+    The governed helper refuses to mint non-passed decisions for reject_all
+    families, but the read paths must not rely on that: an out-of-band holder
+    of the reviewer key can sign any status.  Tests mint such decisions the
+    same way — flip the status, re-sign the signed field set.
+    """
+    mutated = dict(decision)
+    mutated["status"] = status
+    if status == "warning":
+        mutated["warnings"] = ["residual data-quality warning"]
+    payload = {key: mutated[key] for key in _SIGNED_FIELDS}
+    payload["subject_generation_id"] = mutated["subject_generation_id"]
+    payload["subject_content_sha256"] = mutated["subject_content_sha256"]
+    mutated["review_signature_sha256"] = review_signature(payload, private_key_pem=REVIEWER_PRIVATE_KEY)
+    return mutated
+
+
+def _resign_report(report: dict, *, status: str) -> dict:
+    """Re-sign a published owning report with a different status (see _resign_decision)."""
+    mutated = dict(report)
+    mutated["status"] = status
+    if status == "warning":
+        mutated["warnings"] = ["residual data-quality warning"]
+    payload = {key: mutated[key] for key in _SIGNED_FIELDS}
+    payload["subject_generation_id"] = mutated["bound_generation_id"]
+    payload["subject_content_sha256"] = mutated["subject_content_sha256"]
+    mutated["review_signature_sha256"] = review_signature(payload, private_key_pem=REVIEWER_PRIVATE_KEY)
+    mutated["report_checksum_sha256"] = sha256_json(
+        {key: value for key, value in mutated.items() if key != "report_checksum_sha256"}
+    )
+    return mutated
 
 
 
@@ -177,6 +217,66 @@ class TestQlibDatasetExporter:
         mutated_path.write_bytes(bytes(mutated_bytes))
         with pytest.raises(ContractError, match="tampered Qlib export file:"):
             exporter.read("feature-order", manifest["generation_id"])
+
+    def test_warning_status_report_rejected_on_read(self, tmp_path: Path) -> None:
+        # cr.md 8.4 round-4 follow-up (m9): the registry-level lock cannot
+        # prove the read path consults the registry.  Drive the read with a
+        # warning report that is otherwise fully valid — same subject, valid
+        # reviewer signature, stored under its own checksum — so the ONLY
+        # condition left to refuse it is the registry status policy at
+        # qlib_export.py:248 (validate("model_quality_report") checks
+        # schema/checksum/signature, never the registry).
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        manifest = exporter.export(
+            dataset_name="warn_case", generation_id="9" * 64,
+            frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+            calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+            provider_uri="file:///data", quality_decision=export_decision(),
+        )
+        generation_id = manifest["generation_id"]
+        exporter.read("warn_case", generation_id)  # control: the passed export reads cleanly
+
+        export_root = tmp_path / "exports"
+        report_path = export_root / "external_quality_reviews" / f"{manifest['quality_report_checksum_sha256']}.json"
+        warning = _resign_report(json.loads(report_path.read_text()), status="warning")
+        (export_root / "external_quality_reviews" / f"{warning['report_checksum_sha256']}.json").write_text(
+            json.dumps(warning, sort_keys=True, indent=2) + "\n"
+        )
+        manifest_path = export_root / "dataset=warn_case" / f"generation={generation_id}" / "manifest.json"
+        patched = json.loads(manifest_path.read_text())
+        # quality_report_checksum_sha256 is excluded from the manifest identity,
+        # so the manifest still validates — only the status policy can refuse.
+        patched["quality_report_checksum_sha256"] = warning["report_checksum_sha256"]
+        manifest_path.write_text(json.dumps(patched, sort_keys=True, indent=2) + "\n")
+
+        with pytest.raises(ContractError, match="Qlib export quality report rejects read"):
+            exporter.read("warn_case", generation_id)
+
+    def test_warning_status_decision_rejected_on_export(self, tmp_path: Path) -> None:
+        # m9 (publish side): a warning decision validly signed for the export's
+        # own subject must be refused at publish — bind_reviewed_quality_decision
+        # enforces the same registry policy the read side consults.
+        def warning_provider(subject_generation_id: str, subject_content_sha256: str) -> dict:
+            decision = create_reviewed_quality_decision(
+                binding_type="qlib_dataset_export_v1", policy="reject_all", status="passed",
+                checks=[{"name": "export_files_verified", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+                errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+                private_key_pem=REVIEWER_PRIVATE_KEY,
+                subject_generation_id=subject_generation_id,
+                subject_content_sha256=subject_content_sha256,
+            )
+            return _resign_decision(decision, status="warning")
+
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        with pytest.raises(ContractError, match="not approved by reviewed registry"):
+            exporter.export(
+                dataset_name="warn_publish", generation_id="8" * 64,
+                frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+                label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+                calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+                provider_uri="file:///data", quality_decision=warning_provider,
+            )
 
     def test_cache_substitution_outside_approved_root_rejected(self, tmp_path: Path) -> None:
         builder = QlibInitReceiptBuilder()

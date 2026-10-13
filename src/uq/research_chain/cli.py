@@ -300,28 +300,17 @@ def _load_scores(document: Any) -> dict[str, pd.DataFrame]:
 def _governed_trading_days(publisher: MarketDatasetPublisher, request: Mapping[str, Any]) -> list[date]:
     """Derive the research window sessions from the published governed calendar.
 
-    The calendar is a Phase 0.5 ``trading_calendar_snapshot_v1`` family; every
-    partition overlapping the research window contributes its ``session_dates``.
-    A window without any covering calendar snapshot fails closed rather than
-    silently widening or narrowing the observed session set.
+    The calendar semantics are single-sourced in ``PublishedPaperMarketData``:
+    partitions are selected by partition date inside the window (the
+    set-binding convention) and must jointly cover the whole window, so a
+    partially covered window fails closed instead of silently narrowing the
+    observed session set.
     """
-    window_start = date.fromisoformat(request["window_start_date"])
-    window_end = date.fromisoformat(request["window_end_date"])
-    days: set[date] = set()
-    for partition_date in publisher.list_partition_dates("trading_calendar_snapshot_v1"):
-        manifest = publisher.read_manifest("trading_calendar_snapshot_v1", partition_date)
-        start = date.fromisoformat(manifest["window_start"])
-        end = date.fromisoformat(manifest["window_end"])
-        if end < window_start or start > window_end:
-            continue
-        days.update(
-            day
-            for day in (date.fromisoformat(value) for value in manifest.get("session_dates", []))
-            if window_start <= day <= window_end
-        )
-    if not days:
-        raise ContractError("no governed trading calendar snapshot covers the research window")
-    return sorted(days)
+    return PublishedPaperMarketData(
+        publisher,
+        window_start=date.fromisoformat(request["window_start_date"]),
+        window_end=date.fromisoformat(request["window_end_date"]),
+    ).sessions()
 
 
 def _build_runner(

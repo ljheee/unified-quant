@@ -14,6 +14,7 @@ import pytest
 
 from uq.contracts.index_membership import IndexMembershipStore
 from uq.contracts.dividend_events import DividendEventStore
+from uq.contracts.gate_contracts import sha256_json
 from uq.contracts.schema import load_schema
 from uq.store.pit_store import CanonicalStore
 
@@ -183,6 +184,23 @@ def test_dividend_inventory_refuses_tampered_events(tmp_path):
     events = store / "dividend_events/2026-02-26/events.csv"
     events.write_bytes(events.read_bytes().replace(b"0.12", b"0.99"))
     with pytest.raises(SystemExit, match="drifted from manifest"):
+        module.dividend_inventory(store, None, None, tmp_path)
+
+
+def test_dividend_inventory_refuses_instrument_count_drift(tmp_path):
+    # The manifest's instrument_count is publisher-computed: an untrusted
+    # publisher can ship a self-consistent document (valid schema, valid
+    # generation id) whose count still disagrees with the verified events.
+    # The inventory recomputes it instead of trusting the document.
+    store = _dividend_store(tmp_path)
+    manifest_path = store / "dividend_events/2026-02-26/manifest.json"
+    document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    document["instrument_count"] = document["instrument_count"] + 1
+    document["generation_id"] = sha256_json(
+        {key: value for key, value in document.items() if key != "generation_id"}
+    )
+    manifest_path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="instrument count drift"):
         module.dividend_inventory(store, None, None, tmp_path)
 
 

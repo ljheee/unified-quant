@@ -10,7 +10,7 @@ session.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Mapping
 
 import pandas as pd
@@ -36,22 +36,59 @@ class PublishedPaperMarketData:
         self.window_start = window_start
         self.window_end = window_end
 
-    def sessions(self) -> list[date]:
-        """Ordered governed sessions covering the window, fail-closed when empty."""
-        sessions: set[date] = set()
+    def _calendar_partitions(self) -> list[dict[str, Any]]:
+        """Governed calendar partitions selected for the window, coverage-checked.
+
+        Selection follows the set-binding convention exactly — a partition is
+        in the governed set when its partition date falls inside the window —
+        so the sessions served here are always drawn from the same partitions
+        a ``build_set_binding`` digest pins.  The selected partitions must then
+        account for the whole window: their content windows, sorted by start,
+        must chain with at most one-day adjacency from ``window_start`` through
+        ``window_end``.  Anything less fails closed, because a partial session
+        list is indistinguishable from a complete one to callers.
+        """
+        selected: list[dict[str, Any]] = []
         for partition_date in self.publisher.list_partition_dates("trading_calendar_snapshot_v1"):
-            manifest = self.publisher.read_manifest("trading_calendar_snapshot_v1", partition_date)
-            start = date.fromisoformat(manifest["window_start"])
-            end = date.fromisoformat(manifest["window_end"])
-            if end < self.window_start or start > self.window_end:
+            if not (self.window_start <= partition_date <= self.window_end):
                 continue
-            sessions.update(
-                day
-                for day in (date.fromisoformat(value) for value in manifest.get("session_dates", []))
-                if self.window_start <= day <= self.window_end
-            )
-        if not sessions:
+            manifest = self.publisher.read_manifest("trading_calendar_snapshot_v1", partition_date)
+            selected.append({
+                "partition_date": partition_date,
+                "window_start": date.fromisoformat(manifest["window_start"]),
+                "window_end": date.fromisoformat(manifest["window_end"]),
+                "session_dates": [
+                    day
+                    for day in (date.fromisoformat(value) for value in manifest.get("session_dates", []))
+                    if self.window_start <= day <= self.window_end
+                ],
+            })
+        if not selected:
             raise ContractError("no governed trading calendar snapshot covers the paper window")
+        selected.sort(key=lambda item: (item["window_start"], item["partition_date"]))
+        covered_through: date | None = None
+        for item in selected:
+            if covered_through is None:
+                if item["window_start"] > self.window_start:
+                    break
+            elif item["window_start"] > covered_through + timedelta(days=1):
+                break
+            if covered_through is None or item["window_end"] > covered_through:
+                covered_through = item["window_end"]
+        if covered_through is None or covered_through < self.window_end:
+            raise ContractError(
+                "governed trading calendar snapshots do not cover the paper window "
+                f"[{self.window_start.isoformat()}, {self.window_end.isoformat()}]"
+            )
+        return selected
+
+    def sessions(self) -> list[date]:
+        """Ordered governed sessions covering the window, fail-closed on any gap."""
+        sessions: set[date] = set()
+        for item in self._calendar_partitions():
+            sessions.update(item["session_dates"])
+        if not sessions:
+            raise ContractError("no governed trading calendar session falls in the paper window")
         return sorted(sessions)
 
     def _partition_binding(self, family: str, session: date) -> dict[str, str]:
@@ -87,19 +124,12 @@ class PublishedPaperMarketData:
             ],
         }
 
-    def calendar_binding(self) -> dict[str, str]:
-        partitions = [
-            partition_date
-            for partition_date in self.publisher.list_partition_dates("trading_calendar_snapshot_v1")
-            if self.window_start
-            <= date.fromisoformat(
-                self.publisher.read_manifest("trading_calendar_snapshot_v1", partition_date)["window_start"]
-            )
-            <= self.window_end
-        ]
-        if not partitions:
-            raise ContractError("no governed calendar partition covers the paper window")
-        return self._partition_binding("trading_calendar_snapshot_v1", sorted(partitions)[0])
+    def calendar_binding(self, session: date) -> dict[str, str]:
+        """Pin the earliest selected calendar partition whose content window holds the session."""
+        for item in self._calendar_partitions():
+            if item["window_start"] <= session <= item["window_end"]:
+                return self._partition_binding("trading_calendar_snapshot_v1", item["partition_date"])
+        raise ContractError(f"no governed calendar partition covers session {session}")
 
     def suspension_binding(self, session: date) -> dict[str, str]:
         return self._partition_binding("suspension_snapshot_v1", session)

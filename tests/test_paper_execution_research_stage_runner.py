@@ -89,6 +89,7 @@ def _publish_market(root: Path, sessions: list[date]) -> MarketDatasetPublisher:
         sessions=sessions,
         primary_source="test:trade_cal",
         independent_source="not_checked",
+        cross_check_result="skipped",
     )
     for session in sessions:
         bars = pd.DataFrame({
@@ -154,6 +155,12 @@ def _template(publisher: MarketDatasetPublisher, sessions: list[date]) -> dict:
     template["corporate_action_binding"] = publisher.build_set_binding(
         "dividend_event_v1", window_start=sessions[0], window_end=sessions[-1]
     )
+    # The paper stage enforces that every risk decision is issued under the
+    # policy the template pins, so the template names the same reviewed policy
+    # the governed decision fixture carries.
+    template["risk_policy_binding"] = json.loads(
+        (ROOT / "config/schemas/fixtures/paper-execution/risk_decision-valid.json").read_text()
+    )["risk_policy_binding"]
     return template
 
 
@@ -413,3 +420,110 @@ def test_paper_stage_refusal_stops_the_stage_and_hides_later_dates(tmp_path: Pat
     }
     assert published_dates == {decision_dates[0]}
     assert not (tmp_path / "runs" / "research_runs" / "states").exists()
+
+
+def test_paper_stage_rejects_a_decision_issued_under_an_unpinned_policy(tmp_path: Path) -> None:
+    """M5: every risk decision must be issued under the template-pinned policy."""
+    from types import SimpleNamespace
+
+    sessions = [date(2026, 1, 5), date(2026, 1, 6)]
+    publisher = _publish_market(tmp_path / "market", sessions)
+    template = _template(publisher, sessions)
+    paper_root = tmp_path / "paper"
+    (tmp_path / "runs").mkdir(parents=True, exist_ok=True)
+    run_store = FileResearchRunStore(tmp_path / "runs")
+
+    adapter = PaperExecutionStageAdapter(
+        template,
+        market=PublishedPaperMarketData(
+            publisher, window_start=sessions[0], window_end=sessions[-1]
+        ),
+        config_store=ExecutionConfigStore(paper_root),
+        plan_store=OrderPlanStore(paper_root),
+        result_store=ExecutionResultStore(paper_root),
+        state_store=PaperPortfolioStateStore(paper_root),
+    )
+    decision_date = sessions[0].isoformat()
+    frame = pd.DataFrame({"instrument": ["000001.XSHE"], "weight": [0.5]})
+    portfolio_result = SimpleNamespace(
+        definition_manifest={"generation_id": "1" * 64},
+        target_weight_manifests={decision_date: _target_manifest(frame, decision_date)},
+        target_weight_frames={decision_date: frame},
+    )
+    allowed_source = _risk_source()
+
+    def swapped_policy_source(decision_date: str, config_generation_id: str, context) -> dict:
+        decision = allowed_source(decision_date, config_generation_id, context)
+        decision["risk_policy_binding"] = {
+            "family": "risk_policy_v1",
+            "generation_id": "0" * 64,
+            "manifest_digest_sha256": "1" * 64,
+        }
+        return decision
+
+    with pytest.raises(ContractError, match="policy lineage mismatch"):
+        adapter.run(
+            _plan(),
+            portfolio_stage_result=portfolio_result,
+            decision_dates=[decision_date],
+            market=adapter.market,
+            quality_decisions=_quality_source(),
+            run_store=run_store,
+            risk_decision_source=swapped_policy_source,
+            runner_identity={
+                "code_fingerprint": "e" * 64,
+                "environment_profile": "locked-test",
+                "lock_digest_sha256": "f" * 64,
+            },
+            created_at="2026-01-01T00:00:00+00:00",
+        )
+    assert not list((paper_root / "execution-configs").glob("*/generation=*"))
+
+
+def test_paper_stage_rejects_template_bindings_diverged_from_the_store(tmp_path: Path) -> None:
+    """M2: the adapter re-verifies the template's set bindings before publishing."""
+    from types import SimpleNamespace
+
+    sessions = [date(2026, 1, 5), date(2026, 1, 6)]
+    publisher = _publish_market(tmp_path / "market", sessions)
+    template = _template(publisher, sessions)
+    template["suspension_binding"]["set_digest_sha256"] = "0" * 64
+    paper_root = tmp_path / "paper"
+    (tmp_path / "runs").mkdir(parents=True, exist_ok=True)
+    run_store = FileResearchRunStore(tmp_path / "runs")
+
+    adapter = PaperExecutionStageAdapter(
+        template,
+        market=PublishedPaperMarketData(
+            publisher, window_start=sessions[0], window_end=sessions[-1]
+        ),
+        config_store=ExecutionConfigStore(paper_root),
+        plan_store=OrderPlanStore(paper_root),
+        result_store=ExecutionResultStore(paper_root),
+        state_store=PaperPortfolioStateStore(paper_root),
+    )
+    decision_date = sessions[0].isoformat()
+    frame = pd.DataFrame({"instrument": ["000001.XSHE"], "weight": [0.5]})
+    portfolio_result = SimpleNamespace(
+        definition_manifest={"generation_id": "1" * 64},
+        target_weight_manifests={decision_date: _target_manifest(frame, decision_date)},
+        target_weight_frames={decision_date: frame},
+    )
+
+    with pytest.raises(ContractError, match="suspension_binding does not match the governed store"):
+        adapter.run(
+            _plan(),
+            portfolio_stage_result=portfolio_result,
+            decision_dates=[decision_date],
+            market=adapter.market,
+            quality_decisions=_quality_source(),
+            run_store=run_store,
+            risk_decision_source=_risk_source(),
+            runner_identity={
+                "code_fingerprint": "e" * 64,
+                "environment_profile": "locked-test",
+                "lock_digest_sha256": "f" * 64,
+            },
+            created_at="2026-01-01T00:00:00+00:00",
+        )
+    assert not list((paper_root / "execution-configs").glob("*/generation=*"))

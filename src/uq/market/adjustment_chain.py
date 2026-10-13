@@ -26,7 +26,13 @@ Mapping rules, measured rather than assumed:
   provenance instead of being implied;
 * two distinct implementations on one ex-date with different amounts are an
   ambiguity and fail closed; byte-identical revisions already collapsed in the
-  store because it keys rows by content.
+  store because it keys rows by content;
+* an implemented record whose ``stk_div`` disagrees with the
+  ``stk_bo_rate + stk_co_rate`` breakdown, whose ``imp_ann_date`` follows its
+  own ``ex_date``, or whose ``ex_date`` falls on a day that is not a bar
+  session is dirty disclosure data and fails closed: the deriver can only
+  apply an event on a trading session, so publishing such a record would
+  write an ``events.csv`` its own effective-date table contradicts.
 
 Every derivation is cross-checked against the official cumulative
 ``adj_factor`` carried by the canonical bars: ``derived[t]`` must equal
@@ -123,7 +129,17 @@ def implemented_events(
     dropped records with explicit reasons, so a reviewer can see why an
     implemented disclosure did not enter the factors.
     """
-    required = {"instrument", "div_proc", "ex_date", "cash_div_tax", "stk_bo_rate", "stk_co_rate", "record_id"}
+    required = {
+        "instrument",
+        "div_proc",
+        "ex_date",
+        "cash_div_tax",
+        "stk_div",
+        "stk_bo_rate",
+        "stk_co_rate",
+        "imp_ann_date",
+        "record_id",
+    }
     missing = required - set(records.columns)
     if missing:
         raise ContractError(f"dividend records are missing columns: {sorted(missing)}")
@@ -140,17 +156,30 @@ def implemented_events(
             continue
         if not window_start <= ex_day <= window_end:
             continue
+        imp_day = _optional_date(row["imp_ann_date"])
+        if imp_day is not None and imp_day > ex_day:
+            raise ContractError(
+                f"implemented dividend {record_id} was announced after its own ex-date "
+                f"({imp_day} > {ex_day}); refusing dirty disclosure data"
+            )
         cash = _number(row["cash_div_tax"], "cash_div_tax")
         if cash is None:
             raise ContractError(
                 f"implemented dividend {record_id} has no pre-tax cash field; "
                 "refusing to fall back to the after-tax value"
             )
-        bonus = (_number(row["stk_bo_rate"], "stk_bo_rate") or 0.0) + (
-            _number(row["stk_co_rate"], "stk_co_rate") or 0.0
-        )
-        if cash < 0 or bonus < 0:
-            raise ContractError(f"implemented dividend {record_id} has a negative amount")
+        bonus_rate = _number(row["stk_bo_rate"], "stk_bo_rate")
+        capitalization_rate = _number(row["stk_co_rate"], "stk_co_rate")
+        for field, value in (("cash_div_tax", cash), ("stk_bo_rate", bonus_rate), ("stk_co_rate", capitalization_rate)):
+            if value is not None and value < 0:
+                raise ContractError(f"implemented dividend {record_id} has a negative {field}")
+        bonus = (bonus_rate or 0.0) + (capitalization_rate or 0.0)
+        reported_total = _number(row["stk_div"], "stk_div")
+        if reported_total is not None and abs(reported_total - bonus) > 1e-9:
+            raise ContractError(
+                f"implemented dividend {record_id} reports stk_div={reported_total} but "
+                f"stk_bo_rate+stk_co_rate={bonus}; refusing to guess the breakdown"
+            )
         selected.setdefault(ex_day, []).append(
             {
                 "year": ex_day.year,
@@ -279,6 +308,25 @@ def build_adjustment_chain(
     events, dropped = implemented_events(
         records, instrument=instrument, window_start=window_start, window_end=window_end
     )
+    # The deriver applies an event only when its ex-date is itself a session,
+    # so a disclosure whose ex-date falls on a weekend/holiday (dirty data: the
+    # exchange never schedules one) would be recorded in events.csv yet never
+    # move a factor — a snapshot that contradicts its own effective-date table.
+    # Refuse it instead of relying on the provider cross-check, which can only
+    # catch divergences larger than the tolerance.
+    off_session = sorted(
+        {
+            dt.date(int(event["year"]), int(event["month"]), int(event["day"]))
+            for event in events.to_dict(orient="records")
+        }
+        - set(sessions)
+    )
+    if off_session:
+        raise ContractError(
+            f"implemented ex-dates for {instrument} fall outside the bar sessions: "
+            f"{[day.isoformat() for day in off_session]}; the deriver can only apply an event "
+            "on a trading session — verify the disclosure ex-date against the exchange calendar"
+        )
     pre_close = None if events.empty else _pre_close_series(instrument_bars, instrument=instrument, events=events)
     derivation = XdxrAdjustmentDeriver(provenance=provenance).derive(
         instrument, events.copy(), pd.to_datetime(sessions), pre_close
@@ -314,5 +362,8 @@ def publish_adjustment_snapshot(
         events=result.events[EVENT_COLUMNS].reset_index(drop=True),
         effective_dates=result.derivation.effective_dates,
         sessions=list(result.sessions),
+        # the store refuses the write if the table it persists is not byte-
+        # identical to the one the factor side declared
+        expected_effective_checksum=result.derivation.effective_date_table_checksum,
     )
     return directory.name

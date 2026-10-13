@@ -1119,12 +1119,17 @@ def test_evidence_indexes_are_fresh_and_never_index_themselves():
         assert hashlib.sha256(target.read_bytes()).hexdigest() == digest, path
 
 
-def test_reject_all_read_paths_reject_warning_reports_behaviorally():
-    # cr.md 8.4 (behavioral lock): the source scan in
+def test_reviewed_registry_rejects_warning_status_for_passed_only_families():
+    # cr.md 8.4: the source scan in
     # test_reviewed_status_policy_has_a_single_source cannot prove the read
-    # paths reject a warning report. Registry validation is the shared decision
-    # point they all call, so a warning report that is otherwise well formed
-    # must be refused for both families that were hardcoded to passed+warning.
+    # paths reject a warning report. This helper-level lock covers the shared
+    # decision point they all call: a warning report that is otherwise well
+    # formed must be refused for both families that were hardcoded to
+    # passed+warning. The store-level behavioral locks live next to their read
+    # paths — test_model_qlib_export.py::test_warning_status_report_rejected_on_read
+    # for the Qlib export read, and
+    # test_quality_decision_envelope_rejects_warning_owning_report below for the
+    # research-chain runner read.
     from uq.contracts.model_layer import ModelQualityReviewRegistry
 
     registry = ModelQualityReviewRegistry()
@@ -1142,6 +1147,40 @@ def test_reject_all_read_paths_reject_warning_reports_behaviorally():
             registry.validate_report(report)
         report["status"] = "passed"
         registry.validate_report(report)
+
+
+def test_quality_decision_envelope_rejects_warning_owning_report():
+    # cr.md 8.4 round-4 follow-up (m9), research-chain side: the runner reads
+    # research_run_result_v1 quality decisions as resolver envelopes
+    # (runner.py:908 validates the envelope; the :912 status check behind it is
+    # defense-in-depth). Envelope validation consults the registry through
+    # validate_quality_decision_owning_report, so an envelope whose owning
+    # report carries a warning status — validly signed, correct checksums,
+    # bound to the right subject — must be refused here. The passed control
+    # validates cleanly, so the status policy is the only refuser.
+    from uq.contracts.model_layer import ModelContractLoader, sha256_json
+    from tests.test_model_qlib_export import _resign_report
+
+    subject = "a" * 64
+    decision = _quality_decision(
+        subject,
+        binding_type="research_run_result_v1",
+        checks=[{
+            "name": "result_stage_completeness_valid", "threshold": 0,
+            "observed": 0, "level": "error", "result": "passed",
+        }],
+    )
+    envelope = _quality_envelope(decision, subject_generation_id=subject)
+    ModelContractLoader.validate("quality_decision", dict(envelope))
+
+    warning_report = _resign_report(envelope["owning_report"], status="warning")
+    warning_envelope = dict(envelope)
+    warning_envelope["owning_report"] = warning_report
+    warning_envelope["decision_checksum_sha256"] = sha256_json(
+        {key: value for key, value in warning_report.items() if key != "report_checksum_sha256"}
+    )
+    with pytest.raises(StoreContractError, match="not approved by reviewed registry"):
+        ModelContractLoader.validate("quality_decision", warning_envelope)
 
 
 def test_reviewed_status_policy_has_a_single_source():

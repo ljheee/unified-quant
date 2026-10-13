@@ -77,8 +77,8 @@ class EastMoneySessionProvider:
         self.user_agent = user_agent
         self._opener = opener or self._open_url
         self._sessions: list[date] = []
-        # The contiguous range the last payload certified: the fetch window's
-        # start through the newest session it carried.
+        # The contiguous range the last payload certified: its earliest
+        # through its newest session.
         self._certified: tuple[date, date] | None = None
         self.evidence: dict[str, object] | None = None
 
@@ -112,8 +112,20 @@ class EastMoneySessionProvider:
             raise IndependentCalendarError(
                 f"eastmoney calendar newest session {newest.isoformat()} does not cover requested window end {end.isoformat()}"
             )
+        oldest = sessions[0]
+        if start < oldest:
+            # Symmetric to the newest-end guard: the payload is the vendor's
+            # answer from ``fetch_start`` onward, so an earliest kline after
+            # the requested start means the vendor's history does not reach
+            # the window. An empty set here would certify "no trading days"
+            # for sessions the provider simply cannot see.
+            raise IndependentCalendarError(
+                f"eastmoney calendar earliest session {oldest.isoformat()} does not cover requested window start {start.isoformat()}"
+            )
         self._sessions = sessions
-        self._certified = (fetch_start, newest)
+        # The certified range is what the payload proves: its earliest
+        # through its newest session, not the wider fetch window.
+        self._certified = (oldest, newest)
         self.evidence = {
             "provenance": self.provenance,
             "secid": self.secid,
@@ -121,7 +133,7 @@ class EastMoneySessionProvider:
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "payload_sha256": hashlib.sha256(raw).hexdigest(),
             "sessions": len(sessions),
-            "certified_start": fetch_start.isoformat(),
+            "certified_start": oldest.isoformat(),
             "certified_end": newest.isoformat(),
         }
 

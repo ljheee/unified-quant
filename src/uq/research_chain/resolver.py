@@ -18,6 +18,7 @@ from ..contracts.model_layer import (
     research_stage_plan_v2_sha256,
     research_stage_plan_v3_sha256,
     research_stage_plan_v4_sha256,
+    research_stage_plan_v5_sha256,
     sha256_json,
 )
 from ..errors import ContractError
@@ -304,7 +305,15 @@ class ResearchChainRequestResolver:
             self._verify_v5_paper_bindings(candidate)
 
     def _verify_v5_paper_bindings(self, candidate: dict[str, Any]) -> None:
-        """Resolve template-v2 paper bindings against the published market-data store."""
+        """Resolve template-v2 paper bindings against the published market-data store.
+
+        Each template field names exactly one governed publisher family (the
+        template schema pins the family per field; the comparison here is the
+        resolver-level lock for callers that bypass schema validation), and the
+        bound window must cover the research window: a binding that pins last
+        year's partitions while the request runs this year's window is a
+        lineage break, not an input the store merely failed to publish.
+        """
         template = candidate.get("paper_execution_template", {})
         if not self.market_dataset_store:
             raise ResearchResolutionError(
@@ -317,11 +326,43 @@ class ResearchChainRequestResolver:
             "suspension_binding": "suspension_snapshot_v1",
             "corporate_action_binding": "dividend_event_v1",
         }
-        from datetime import date as _date
+        # The schema pins only the shape of these dates (^\d{4}-\d{2}-\d{2}$),
+        # not the calendar: a shape-valid non-date like "2026-99-99" passes
+        # validation, and a bare ValueError here would surface at the CLI as an
+        # untyped configuration_failure instead of the resolution failure it is.
+        try:
+            window_start = date.fromisoformat(candidate["window_start_date"])
+            window_end = date.fromisoformat(candidate["window_end_date"])
+        except ValueError as exc:
+            raise ResearchResolutionError(
+                "request_invalid",
+                f"request window date is not a real calendar date: {exc}",
+            ) from exc
         for field, expected_family in _PAPER_BINDING_FAMILIES.items():
             binding = template.get(field)
             if not binding:
                 raise ResearchResolutionError("input_unresolved", f"missing paper binding: {field}")
+            if binding.get("family") != expected_family:
+                raise ResearchResolutionError(
+                    "lineage_mismatch",
+                    f"paper binding {field} must name family {expected_family}, "
+                    f"got {binding.get('family')!r}",
+                )
+            try:
+                binding_start = date.fromisoformat(binding["window_start"])
+                binding_end = date.fromisoformat(binding["window_end"])
+            except ValueError as exc:
+                raise ResearchResolutionError(
+                    "input_unresolved",
+                    f"paper binding {field} window date is not a real calendar date: {exc}",
+                ) from exc
+            if binding_start > window_start or binding_end < window_end:
+                raise ResearchResolutionError(
+                    "input_unresolved",
+                    f"paper binding {field} window "
+                    f"[{binding['window_start']}, {binding['window_end']}] does not cover "
+                    f"the research window [{candidate['window_start_date']}, {candidate['window_end_date']}]",
+                )
             try:
                 self.market_dataset_store.verify_set_binding(binding)
             except ResearchResolutionError:

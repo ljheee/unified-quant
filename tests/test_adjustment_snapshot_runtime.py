@@ -140,6 +140,32 @@ def test_snapshot_persistence_checksums_visibility_and_typed_reader(tmp_path):
         )
 
 
+def test_save_refuses_artifact_columns_the_reader_would_reject(tmp_path):
+    # A producer carrying lineage columns (or any drift) into the artifacts
+    # would write a snapshot its own reader refuses; fail closed at the write.
+    bad_events = pd.DataFrame([{**event(), "source_event_id": "a" * 64}])
+    with pytest.raises(ContractError, match="events columns"):
+        AdjustmentSnapshotStore().save(
+            tmp_path,
+            instrument="600000.XSHG",
+            visibility_time=datetime.fromisoformat("2026-08-21T16:00:00+08:00"),
+            window_start=date(2026, 8, 20), window_end=date(2026, 8, 21),
+            events=bad_events,
+            effective_dates=pd.DataFrame({"session_date": ["2026-08-20", "2026-08-21"], "effective_date": [None, "2026-08-20"], "source_event_id": ["", "event"]}),
+            sessions=[date(2026, 8, 20), date(2026, 8, 21)],
+        )
+    with pytest.raises(ContractError, match="effective-date columns"):
+        AdjustmentSnapshotStore().save(
+            tmp_path,
+            instrument="600000.XSHG",
+            visibility_time=datetime.fromisoformat("2026-08-21T16:00:00+08:00"),
+            window_start=date(2026, 8, 20), window_end=date(2026, 8, 21),
+            events=pd.DataFrame([event()]),
+            effective_dates=pd.DataFrame({"session_date": ["2026-08-20", "2026-08-21"], "effective_date": [None, "2026-08-20"]}),
+            sessions=[date(2026, 8, 20), date(2026, 8, 21)],
+        )
+
+
 def test_snapshot_rejects_session_manifest_mismatch(tmp_path):
     directory = _snapshot(tmp_path)
     generation_id = directory.name

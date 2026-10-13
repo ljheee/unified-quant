@@ -66,6 +66,26 @@ def test_window_past_the_newest_published_session_fails_closed():
         provider.between(date(2025, 9, 3), date(2025, 9, 4))
 
 
+def test_window_before_the_earliest_published_session_fails_closed():
+    # Symmetric to the newest-end guard: the vendor's history does not reach
+    # this window, and an empty answer would certify "no trading days" for
+    # sessions the provider simply cannot see.
+    provider = _provider(("2025-09-01", "2025-09-02"))
+    with pytest.raises(IndependentCalendarError, match="does not cover"):
+        provider.between(date(2020, 1, 5), date(2020, 1, 9))
+
+
+def test_window_starting_at_the_earliest_session_is_served():
+    provider = _provider(("2025-09-01", "2025-09-02"))
+    assert provider.between(date(2025, 9, 1), date(2025, 9, 2)) == {
+        date(2025, 9, 1),
+        date(2025, 9, 2),
+    }
+    # the certified range is what the payload proves, not the wider fetch window
+    assert provider.evidence["certified_start"] == "2025-09-01"
+    assert provider.evidence["certified_end"] == "2025-09-02"
+
+
 def test_cached_answer_is_certified_and_recorded_as_evidence():
     provider = _provider(("2025-09-01", "2025-09-02"))
     assert provider.between(date(2025, 9, 1), date(2025, 9, 2)) == {

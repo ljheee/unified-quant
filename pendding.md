@@ -32,7 +32,7 @@
     - runner:`_reconcile` 在发布结果前调用 `_reverify_input_sets`,对 v4/v5 用 owning store 重新推导两类集合摘要;resolve 之后若 store 被改动,run 直接失败,不再发布与请求血缘不符的结果。输入不可变,故一次复核即覆盖每个阶段的读回。
     - CLI:`uq-research-run` 新增 `--membership-root` 与 `--market-dataset-root`(必须成对);治理交易日历不再来自厂商实时日历,而是从已发布的 `trading_calendar_snapshot_v1` 家族(`MarketDatasetPublisher`)按研究窗口取会话(`_governed_trading_days`,无覆盖即 fail-closed),并把它同时交给 dataset 阶段与 resolver。
     - 测试:`tests/test_research_membership_input.py` 新增 7 项(v5 分派校验、v5 缺治理即拒、读回复核拒篡改、v1 跳过复核、dataset 阶段消费过滤帧、v4/v5 缺治理即拒、治理日历派生与 fail-closed、CLI runner 接线)。
-    - 仍未接线(非本项欠账):CLI 的 v5 dry-run(`_dry_run` 只校验 v1 请求)与真实 `MarketDatasetPublisher` 数据面(Phase 0.5 家族目前只有测试写入,没有生产脚本);v5 端到端因此仍以测试/库调用方式验证。
+    - 接线状态更正(2026-10-12 修复轮,原文两条断言均已过时):CLI `_dry_run` 已按 contract version 路由到 v1..v5 各自 schema(`cli.py:140-144`),Phase 0.5 家族已有生产发布脚本 `scripts/publish_market_datasets.py`。本批 CR 发现的真问题是 v5 EXECUTE 全死:resolver 漏导入 `research_stage_plan_v5_sha256`,任何 v5 `resolve()` 直接 NameError(cr.md §8.12 B1)。修复轮已补导入并把原 vacuous 测试重写为真实 store 端到端 resolve(变异验证:删导入即复现 NameError);模板四大 paper 绑定现于三处强制——resolver(族比对+绑定窗口覆盖请求窗口)、模板 schema(逐字段 family const)、执行侧(adapter 发布任何 artifact 前复核 store 与模板一致)。剩余边界:v5 CLI execute 在真实数据面上的端到端跑通尚未实测(测试/库调用已覆盖);真实跑通需先用发布脚本按请求窗口备齐 Phase 0.5 家族与 membership/factor 治理输入。
   - 4d. [已完成] `tests/test_research_membership_input.py`(11 项):跨月窗口逐日成员、快照日当天不可见、成员字节篡改、两个集合摘要漂移、窗口早于首个可见快照 fail closed、绑定窗口与请求窗口不一致、resolver 治理参数缺失、v1/v3 解析不受影响。
   - 不变量:任何训练窗口内的每个交易日,成员只能来自 `visible_from <= 该交易日` 的快照。
 - [x] 5. 训练前覆盖校验 fail-closed(成员数 500、Alpha158 每只至少 60 个交易日、5 日 label 需未来数据、adj_factor/涨跌停/停牌/上市退市字段缺失率)。

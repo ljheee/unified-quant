@@ -207,15 +207,23 @@ class TushareAdapter:
         training readiness gate noticed 22 sessions later. Retry once, then raise
         so the caller reports a retryable upstream error instead of publishing a
         silently short panel.
+
+        A ``None`` answer is the same failure in another shape: the retry and
+        the raise must cover it too, or a multi-batch fetch silently drops the
+        ``None`` batch and still publishes the short panel. An empty request
+        issues no provider call at all - ``ts_code=None`` would fetch the whole
+        market and hand back rows nobody asked for.
         """
         for _ in range(2):
+            if not batch:
+                return pd.DataFrame()
             response = client.daily(
                 ts_code=codes or None,
                 start_date=start.replace("-", ""),
                 end_date=end.replace("-", ""),
             )
-            if not batch or response is None or not response.empty:
-                return pd.DataFrame() if response is None else response
+            if response is not None and not response.empty:
+                return response
         raise RuntimeError(
             f"daily returned no rows for batch {batch[0]}..{batch[-1]} ({len(batch)} codes)"
         )
@@ -351,6 +359,13 @@ class TushareAdapter:
         if isinstance(exc, (ImportError, ModuleNotFoundError)):
             return FetchStatus.UNSUPPORTED_REQUEST, False, str(exc)
         if isinstance(exc, ContractError):
+            preserved = getattr(exc, "status", None)
+            if preserved is not None:
+                # ``_call``/``trade_dates`` already classified this failure
+                # (rate limit, upstream error, ...); keep their verdict
+                # instead of flattening every ContractError to AUTH_FAILED,
+                # which also stripped the retryable flag off transient ones.
+                return FetchStatus(preserved), bool(getattr(exc, "retryable", False)), str(exc)
             return FetchStatus.AUTH_FAILED, False, str(exc)
         text = str(exc).lower()
         if "token" in text or "auth" in text or "权限" in str(exc):
@@ -361,7 +376,7 @@ class TushareAdapter:
 
     @staticmethod
     def _unsupported(dataset: str, fields: list[str], fetched_at: datetime) -> FetchResult:
-        return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, "tushare", dataset, "research-v1", frozenset(fields), frozenset(), fetched_at, errors=("dataset unsupported",))
+        return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, "tushare", dataset, TushareAdapter._schema_version_for(fields), frozenset(fields), frozenset(), fetched_at, errors=("dataset unsupported",))
 
     @staticmethod
     def _normalize_v2(

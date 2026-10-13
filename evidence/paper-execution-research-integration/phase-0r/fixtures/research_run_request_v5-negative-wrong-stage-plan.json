@@ -61,7 +61,7 @@
     "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
   },
-  "manifest_digest_sha256": "fccfba37364408da02518a2deb56103b9db78227dc953a04364496d40d6c36da",
+  "manifest_digest_sha256": "3c629a220cd5953d1cd94972a90b24aaba6d54db265580f4b0c3824bf4c3289e",
   "model_definition_template": {
     "algorithm": "qlib_linear",
     "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -118,7 +118,7 @@
     "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "weight_scheme": "top_n_equal_weight"
   },
-  "request_content_generation_id": "b54fcd059c4f369b7182b72dabd8a2e0d77a252387f17bfa30aa20de179e60e7",
+  "request_content_generation_id": "9391069494f3ebe41ce60aad5267bd440b42cf9c08636e5250884439398095e4",
   "research_name": "adjusted_return_baseline",
   "run_id": "00000000-0000-4000-8000-000000000001",
   "run_visible_cutoff": "2026-01-30T15:00:00+08:00",
@@ -232,29 +232,29 @@
     },
     "market_data_binding": {
       "family": "bars_daily_v2",
-      "window_start": "2025-01-01",
-      "window_end": "2025-12-31",
+      "window_start": "2025-12-01",
+      "window_end": "2026-01-29",
       "set_digest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "member_count": 1
     },
     "calendar_binding": {
       "family": "trading_calendar_snapshot_v1",
-      "window_start": "2025-01-01",
-      "window_end": "2025-12-31",
+      "window_start": "2025-12-01",
+      "window_end": "2026-01-29",
       "set_digest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "member_count": 1
     },
     "suspension_binding": {
       "family": "suspension_snapshot_v1",
-      "window_start": "2025-01-01",
-      "window_end": "2025-12-31",
+      "window_start": "2025-12-01",
+      "window_end": "2026-01-29",
       "set_digest_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "member_count": 1
     },
     "corporate_action_binding": {
       "family": "dividend_event_v1",
-      "window_start": "2025-01-01",
-      "window_end": "2025-12-31",
+      "window_start": "2025-12-01",
+      "window_end": "2026-01-29",
       "set_digest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       "member_count": 1
     },
@@ -274,18 +274,18 @@
     "binding_type": "index_membership_set",
     "universe_id": "a500-test",
     "index_code": "000510.SH",
-    "window_start": "2025-01-01",
-    "window_end": "2025-12-31",
+    "window_start": "2025-12-01",
+    "window_end": "2026-01-29",
     "set_digest_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
   },
   "factor_partition_set_binding": {
     "binding_type": "factor_partition_set",
-    "input_dataset": "test_factors",
-    "input_schema_version": "v1",
-    "factor_set": "raw_price",
+    "input_dataset": "bars_daily",
+    "input_schema_version": "research-v1",
+    "factor_set": "basic",
     "factor_version": "1.0.0",
-    "window_start": "2025-01-01",
-    "window_end": "2025-12-31",
+    "window_start": "2025-12-01",
+    "window_end": "2026-01-29",
     "set_digest_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
   }
 }

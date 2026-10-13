@@ -111,6 +111,14 @@ def test_request_v5_rejects_superseded_stage_plan() -> None:
         verify_stage_plan_review(
             neg2["stage_plan_review"], stage_plan_sha256=neg2["stage_plan_sha256"]
         )
+    # The refusal checks never exercise the fixtures' own identities; lock them
+    # so an edit without an identity refresh fails instead of silently drifting.
+    for negative in (neg1, neg2):
+        generation, digest = research_contract_identities(
+            negative, schema_name="research_run_request_v5"
+        )
+        assert negative["request_content_generation_id"] == generation
+        assert negative["manifest_digest_sha256"] == digest
 
 
 def test_request_v5_rejects_v1_template() -> None:
@@ -120,7 +128,7 @@ def test_request_v5_rejects_v1_template() -> None:
     assert "mode" not in v1_schema.get("properties", {})
 
 
-def test_request_v5_rejects_superseded_stage_plan() -> None:
+def test_request_v5_stage_plan_digest_is_distinct() -> None:
     v5_digest = research_stage_plan_v5_sha256()
     assert v5_digest != research_stage_plan_v3_sha256()
     assert v5_digest != research_stage_plan_v4_sha256()

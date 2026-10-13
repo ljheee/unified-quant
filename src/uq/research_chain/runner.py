@@ -754,7 +754,10 @@ class ResearchChainRunner:
 
     def _reconcile_paper_bindings(self, bindings: Sequence[Any]) -> None:
         """Reject missing, extra, unordered or cross-date paper bindings."""
-        from ..execution.result_reconciliation import reconcile_paper_stage_bindings
+        from ..execution.result_reconciliation import (
+            reconcile_paper_stage_bindings,
+            verify_paper_binding_tampering,
+        )
 
         if self.paper_adapter is None or getattr(self.paper_adapter, "last_result", None) is None:
             raise ContractError("paper stage result is unavailable for reconciliation")
@@ -774,6 +777,20 @@ class ResearchChainRunner:
                 "physical_path": binding.physical_path,
             })
         reconcile_paper_stage_bindings(derived, decision_dates=decision_dates)
+        # The reconciled bindings are read back from the published stage state,
+        # so they must still match the authoritative in-memory stage result;
+        # a tampered state file fails closed here.
+        published = list(self.paper_adapter.last_result.bindings)
+        if len(published) != len(derived):
+            raise ContractError("paper stage result bindings do not match the reconciled set")
+        for item, expected in zip(derived, published):
+            if item["output_family"] != expected.get("output_family"):
+                raise ContractError("paper stage result binding order does not match the reconciled set")
+            verify_paper_binding_tampering(
+                item,
+                expected_generation_id=expected.get("generation_id"),
+                expected_digest=expected.get("manifest_digest_sha256"),
+            )
         for offset in range(0, len(derived), 4):
             group = derived[offset:offset + 4]
             if len({item["execution_id"] for item in group}) != 1:

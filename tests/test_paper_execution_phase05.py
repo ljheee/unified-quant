@@ -247,3 +247,36 @@ def test_read_partition_frame_rejects_tampered_bytes(tmp_path: Path) -> None:
     tampered.to_parquet(data_path, index=False)
     with pytest.raises(ContractError, match="tampered dividend_event_v1 partition"):
         store.read_partition_frame("dividend_event_v1", date(2025, 9, 22))
+
+
+def test_calendar_snapshot_without_crosscheck_cannot_record_agreement(tmp_path: Path) -> None:
+    """m12: an unchecked independent source must not record a false agreement."""
+    store = _publisher(tmp_path)
+    sessions = [date(2025, 6, 2)]
+    with pytest.raises(ContractError, match="cross-check was not performed"):
+        store.publish_calendar_snapshot(
+            partition_date=date(2025, 6, 30),
+            window_start=date(2025, 6, 1),
+            window_end=date(2025, 6, 30),
+            sessions=sessions,
+            primary_source="akshare_sina",
+            independent_source="not_checked",
+        )
+
+
+def test_calendar_snapshot_without_crosscheck_records_skipped(tmp_path: Path) -> None:
+    """m12: the honest skipped outcome is recorded and validates against the contract."""
+    store = _publisher(tmp_path)
+    sessions = [date(2025, 6, 2)]
+    manifest = store.publish_calendar_snapshot(
+        partition_date=date(2025, 6, 30),
+        window_start=date(2025, 6, 1),
+        window_end=date(2025, 6, 30),
+        sessions=sessions,
+        primary_source="akshare_sina",
+        independent_source="not_checked",
+        cross_check_result="skipped",
+    )
+    assert manifest["cross_check_result"] == "skipped"
+    read = store.read_manifest("trading_calendar_snapshot_v1", date(2025, 6, 30))
+    assert read["cross_check_result"] == "skipped"

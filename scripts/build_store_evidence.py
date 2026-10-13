@@ -253,6 +253,15 @@ def dividend_inventory(
         events = _governed("read back dividend events", artifact_path, lambda: store_reader.read_events(ann_date))
         if len(events) != artifact["row_count"]:
             raise SystemExit(f"dividend events row count drift: {artifact_path}")
+        # the manifest's instrument_count is publisher-computed; recompute it
+        # from the verified frame instead of trusting the document
+        instrument_count = int(events["instrument"].nunique())
+        if instrument_count != manifest["instrument_count"]:
+            raise SystemExit(
+                f"dividend instrument count drift: manifest declares "
+                f"{manifest['instrument_count']} but the verified events carry "
+                f"{instrument_count}: {artifact_path}"
+            )
         records.append(
             {
                 "ann_date": ann_date.isoformat(),
@@ -261,7 +270,7 @@ def dividend_inventory(
                 "generation_id": manifest["generation_id"],
                 "events_sha256": artifact_sha256,
                 "event_count": artifact["row_count"],
-                "instrument_count": manifest["instrument_count"],
+                "instrument_count": instrument_count,
             }
         )
     return {
@@ -275,7 +284,8 @@ def dividend_inventory(
         "verification": (
             "partition manifest validated against dividend_event_partition.v1, "
             "ann_date/record_id re-derived from the artifact bytes, per-row record_id "
-            "recomputed through DividendEventStore.read_events"
+            "recomputed through DividendEventStore.read_events, instrument_count "
+            "recomputed from the verified frame"
         ),
         "note": (
             "the store root is gitignored; these digests are re-derivable by "

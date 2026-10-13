@@ -155,12 +155,32 @@ def assess_readiness(
                 ReadinessFinding("bar_fields_missing", "canonical bars lack fields: " + ",".join(sorted(absent)))
             )
 
-    observed_sessions = 0 if frame.empty else len({value for value in frame["session_date"]})
-    if observed_sessions and observed_sessions != len(session_values):
+    observed_dates = (
+        set()
+        if frame.empty or "session_date" not in frame.columns
+        else set(pd.to_datetime(frame["session_date"]).dt.date)
+    )
+    if observed_dates and observed_dates != set(session_values):
+        # Compare the date sets, not just the cardinalities: a partition whose
+        # rows carry a date outside the declared calendar can replace a real
+        # session one-for-one and leave the counts equal.
+        missing_dates = sorted(set(session_values) - observed_dates)
+        extra_dates = sorted(observed_dates - set(session_values))
+        parts = []
+        if missing_dates:
+            parts.append(
+                f"missing {len(missing_dates)} declared sessions (first: {missing_dates[0].isoformat()})"
+            )
+        if extra_dates:
+            parts.append(
+                f"carries {len(extra_dates)} dates outside the declared calendar "
+                f"(first: {extra_dates[0].isoformat()})"
+            )
         findings.append(
             ReadinessFinding(
                 "bar_session_gap",
-                f"bars cover {observed_sessions} sessions but the window declares {len(session_values)}",
+                f"bars cover {len(observed_dates)} sessions against {len(session_values)} declared: "
+                + "; ".join(parts),
             )
         )
 
@@ -182,11 +202,44 @@ def assess_readiness(
         )
 
     present_sessions = sessions_by_instrument(frame)
-    observable_counts: dict[str, int] = {}
-    for instrument in set(members) | set(with_bars):
+    declared_sessions = set(session_values)
+    member_days_by_instrument: dict[str, set[date]] = {}
+    for session, names in members_by_session.items():
+        if session not in declared_sessions:
+            continue
+        for name in names:
+            member_days_by_instrument.setdefault(str(name), set()).add(session)
+
+    def _required_sessions(instrument: str) -> set[date]:
+        """Sessions an instrument must have bars for.
+
+        Only the days the instrument was a PIT-visible member, plus the
+        label-horizon tail after its last member day (capped at the window
+        end): the forward labels of its late-membership decision dates are
+        computed from those bars, so a missing tail is as untrainable as a
+        missing member day. The tail is required only when at least one
+        member day was tradable - a name halted through its whole member span
+        has no decisions to label. Days outside the membership span and past
+        the tail are not required: the ingest chain follows per-day PIT
+        membership, so those bars legitimately do not exist.
+        """
+        member_days = member_days_by_instrument.get(instrument, set())
         suspended = suspended_by_instrument.get(instrument, set())
-        observable = [value for value in session_values if value not in suspended]
-        observable_counts[instrument] = len(observable)
+        required = set(member_days)
+        if member_days - suspended:
+            last = max(member_days)
+            tail = [value for value in session_values if last < value <= window_end]
+            required.update(tail[:label_horizon_sessions])
+        return required
+
+    required_by_instrument = {
+        instrument: _required_sessions(instrument)
+        for instrument in set(members) | set(with_bars)
+    }
+    observable_counts: dict[str, int] = {
+        instrument: len(required - suspended_by_instrument.get(instrument, set()))
+        for instrument, required in required_by_instrument.items()
+    }
     fully_suspended = sorted(
         instrument for instrument in members if observable_counts.get(instrument) == 0
     )
@@ -204,14 +257,15 @@ def assess_readiness(
             suspended = suspended_by_instrument.get(instrument, set())
             if suspended & present:
                 conflicts.append(instrument)
-            missing = {value for value in session_values if value not in suspended} - present
+            required = required_by_instrument[instrument]
+            missing = {value for value in required if value not in suspended} - present
             if not missing:
                 continue
             # A provider-confirmed delisting excuses an absence that is total for
-            # the window. It cannot excuse a partial one: the account level offers
-            # no delisting date, so only "never traded at all here" is verifiable,
-            # and a mid-window ingest hole keeps its own signature.
-            if delisted is not None and not present and instrument in delisted:
+            # the required span. It cannot excuse a partial one: the account level
+            # offers no delisting date, so only "never traded at all here" is
+            # verifiable, and a mid-span ingest hole keeps its own signature.
+            if delisted is not None and not (present & required) and instrument in delisted:
                 excused_delisted.append(instrument)
                 continue
             gaps.append(instrument)
@@ -230,8 +284,8 @@ def assess_readiness(
             findings.append(
                 ReadinessFinding(
                     "unexplained_bar_gap",
-                    f"{len(gaps)} instruments lack sessions that {suspension_provenance} does not "
-                    "attribute to a suspension",
+                    f"{len(gaps)} instruments lack required sessions (member days plus the label "
+                    f"tail) that {suspension_provenance} does not attribute to a suspension",
                     tuple(gaps[:50]),
                 )
             )

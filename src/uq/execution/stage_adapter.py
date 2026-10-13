@@ -165,9 +165,9 @@ class PaperExecutionStageAdapter:
         dates = list(decision_dates)
         if not dates:
             raise ContractError("paper stage requires at least one decision date")
+        self._verify_template_bindings(market)
         sessions = market.sessions()
         session_index = {session.isoformat(): index for index, session in enumerate(sessions)}
-        calendar_binding = market.calendar_binding()
         target_weights_frames = portfolio_stage_result.target_weight_frames
         target_weight_manifests = portfolio_stage_result.target_weight_manifests
 
@@ -227,7 +227,7 @@ class PaperExecutionStageAdapter:
                 input_state_binding=input_state_binding,
                 initial_state=initial_state,
                 market=market,
-                calendar_binding=calendar_binding,
+                calendar_binding=market.calendar_binding(sessions[execution_index]),
                 decision_session=date.fromisoformat(decision_date),
                 execution_session=sessions[execution_index],
                 run_id=plan.request["run_id"],
@@ -249,6 +249,11 @@ class PaperExecutionStageAdapter:
             ))
             if risk_decision.get("binding_config_generation_id") != config["generation_id"]:
                 raise ContractError("risk decision source returned a decision for another config generation")
+            policy_binding = self.template.get("risk_policy_binding")
+            if not isinstance(policy_binding, Mapping):
+                raise ContractError("paper execution template lacks governed risk_policy_binding")
+            if risk_decision.get("risk_policy_binding") != policy_binding:
+                raise ContractError("paper risk decision policy lineage mismatch")
             risk_generation, risk_digest = risk_contract_identities(
                 risk_decision, schema_name="risk_decision"
             )
@@ -260,6 +265,11 @@ class PaperExecutionStageAdapter:
             config["generation_id"], config["manifest_digest_sha256"] = paper_execution_identities(
                 config, schema_name="execution_config"
             )
+            # The refusal decision is deliberately published BEFORE the config
+            # publication below aborts: ConfigPublicationBinding raises on a
+            # non-executable decision and stops the stage, but the refusal is
+            # itself governed evidence and must already be durable in the risk
+            # decision store when that abort fires.
             if self.risk_decision_store is not None:
                 self.risk_decision_store.publish(risk_decision, {
                     "action": risk_decision["action"],
@@ -358,6 +368,35 @@ class PaperExecutionStageAdapter:
             decision_dates=dates,
             published_state=published_state,
         )
+
+    def _verify_template_bindings(self, market: Any) -> None:
+        """Fail closed unless the governed store still matches the template bindings.
+
+        The resolver pins the template's four partition-set bindings to the
+        request; the paper stage must read from exactly that store state.  The
+        bindings are therefore re-verified against the store before any
+        per-date artifact is published, so a drifted or swapped store stops
+        the stage before it can leave a partial chain behind.
+        """
+        publisher = getattr(market, "publisher", None)
+        verify = getattr(publisher, "verify_set_binding", None)
+        if verify is None:
+            raise ContractError("paper market source cannot verify governed set bindings")
+        for field in (
+            "market_data_binding",
+            "calendar_binding",
+            "suspension_binding",
+            "corporate_action_binding",
+        ):
+            binding = self.template.get(field)
+            if not isinstance(binding, Mapping):
+                raise ContractError(f"paper execution template lacks governed {field}")
+            try:
+                verify(binding)
+            except ContractError as exc:
+                raise ContractError(
+                    f"paper execution template {field} does not match the governed store: {exc}"
+                ) from exc
 
     def _config_manifest(
         self,

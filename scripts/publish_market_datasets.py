@@ -88,6 +88,7 @@ def _publish_calendar(
         sessions=sorted(sessions),
         primary_source=primary_source,
         independent_source=independent_source,
+        cross_check_result=("agreement" if independent_sessions is not None else "skipped"),
     )
 
 

@@ -112,7 +112,16 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
 
-    gaps = [item["provider_check"].get("max_abs_diff") or 0.0 for item in published]
+    # Snapshots published with provider_check "skipped" were never reconciled
+    # against the official adj_factor; they are reported as their own section,
+    # never folded into the divergence summary as a silent 0.0.
+    verified = [item for item in published if item["provider_check"].get("status") == "passed"]
+    unverified = [
+        {"instrument": item["instrument"], "reason": item["provider_check"].get("reason")}
+        for item in published
+        if item["provider_check"].get("status") != "passed"
+    ]
+    gaps = [item["provider_check"]["max_abs_diff"] for item in verified]
     report = {
         "record_version": 1,
         "kind": "dividend_adjustment_chain",
@@ -129,11 +138,16 @@ def main(argv: list[str] | None = None) -> int:
         "published": len(published),
         "refused": len(refused),
         "provider_reconciliation": {
+            "verified": len(verified),
+            "skipped": len(unverified),
+            "skipped_instruments": unverified,
             "max_abs_diff": max(gaps) if gaps else None,
-            "worst_instrument": max(published, key=lambda item: item["provider_check"].get("max_abs_diff") or 0.0)["instrument"] if published else None,
+            "worst_instrument": max(
+                verified, key=lambda item: item["provider_check"]["max_abs_diff"]
+            )["instrument"] if verified else None,
             "all_within_public_resolution": all(
-                item["provider_check"].get("within_public_resolution", False) for item in published
-            ),
+                item["provider_check"].get("within_public_resolution", False) for item in verified
+            ) if verified else None,
         },
         "records": published,
         "refusals": refused,
