@@ -505,7 +505,7 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 
 **未决项（需用户裁决）：**
 1. **schema 原地拓宽（D 申报的范围外扩展）——已裁决（2026-10-13，用户授权监工定夺）：保留 `trading_calendar_snapshot_v1.json:35` 的 `cross_check_result` 枚举 +`"skipped"`，记为与 m10 同类的有意先例**。理由：① 该字段仓库内零消费方（仅 publisher 写、publish 脚本传，监工 grep 核实无读者穷举），对一个纯审计字段开 v2 强推版本分派是零行为收益的治理成本；② 拓宽向后兼容——旧记录全部仍合法，旧消费者 fail-closed（枚举外值被 schema 校验拒绝）而非误读，与 m10 兼容性形态一致；③ 已有写侧锁（`not_checked` 不得记 `agreement`）与两条行为测试充当兼容锁。**重访触发条件**：出现仓库外消费方按 schema 校验该字段，或 `cross_check_result` 获得语义消费者时，开 `trading_calendar_snapshot_v2`。
-2. **pilot 证据日历腿未复验**：修复轮期间 EastMoney 瞬时不可达（3 次探测 empty reply），`--independent-calendar` 全标记复跑未执行；B 以无标记复跑证明门输出语义逐字段不变。是否待 EastMoney 恢复后全标记刷新 a500-pilot 证据（须同步重钉索引），由用户定。
+2. **pilot 证据日历腿未复验——已关闭（2026-10-13）**：EastMoney 恢复可达，`validate_training_readiness.py --independent-calendar` 对 A500 试点窗口全标记复跑仍 `passed`（23/23 会话两历一致）；归档 `training-readiness.json` 已用新载荷证据刷新（仅 certified_end/fetched_at/payload_sha256/sessions/url 五个探针字段更新，判定字段逐项不变），evidence-index 同步重钉。
 3. **按设计未修**：O2（就绪门对大面积停牌的过宽报告，已有文档化限制）、O4（停牌源与 bars 同商，治理后续项）、A 的三项无法判定（§8.12 未夸大声明③）。
 
 未夸大声明：B1、M4、P1 的变异验证，fixture 窗口核验，cr.md:343 更正，两轮全量 exit 0，P1 后两簇 except 的变异杀伤确认与重钉后两条证据测试复绿为监工亲做；各簇测试计数与证据索引全量遍历结论为代理自报（B/D 的重钉经监工抽查匹配）；C 簇修复未做监工级变异验证（12 测试为代理自报，全量两轮 exit 0 覆盖其回归）。P1 的 `_window_days` 分支在 v5 路径上由 `_verify_v4_input_sets` 接缝报 input_unresolved（而非 resolver 内的 request_invalid），属接缝既有映射，监工未改其语义。

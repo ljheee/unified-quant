@@ -38,7 +38,7 @@
     },
     {
       "path": "evidence/a500-pilot/2025-08-29-to-2025-09-30/training-readiness.json",
-      "sha256": "c91d11369d6b6234351904fe4013f6e8ef22d20473585fd5e046dfe8130e9457"
+      "sha256": "cd031ba68f4592039035ee5b37044f7cf59c41932925ec5cec441d403791ca7e"
     },
     {
       "path": "scripts/build_store_evidence.py",
