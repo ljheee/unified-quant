@@ -177,7 +177,16 @@ P3 实施记录(2026-10-13,方案 A)
   - `src/uq/factors/store.py`:输入线守卫改为**由定义驱动**(有 `input_bindings` 就走它),v1 两个集合的名称分支原样保留;顺带把"raw-price 输入不得绑复权血缘"从只覆盖 `basic` 扩到所有 bars_daily 输入。
   - `specs/layers/factor-layer-spec.md` §3.1.1 登记该 reviewed 输入线与两条边界。
   - 测试:`tests/test_factor_set_input_line_v2.py`(7 例,含"加 2.0.0 没有放宽 1.0.0"的双向拒绝、v3 条件必填、unreviewed dataset 报出 reviewed 清单)。
-- 未落地(A-2,仍是 P3 的剩余部分):
-  - 没有生产出入口把 canonical `v2` 分区读出来→投影(`session_date`→`datetime`、只留 reviewed 列)→算→发布。`scripts/` 里至今没有因子发布入口(`FactorEngine.execute` 只算不发布),所以"用 A500 v2 数据真跑一次训练"还差这一步。
+- 已落地(A-2,2026-10-13):`scripts/publish_factor_partitions.py` + `src/uq/factors/inputs.py`。
+  - 流程:`ManifestFirstReader` 读 canonical 分区(manifest-first + checksum 校验)→ 投影到 reviewed 输入契约 → `calculate_raw_price_factors` → 逐 session `FactorStore.publish`,并把同 session canonical 分区的 `generation_id`/`data_checksum_sha256` 绑成上游;可选输出 `factor_partition_set` 绑定(覆盖**实际发布**的 session,不假装覆盖请求窗口)。
+  - 行资格规则写在库里而不是脚本里:`v2` 可能带 `status != trading` 的零成交量行,而 research-v1 对停牌标的**根本没有行**;不剔除就会把 0 吸进 20 日均值、让 `volume_ratio_20d` 报 `0.0` 而不是缺失。所以投影时剔除非交易行,并有测试区分"剔除后为 NaN"与"保留后有限值"。
+  - 可见性口径**必填无默认**(`--input-visibility {session_close,ingest_time}`):契约把 `run_visible_cutoff` 钉在 `分区日 15:00 Asia/Shanghai` 且要求所有输入在此之前可见。实测:`session_close` 可发布;`ingest_time` 绑定 canonical manifest 的真实下载时间(收盘后),直接 `upstream partition visibility violates factor run cutoff` fail-closed。这是口径选择,不是缺陷。
+  - 真跑验证(A500 实测 store):`--factor-set basic --factor-version 2.0.0 --input-visibility session_close` 在 2025-08-29~09-30 窗口发布 4 个分区(09-25~09-30,每分区 498 行),其余 19 个 session 记为 `insufficient_history`(lookback=20);重跑全部 `already_published`、set digest 不变。**教训**:研究窗口前必须先灌够 ≥20 个 session 的暖机历史,否则 A500 全窗口只有尾巴能出因子。
+  - 测试:`tests/test_publish_factor_partitions.py`(7 例,含因子值逐位断言 range_ratio_1d=0.2、close_location_1d=0.5、amount_20d=1000、volume_ratio_20d=1.0)。
+- 新发现(本轮实测暴露,未修):
+  - **两个 canonical 发布器与 reader 的 manifest 版本不兼容**:`uq.store.pit_store.CanonicalStore`(ingest pipeline 用的、也是 `data/bars-a500-store` 实际形状)写 `manifest_version: 1` + `schema_version: "v2"`;`uq.contracts.canonical_v2.CanonicalV2Store` 写 `manifest_version: 2` + `package_provenance`。而 `ManifestFirstReader` 固定按 `canonical-v1.json` 校验,读 CanonicalV2Store 的分区会直接 `manifest schema validation failed`。后果:凡是只用 `CanonicalV2Store` 造的数据,受治理读路径都读不了(本层测试改用 `CanonicalStore` 以对齐真实 store)。需要单独评审决定是收敛写侧还是让 reader 支持双版本分派。
+  - **`FactorEngine.create_result` 的报告 taxonomy 与发布契约不兼容**:engine 每列各发一个同名 `null_rate`,而 `FactorStore._reports_agree` 遇到重名直接 `duplicate quality checks reject publication`,且发布侧还要求 `null_rate__<col>`/`finite_values__<col>` 命名。后果:engine 产出的 `quality_report` 永远无法用于发布,发布侧报告必须由 `_validate_factor_frame`(publish 内部用的同一函数)生成——A-2 入口就是这么做的。修它要改因子层 Phase 4 的验收语义,应另开一轮。
+  - **因子分区只绑一个上游 generation**:滚动窗口实际用了 20 个 canonical 分区,但 manifest 的 `inputs` 只记录决策 session 那一个 `generation_id`/checksum,其余 19 个不在因子血缘里(research-v1 时代同样如此,不是本次引入)。要精确复现需要把窗口内的 bars 集合绑定进来。
+- 仍未 reviewed 的输入线:
   - `alpha158/1.0.0` 仍只接受 `research-v1`;要做 qlib 线过 v2,需另开一个 reviewed 版本(它牵涉 qlib 引擎版本与表达式字段口径),不在本次范围。
   - `adjusted/1.0.0` 仍绑 `bars_adjusted/adjusted-v1`。v2 上虽然带了 `adj_factor`,但"带字段"不等于"该线已 reviewed",复权线要单独走一次评审。

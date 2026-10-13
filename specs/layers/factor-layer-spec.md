@@ -91,16 +91,47 @@ line never edits a reviewed definition in place.
   reviewed set needs no code change here; definitions without `input_bindings`
   (the two v1 sets) keep the historical name-based rules.
 
-Two boundaries that follow from this and are not yet closed:
+### 3.1.2 Projecting a canonical partition into a factor run
 
-- A `v2` input frame must be projected before computation: `session_date` is
-  renamed to `datetime` and only the reviewed columns are passed, because
-  `_validate_factor_frame` requires `instrument`/`datetime` regardless of input
-  line. No production entry point performs read + project + compute + publish
-  yet (tracked in `pendding.md`).
-- Only `basic` has a reviewed `v2` definition. `alpha158/1.0.0` still requires
-  `research-v1`, and `adjusted/1.0.0` still binds `bars_adjusted/adjusted-v1`;
-  `adj_factor` being present on `v2` does not by itself make that line reviewed.
+`src/uq/factors/inputs.py::factor_input_frame` is the only place allowed to turn
+a verified canonical frame into a factor input frame, so producers cannot each
+invent a rename or a row rule:
+
+- key: `session_date` becomes `datetime` (the factor frame contract is
+  line-independent because `_validate_factor_frame` always requires
+  `instrument`/`datetime`);
+- only the definition's `required_columns` are passed on;
+- **row eligibility**: `v2` may carry explicit non-trading rows
+  (`status != "trading"`, zero volume), while `research-v1` had no row at all for
+  a suspended instrument. Non-trading rows are therefore excluded, otherwise a
+  zero would enter every rolling statistic and `volume_ratio_20d` would report
+  `0.0` instead of being absent;
+- an unknown `bars_daily/<version>` line is refused rather than passed through.
+
+`scripts/publish_factor_partitions.py` is the production entry point: it reads
+partitions through `ManifestFirstReader` (manifest-first, checksum verified),
+binds each factor partition to the exact canonical `generation_id` and data
+checksum of the same session, takes the input line *from the store* and refuses
+anything the reviewed definition does not bind, and writes the
+`factor_partition_set` binding over the sessions it actually published.
+
+History and visibility are both explicit:
+
+- the trailing window is the definition's largest `minimum_history`; a session
+  with less history is skipped with a recorded reason instead of being published
+  from a short window;
+- `--input-visibility` has no default, because `factor_governance` fixes
+  `run_visible_cutoff` at `partition_date 15:00 Asia/Shanghai` and requires every
+  bound input to be visible by then. `session_close` states that the session close
+  is information available at the close instant; `ingest_time` binds the canonical
+  manifest's download timestamp, which for end-of-day vendor data is after the
+  close and therefore fails closed with
+  `upstream partition visibility violates factor run cutoff`.
+
+Remaining boundary: only `basic` has a reviewed `v2` definition.
+`alpha158/1.0.0` still requires `research-v1`, and `adjusted/1.0.0` still binds
+`bars_adjusted/adjusted-v1`; `adj_factor` being present on `v2` does not by itself
+make that line reviewed.
 
 Every factor has a stable identity:
 

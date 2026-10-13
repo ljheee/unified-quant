@@ -211,7 +211,7 @@ execute 的命令形状如下，仅作结构说明：
 
 | 请求绑定 | 读取它的 store | 仓库内是否带生产者 |
 | --- | --- | --- |
-| `factor_binding` / `factor_partition_set_binding` | `uq.factors.store.FactorStore` | 否:发布类存在,但"从 bars store 算因子 → 发布因子分区"的入口脚本还没有(见 `pendding.md` P3) |
+| `factor_binding` / `factor_partition_set_binding` | `uq.factors.store.FactorStore` | 是:`scripts/publish_factor_partitions.py`(读 canonical bars → 投影 → 算 → 发布,并输出 `factor_partition_set` 绑定) |
 | `universe_snapshot_binding` | `uq.contracts.artifacts.UniverseSnapshotStore` | 否:`save()` 目前只被测试调用 |
 | `adjusted_price_binding` | `src/uq/research_chain/owning_contracts.py:31` `AdjustedPriceDatasetStore` | 否:只读 |
 | `feature_preprocessing_binding` | 同文件 `FeatureSchemaStore` + `FeaturePreprocessingStore` | 否:只读 |
@@ -226,7 +226,7 @@ v5 请求额外要求的两类绑定**有**随仓库提供的生产者:
 两点提醒:
 
 - §5 的 dry-run 只校验请求本身并写 request/state manifest,**不会**去解析上面这些 store;绑定是到 execute 阶段才逐个读取校验的,所以 dry-run 通过不代表可以 execute。
-- 因此"一条命令从零跑到回测"按现有代码还做不到:上面六类要先由研究流程产出并落到同一个 `--data-root`——目前只有测试里的 helper 会产出它们。
+- 因此"一条命令从零跑到回测"按现有代码还做不到:上面六类要先产出并落到同一个 `--data-root`。因子那一类已有入口脚本(`scripts/publish_factor_partitions.py`),其余五类目前只有测试里的 helper 会产出。
 
 ### 论文执行(v5 请求)的两个额外参数
 
