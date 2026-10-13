@@ -11,6 +11,7 @@ from ..contracts.artifacts import QualityReportStore
 from ..contracts.canonical_v2 import file_sha256_bytes
 from ..contracts.manifest import validate_canonical_v2_manifest
 from ..contracts.model_layer import ModelContractLoader
+from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
 
@@ -82,8 +83,7 @@ class AdjustedPriceDatasetStore:
         canonical_root = canonical_root.resolve()
         if not canonical_root.is_relative_to(self.root.resolve()):
             raise ContractError("unsafe adjusted price dataset store layout")
-        if canonical_root.is_symlink() or any(parent.is_symlink() for parent in canonical_root.parents):
-            raise ContractError("unsafe adjusted price dataset root")
+        reject_symlinks_within(self.root, canonical_root, label="adjusted price dataset root")
         report_root = canonical_root.parent
         report_path = report_root / "reports" / "canonical_v2" / manifest["generation_id"] / "report.json"
         if not report_path.is_file():

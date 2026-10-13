@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .canonical_v2 import file_sha256_bytes
+from .paths import reject_symlinks_within
 from .gate_contracts import adjustment_snapshot_generation, canonical_json, factor_manifest_identities, sha256_bytes, validate_contract, validate_contract_path
 from ..errors import ContractError
 from ..runtime import require_production_review_key
@@ -568,9 +569,18 @@ class ModelContractLoader:
             raise ContractError(f"missing {schema_name} contract") from exc
         except OSError as exc:
             raise ContractError(f"unreadable {schema_name} contract") from exc
-        resolved = self._safe_resolve(artifact_path)
-        if self.accepted_root is not None:
-            root_resolved = self._safe_resolve(self.accepted_root)
+        root = self.accepted_root
+        if root is not None:
+            # Scope first, then resolve: an out-of-root path must read as an
+            # unapproved root, not as a symlink finding, so the governance answer
+            # stays the same whichever way the path is spelled.
+            try:
+                artifact_path.absolute().relative_to(Path(root).absolute())
+            except ValueError as exc:
+                raise ContractError("accepted contract lies outside approved root") from exc
+        resolved = self._safe_resolve(artifact_path, root=root)
+        if root is not None:
+            root_resolved = self._safe_resolve(root, root=root)
             try:
                 contained = resolved.is_relative_to(root_resolved)
             except ValueError:
@@ -589,11 +599,19 @@ class ModelContractLoader:
         return payload
 
     @staticmethod
-    def _safe_resolve(path: Path) -> Path:
+    def _safe_resolve(path: Path, *, root: Path | None = None) -> Path:
         try:
             resolved = path.resolve(strict=True)
         except (OSError, RuntimeError) as exc:
             raise ContractError(f"unsafe or missing contract path: {path}") from exc
+        if root is not None:
+            # With a configured accepted root the rule is scoped to that root: the
+            # layout above it belongs to the operating system, links inside it do
+            # not (external review B9).
+            return reject_symlinks_within(root, path, label="accepted contract path")
+        # Without a configured root there is no governed scope to scope to, so the
+        # loader keeps the strictest reading available and refuses any link in the
+        # lexical path.
         if any(item.is_symlink() for item in (path, *path.parents)):
             raise ContractError("symbolic links are forbidden in accepted contracts")
         return resolved
@@ -671,7 +689,15 @@ class ModelContractLoader:
                 "research_run_result": "manifest_digest_sha256",
             }[schema_name]
             if payload[digest_field] != expected_digest:
-                raise ContractError(f"{schema_name} manifest digest mismatch expected={expected_digest} actual={payload['manifest_digest_sha256']}")
+                # The message must not name a field this family does not carry:
+                # templates bind ``template_manifest_digest_sha256``, and reading
+                # ``manifest_digest_sha256`` here turned a governance rejection
+                # into a bare KeyError that escaped every ``except ContractError``
+                # (external review B8).
+                raise ContractError(
+                    f"{schema_name} manifest digest mismatch expected={expected_digest} "
+                    f"actual={payload[digest_field]}"
+                )
             return
         if schema_name not in _MODEL_CONTRACT_FAMILIES:
             raise ContractError(f"unknown model contract family: {schema_name}")

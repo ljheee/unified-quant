@@ -541,3 +541,23 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **未修（有意，登记不隐藏）**：`src/uq/exporters/qlib.py:41`（legacy QlibExporter）把自己重读的 canonical manifest 原样嵌进导出快照 manifest，未走契约校验（帧本身已由 `ManifestFirstReader` 校验过），属 legacy 隔离面的 TOCTOU-ish 弱点，不在本轮半径；`factor-layer-implementation-plan` Phase 的「带外 expected anchor + 物理路径三元组校验」仍是未完成项。
 
 **未夸大声明**：全量 `python -m pytest tests/` = 945 passed / 24 skipped（监工亲跑，qlib 门控本地 skip）；本轮不改任何写侧身份，故无需迁移已发布分区；生产写侧今天没有任何入口使用 `CanonicalV2Store`（grep 核实：仅 contracts 自身与 research-chain 测试引用），该结论为代码检索而非运行时枚举。R3 未动。
+
+### 8.16 外部评审处置轮（2026-10-13，`code-review-unified-quant.md` 20 条候选逐条重验）
+
+外部报告基线 `44a0286`。监工对本 HEAD 逐条重验（读码 + 可达性判定 + 关键项运行时复现），**每条已修项都做变异验证**：临时回退被修文件后新测试必失败，恢复后全绿。锁集中在 `tests/test_external_review_20261013.py`（14 例，报告条目 ID 写在文件 docstring）。
+
+| ID | 判定 | 修复 | 变异验证（监工亲做） |
+|---|---|---|---|
+| B4 | 真问题（可达） | 回测按**日初持仓**分类 sell/buy/hold 后分批执行，取代"注释说先卖后买、实为一个字母序循环" | 回退 `backtest/engine.py` → 新测试 `AAA` 买入永不成交（`[] == ['AAA']`） |
+| B6 | 真问题（可达） | 预测阶段改为**逐日期构建 + 阶段一次性发布**（state 路径按 stage 编号，循环内发布必撞不可变路径）；`run()` 变薄封装 | 回退 `research_chain/adapters.py` → 复现 `immutable research manifest already exists: .../stage=05/manifest.json` |
+| B7 | 真问题（可达，低中） | `contracts/schema.py` 删除自持 `ContractError`，复用 `uq.errors.ContractError` | 回退 → 两条锁失败（类型同一性 + 可捕获性） |
+| B8 | 真问题（可达） | 模板 digest 不匹配的消息改读 `payload[digest_field]`（原读 `manifest_digest_sha256` → 治理拒绝变成裸 `KeyError`） | 回退 → 锁失败 |
+| B9 | 真问题（可达） | 新增单源 `contracts/paths.py::reject_symlinks_within(root, path)`：根以上不查、根以内逐分量查、解析后仍在根内；接入 `market_dataset_publisher`×4、`execution/stores`×2、`dataset_writer`、`model_layer`（有 accepted root 时）、`owning_contracts` | 变异（把守卫改回遍历祖先分量）→ 根内符号链接被漏检，锁失败 |
+| B10a/b | 真问题（可达） | builder 新增显式 `initial_state`（仅运行首份分区可为真，真时豁免且由 `previous_target_weights_generation_id: null` 留痕）；`max_turnover == 0` 不再两侧都不进 | 回退 `portfolio/builder.py` → 两条 B10 锁失败 |
+| B12 | 真问题（可达，低） | purge/embargo 改为先按时间排序再对相邻区间判重叠与隔离带（顺序无关；相邻满足则非相邻必然满足） | 回退 → 两条 split 锁失败 |
+| B1/B2/B3/B5/B11/B13 | 真问题但**当前不可达/待裁决** | **本轮不修**，按依赖与决策条件登记（见 pendding 同名条目）：B1 需先定 risk_run `files[]` 载荷与 `de_risk/flatten` 是否算阻断；B2 是"写 label 生产者之前必须先修"的硬前置；B3 触发条件是模板改用 `declared_fill`；B5 与 B1 同批；B13 触发条件是多年回填经 SourceRouter；B11 属 metrics 语义裁决 | 不适用（未改动） |
+| N1/N2/N5、N3/N4/B14 | 非缺陷 / REFUTED | 未据此改动 | 不适用 |
+
+**证据与残余**：`evidence/paper-execution-research-integration/phase-0/evidence-index.json` 对 `model_layer.py` 的钉值按既有约定重钉（该文件被 B8/B9 两批改到，一个会话内重钉两次本身是"被钉文件是热路径"的信号，已在此记录）。B9 同类残余两点未收敛并已注释说明：`contracts/artifacts.py:228` 与未配置 root 的 `ModelContractLoader`。`code-review-unified-quant.md` 保持未跟踪（外部输入件，是否入库由用户定）。
+
+**未夸大声明**：全量 `python -m pytest tests/` = 960 passed / 24 skipped（监工亲跑；qlib 门控本地 skip）；变异验证为监工逐条亲做；"不可达"结论来自代码检索（调用方枚举），非运行时覆盖统计。

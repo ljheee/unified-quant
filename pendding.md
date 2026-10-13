@@ -227,3 +227,23 @@ universe snapshot 生产者(2026-10-13)
 - 顺带把 `IndexMembershipStore.snapshot_dates()` 提为公开 API(脚本不该依赖私有 `_snapshot_dates`)。
 - 测试:`tests/test_publish_universe_snapshots.py`(6 例:平铺正确+读回、幂等、窗口过滤、未知 universe 拒绝且不落盘、visible_from 冲突拒绝、边界参数拒绝)。
 - 剩余四类预发布制品仍只有测试 helper:`adjusted_price`、`feature_schema`/`feature_preprocessing`、`label_set`、`backtest_config`。其中 `label_set`/`adjusted_price` 还需要**新写受治理写入器**(现有 `LabelStore`/`AdjustedPriceDatasetStore` 只有 read_* 方法)。
+
+外部评审 2026-10-13 复核与处置(报告文件 `code-review-unified-quant.md`,基线 `44a0286`)
+- 方法:报告 20 条候选逐条对本 HEAD 重验(读码 + 可达性 + 必要时运行时复现),**每条已修项都用变异验证确认新增锁在修复前必失败**(临时回退源码跑新测试)。锁集中在 `tests/test_external_review_20261013.py`(14 例)。
+- 已修(8 条,全部是真问题):
+  - **B4 回测先卖后买未真的生效**:买卖在同一字母序循环里,买入按字母序早于卖出时会把本可成交的买入记成 `skipped_insufficient_cash`。改为按**日初持仓**分类 sell/buy/hold 后分批执行(组内仍按标的序,确定性不变)。锁:构造 `AAA`(买)/`ZELT`(卖)资金依赖场景,修复前 `AAA` 永不成交。
+  - **B6 多决策日研究链必崩**:state 路径只含 `stage=NN`,而预测阶段在逐日期循环内 publish,第二个日期撞 `immutable research manifest already exists`。改为**逐日期构建、阶段一次性发布**(与 portfolio 阶段同形),`run()` 变成单日薄封装。锁:两日期 `run_for_dates` 产出 2 份 prediction + 1 份 state 两条 binding;修复前直接复现撞路径。
+  - **B7 两份 `ContractError`**:`contracts/schema.py` 自持一份,导致 schema 拒绝绕过 ingest 的 `except ContractError` 分类。改为复用 `uq.errors.ContractError`(全仓无人 import 旧类)。
+  - **B8 模板 digest 报错路径自身 KeyError**:错误消息读 `manifest_digest_sha256`,而模板族只有 `template_manifest_digest_sha256`。改为读 `payload[digest_field]`。
+  - **B9 symlink 守卫误伤合法 store 根**:守卫遍历**未解析路径的全部祖先**,macOS 的 `/tmp`、`/var` 都是符号链接 → 落在其下的根必拒;`pytest` 的 `tmp_path` 已解析所以测试全绿掩盖了它。新增单源 `src/uq/contracts/paths.py::reject_symlinks_within(root, path)`:**根以上是操作系统的事,根以内不许有链接,解析后仍须在根内**;已接入 `market_dataset_publisher`(4 处)、`execution/stores`(2 处)、`models/dataset_writer`、`contracts/model_layer`(仅当配置了 accepted root)、`research_chain/owning_contracts`。
+  - **B10a `max_turnover > 0` 首个调仓日必崩** + **B10b `max_turnover == 0` 静默跳过约束**:builder 现在要求显式 `initial_state`(仅一次运行的首份分区可为真;真时豁免并因 manifest `previous_target_weights_generation_id: null` 可审计),adapter 传 `initial_state=previous_frame is None`。`max_turnover=0` 且有前序状态时真正冻结。
+  - **B12 split purge/embargo 对声明顺序敏感**:改为**先按时间排序再逐相邻对**判重叠/隔离带,顺序无关且不漏报(相邻满足则非相邻自动满足)。
+- 已核实为真但**本轮不修**(附触发条件,不是回避):
+  - **B1 风控发布门 allow 路径必 AttributeError**(`risk/adapter.py:154` `run_store.publish(run)` 未传 payloads;且 `:105` 阻断集合不含 `de_risk/flatten`)。`PortfolioPublicationRiskGate` 在 src 内零调用方。**修它要一并定两件事**:① risk_run 记录里 `files[]` 载荷到底放什么(逐决策 `decision-N.json` 还是摘要);② `de_risk/flatten` 算不算阻断。只补 payloads 会把缺口变成 fail-open。**需要你裁决后再动。**
+  - **B2 标签先过滤后 `shift(-horizon)`**:horizon 变成"第 N 个幸存行"而非"第 N 个交易日",且 manifest 仍声明交易日口径 —— 属真危害。今天不可达:`LabelBuilder` 无 src 调用方、`label_set` 还没有受治理写入器。**硬前置:写 label 生产者之前必须先修这条。**
+  - **B3 trainer 不校验 X 的 NaN**:链上唯一在用模板是 `missing_policy=fail_closed` 且数据集阶段已拦空值。触发条件:任何模板改用 `declared_fill`。
+  - **B5 风控门对停牌标的传 `price=0.0`**:链上回测不传 `risk_gate`(仅 `run_with_risk_gate` 测试路径)。与 B1 同批修(风控门真正接入执行链时),修法是把停牌判定移到风控调用之前。
+  - **B13 mootdx 长区间被静默截断到 800 根**:当前唯一生产调用是 `start == end` 的日线 ingest。触发条件:任何多年回填经 SourceRouter。修法是把 `_requested_bar_estimate` 的估算真正用于分页循环。
+  - **B11 IC 是 pooled 还是截面**:PLAUSIBLE,仓库无 spec 锁定 → 属模型层 metrics 语义**待裁决**,不是代码缺陷。
+  - **B9 残余同类点**:`contracts/artifacts.py:228`(universe snapshot 目录,函数签名里没有 store root,故仍走父目录全扫)与 `ModelContractLoader` 未配置 root 时的严格扫描 —— 二者是"无根可限定"时的保守行为,已在代码注释写明;需要时在调用方传入 root 后收敛。
+- 处置边界声明:报告里 N1/N2/N5 是既定口径(非缺陷),N3/N4/B14 为 REFUTED,本轮未据此改动任何东西。`code-review-unified-quant.md` 保持**未跟踪**(是外部输入件,不入库;要入库由你决定)。

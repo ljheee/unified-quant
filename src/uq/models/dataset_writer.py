@@ -17,6 +17,7 @@ import pyarrow.parquet as parquet
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
 from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegistry, bind_reviewed_quality_decision, model_manifest_identities, resolve_subject_quality_decision, reviewed_allowed_statuses, sha256_json
+from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from .dataset import SplitValidator
 from .feature_preprocessing import FeaturePreprocessorBuilder
@@ -220,8 +221,7 @@ class DatasetWriter:
             contained = False
         if not contained:
             raise ContractError("dataset partition lies outside approved store")
-        if any(item.is_symlink() for item in (self.root, *partition.parents)):
-            raise ContractError("symbolic links are forbidden in dataset stores")
+        reject_symlinks_within(self.root, partition, label="dataset store path")
         manifest_path = partition / "manifest.json"
         data_path = partition / "data.parquet"
         if not manifest_path.is_file() or not data_path.is_file():

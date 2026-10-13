@@ -182,7 +182,30 @@ class BacktestEngine:
                 target_shares_map[inst] = max(floored, 0)
 
             # --- Execute sells first (only prior-day sellable shares) ---
-            for inst in sorted(set(list(holdings.keys()) + list(target_shares_map.keys()))):
+            # "sells first" is a settlement rule, not a comment: one alphabetical
+            # pass lets an alphabetically early buy consume cash that a later sell
+            # would have freed, so that buy is recorded ``skipped_insufficient_cash``
+            # in a run that is really fundable (external review B4).  The side is
+            # classified from the *day-start* position, which no later fill can
+            # change for another instrument, so sells settle before buys while each
+            # group stays in instrument order and the run stays deterministic.
+            instruments = sorted(set(holdings) | set(target_shares_map))
+
+            def _side_at_open(instrument: str) -> str:
+                target = target_shares_map.get(instrument, 0)
+                current = holdings.get(instrument, 0)
+                if target < current:
+                    return "sell"
+                return "buy" if target > current else "hold"
+
+            sides = {instrument: _side_at_open(instrument) for instrument in instruments}
+            ordered_instruments = [
+                instrument
+                for side in ("sell", "buy", "hold")
+                for instrument in instruments
+                if sides[instrument] == side
+            ]
+            for inst in ordered_instruments:
                 current_total = holdings.get(inst, 0)
                 current_sellable = current_total - t1_locked.get(inst, 0)
                 target_shares = target_shares_map.get(inst, 0)

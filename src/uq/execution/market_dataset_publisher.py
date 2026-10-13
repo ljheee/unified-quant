@@ -18,19 +18,12 @@ import pandas as pd
 
 from ..contracts.gate_contracts import validate_contract
 from ..contracts.manifest import canonical_json
+from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 
 
 def sha256_json(value: Any) -> str:
     return hashlib.sha256(canonical_json(value)).hexdigest()
-
-
-def _no_symlink(path: Path) -> None:
-    current = path
-    while current != current.parent:
-        if current.is_symlink():
-            raise ContractError(f"symlink detected in store path: {current}")
-        current = current.parent
 
 
 class MarketDatasetPublisher:
@@ -62,7 +55,7 @@ class MarketDatasetPublisher:
         directory = self._directory("trading_calendar_snapshot_v1", partition_date)
         if directory.exists():
             raise ContractError(f"calendar snapshot already published: {directory}")
-        _no_symlink(directory.parent)
+        reject_symlinks_within(self.root, directory.parent, label="market dataset store path")
         session_strings = sorted(session.isoformat() for session in sessions)
         generation = sha256_json({
             "family": "trading_calendar_snapshot_v1",
@@ -110,7 +103,7 @@ class MarketDatasetPublisher:
         directory = self._directory("suspension_snapshot_v1", partition_date)
         if directory.exists():
             raise ContractError(f"suspension snapshot already published: {directory}")
-        _no_symlink(directory.parent)
+        reject_symlinks_within(self.root, directory.parent, label="market dataset store path")
         directory.mkdir(parents=True, exist_ok=False)
         data_path = directory / "data.parquet"
         frame.to_parquet(data_path, index=False)
@@ -164,7 +157,7 @@ class MarketDatasetPublisher:
         directory = self._directory("bars_daily_v2", partition_date)
         if directory.exists():
             raise ContractError(f"bars partition already published: {directory}")
-        _no_symlink(directory.parent)
+        reject_symlinks_within(self.root, directory.parent, label="market dataset store path")
         for label, value in (
             ("source_generation_id", source_generation_id),
             ("source_data_checksum_sha256", source_data_checksum_sha256),
@@ -234,7 +227,7 @@ class MarketDatasetPublisher:
         directory = self._directory("dividend_event_v1", partition_date)
         if directory.exists():
             raise ContractError(f"corporate action partition already published: {directory}")
-        _no_symlink(directory.parent)
+        reject_symlinks_within(self.root, directory.parent, label="market dataset store path")
         ordered = frame.sort_values("instrument").reset_index(drop=True)
         generation_ids = sorted(str(value) for value in source_generation_ids)
         if any(not re.fullmatch(r"[0-9a-f]{64}", value) for value in generation_ids):

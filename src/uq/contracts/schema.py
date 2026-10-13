@@ -7,16 +7,14 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from ..errors import ContractError
+
 _DTYPE_ALIASES = {"string": "object", "float64": "float64", "int64": "int64", "bool": "bool"}
 _COMPATIBLE_DTYPES = {
     "date32": {"datetime64[ns]", "datetime64[us]", "object"},
 }
 _FIELD_RULE_KEYS = {"dtype", "nullable", "unit", "adjustment", "timezone", "meaning", "resolution", "pattern", "enum", "default", "zero_policy", "semantics"}
 _SCHEMA_KEYS = {"dataset", "version", "status", "primary_key", "sort_key", "fields", "invariants", "compatibility", "migration"}
-
-
-class ContractError(ValueError):
-    pass
 
 
 @dataclass(frozen=True)

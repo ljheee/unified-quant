@@ -55,16 +55,21 @@ class SplitValidator:
             end_idx = date_index[end]
             if start_idx > end_idx:
                 raise ContractError(f"split {name} start after end")
-            for prev_name, prev_start, prev_end in ranges:
-                if start_idx <= prev_end + horizon + embargo_days and prev_name != name:
-                    raise ContractError(
-                        f"purge/embargo violation between {prev_name} and {name}"
-                    )
             ranges.append((name, start_idx, end_idx))
-        ordered_ranges = sorted(ranges, key=lambda item: item[1])
-        for (_, start_a, end_a), (_, start_b, end_b) in zip(ordered_ranges, ordered_ranges[1:]):
-            if start_b <= end_a:
+        # Every rule below is evaluated in *time* order, never in declaration
+        # order: comparing each split only against the ones already iterated made
+        # a legitimate ``[validation, train]`` declaration look like a leak
+        # (external review B12).
+        ordered_ranges = sorted(ranges, key=lambda item: (item[1], item[2], item[0]))
+        for (previous_name, _, previous_end), (next_name, next_start, _) in zip(
+            ordered_ranges, ordered_ranges[1:]
+        ):
+            if next_start <= previous_end:
                 raise ContractError("overlapping split intervals")
+            if next_start <= previous_end + horizon + embargo_days:
+                raise ContractError(
+                    f"purge/embargo violation between {previous_name} and {next_name}"
+                )
 
 
 def resolve_train_split(

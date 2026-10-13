@@ -46,6 +46,7 @@ class PortfolioBuilder:
         scores: pd.Series,
         universe_instruments: list[str],
         previous_target_weights: dict[str, float] | None = None,
+        initial_state: bool = False,
         quality_decision: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], pd.DataFrame]:
         """Compute target weights for one rebalance date.
@@ -57,7 +58,13 @@ class PortfolioBuilder:
             scores: instrument-indexed score series (already filtered to eligible).
             universe_instruments: allowed instruments from the universe snapshot.
             previous_target_weights: prior date's {instrument: weight} mapping.
-                Required when max_turnover constraint is active.
+                Required whenever ``max_turnover`` is set, unless this partition is the
+                run's initialization.
+            initial_state: states that there is no earlier governed target state, so
+                the turnover cap has nothing to measure against and is not applied.
+                Only the first partition of a run qualifies; the published manifest
+                records ``previous_target_weights_generation_id: null``, which is what
+                makes the exemption auditable instead of silent.
             quality_decision: externally reviewed quality decision document.
 
         Returns:
@@ -119,13 +126,22 @@ class PortfolioBuilder:
                 "industry cap requires a governed industry membership runtime, which is not enabled"
             )
 
-        # Turnover cap
+        # Turnover cap.
+        #
+        # The cap is defined against the previous *target* weights, so it needs a
+        # stated answer for "what came before".  Silently skipping it was the real
+        # defect: the first rebalance of any run had no previous frame, so every
+        # ``max_turnover > 0`` definition died on day one, while ``max_turnover == 0``
+        # slipped past both guards and built a full position that a 0.0001 cap would
+        # have rejected (external review B10a/B10b).
         if max_turnover is not None:
-            if max_turnover > 0 and previous_target_weights is None:
-                raise ContractError(
-                    "previous_target_weights is required when max_turnover is set"
-                )
-            if previous_target_weights is not None:
+            if previous_target_weights is None:
+                if not initial_state:
+                    raise ContractError(
+                        "previous_target_weights is required when max_turnover is set; "
+                        "pass initial_state=True only for the first partition of a run"
+                    )
+            else:
                 all_keys = sorted(set(weights_map.keys()) | set(previous_target_weights.keys()))
                 turnover = 0.5 * sum(
                     abs(weights_map.get(k, 0.0) - previous_target_weights.get(k, 0.0))

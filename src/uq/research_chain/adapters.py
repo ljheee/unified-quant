@@ -672,6 +672,9 @@ class PortfolioStageAdapter:
                 scores=scores,
                 universe_instruments=universe_instruments,
                 previous_target_weights=previous_target_weights,
+                # Nothing precedes the first decision date of a run, and that is the
+                # only state allowed to exempt itself from the turnover cap.
+                initial_state=previous_frame is None,
                 quality_decision=None,
             )
             self.target_weight_store.publish(
@@ -1244,48 +1247,20 @@ class PredictionStageAdapter:
         runner_identity: Mapping[str, str],
         created_at: str | None = None,
     ) -> PredictionStageResult:
-        dataset_binding = _stage_binding(plan, stage="dataset_preparation", output_family="model_dataset")
-        if dataset_generation_id != dataset_binding.generation_id:
-            raise ContractError("prediction dataset binding mismatch")
-        manifest, artifact = self.prediction_builder.build(
-            prediction_set_name=f"research_prediction_{decision_date}",
-            model_artifact_generation_id=model_stage_result.artifact_manifest["generation_id"],
-            model_artifact_checksum=model_stage_result.artifact_manifest["artifact_checksum_sha256"],
-            input_dataset_generation_id=dataset_generation_id,
-            run_generation_id=model_stage_result.run_manifest["run_content_generation_id"],
-            artifact_store=self.prediction_builder.artifact_store,
-            decision_date=decision_date,
-            scores=scores,
+        results = self.run_for_dates(
+            plan,
+            dataset_generation_id=dataset_generation_id,
+            model_stage_result=model_stage_result,
+            scores_by_decision_date={decision_date: scores},
+            quality_decision=quality_decision,
             eligibility_policy=eligibility_policy,
             eligibility_status=eligibility_status,
-            quality_decision=_decision_payload(quality_decision),
-        )
-        self.prediction_builder.publish(manifest, artifact)
-        readback_manifest, frame = self.prediction_builder.read(
-            manifest["generation_id"], decision_date,
-        )
-        if readback_manifest["generation_id"] != manifest["generation_id"]:
-            raise ContractError("prediction readback identity mismatch")
-        state = build_stage_state(
-            plan,
-            stage="prediction_publication",
-            output_bindings=[{
-                "output_family": "prediction_set",
-                "generation_id": readback_manifest["generation_id"],
-                "manifest_digest_sha256": readback_manifest["manifest_digest_sha256"],
-                "data_checksum_sha256": readback_manifest["data_checksum_sha256"],
-                "physical_path": f"predictions/prediction_set={readback_manifest['generation_id']}/date={decision_date}",
-                "quality_decision_checksum_sha256": readback_manifest["quality_report_checksum_sha256"],
-                "failure_reason": None,
-            }],
             runner_identity=runner_identity,
             created_at=created_at,
         )
-        return PredictionStageResult(
-            manifest=readback_manifest,
-            frame=frame,
-            published_state=self.run_store.publish_state(state, stage="prediction_publication"),
-        )
+        if len(results) != 1:
+            raise ContractError("single-date prediction run produced more than one result")
+        return results[0]
 
     def run_for_dates(
         self,
@@ -1300,18 +1275,63 @@ class PredictionStageAdapter:
         runner_identity: Mapping[str, str],
         created_at: str | None = None,
     ) -> list[PredictionStageResult]:
-        return [
-            self.run(
-                plan,
-                dataset_generation_id=dataset_generation_id,
-                model_stage_result=model_stage_result,
-                scores=scores,
+        """Build one prediction per decision date and publish the stage once.
+
+        A stage state is a stage-level publication record whose immutable path is
+        keyed by stage number, so publishing inside the per-date loop made every run
+        with two or more decision dates collide on ``immutable research manifest
+        already exists`` (external review B6).  The publishing stage now matches the
+        portfolio stage: one publication carrying one binding per decision date,
+        which is also where the runner reads its decision dates back from.
+        """
+        dataset_binding = _stage_binding(plan, stage="dataset_preparation", output_family="model_dataset")
+        if dataset_generation_id != dataset_binding.generation_id:
+            raise ContractError("prediction dataset binding mismatch")
+        if not scores_by_decision_date:
+            raise ContractError("prediction stage requires governed scores")
+
+        built: list[tuple[dict[str, Any], pd.DataFrame]] = []
+        output_bindings: list[dict[str, Any]] = []
+        for decision_date, scores in sorted(scores_by_decision_date.items()):
+            manifest, artifact = self.prediction_builder.build(
+                prediction_set_name=f"research_prediction_{decision_date}",
+                model_artifact_generation_id=model_stage_result.artifact_manifest["generation_id"],
+                model_artifact_checksum=model_stage_result.artifact_manifest["artifact_checksum_sha256"],
+                input_dataset_generation_id=dataset_generation_id,
+                run_generation_id=model_stage_result.run_manifest["run_content_generation_id"],
+                artifact_store=self.prediction_builder.artifact_store,
                 decision_date=decision_date,
-                quality_decision=_decision_payload(quality_decision),
+                scores=scores,
                 eligibility_policy=eligibility_policy,
                 eligibility_status=eligibility_status,
-                runner_identity=runner_identity,
-                created_at=created_at,
+                quality_decision=_decision_payload(quality_decision),
             )
-            for decision_date, scores in sorted(scores_by_decision_date.items())
+            self.prediction_builder.publish(manifest, artifact)
+            readback_manifest, frame = self.prediction_builder.read(
+                manifest["generation_id"], decision_date,
+            )
+            if readback_manifest["generation_id"] != manifest["generation_id"]:
+                raise ContractError("prediction readback identity mismatch")
+            built.append((readback_manifest, frame))
+            output_bindings.append({
+                "output_family": "prediction_set",
+                "generation_id": readback_manifest["generation_id"],
+                "manifest_digest_sha256": readback_manifest["manifest_digest_sha256"],
+                "data_checksum_sha256": readback_manifest["data_checksum_sha256"],
+                "physical_path": f"predictions/prediction_set={readback_manifest['generation_id']}/date={decision_date}",
+                "quality_decision_checksum_sha256": readback_manifest["quality_report_checksum_sha256"],
+                "failure_reason": None,
+            })
+
+        state = build_stage_state(
+            plan,
+            stage="prediction_publication",
+            output_bindings=output_bindings,
+            runner_identity=runner_identity,
+            created_at=created_at,
+        )
+        published = self.run_store.publish_state(state, stage="prediction_publication")
+        return [
+            PredictionStageResult(manifest=manifest, frame=frame, published_state=published)
+            for manifest, frame in built
         ]

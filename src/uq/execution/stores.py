@@ -20,6 +20,7 @@ from ..contracts.model_layer import (
     resolve_subject_quality_decision,
     sha256_json,
 )
+from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from ..runtime import current_runtime_mode
 
@@ -59,8 +60,7 @@ class _ImmutablePaperManifestStore:
             resolved = path.resolve(strict=True)
         except (OSError, RuntimeError) as exc:
             raise ContractError("unsafe or missing paper path") from exc
-        if any(item.is_symlink() for item in (path, *path.parents)):
-            raise ContractError("symbolic links are forbidden in paper paths")
+        reject_symlinks_within(self.root, path, label="paper store path")
         try:
             resolved.relative_to(self.root.resolve(strict=False))
         except ValueError as exc:
@@ -540,8 +540,7 @@ def read_verified_quality_report(root: Path, manifest: dict[str, Any]) -> dict[s
         raise ContractError("paper quality report is missing or inaccessible") from exc
     if review_root not in resolved.parents:
         raise ContractError("paper quality report path escapes storage root")
-    if any(item.is_symlink() for item in (path, *path.parents)):
-        raise ContractError("symbolic links are forbidden in paper quality report paths")
+    reject_symlinks_within(review_root, path, label="paper quality report path")
     if not resolved.is_file():
         raise ContractError("paper quality report is missing")
     report = json.loads(resolved.read_text(encoding="utf-8"))
