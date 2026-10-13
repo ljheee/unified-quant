@@ -509,3 +509,20 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 3. **按设计未修**：O2（就绪门对大面积停牌的过宽报告，已有文档化限制）、O4（停牌源与 bars 同商，治理后续项）、A 的三项无法判定（§8.12 未夸大声明③）。
 
 未夸大声明：B1、M4、P1 的变异验证，fixture 窗口核验，cr.md:343 更正，两轮全量 exit 0，P1 后两簇 except 的变异杀伤确认与重钉后两条证据测试复绿为监工亲做；各簇测试计数与证据索引全量遍历结论为代理自报（B/D 的重钉经监工抽查匹配）；C 簇修复未做监工级变异验证（12 测试为代理自报，全量两轮 exit 0 覆盖其回归）。P1 的 `_window_days` 分支在 v5 路径上由 `_verify_v4_input_sets` 接缝报 input_unresolved（而非 resolver 内的 request_invalid），属接缝既有映射，监工未改其语义。
+
+### 8.14 R1 修复轮（2026-10-13，因子层质量口径单一化）
+
+用户点头后落地 pendding R1（`FactorEngine.create_result` 报告 taxonomy 与发布契约不兼容）。改动半径仅因子层 + 一个发布脚本。
+
+| 项 | 修复 | 验证 |
+|---|---|---|
+| 第二套 checks 口径 | `engine.py:create_result` 删除自算 checks，**委托** publish 重推导所用的 `_validate_factor_frame`；status 只跟随 reviewed 阈值，advisory 缺失列降级为 `FactorResult.warnings`（不进 durable 报告，也不再把 `accept_with_warnings` 集合降成 `warning`——那会让 engine 状态 ≠ publish 期望状态而被拒） | 正向锁 `test_factor_engine_quality_report_publishes_end_to_end`：`result.quality_report == _validate_factor_frame(...)` 且真 `publish` 成功 |
+| 空帧语义 | `intent="publication"` → `rejected` + 错误消息（旧为直接抛）；`intent="dry_run"` → `empty` 不变；publish 侧对空帧仍直接抛（未放宽） | 既有的 dry-run/publication 两例分别锁 `empty`+`staging_only` 与 `ContractError` |
+| 外部报告一致性校验 | policy/status/checks 三项校验保留；checks 比对由「必须非空 + 集合比对」简化为字典相等，使零 checks 的空帧报告不被误伤 | `test_external_quality_report_must_match_local_decision` 两例仍杀（status / checks 各一） |
+| `null_policy` 静默丢弃 | 尊重调用方传入，缺省才回退默认 | 既有 `staging_only` 断言覆盖默认分支 |
+| 发布入口 | `scripts/publish_factor_partitions.py` 改走 `FactorEngine`（`intent="publication"`、run cutoff=分区日 15:00 Asia/Shanghai），非 `passed` 带 status/errors 失败；不再 import 私有校验函数 | 真实 A500 store 全新 factor root 重发 2025-09-25~09-30：4 分区 × 498 行，零 skip/失败 |
+| 治理倒退风险 | 未在发布侧放宽任何比较；R1 的 pin 换成正向锁，另加 `test_downgraded_engine_report_still_rejects_publication`（schema 合法但 status 降级的报告仍被拒）。CanonicalV2Store 的 R2 pin **故意保留** | 该文件 3 例全绿 |
+
+**generation 是否漂移（实测，非推定）**：`result.quality_report` 在无外部报告时即校验器返回的同一文档，实测 A500 2025-09-30 分区发布报告与 `_validate_factor_frame` 输出逐字段相等（`warnings` 为空），故 R1 不改既有分区身份。
+
+**未夸大声明**：全量套件监工亲跑 `python -m pytest tests/`= 941 passed / 24 skipped（qlib 门控本地 skip）；generation 不变仅对 2025-09-30 一个分区做了逐字段核对，其余 3 个分区按同一路径推定；真实 A500 重发为监工亲跑。R2/R3 未动。

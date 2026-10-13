@@ -1,22 +1,25 @@
-"""Pins for two known contract divergences (see ``pendding.md``).
+"""Guard for one remaining contract divergence (see ``pendding.md``).
 
-These tests are deliberate **pins, not endorsements**: each one asserts that a
+The first test is a deliberate **pin, not an endorsement**: it asserts that the
 divergence still exists, so fixing it forces a conscious update here instead of
-letting the divergence drift silently into new code.
+letting it drift silently into new code.
 
 1. ``uq.contracts.canonical_v2.CanonicalV2Store`` writes ``manifest_version: 2``
    manifests, while ``uq.store.reader.ManifestFirstReader`` validates against
    ``canonical-v1.json`` only, so partitions written by the former are not
    readable through the governed read path that every layer uses.
-2. ``FactorEngine.create_result`` emits one ``null_rate`` check per value column,
-   and ``FactorStore`` rejects duplicate check names outright, so an
-   engine-produced report can never satisfy publication; the published report has
-   to come from ``_validate_factor_frame``.
+
+The second test used to be the matching pin for the factor quality contract --
+``FactorEngine.create_result`` produced a check set that ``FactorStore.publish``
+could never accept, so the governed facade could plan but never publish. That
+divergence is fixed (cr.md R1), so it is now a positive lock: the engine report
+has to satisfy the same validator publication re-derives, end to end.
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 import pandas as pd
@@ -30,7 +33,12 @@ from uq.contracts.schema import load_schema
 from uq.errors import ContractError
 from uq.factors.engine import FactorEngine
 from uq.factors.raw_price import calculate_raw_price_factors
-from uq.factors.store import _reports_agree, _validate_factor_frame
+from uq.factors.store import (
+    FactorStore,
+    _reports_agree,
+    _validate_factor_frame,
+    factor_generation,
+)
 from uq.store.reader import ManifestFirstReader
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,7 +72,7 @@ def test_canonical_v2_store_output_is_not_readable_by_the_governed_reader(tmp_pa
             / f"date={day.isoformat()}" / "manifest.json").is_file()
 
 
-def test_factor_engine_quality_report_cannot_satisfy_publication(tmp_path):
+def _engine_publication_setup(tmp_path):
     registry = FactorRegistry(ROOT)
     days = pd.bdate_range("2026-06-01", periods=22)
     bars_frame = pd.DataFrame({
@@ -72,16 +80,78 @@ def test_factor_engine_quality_report_cannot_satisfy_publication(tmp_path):
         "low": 9.0, "close": 10.0, "volume": 100.0, "amount": 1000.0,
     })
     computed = calculate_raw_price_factors(bars_frame)
+    day = date(2026, 6, 26)
+    frame = computed[computed["datetime"] == pd.Timestamp(day)].reset_index(drop=True)
     engine = FactorEngine(tmp_path, registry,
                           run_visible_cutoff=pd.Timestamp("2026-08-01T00:00:00Z").to_pydatetime())
     request = engine.build_request(
-        trade_date=date(2026, 6, 26), factor_set="basic", factor_version="1.0.0",
-        session_dates=(date(2026, 6, 26),), intent="publication",
+        trade_date=day, factor_set="basic", factor_version="1.0.0",
+        session_dates=(day,), intent="publication",
     )
-    result = engine.create_result(request, computed, input_lineage=())
-    local = _validate_factor_frame(computed, registry.get("basic", "1.0.0"))
+    return engine, request, frame
 
-    engine_names = [check["name"] for check in result.quality_report["checks"]]
-    assert engine_names.count("null_rate") > 1, "engine checks are no longer duplicated"
-    with pytest.raises(ContractError, match="duplicate quality checks reject publication"):
-        _reports_agree(local, result.quality_report)
+
+def _publication_arguments(frame: pd.DataFrame) -> dict:
+    return {
+        "frame": frame,
+        "partition_date": date(2026, 6, 26),
+        "input_dataset": "bars_daily",
+        "input_schema_version": "research-v1",
+        "upstream_generation_id": "a" * 64,
+        "upstream_data_checksum": "b" * 64,
+        "quality_report_checksum": "",
+        "upstream_created_at": datetime(2026, 6, 26, 15, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    }
+
+
+def test_factor_engine_quality_report_publishes_end_to_end(tmp_path):
+    registry = FactorRegistry(ROOT)
+    engine, request, frame = _engine_publication_setup(tmp_path)
+    result = engine.create_result(request, frame, input_lineage=())
+    local = _validate_factor_frame(frame, registry.get("basic", "1.0.0"))
+
+    # One decision, two derivations: the report the engine hands out has to *be*
+    # the report publication re-derives -- byte-for-byte, not merely agreeable --
+    # otherwise the durable report checksum drifts between plan and publish.
+    assert result.quality_report == local
+    assert result.quality_report["status"] == local["status"] == "passed"
+    assert result.errors == ()
+    assert _reports_agree(local, result.quality_report) is True
+
+    arguments = _publication_arguments(frame)
+    generation = factor_generation(**arguments)
+    report = {
+        **result.quality_report,
+        "report_version": 1,
+        "binding_type": "factor_v1",
+        "bound_generation_id": generation,
+    }
+    QualityReportStore().save(tmp_path, report)
+    arguments["quality_report_checksum"] = file_sha256_bytes(
+        (tmp_path / "reports" / "factor_v1" / generation / "report.json").read_bytes()
+    )
+    partition = FactorStore(tmp_path, registry).publish(**arguments)
+    assert (partition / "manifest.json").is_file()
+
+
+def test_downgraded_engine_report_still_rejects_publication(tmp_path):
+    """A schema-valid report that disagrees with the local decision cannot publish."""
+    registry = FactorRegistry(ROOT)
+    engine, request, frame = _engine_publication_setup(tmp_path)
+    result = engine.create_result(request, frame, input_lineage=())
+    arguments = _publication_arguments(frame)
+    generation = factor_generation(**arguments)
+    report = {
+        **result.quality_report,
+        "report_version": 1,
+        "binding_type": "factor_v1",
+        "bound_generation_id": generation,
+        "status": "warning",
+        "warnings": ["downgraded after the reviewed checks passed"],
+    }
+    QualityReportStore().save(tmp_path, report)
+    arguments["quality_report_checksum"] = file_sha256_bytes(
+        (tmp_path / "reports" / "factor_v1" / generation / "report.json").read_bytes()
+    )
+    with pytest.raises(ContractError, match="quality report rejects publication"):
+        FactorStore(tmp_path, registry).publish(**arguments)

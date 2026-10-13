@@ -52,7 +52,8 @@ from uq.errors import ContractError
 from uq.factors.inputs import factor_input_frame
 from uq.factors.partition_set import build_factor_partition_set
 from uq.factors.raw_price import calculate_raw_price_factors
-from uq.factors.store import FactorStore, _validate_factor_frame, factor_generation
+from uq.factors.engine import FactorEngine
+from uq.factors.store import FactorStore, factor_generation
 from uq.store.reader import ManifestFirstReader
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -171,6 +172,11 @@ def main() -> int:
     schema = load_schema(PROJECT_ROOT / "config" / "schemas" / f"bars_daily.{schema_version}.yaml")
     reader = ManifestFirstReader(args.bars_root)
     store = FactorStore(args.factor_root, registry)
+    engine = FactorEngine(
+        args.factor_root, registry,
+        run_visible_cutoff=dt.datetime.combine(
+            target_days[-1], DECISION_CLOCK, tzinfo=DECISION_ZONE),
+    )
     report_root = args.factor_root
     cache: dict[dt.date, tuple[pd.DataFrame, dict[str, Any]]] = {}
 
@@ -223,7 +229,33 @@ def main() -> int:
                 "upstream_created_at": _upstream_created_at(args.input_visibility, day, bar_manifest),
             }
             generation = factor_generation(**arguments)
-            local_quality = _validate_factor_frame(frame, definition)
+            # The reviewed decision comes from the governed engine, whose report
+            # FactorStore.publish re-derives from the same validator, so what the
+            # run plans is exactly what publication accepts (cr.md R1).
+            result = engine.create_result(
+                engine.build_request(
+                    trade_date=day, factor_set=args.factor_set,
+                    factor_version=args.factor_version, session_dates=(day,),
+                    intent="publication",
+                    run_visible_cutoff=dt.datetime.combine(
+                        day, DECISION_CLOCK, tzinfo=DECISION_ZONE),
+                ),
+                frame,
+                input_lineage=({
+                    "factor_set": args.factor_set,
+                    "factor_version": args.factor_version,
+                    "dataset": "bars_daily",
+                    "schema_version": schema_version,
+                    "generation_id": bar_manifest["generation_id"],
+                    "data_checksum_sha256": bar_manifest["data_checksum_sha256"],
+                },),
+            )
+            if result.status != "passed":
+                raise ContractError(
+                    f"governed factor engine refused {day.isoformat()}: status={result.status}"
+                    + ("".join(f"; {message}" for message in result.errors))
+                )
+            local_quality = result.quality_report
             QualityReportStore().save(report_root, {
                 "report_version": 1,
                 "binding_type": "factor_v1",

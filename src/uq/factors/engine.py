@@ -14,6 +14,7 @@ from ..contracts.factor_governance import FactorRegistry, FactorSetDefinition
 from ..errors import ContractError
 from .adjusted_price import calculate_adjusted_factors
 from .raw_price import calculate_raw_price_factors
+from .store import _validate_factor_frame
 
 
 DECISION_ZONE = ZoneInfo("Asia/Shanghai")
@@ -174,12 +175,35 @@ class FactorEngine:
         quality_report: dict[str, Any] | None = None,
         null_policy: dict[str, Any] | None = None,
     ) -> FactorResult:
-        """Materialize governed empty/all-null/partial-result semantics."""
+        """Materialize governed empty / all-null / partial-result semantics.
+
+        The quality decision is delegated to ``_validate_factor_frame`` -- the very
+        function ``FactorStore.publish`` re-derives at publication time -- so a
+        report produced here is publishable by construction (cr.md R1).  Before
+        that, this method computed its own check set (one ``null_rate`` per value
+        column) which ``FactorStore`` rejected outright as duplicate checks, so the
+        governed facade could never publish what it planned.
+
+        Status therefore tracks the reviewed thresholds only: partial nulls that
+        stay inside ``null_rate_maximum`` are reported through ``warnings`` as
+        advisory context instead of downgrading the status.
+        """
         def check_results(report: dict[str, Any]) -> dict[tuple[str, float], str]:
             return {
                 (item["name"], float(item["threshold"])): item["result"]
                 for item in report.get("checks", [])
             }
+
+        def failure_message(name: str) -> str:
+            if name == "coverage":
+                return "coverage below minimum"
+            if name == "null_rate":
+                return "null rate above maximum: all value columns"
+            if name.startswith("null_rate__"):
+                return f"null rate above maximum: {name[len('null_rate__'):]}"
+            if name.startswith("finite_values__"):
+                return f"non-finite values: {name[len('finite_values__'):]}"
+            return f"{name} threshold failed"
 
         expected_names = {item["name"] for item in request.definition.factors}
         missing = sorted(expected_names - set(frame.columns))
@@ -188,58 +212,37 @@ class FactorEngine:
         value_columns = [item["name"] for item in request.definition.factors]
         thresholds = request.definition.document.get("quality_thresholds", {})
         maximum_null_rate = float(thresholds.get("null_rate_maximum", 0.0))
-        minimum_coverage = float(thresholds.get("coverage_minimum", 1.0))
-        null_rates = {
-            column: float(frame[column].isna().mean()) if len(frame) else 1.0
-            for column in value_columns
-        }
-        failed_nulls = [column for column, rate in null_rates.items() if rate > maximum_null_rate]
-        observed_coverage = 1.0 - (sum(null_rates.values()) / len(value_columns))
-        coverage_failed = frame.empty or observed_coverage < minimum_coverage
-        warnings: list[str] = []
         errors: list[str] = []
+        warnings: list[str] = []
+        policy = request.definition.document["quality_policy"]
         if frame.empty:
-            status = "empty"
-            if request.intent == "publication":
+            # Publish refuses an empty frame, so an empty result can only ever be a
+            # dry-run staging artifact; a publication intent fails closed instead.
+            status = "rejected" if request.intent == "publication" else "empty"
+            if status == "rejected":
                 errors.append("empty factor results cannot be published")
-                status = "rejected"
-        elif failed_nulls:
-            status = "rejected"
-            errors.extend(f"null rate above maximum: {name}" for name in failed_nulls)
-        elif coverage_failed:
-            status = "rejected"
-            errors.append("coverage below minimum")
+            local_report: dict[str, Any] = {
+                "policy": policy, "status": status, "checks": [],
+                "errors": errors, "warnings": warnings,
+            }
         else:
-            partial = [column for column, rate in null_rates.items() if rate > 0]
-            if partial:
-                warnings.extend(f"insufficient history emits nulls: {name}" for name in partial)
-            status = "warning" if warnings and request.definition.document["quality_policy"] == "accept_with_warnings" else "passed"
-        local_report = {
-            "policy": request.definition.document["quality_policy"],
-            "status": status,
-            "checks": [
-                *[
-                    {"name": "null_rate", "threshold": maximum_null_rate, "observed": null_rates[name], "level": "error", "result": "failed" if name in failed_nulls else "passed"}
-                    for name in value_columns
-                ],
-                {"name": "coverage", "threshold": minimum_coverage, "observed": observed_coverage, "level": "error", "result": "failed" if coverage_failed else "passed"},
-            ],
-            "errors": errors,
-            "warnings": warnings,
-        }
+            local_report = _validate_factor_frame(frame, request.definition)
+            status = local_report["status"]
+            errors.extend(
+                failure_message(item["name"]) for item in local_report["checks"]
+                if item["result"] == "failed"
+            )
+            for column in value_columns:
+                if float(frame[column].isna().mean()) > 0:
+                    warnings.append(f"insufficient history emits nulls: {column}")
         report = quality_report or local_report
-        supplied_policy = report.get("policy")
-        expected_policy = request.definition.document["quality_policy"]
-        supplied_status = report.get("status")
-        if supplied_policy != expected_policy:
+        if report.get("policy") != policy:
             raise ContractError("factor result quality policy does not match reviewed definition")
-        if supplied_status != status:
+        if report.get("status") != status:
             raise ContractError("factor result quality status disagrees with local checks")
         expected_checks = check_results(local_report)
         supplied_checks = check_results(report)
-        if not supplied_checks or set(supplied_checks) != set(expected_checks) or any(
-            supplied_checks[key] != result for key, result in expected_checks.items()
-        ):
+        if supplied_checks != expected_checks:
             raise ContractError("factor result quality checks disagree with local computation")
         return FactorResult(
             frame=frame,
@@ -249,7 +252,7 @@ class FactorEngine:
             status=status,
             warnings=tuple(warnings),
             errors=tuple(errors),
-            null_policy={
+            null_policy=null_policy or {
                 "maximum_null_rate": maximum_null_rate,
                 "forward_fill": False,
                 "intent": request.intent,
