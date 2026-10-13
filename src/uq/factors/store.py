@@ -83,7 +83,15 @@ class FactorStore:
         local_quality = _validate_factor_frame(frame, definition)
         if definition.factor_set == "basic":
             if input_dataset != "bars_daily" or input_schema_version != "research-v1":
-                raise ContractError("factor input binding does not match reviewed factor set")
+                # cr.md P3: this rejection is the guard that keeps governed factors
+                # off un-reviewed input lines, so it has to say which binding is
+                # reviewed -- otherwise the caller cannot tell a wrong argument
+                # from a governance gap that needs a reviewed-definition change.
+                raise ContractError(
+                    "factor input binding does not match reviewed factor set "
+                    f"{factor_set}/{factor_version}: got {input_dataset}/{input_schema_version}, "
+                    "reviewed binding is bars_daily/research-v1"
+                )
             if adjustment_snapshot_id is not None or effective_date_table_checksum is not None:
                 raise ContractError("raw-price factors cannot bind adjustment lineage")
         elif definition.factor_set == "adjusted":
@@ -97,7 +105,10 @@ class FactorStore:
                 raise ContractError(f"qlib factor input dataset is not reviewed: {input_dataset}")
             reviewed_schemas = bindings["required_schema_versions"].get(input_dataset, [])
             if input_schema_version not in reviewed_schemas:
-                raise ContractError(f"qlib factor input schema is not reviewed: {input_schema_version}")
+                raise ContractError(
+                    f"qlib factor input schema is not reviewed: {input_schema_version} "
+                    f"(reviewed schema versions for {input_dataset}: {sorted(reviewed_schemas)})"
+                )
             if input_dataset == "bars_adjusted" and (
                 adjustment_snapshot_id is None or effective_date_table_checksum is None
             ):

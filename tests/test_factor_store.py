@@ -184,3 +184,49 @@ def test_naive_upstream_timestamp_is_a_typed_refusal(tmp_path):
             store.publish(**{**arguments, "upstream_created_at": naive})
     with pytest.raises(ContractError, match="not an ISO-8601 timestamp"):
         store.publish(**{**arguments, "upstream_created_at": "20th-of-July-2026"})
+
+
+def test_unreviewed_input_binding_names_the_reviewed_line(tmp_path):
+    """cr.md P3: a refusal must name the reviewed line so the caller can act.
+
+    These two input-binding guards are why governed factors cannot consume the
+    production ``bars_daily/v2`` line.  A bare "not reviewed" message cannot be
+    told apart from a wrong argument, so both rejections now quote the reviewed
+    dataset/schema pair.
+    """
+    store = FactorStore(tmp_path, FactorRegistry(ROOT))
+    with pytest.raises(ContractError) as basic:
+        store.publish(**{**kwargs(), "input_schema_version": "v2"})
+    assert "basic/1.0.0: got bars_daily/v2" in str(basic.value)
+    assert "reviewed binding is bars_daily/research-v1" in str(basic.value)
+
+    # The Qlib branch is only reachable through a definition whose output columns
+    # the fixture frame satisfies, so derive one from the reviewed alpha158
+    # definition and swap in the basic set's factor names.  The point under test is
+    # the input-schema guard, which runs before any Qlib computation: the same
+    # fixture with input_schema_version="research-v1" gets past it and only then
+    # fails on the missing optional qlib extra.
+    basic_document = json.loads((ROOT / "config/factor-sets/basic-v1.json").read_text())
+    alpha_document = json.loads((ROOT / "config/factor-sets/alpha158-v1.json").read_text())
+    factors = []
+    for alpha_factor, basic_factor in zip(alpha_document["factors"], basic_document["factors"]):
+        entry = dict(alpha_factor)
+        entry.update({
+            "name": basic_factor["name"],
+            "version": basic_factor["version"],
+            "implementation_fingerprint": basic_factor["implementation_fingerprint"],
+        })
+        factors.append(entry)
+    alpha_document.update({"factors": factors, "required_columns": basic_document["required_columns"], "excluded_factors": []})
+    project_root = tmp_path / "project"
+    definitions = project_root / "config" / "factor-sets"
+    definitions.mkdir(parents=True)
+    (definitions / "alpha158-v1.json").write_text(json.dumps(alpha_document), encoding="utf-8")
+    alpha_store = FactorStore(tmp_path / "alpha", FactorRegistry(project_root))
+    with pytest.raises(ContractError) as alpha:
+        alpha_store.publish(**{
+            **kwargs(), "factor_set": "alpha158", "factor_version": "1.0.0",
+            "input_schema_version": "v2",
+        })
+    assert "qlib factor input schema is not reviewed: v2" in str(alpha.value)
+    assert "reviewed schema versions for bars_daily: ['research-v1']" in str(alpha.value)

@@ -159,6 +159,8 @@
 - [x] 4. P5 决定不改(理由见上文 P5:化妆性改名会破坏 A500 pilot 证据的 digest 锁)。
 - [x] 5. 修 P6:`docs/user-guide.md` 列出六类预发布 family 并指明生产者尚未随仓库提供,交叉引用 `docs/layer-architecture.md`。
 - [ ] 6. 决策 P3(A/B/C 三选一)后再实施:该决策改变 canonical 口径,必须由用户确认,不得单方面放宽已 reviewed 定义;决策与理由追加到本节。
+  - 已做的决策无关部分(2026-10-13):两处拒绝信息改为可操作——`basic` 现在报 `... basic/1.0.0: got bars_daily/v2, reviewed binding is bars_daily/research-v1`,Qlib 分支现在报 `... (reviewed schema versions for bars_daily: ['research-v1'])`。**已 reviewed 的定义未放宽**,行为仍是 fail-closed。回归测试 `tests/test_factor_store.py::test_unreviewed_input_binding_names_the_reviewed_line`。
+
 
 实施记录(2026-10-13):
 - 1:`scripts/publish_market_datasets.py` 的日期解析改 `try/except ValueError` → 打印 `{"status":"configuration_failure","error":...}` 并 `return 2`;`--end` 早于 `--start` 同样结构化拒绝(原先是 `SystemExit`,exit 1 且无 JSON)。
