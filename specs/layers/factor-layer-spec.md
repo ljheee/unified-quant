@@ -69,6 +69,39 @@ existing eight-field bar contract alone. Until one of these prerequisites is
 implemented, only raw-price factors are implementable from current canonical
 bars.
 
+#### 3.1.1 Reviewed production input line `bars_daily.v2` (2026-10-13)
+
+`bars_daily.v2` is the line the Tushare-primary ingest publishes for the A500 /
+full-A pilots (`canonical/bars_daily/v2/date=<session>`). It keeps the
+research-v1 units -- `volume` in shares, `amount` in CNY, prices raw CNY -- and
+adds `status`, `limit_up`, `limit_down`, `adj_factor`, renaming only the key
+column (`datetime` -> `session_date`); both lines are produced from the same
+conversion in `src/uq/adapters/tushare.py` (`vol * 100.0`, `amount * 1000.0`).
+
+Governance rule: an input line is reviewed **per factor-set version**. Adding a
+line never edits a reviewed definition in place.
+
+- `basic/1.0.0` keeps `set_definition_version: 1` and `bars_daily/research-v1`.
+  Its published partitions keep their meaning.
+- `basic/2.0.0` is a new reviewed definition
+  (`config/factor-sets/basic-v2.json`, `set_definition_version: 3`) whose
+  `input_bindings` require `bars_daily/v2`. Implementations, fingerprints,
+  thresholds and the output contract are identical to `1.0.0`.
+- `FactorStore.publish` reads `input_bindings` from the definition, so a new
+  reviewed set needs no code change here; definitions without `input_bindings`
+  (the two v1 sets) keep the historical name-based rules.
+
+Two boundaries that follow from this and are not yet closed:
+
+- A `v2` input frame must be projected before computation: `session_date` is
+  renamed to `datetime` and only the reviewed columns are passed, because
+  `_validate_factor_frame` requires `instrument`/`datetime` regardless of input
+  line. No production entry point performs read + project + compute + publish
+  yet (tracked in `pendding.md`).
+- Only `basic` has a reviewed `v2` definition. `alpha158/1.0.0` still requires
+  `research-v1`, and `adjusted/1.0.0` still binds `bars_adjusted/adjusted-v1`;
+  `adj_factor` being present on `v2` does not by itself make that line reviewed.
+
 Every factor has a stable identity:
 
 ```yaml

@@ -228,5 +228,5 @@ def test_unreviewed_input_binding_names_the_reviewed_line(tmp_path):
             **kwargs(), "factor_set": "alpha158", "factor_version": "1.0.0",
             "input_schema_version": "v2",
         })
-    assert "qlib factor input schema is not reviewed: v2" in str(alpha.value)
+    assert "factor input schema is not reviewed: v2" in str(alpha.value)
     assert "reviewed schema versions for bars_daily: ['research-v1']" in str(alpha.value)

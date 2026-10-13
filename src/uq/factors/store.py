@@ -81,7 +81,34 @@ class FactorStore:
         if definition.factor_set == "alpha360" or not definition.factors:
             raise ContractError("contract-only factor sets cannot be published")
         local_quality = _validate_factor_frame(frame, definition)
-        if definition.factor_set == "basic":
+        bindings = definition.document.get("input_bindings")
+        if bindings is not None:
+            # Definition versions 2 and 3 carry their own reviewed input line, so the
+            # guard is data-driven: reviewing a new set -- for example basic/2.0.0 over
+            # bars_daily/v2 -- must not require a new hardcoded dataset/schema pair in
+            # this function. Definitions without input_bindings (the two v1 sets) keep
+            # the historical name-based rules below, byte for byte.
+            if input_dataset not in bindings["allowed_datasets"]:
+                raise ContractError(
+                    f"factor input dataset is not reviewed: {input_dataset} "
+                    f"(reviewed datasets for {factor_set}/{factor_version}: "
+                    f"{sorted(bindings['allowed_datasets'])})"
+                )
+            reviewed_schemas = bindings["required_schema_versions"].get(input_dataset, [])
+            if input_schema_version not in reviewed_schemas:
+                raise ContractError(
+                    f"factor input schema is not reviewed: {input_schema_version} "
+                    f"(reviewed schema versions for {input_dataset}: {sorted(reviewed_schemas)})"
+                )
+            if input_dataset == "bars_adjusted":
+                if adjustment_snapshot_id is None or effective_date_table_checksum is None:
+                    raise ContractError("adjusted factors require governed adjustment lineage")
+            elif adjustment_snapshot_id is not None or effective_date_table_checksum is not None:
+                # Adjustment lineage describes how raw prices were restated, so binding
+                # it to a raw-price input would let a bars_daily partition claim adjusted
+                # semantics. The name-based rules below only enforced this for basic.
+                raise ContractError("raw-price factors cannot bind adjustment lineage")
+        elif definition.factor_set == "basic":
             if input_dataset != "bars_daily" or input_schema_version != "research-v1":
                 # cr.md P3: this rejection is the guard that keeps governed factors
                 # off un-reviewed input lines, so it has to say which binding is
@@ -99,20 +126,6 @@ class FactorStore:
                 raise ContractError("adjusted factor input binding does not match reviewed factor set")
             if adjustment_snapshot_id is None or effective_date_table_checksum is None:
                 raise ContractError("adjusted factors require governed adjustment lineage")
-        elif definition.factor_set.startswith("alpha"):
-            bindings = definition.document.get("input_bindings")
-            if not bindings or input_dataset not in bindings["allowed_datasets"]:
-                raise ContractError(f"qlib factor input dataset is not reviewed: {input_dataset}")
-            reviewed_schemas = bindings["required_schema_versions"].get(input_dataset, [])
-            if input_schema_version not in reviewed_schemas:
-                raise ContractError(
-                    f"qlib factor input schema is not reviewed: {input_schema_version} "
-                    f"(reviewed schema versions for {input_dataset}: {sorted(reviewed_schemas)})"
-                )
-            if input_dataset == "bars_adjusted" and (
-                adjustment_snapshot_id is None or effective_date_table_checksum is None
-            ):
-                raise ContractError("adjusted qlib factors require governed adjustment lineage")
         else:
             raise ContractError(f"unsupported governed factor set: {factor_set}")
 

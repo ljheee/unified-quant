@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/factor-sets/factor_set.v3.json",
+  "title": "Reviewed factor set definition v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "set_definition_version",
+    "factor_set",
+    "factor_version",
+    "status",
+    "required_columns",
+    "quality_policy",
+    "dependencies",
+    "factors",
+    "input_bindings"
+  ],
+  "properties": {
+    "set_definition_version": {
+      "const": 3
+    },
+    "factor_set": {
+      "type": "string",
+      "minLength": 1
+    },
+    "factor_version": {
+      "$ref": "#/$defs/semver"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "reviewed"
+      ]
+    },
+    "required_columns": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "quality_policy": {
+      "enum": [
+        "reject_all",
+        "accept_with_warnings"
+      ]
+    },
+    "quality_thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "null_rate_maximum",
+        "coverage_minimum"
+      ],
+      "properties": {
+        "null_rate_maximum": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "coverage_minimum": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[^/]+/\\d+\\.\\d+\\.\\d+$"
+      }
+    },
+    "qlib_expression_set": {
+      "type": "string",
+      "enum": [
+        "Alpha158",
+        "Alpha360"
+      ]
+    },
+    "excluded_factors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "reason"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "factors": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version",
+          "implementation_fingerprint"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "$ref": "#/$defs/semver"
+          },
+          "implementation_fingerprint": {
+            "$ref": "#/$defs/sha256"
+          },
+          "qlib_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expression": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minimum_history": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "reviewed_engine_versions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_datasets",
+        "required_schema_versions"
+      ],
+      "properties": {
+        "allowed_datasets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required_schema_versions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "description": "v2 plus two changes needed to review a factor set whose governed input line is bars_daily/v2: (1) input_bindings stays required, so a v3 definition can never rely on a hardcoded dataset/schema pair in FactorStore; (2) the qlib-specific members (per-factor qlib_name/expression and reviewed_engine_versions) are required only when the definition declares qlib_expression_set, because a native pandas-computed set has no qlib expression and no qlib engine version. Native runtime provenance is not unrecorded: every published factor partition carries python_version and dependency_lock_digest_sha256 from the locked environment.",
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "qlib_expression_set"
+        ]
+      },
+      "then": {
+        "required": [
+          "reviewed_engine_versions"
+        ],
+        "properties": {
+          "factors": {
+            "items": {
+              "required": [
+                "name",
+                "version",
+                "implementation_fingerprint",
+                "qlib_name",
+                "expression"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

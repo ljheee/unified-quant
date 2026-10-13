@@ -158,7 +158,7 @@
 - [x] 3. 修 P4:naive `upstream_created_at` 改抛 `ContractError`(只收紧失败形状,不改已接受输入的 identity 语义),并补回归测试。
 - [x] 4. P5 决定不改(理由见上文 P5:化妆性改名会破坏 A500 pilot 证据的 digest 锁)。
 - [x] 5. 修 P6:`docs/user-guide.md` 列出六类预发布 family 并指明生产者尚未随仓库提供,交叉引用 `docs/layer-architecture.md`。
-- [ ] 6. 决策 P3(A/B/C 三选一)后再实施:该决策改变 canonical 口径,必须由用户确认,不得单方面放宽已 reviewed 定义;决策与理由追加到本节。
+- [~] 6. P3 决策:**已定 A(2026-10-13,用户拍板)**,契约层已落地,剩 A-2 执行入口:该决策改变 canonical 口径,必须由用户确认,不得单方面放宽已 reviewed 定义;决策与理由追加到本节。
   - 已做的决策无关部分(2026-10-13):两处拒绝信息改为可操作——`basic` 现在报 `... basic/1.0.0: got bars_daily/v2, reviewed binding is bars_daily/research-v1`,Qlib 分支现在报 `... (reviewed schema versions for bars_daily: ['research-v1'])`。**已 reviewed 的定义未放宽**,行为仍是 fail-closed。回归测试 `tests/test_factor_store.py::test_unreviewed_input_binding_names_the_reviewed_line`。
 
 
@@ -167,3 +167,17 @@
 - 2:新增 `tests/test_publish_market_datasets.py`(6 例):非法日期、倒序窗口、`--skip-independent-calendar` → `cross_check_result="skipped"` 且 `independent_source="not_checked"`、两家一致 → `"agreement"`、两家分歧 → `ContractError` fail-closed、重跑记 `already_present` 且不重复发布(set binding 逐字节不变)。
 - 3:`_iso_datetime` 在入口处拒绝 naive `datetime` 与 naive ISO 串(`ContractError: upstream_created_at must be timezone-aware`)与不可解析串;字符串入参仍原样返回,已发布分区的 identity 字节不受影响。回归测试 `tests/test_factor_store.py::test_naive_upstream_timestamp_is_a_typed_refusal`。
 - 5:`docs/user-guide.md` §6 新增「execute 前必须已发布的上游制品」表(六类绑定 + 谁读它 + 仓库内是否有生产者),并说明 dry-run 不解析这些 store、v5 日历快照的 `skipped`/`agreement` 口径。
+
+P3 实施记录(2026-10-13,方案 A)
+- 决策:新增 reviewed 定义版本,而不是放宽旧的、也不是再灌一条 research-v1 线。旧定义与其已发布分区语义不变。
+- 已核实的等价性(为什么这是"新版本"而非"改名"):`config/schemas/bars_daily.v2.yaml` 与 research-v1 同单位(`volume` share、`amount` CNY、价格 raw CNY),只把主键 `datetime` 改名为 `session_date` 并新增 `status/limit_up/limit_down/adj_factor`;两条线共用 `src/uq/adapters/tushare.py` 里同一次换算(`vol*100`、`amount*1000`),实测 A500 store `amount ≈ close×volume` 成立,故因子值单位一致。
+- 已落地:
+  - `config/schemas/factor-sets/factor_set.v3.json`:在 v2 基础上 (1) `input_bindings` 仍必填,(2) `qlib_name`/`expression`/`reviewed_engine_versions` 改为**仅在声明 `qlib_expression_set` 时必填**(原生 pandas 集合没有 qlib 表达式与 qlib 引擎版本;原生运行环境溯源仍由分区的 `python_version` + `dependency_lock_digest_sha256` 承担)。
+  - `config/factor-sets/basic-v2.json`:`basic/2.0.0`、`set_definition_version: 3`、statuses reviewed、`input_bindings` 只允许 `bars_daily/v2`;factors/fingerprint/thresholds/required_columns 与 1.0.0 逐字相同(有测试锁)。
+  - `src/uq/factors/store.py`:输入线守卫改为**由定义驱动**(有 `input_bindings` 就走它),v1 两个集合的名称分支原样保留;顺带把"raw-price 输入不得绑复权血缘"从只覆盖 `basic` 扩到所有 bars_daily 输入。
+  - `specs/layers/factor-layer-spec.md` §3.1.1 登记该 reviewed 输入线与两条边界。
+  - 测试:`tests/test_factor_set_input_line_v2.py`(7 例,含"加 2.0.0 没有放宽 1.0.0"的双向拒绝、v3 条件必填、unreviewed dataset 报出 reviewed 清单)。
+- 未落地(A-2,仍是 P3 的剩余部分):
+  - 没有生产出入口把 canonical `v2` 分区读出来→投影(`session_date`→`datetime`、只留 reviewed 列)→算→发布。`scripts/` 里至今没有因子发布入口(`FactorEngine.execute` 只算不发布),所以"用 A500 v2 数据真跑一次训练"还差这一步。
+  - `alpha158/1.0.0` 仍只接受 `research-v1`;要做 qlib 线过 v2,需另开一个 reviewed 版本(它牵涉 qlib 引擎版本与表达式字段口径),不在本次范围。
+  - `adjusted/1.0.0` 仍绑 `bars_adjusted/adjusted-v1`。v2 上虽然带了 `adj_factor`,但"带字段"不等于"该线已 reviewed",复权线要单独走一次评审。
