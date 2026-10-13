@@ -190,3 +190,10 @@ P3 实施记录(2026-10-13,方案 A)
 - 仍未 reviewed 的输入线:
   - `alpha158/1.0.0` 仍只接受 `research-v1`;要做 qlib 线过 v2,需另开一个 reviewed 版本(它牵涉 qlib 引擎版本与表达式字段口径),不在本次范围。
   - `adjusted/1.0.0` 仍绑 `bars_adjusted/adjusted-v1`。v2 上虽然带了 `adj_factor`,但"带字段"不等于"该线已 reviewed",复权线要单独走一次评审。
+
+universe snapshot 生产者(2026-10-13)
+- `scripts/publish_universe_snapshots.py`:把受治理的 `index_membership` 快照铺成 `universe_snapshot.v1` 制品,覆盖区间严格 `[visible_from, 下一 visible_from)`(最后一份 `valid_to=null` 且在 evidence 里标注),`membership_evidence` 必带 `source/index_code/pit_precision/index_snapshot_date/publish_lag_days/membership_generation` 与"月度近似、非严格逐日 PIT"的限制语。两个快照 `visible_from` 相同(无法平铺)时直接拒绝,不猜先后。
+- 真跑:`data/a500-store` 17 个快照 → 17 个制品,`UniverseSnapshotStore.read_manifest` 全部读回通过,区间**无缺口无重叠**(最早 `valid_from=2025-06-10`,最新 `2026-10-15` 开放)。
+- 顺带把 `IndexMembershipStore.snapshot_dates()` 提为公开 API(脚本不该依赖私有 `_snapshot_dates`)。
+- 测试:`tests/test_publish_universe_snapshots.py`(6 例:平铺正确+读回、幂等、窗口过滤、未知 universe 拒绝且不落盘、visible_from 冲突拒绝、边界参数拒绝)。
+- 剩余四类预发布制品仍只有测试 helper:`adjusted_price`、`feature_schema`/`feature_preprocessing`、`label_set`、`backtest_config`。其中 `label_set`/`adjusted_price` 还需要**新写受治理写入器**(现有 `LabelStore`/`AdjustedPriceDatasetStore` 只有 read_* 方法)。

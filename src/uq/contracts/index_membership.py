@@ -144,6 +144,10 @@ class IndexMembershipStore:
             if child.is_dir() and _SNAPSHOT_DIR.fullmatch(child.name)
         )
 
+    def snapshot_dates(self, universe_id: str) -> list[date]:
+        """Public accessor for the published snapshot dates of one universe."""
+        return self._snapshot_dates(universe_id)
+
     def earliest_visible_date(self, universe_id: str) -> date:
         visible = [
             date.fromisoformat(self.read_manifest(universe_id, snapshot_date)["visible_from"])
