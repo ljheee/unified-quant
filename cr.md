@@ -526,3 +526,18 @@ U 批次合入（12d44af）并经 code-review 复核（46ba276）后，复核方
 **generation 是否漂移（实测，非推定）**：`result.quality_report` 在无外部报告时即校验器返回的同一文档，实测 A500 2025-09-30 分区发布报告与 `_validate_factor_frame` 输出逐字段相等（`warnings` 为空），故 R1 不改既有分区身份。
 
 **未夸大声明**：全量套件监工亲跑 `python -m pytest tests/`= 941 passed / 24 skipped（qlib 门控本地 skip）；generation 不变仅对 2025-09-30 一个分区做了逐字段核对，其余 3 个分区按同一路径推定；真实 A500 重发为监工亲跑。R2/R3 未动。
+
+### 8.15 R2 修复轮（2026-10-13，canonical manifest 版本收敛 + 身份判定单源）
+
+pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstReader` 无条件按 `canonical-v1.json` 校验，凡由前者产出的分区在**所有层共用的受治理读路径**上直接不可读；同时未带版本的文档会静默走 v1 分支。
+
+| 项 | 修复 | 验证 |
+|---|---|---|
+| 读侧版本分派 | `contracts/manifest.py:load_canonical_manifest`：**先读 `manifest_version` 再选契约**，白名单 `(1, 2)`（`bool`/缺失/其他值一律 `unsupported canonical manifest_version` 并打印支持集，无 v1 回退）；`1` 走原 `canonical-v1.json` 规则（既有分区字节不变），`2` 走 `canonical_manifest.v2.json` + `canonical_v2_identities` 重算 generation/digest/trust anchor | `tests/test_canonical_manifest_versions.py` 5 例： v1 仍可读、`CanonicalV2Store` 分区经 `ManifestFirstReader` 读出、`manifest_version: 3` 与删字段两例 fail-closed、篡改 `row_count` 触发 generation mismatch |
+| 身份判定单源 | 新增 `validate_canonical_v2_manifest`（契约层）；`canonical_v2._validate_manifest` 与 `research_chain/owning_contracts.py` 的手写副本**均改为委托**（后者原先是第三份 generation/digest 手写实现，且不校验 trust anchor 等式）。`gate_contracts` 懒加载避免 manifest↔gate_contracts 模块环 | 全量套件在**加严** adjusted-price 读（多出 trust anchor 等式）后仍 945 passed / 24 skipped，说明不存在依赖旧宽松口径的既有数据 |
+| 严格度差异登记 | 未把两条读路径强行合并：`ManifestFirstReader` 证身份 + data checksum + row count + 列序 + dtype + 内嵌 anchor；`read_canonical_v2` 额外要求带外 expected anchor + 绑定 quality report。差异与原因写入 `specs/layers/factor-layer-spec.md` §3.1.3，并登记命名坑：`bars_daily/v2`（schema 版本）实际活在 `manifest_version: 1` | spec 文本；两条读路径各自测试均绿 |
+| pin 清理 | `tests/test_known_contract_divergences.py` 两条 pin 全部撤除（R1→正向锁、R2→上述新锁），文件删除，锁分拆为 `tests/test_factor_quality_single_source.py` / `tests/test_canonical_manifest_versions.py` | 两文件 2 + 5 例绿 |
+
+**未修（有意，登记不隐藏）**：`src/uq/exporters/qlib.py:41`（legacy QlibExporter）把自己重读的 canonical manifest 原样嵌进导出快照 manifest，未走契约校验（帧本身已由 `ManifestFirstReader` 校验过），属 legacy 隔离面的 TOCTOU-ish 弱点，不在本轮半径；`factor-layer-implementation-plan` Phase 的「带外 expected anchor + 物理路径三元组校验」仍是未完成项。
+
+**未夸大声明**：全量 `python -m pytest tests/` = 945 passed / 24 skipped（监工亲跑，qlib 门控本地 skip）；本轮不改任何写侧身份，故无需迁移已发布分区；生产写侧今天没有任何入口使用 `CanonicalV2Store`（grep 核实：仅 contracts 自身与 research-chain 测试引用），该结论为代码检索而非运行时枚举。R3 未动。

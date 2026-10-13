@@ -1,35 +1,28 @@
-"""Guard for one remaining contract divergence (see ``pendding.md``).
+"""The factor quality decision has exactly one source (cr.md R1).
 
-The first test is a deliberate **pin, not an endorsement**: it asserts that the
-divergence still exists, so fixing it forces a conscious update here instead of
-letting it drift silently into new code.
+``FactorEngine.create_result`` and ``FactorStore.publish`` used to derive two
+different check taxonomies, so a report produced by the governed facade could
+never satisfy publication and every publisher had to re-derive the report
+itself.  The engine now delegates to the validator publication re-derives, and
+these tests keep that property from eroding:
 
-1. ``uq.contracts.canonical_v2.CanonicalV2Store`` writes ``manifest_version: 2``
-   manifests, while ``uq.store.reader.ManifestFirstReader`` validates against
-   ``canonical-v1.json`` only, so partitions written by the former are not
-   readable through the governed read path that every layer uses.
-
-The second test used to be the matching pin for the factor quality contract --
-``FactorEngine.create_result`` produced a check set that ``FactorStore.publish``
-could never accept, so the governed facade could plan but never publish. That
-divergence is fixed (cr.md R1), so it is now a positive lock: the engine report
-has to satisfy the same validator publication re-derives, end to end.
+* the report the engine hands out *is* the report publication re-derives;
+* that report really does publish, end to end;
+* a report that disagrees with the local decision still rejects publication.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
-from zoneinfo import ZoneInfo
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
 
-from tests.test_publish_factor_partitions import V2_SCHEMA, bars
 from uq.contracts.artifacts import QualityReportStore
-from uq.contracts.canonical_v2 import CanonicalV2Store, file_sha256_bytes
+from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.contracts.factor_governance import FactorRegistry
-from uq.contracts.schema import load_schema
 from uq.errors import ContractError
 from uq.factors.engine import FactorEngine
 from uq.factors.raw_price import calculate_raw_price_factors
@@ -39,37 +32,8 @@ from uq.factors.store import (
     _validate_factor_frame,
     factor_generation,
 )
-from uq.store.reader import ManifestFirstReader
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def test_canonical_v2_store_output_is_not_readable_by_the_governed_reader(tmp_path):
-    schema = load_schema(V2_SCHEMA)
-    day = date(2026, 3, 2)
-    frame = bars(day)
-    store = CanonicalV2Store(tmp_path)
-    generation = store.prepare_generation(schema, day, frame, {}, {})
-    directory = QualityReportStore().save(tmp_path, {
-        "report_version": 1,
-        "binding_type": "canonical_v2",
-        "bound_generation_id": generation,
-        "policy": "reject_all",
-        "status": "passed",
-        "checks": [{"name": "coverage", "threshold": 0, "observed": 0,
-                    "level": "error", "result": "passed"}],
-        "errors": [], "warnings": [],
-    })
-    store.publish(schema, day, frame, {}, {},
-                  quality_checksum=file_sha256_bytes((directory / "report.json").read_bytes()))
-
-    with pytest.raises(ContractError, match="manifest schema validation failed"):
-        ManifestFirstReader(tmp_path).read(schema, day)
-    # The partition really is there: the failure is the manifest contract, not
-    # missing data. If this ever stops raising, converge the two writers and
-    # delete this pin in the same change.
-    assert (tmp_path / "canonical" / schema.dataset / schema.version
-            / f"date={day.isoformat()}" / "manifest.json").is_file()
 
 
 def _engine_publication_setup(tmp_path):

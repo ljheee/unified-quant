@@ -8,8 +8,8 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.artifacts import QualityReportStore
-from ..contracts.canonical_v2 import canonical_v2_identities, file_sha256_bytes
-from ..contracts.gate_contracts import validate_contract
+from ..contracts.canonical_v2 import file_sha256_bytes
+from ..contracts.manifest import validate_canonical_v2_manifest
 from ..contracts.model_layer import ModelContractLoader
 from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
@@ -53,7 +53,7 @@ class AdjustedPriceDatasetStore:
         for path in candidates:
             try:
                 manifest = json.loads(path.read_text(encoding="utf-8"))
-                validate_contract("canonical_manifest.v2.json", manifest)
+                validate_canonical_v2_manifest(manifest)
             except (OSError, json.JSONDecodeError, ContractError):
                 continue
             if manifest.get("generation_id") == generation_id:
@@ -65,17 +65,9 @@ class AdjustedPriceDatasetStore:
         return self._read_verified_manifest(matches[0]), matches[0]
 
     def _read_verified_manifest(self, directory: Path) -> dict[str, Any]:
-        manifest = _read_json(directory / "manifest.json")
-        unsigned = {
-            key: value for key, value in manifest.items()
-            if key not in {"generation_id", "manifest_digest_sha256", "trust_anchor_sha256"}
-        }
-        expected_generation, expected_digest = canonical_v2_identities(unsigned)
-        if (
-            manifest["generation_id"] != expected_generation
-            or manifest["manifest_digest_sha256"] != expected_digest
-        ):
-            raise ContractError("tampered adjusted price manifest identity")
+        # Schema plus all three identities come from the one contract-layer rule,
+        # so this boundary cannot drift from the publisher or the governed reader.
+        manifest = validate_canonical_v2_manifest(_read_json(directory / "manifest.json"))
         data_path = directory / "data.parquet"
         if not data_path.is_file():
             raise ContractError("incomplete adjusted price dataset")

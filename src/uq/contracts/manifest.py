@@ -65,6 +65,53 @@ def load_manifest_with_schema(
     return manifest
 
 
+CANONICAL_MANIFEST_VERSIONS = (1, 2)
+
+
+def validate_canonical_v2_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Validate a canonical-v2 partition manifest against its own identities.
+
+    Lives here rather than in :mod:`uq.contracts.canonical_v2` so that the governed
+    read path and the publisher share one identity rule; ``gate_contracts`` is
+    imported lazily because it stays free of ``manifest`` dependencies.
+    """
+    from .gate_contracts import canonical_v2_identities, validate_contract
+
+    validate_contract("canonical_manifest.v2.json", manifest)
+    unsigned = {
+        key: value for key, value in manifest.items()
+        if key not in {"generation_id", "manifest_digest_sha256", "trust_anchor_sha256"}
+    }
+    generation_id, manifest_digest = canonical_v2_identities(unsigned)
+    if manifest.get("generation_id") != generation_id:
+        raise ContractError("canonical-v2 generation digest mismatch")
+    if manifest.get("manifest_digest_sha256") != manifest_digest:
+        raise ContractError("canonical-v2 manifest digest mismatch")
+    if manifest.get("trust_anchor_sha256") != sha256_bytes(generation_id.encode("ascii")):
+        raise ContractError("canonical-v2 trust anchor mismatch")
+    return manifest
+
+
+def load_canonical_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Dispatch a canonical partition manifest on an explicit version allowlist.
+
+    The governed reader used to validate every manifest against the v1 contract,
+    so a partition published as ``manifest_version: 2`` was unreadable while an
+    unversioned document silently took the v1 path.  Neither is acceptable: the
+    version is read first, and anything outside the allowlist fails closed with
+    the supported set quoted.
+    """
+    version = manifest.get("manifest_version")
+    if isinstance(version, bool) or version not in CANONICAL_MANIFEST_VERSIONS:
+        raise ContractError(
+            f"unsupported canonical manifest_version: {version!r} "
+            f"(supported: {list(CANONICAL_MANIFEST_VERSIONS)})"
+        )
+    if version == 2:
+        return validate_canonical_v2_manifest(manifest)
+    return load_manifest_with_schema(manifest)
+
+
 def anchor_generation_id(generation_id: str) -> str:
     return sha256_bytes(generation_id.encode("ascii"))
 

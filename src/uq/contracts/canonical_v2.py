@@ -16,30 +16,17 @@ from typing import Any
 import pandas as pd
 
 from .gate_contracts import canonical_json, canonical_v2_identities, sha256_bytes, sha256_json, validate_contract
-from .manifest import schema_file_checksum
+from .manifest import schema_file_checksum, validate_canonical_v2_manifest
 from .schema import Schema
 from ..errors import ContractError
 
 
 
 def _validate_manifest(manifest: dict[str, Any], *, expected_anchor: str | None = None) -> None:
-    from .gate_contracts import validate_contract
-
-    validate_contract("canonical_manifest.v2.json", manifest)
-    unsigned_manifest = {
-        key: deepcopy(value) for key, value in manifest.items()
-        if key not in {"generation_id", "manifest_digest_sha256", "trust_anchor_sha256"}
-    }
-    expected_generation, expected_manifest_digest = canonical_v2_identities(unsigned_manifest)
-    if manifest["generation_id"] != expected_generation:
-        raise ContractError("canonical-v2 generation digest mismatch")
-    if manifest["manifest_digest_sha256"] != expected_manifest_digest:
-        raise ContractError("canonical-v2 manifest digest mismatch")
-    if (
-        not isinstance(expected_anchor, str)
-        or sha256_bytes(manifest["generation_id"].encode("ascii")) != expected_anchor
-        or manifest["trust_anchor_sha256"] != expected_anchor
-    ):
+    # Schema, generation and manifest digest rules live with the governed read
+    # path, so publisher and reader cannot drift apart on the identity contract.
+    validate_canonical_v2_manifest(manifest)
+    if not isinstance(expected_anchor, str) or manifest["trust_anchor_sha256"] != expected_anchor:
         raise ContractError("canonical-v2 trust anchor mismatch")
 
 

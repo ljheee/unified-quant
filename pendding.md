@@ -184,12 +184,12 @@ P3 实施记录(2026-10-13,方案 A)
   - 真跑验证(A500 实测 store):`--factor-set basic --factor-version 2.0.0 --input-visibility session_close` 在 2025-08-29~09-30 窗口发布 4 个分区(09-25~09-30,每分区 498 行),其余 19 个 session 记为 `insufficient_history`(lookback=20);重跑全部 `already_published`、set digest 不变。**教训**:研究窗口前必须先灌够 ≥20 个 session 的暖机历史,否则 A500 全窗口只有尾巴能出因子。
   - 测试:`tests/test_publish_factor_partitions.py`(7 例,含因子值逐位断言 range_ratio_1d=0.2、close_location_1d=0.5、amount_20d=1000、volume_ratio_20d=1.0)。
 - 新发现(本轮实测暴露,未修):
-  - **两个 canonical 发布器与 reader 的 manifest 版本不兼容**:`uq.store.pit_store.CanonicalStore`(ingest pipeline 用的、也是 `data/bars-a500-store` 实际形状)写 `manifest_version: 1` + `schema_version: "v2"`;`uq.contracts.canonical_v2.CanonicalV2Store` 写 `manifest_version: 2` + `package_provenance`。而 `ManifestFirstReader` 固定按 `canonical-v1.json` 校验,读 CanonicalV2Store 的分区会直接 `manifest schema validation failed`。后果:凡是只用 `CanonicalV2Store` 造的数据,受治理读路径都读不了(本层测试改用 `CanonicalStore` 以对齐真实 store)。需要单独评审决定是收敛写侧还是让 reader 支持双版本分派。
+  - **两个 canonical 发布器与 reader 的 manifest 版本不兼容**:`uq.store.pit_store.CanonicalStore`(ingest pipeline 用的、也是 `data/bars-a500-store` 实际形状)写 `manifest_version: 1` + `schema_version: "v2"`;`uq.contracts.canonical_v2.CanonicalV2Store` 写 `manifest_version: 2` + `package_provenance`。而 `ManifestFirstReader` 固定按 `canonical-v1.json` 校验,读 CanonicalV2Store 的分区会直接 `manifest schema validation failed`。后果:凡是只用 `CanonicalV2Store` 造的数据,受治理读路径都读不了(本层测试改用 `CanonicalStore` 以对齐真实 store)。需要单独评审决定是收敛写侧还是让 reader 支持双版本分派。**→ 已于 2026-10-13 收敛(reader 按 manifest_version 白名单显式分派),见下面 R2 实施记录。**
   - **`FactorEngine.create_result` 的报告 taxonomy 与发布契约不兼容**:engine 每列各发一个同名 `null_rate`,而 `FactorStore._reports_agree` 遇到重名直接 `duplicate quality checks reject publication`,且发布侧还要求 `null_rate__<col>`/`finite_values__<col>` 命名。后果:engine 产出的 `quality_report` 永远无法用于发布,发布侧报告必须由 `_validate_factor_frame`(publish 内部用的同一函数)生成——A-2 入口就是这么做的。修它要改因子层 Phase 4 的验收语义,应另开一轮。**→ 已于 2026-10-13 修复,见下面 R1 实施记录。**
   - **因子分区只绑一个上游 generation**:滚动窗口实际用了 20 个 canonical 分区,但 manifest 的 `inputs` 只记录决策 session 那一个 `generation_id`/checksum,其余 19 个不在因子血缘里(research-v1 时代同样如此,不是本次引入)。要精确复现需要把窗口内的 bars 集合绑定进来。
 - 这三条的修复排期与前置决策(2026-10-13 定;先把两条无决策可加固的变成 CI 锁 `tests/test_known_contract_divergences.py`,它们**故意断言"问题仍然存在"**,真修时必须同一次改动里删掉对应 pin):
   - **R1(已完成 2026-10-13)engine 报告 taxonomy 与发布契约不兼容**:已改为单一口径,见下面 R1 实施记录。
-  - **R2(其后)canonical manifest 版本收敛**:先决策生产写侧以谁为准。建议:**生产固定 `CanonicalStore`(manifest_version 1,即 `data/bars-a500-store` 的现实形状)**;`CanonicalV2Store` 要么产出 reader 能校验的 manifest,要么迁到独立 dataset/version 命名空间,不再与 v1 写同一路径布局;`ManifestFirstReader` 则按 `manifest_version` 白名单显式分派,不再默认 v1。半径覆盖所有层的 canonical 读路径,要挑没有其它大改动的窗口单独做。
+  - **R2(已完成 2026-10-13)canonical manifest 版本收敛**:已让受治理 reader 按 `manifest_version` **白名单显式分派**,见下面 R2 实施记录。
   - **R3(有明确触发条件才做)因子只绑决策 session 的上游 generation**:改它就是改因子 manifest 身份(canonical 变更 → 现有分区要按新版本重发)。触发条件:出现"必须逐窗口精确复现/审计因子输入"的实际需求(例如监管式回溯、或跨数据源对账对不平)。在那之前用 bars 侧 inventory(`scripts/build_store_evidence.py` 逐分区 checksum)+ `factor_partition_set` 做近似审计。**在此之前不要动。**
 
 R1 实施记录(2026-10-13,单一质量口径)
@@ -202,8 +202,20 @@ R1 实施记录(2026-10-13,单一质量口径)
   - `null_policy` 参数此前被静默丢弃,现在尊重调用方传入,缺省才回退默认。
 - 已落地代码:`src/uq/factors/engine.py`(委托 + 状态语义)、`scripts/publish_factor_partitions.py`(改走 `FactorEngine`,`intent="publication"`,run cutoff = 分区日 15:00 Asia/Shanghai;非 `passed` 直接带 status/errors 失败,不再 import 私有 `_validate_factor_frame`)。
 - 身份影响(已实测,结论是不变):因子分区 manifest 身份含 `quality_report_checksum`,直觉上担心 engine 报告换内容会改 generation。实测相反——无外部报告时 `result.quality_report` **就是** `_validate_factor_frame` 返回的那个文档(policy/status/checks/errors/warnings 逐字段相同,实测 A500 2025-09-30 分区为 `True`),所以 R1 不改任何既有分区的 generation。advisory 的 `insufficient history emits nulls` 只留在 `FactorResult.warnings`,**故意不写进 durable 报告**:这样"计划时报告 ≡ 发布时重推导报告"是字节级等价,身份也因此稳定;代价是发布侧不留 advisory 语境,需要时由运行日志承担(已加测试锁这条等价)。
-- 测试:`tests/test_known_contract_divergences.py` 的 R1 pin 换成**正向锁**——(1) engine 报告与 `_validate_factor_frame` 逐 check 一致且能端到端 `publish`;(2) 一份 schema 合法但 status 降级的报告仍被发布拒绝。CanonicalV2Store 那条 pin(R2 未做)**故意保留**。
+- 测试:`tests/test_known_contract_divergences.py` 的 R1 pin 换成**正向锁**——(1) engine 报告与 `_validate_factor_frame` 逐 check 一致且能端到端 `publish`;(2) 一份 schema 合法但 status 降级的报告仍被发布拒绝。同文件里 CanonicalV2Store 那条 pin 随 R2 一起撤除,两个锁现分拆为 `tests/test_factor_quality_single_source.py` 与 `tests/test_canonical_manifest_versions.py`(pin 文件本身已删)。
 - 验证:全量 `python -m pytest tests/` → 941 passed / 24 skipped;真实 A500 store 走 engine 路径重发 2025-09-25~09-30(4×498 行)成功。
+
+R2 实施记录(2026-10-13,canonical manifest 版本收敛)
+- 决策(收敛读侧,不改写侧身份):**受治理 reader 先读 `manifest_version`,再按该版本自己的契约与身份校验**。白名单 `(1, 2)` 之外(含缺失、非整数、bool)一律 fail-closed 并打印支持集;不再有任何"默认按 v1 校验"的回退。
+  - `1` → 仍走 `canonical-v1.json` + 原 generation/trust-anchor 规则(既有 store 与分区**逐字节不变**);
+  - `2` →走 `canonical_manifest.v2.json` + `canonical_v2_identities` 重算(generation / manifest digest / trust anchor 三项全验)。
+- 为什么不选"只保留一个写侧":`CanonicalV2Store` 是 plan 明确要求的 **canonical-v2 增量契约**(带 `package_provenance` 与 run-local `manifest_digest_sha256`),不是 accidental 副本;而 `CanonicalStore`(manifest_version 1)是 ingest 流水线与磁盘上真实 store 的形状。删任一边都会毁掉已有能力,而两边身份规则本来就没冲突——缺的只是读侧的分派。
+- 关键细节:`validate_canonical_v2_manifest` 放在 `src/uq/contracts/manifest.py`(契约层),`canonical_v2._validate_manifest` 改为**委托**它,发布侧与读取侧共用同一身份判定,不会再各自漂移(`gate_contracts` 在函数内懒加载,避免 `manifest ↔ gate_contracts` 模块环)。
+- 两条读路径的严格度差异是**有意保留**并在 spec 登记:`ManifestFirstReader` 证 manifest 身份 + data checksum + row count + 列序 + dtype + 内嵌 trust anchor;`read_canonical_v2` 额外要求带外 expected anchor 与绑定的 quality report。
+- 命名坑登记(spec §3.1.3):`bars_daily` 的 **schema** 版本 `v2` 与 canonical **manifest** 版本 2 是两回事,`bars_daily/v2` 分区实际活在 `manifest_version: 1`。R2 之前的混乱正是这两个 `v2` 撞名造成的。
+- 测试:`tests/test_canonical_manifest_versions.py`(5 例:v1 仍读、v2 能读、`manifest_version: 3` 与缺失均 fail-closed、篡改 v2 `row_count` 触发 generation mismatch)。`tests/test_known_contract_divergences.py` 两条 pin 都已撤除(R1→正向锁、R2→上面的锁),该文件已删除。
+- 生产写侧现状记录(不做代码改动):今天**没有任何生产入口写 canonical-v2**(`CanonicalV2Store` 只被 contracts 自身与 research-chain 测试使用),所以本次不存在"已发布分区需要迁移"的问题。
+
 
 - 仍未 reviewed 的输入线:
   - `alpha158/1.0.0` 仍只接受 `research-v1`;要做 qlib 线过 v2,需另开一个 reviewed 版本(它牵涉 qlib 引擎版本与表达式字段口径),不在本次范围。

@@ -202,6 +202,25 @@ Set version derivation rules:
 4. `factor_version` is never inferred automatically from individual member
    versions; it comes from a reviewed factor-set definition file.
 
+### 3.1.3 Canonical partition reads dispatch on the manifest version
+
+Two canonical writers exist and both stay: `uq.store.pit_store.CanonicalStore`
+(the ingest pipeline, `manifest_version: 1`, which is what the stores on disk
+carry) and `uq.contracts.canonical_v2.CanonicalV2Store` (`manifest_version: 2`,
+adding `package_provenance` and a run-local `manifest_digest_sha256`).
+`ManifestFirstReader` reads `manifest_version` first and validates the document
+against that version's own contract and identities, so a `v2` partition is
+visible to every layer instead of failing `canonical-v1` schema validation.
+Any version outside `(1, 2)` -- including a missing or non-integer version --
+fails closed with the supported set quoted; nothing falls back to `v1`.
+
+The two read paths stay different in strength on purpose:
+`ManifestFirstReader` proves manifest identity, data checksum, row count,
+column order, dtypes and the embedded trust anchor, while `read_canonical_v2`
+additionally requires an out-of-band expected anchor and the bound quality
+report.  A `bars_daily` *schema* version is not a canonical *manifest* version:
+`bars_daily/v2` partitions live under `manifest_version: 1`.
+
 ## 4. Decision-Time Semantics
 
 ### 4.1 Two Clocks

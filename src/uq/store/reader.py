@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..contracts.manifest import load_manifest_with_schema, sha256_bytes
+from ..contracts.manifest import load_canonical_manifest, sha256_bytes
 from ..contracts.schema import Schema
 from ..errors import ContractError
 
@@ -25,7 +25,7 @@ class ManifestFirstReader:
         if not manifest_path.is_file() or not data_path.is_file():
             raise ContractError(f"unpublished or incomplete partition: {partition}")
 
-        manifest = load_manifest_with_schema(json.loads(manifest_path.read_text(encoding="utf-8")))
+        manifest = load_canonical_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
         expected_anchor = sha256_bytes(manifest["generation_id"].encode("ascii"))
         if manifest.get("trust_anchor_sha256") != expected_anchor:
             raise ContractError("manifest trust anchor mismatch")
