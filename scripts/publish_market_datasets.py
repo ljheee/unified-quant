@@ -254,9 +254,24 @@ def main() -> int:
     parser.add_argument("--bindings-out", type=Path, default=None)
     args = parser.parse_args()
 
-    start, end = dt.date.fromisoformat(args.start), dt.date.fromisoformat(args.end)
+    # cr.md P1: a malformed window is a configuration error, so it must take the
+    # same structured shape as the other governed entry points
+    # (``validate_training_readiness.py``, ``uq-ingest daily``) instead of
+    # surfacing a raw ValueError traceback with exit code 1.
+    try:
+        start, end = dt.date.fromisoformat(args.start), dt.date.fromisoformat(args.end)
+    except ValueError as exc:
+        print(json.dumps(
+            {"status": "configuration_failure", "error": f"invalid --start/--end: {exc}"},
+            ensure_ascii=False,
+        ))
+        return 2
     if end < start:
-        raise SystemExit("--end precedes --start")
+        print(json.dumps(
+            {"status": "configuration_failure", "error": "--end precedes --start"},
+            ensure_ascii=False,
+        ))
+        return 2
     families = args.family or list(FAMILIES)
     publisher = MarketDatasetPublisher(args.market_dataset_root)
 

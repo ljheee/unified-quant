@@ -285,6 +285,23 @@ def serialize_factor_frame(frame: pd.DataFrame) -> tuple[bytes, str]:
 
 
 def _iso_datetime(value: str | datetime) -> str:
+    """Render an upstream instant, refusing naive values at the intake point.
+
+    cr.md P4: ``FactorGovernance.validate_manifest`` compares each input's
+    ``upstream_created_at`` against a tz-aware ``run_visible_cutoff``, so a naive
+    ``datetime`` (or naive ISO string) reached that comparison and surfaced as a
+    bare ``TypeError``. Accepted inputs keep their exact previous shape: strings
+    are returned verbatim so published identity bytes are unaffected.
+    """
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise ContractError(f"upstream_created_at is not an ISO-8601 timestamp: {value!r}") from exc
+    else:
+        parsed = value
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ContractError("upstream_created_at must be timezone-aware")
     return value if isinstance(value, str) else value.isoformat()
 
 

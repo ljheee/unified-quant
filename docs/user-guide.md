@@ -205,6 +205,29 @@ execute 的命令形状如下，仅作结构说明：
 
 但这只是格式示例。真实 execute 还要求分数对应的 universe、factor、dataset、model artifact 和 quality decision 都能被解析。
 
+### execute 前必须已发布的上游制品
+
+请求里的这些绑定,必须在 execute 之前就已经作为受治理分区存在于 `--data-root`。研究链对它们**只读取并校验**,不会代为生成:
+
+| 请求绑定 | 读取它的 store | 仓库内是否带生产者 |
+| --- | --- | --- |
+| `factor_binding` / `factor_partition_set_binding` | `uq.factors.store.FactorStore` | 否:发布类存在,但"从 bars store 算因子 → 发布因子分区"的入口脚本还没有(见 `pendding.md` P3) |
+| `universe_snapshot_binding` | `uq.contracts.artifacts.UniverseSnapshotStore` | 否:`save()` 目前只被测试调用 |
+| `adjusted_price_binding` | `src/uq/research_chain/owning_contracts.py:31` `AdjustedPriceDatasetStore` | 否:只读 |
+| `feature_preprocessing_binding` | 同文件 `FeatureSchemaStore` + `FeaturePreprocessingStore` | 否:只读 |
+| `label_binding` | 同文件 `LabelStore` | 否:只读 |
+| `backtest_config_binding` | 同文件 `BacktestConfigStore` | 否:只读 |
+
+v5 请求额外要求的两类绑定**有**随仓库提供的生产者:
+
+- `index_membership_binding`:`scripts/fetch_index_membership.py`。
+- `paper_execution_template` 的市场数据四族:`scripts/publish_market_datasets.py`。
+
+两点提醒:
+
+- §5 的 dry-run 只校验请求本身并写 request/state manifest,**不会**去解析上面这些 store;绑定是到 execute 阶段才逐个读取校验的,所以 dry-run 通过不代表可以 execute。
+- 因此"一条命令从零跑到回测"按现有代码还做不到:上面六类要先由研究流程产出并落到同一个 `--data-root`——目前只有测试里的 helper 会产出它们。
+
 ### 论文执行(v5 请求)的两个额外参数
 
 `contract_version: 5` 的请求(带 `paper_execution_template`)额外要求两个治理输入,必须成对提供:
@@ -225,6 +248,8 @@ execute 的命令形状如下，仅作结构说明：
 - `--market-dataset-root`:Phase 0.5 的 `MarketDatasetPublisher` store。研究窗口的交易日历由此处的 `trading_calendar_snapshot_v1` 家族导出;窗口没有覆盖到的日历快照会 fail-closed。
 
 只提供其中一个会报 `--membership-root and --market-dataset-root must be provided together`。
+
+日历快照的跨源核对口径:`--skip-independent-calendar` 会把 `independent_source` 记为 `not_checked`、`cross_check_result` 记为 `skipped`(而不是伪报 `agreement`);两家供应商会话列表不一致时直接 fail-closed。
 
 ## 7. 结果在哪里看
 

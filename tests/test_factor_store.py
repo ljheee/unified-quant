@@ -167,3 +167,20 @@ def test_store_honors_injected_registry_at_generation_and_read(tmp_path):
     store.publish(**arguments)
     _, restored = store.read_partition(generation)
     assert len(restored) == 4
+
+
+def test_naive_upstream_timestamp_is_a_typed_refusal(tmp_path):
+    """cr.md P4: a naive instant fails as ContractError, never a bare TypeError.
+
+    ``FactorGovernance.validate_manifest`` compares every input's
+    ``upstream_created_at`` against a tz-aware ``run_visible_cutoff``, so a naive
+    value used to reach that comparison and escape as
+    ``TypeError: can't compare offset-naive and offset-aware datetimes``.
+    """
+    store = FactorStore(tmp_path, FactorRegistry(ROOT))
+    arguments = kwargs()
+    for naive in (datetime(2026, 7, 20, 16, 0), "2026-07-20T16:00:00"):
+        with pytest.raises(ContractError, match="must be timezone-aware"):
+            store.publish(**{**arguments, "upstream_created_at": naive})
+    with pytest.raises(ContractError, match="not an ISO-8601 timestamp"):
+        store.publish(**{**arguments, "upstream_created_at": "20th-of-July-2026"})

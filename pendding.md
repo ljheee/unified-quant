@@ -118,3 +118,50 @@
 - 已实现:`build_membership_set` 按窗口内交易日选择快照并生成 `set_digest_sha256`;`verify_membership_set` 校验 digest、generation、manifest 摘要、成员校验和、严格递增,以及每个交易日选中的快照是最新可见者。
 - 已验证:真实 store 上构造确定性(两次 digest 相同),窗口 2025-10-10 至 2026-09-30 选中 13 个快照并通过校验。
 - 决策点(已定,2026-10-12):窗口起点早于首个可见快照时**保持直接失败**(fail-closed),不做空段降级。理由:静默接受未覆盖的起始段会让"窗口内每个交易日都有可见快照"这条不变量失效,而调用方无法从结果里看出前段是空的;正确做法是把快照补齐(例如 `data/a500-store/` 已为此向前追加 2025-05-30/06-30/07-31 三个月度快照),而不是让运行时猜。若将来确有"窗口合法地早于首个已发布快照"的用例,再改为显式返回空缺段并让调用方决定。
+
+# 全 A / A500 实盘训练前置缺口(2026-10-13 项目级 CR 复核)
+
+来源:对最近数个 commit 的项目级 CR。下面每条都在本机复现过才写入;CR 里**未复现的指控单列在"本轮未复现项"**,防止后续读者按假问题施工。
+
+## 已复现的真问题
+
+- P1(阻断,机械)`scripts/publish_market_datasets.py:257` 直接 `dt.date.fromisoformat(args.start)`,日期写错即抛 `ValueError: Invalid isoformat string` 原始 traceback、exit=1。
+  - 同类入口都已结构化拒绝:`src/uq/cli.py:71` 用 `parser.error`,`scripts/validate_training_readiness.py` 输出 `{"status":"configuration_failure",...}`,本脚本是唯一例外。
+- P2(阻断,机械)`rg -l publish_market_datasets tests` 为空:该脚本 `main()` 无任何测试覆盖,包括 `cross_check_result=("agreement" if independent_sessions is not None else "skipped")`(`:283`)这条刚改过的装配线。也就是说本层唯一的"四族发布入口"没有回归防护。
+- P3(阻断,需决策)已治理的因子链**无法消费 v2 bars 线**,而 A500/全 A 实盘训练实测产出的正是 v2:
+  - 复现:`FactorStore.publish(..., input_dataset="bars_daily", input_schema_version="v2")` → `ContractError: factor input binding does not match reviewed factor set`(`src/uq/factors/store.py:85` 对 `basic` 硬要求 `research-v1`);`alpha158` → `ContractError: qlib factor input schema is not reviewed: v2`(`store.py:96-99`,读 `config/factor-sets/alpha158-v1.json` 的 `required_schema_versions.bars_daily == ["research-v1"]`)。
+  - 实测 store:`data/bars-a500-store/canonical/bars_daily/v2/date=*/manifest.json` 的 `schema_version` 为 `v2`(23 个分区)。
+  - 根因**不只是版本字符串比较**:`bars_daily.research-v1.yaml` 主键是 `(instrument, datetime)`、字段止于 OHLCV+amount,`basic-v1.json` 的 `required_columns` 同样要求 `datetime`;v2 主键是 `session_date`,并多出 `status`/`limit_up`/`limit_down`/`adj_factor`。列契约与主键都不同,放宽字符串也接不上。
+  - 可选路线(未决策,不得擅自放宽已 reviewed 定义):
+    - A. 新建 v2 因子集定义(`basic-v2.json`/`alpha158-v2.json`,`required_columns` 改 `session_date`,`input_bindings` 要求 v2,重算 `implementation_fingerprint`)——口径最干净,但是一次真正的重新评审。
+    - B. 加受治理的 v2 → research-v1 投影(重命名 `session_date`→`datetime`、丢弃扩展列)后按现有 reviewed 定义发布——改动最小、保持 v1 定义与既有证据不变;代价是丢掉 `adj_factor`/状态列,`adjusted`/资格判定仍接不到 v2。
+    - C. 并行维护一条 research-v1 bars 线(重复抓取,额外配额)。
+  - 相关缺口:仓库内**没有**从 bars store 计算并发布治理因子的生产入口(`rg -l FactorStore scripts/` 为空,只有 `src/uq/factors/store.py`、`src/uq/models/accepted_store.py`、`src/uq/research_chain/cli.py` 引用),上面任一条路线落地时都要一并补上该入口。
+- P4(次要,机械)`upstream_created_at` 传入 naive `datetime` 时抛 `TypeError: can't compare offset-naive and offset-aware datetimes`,而非带类型的 `ContractError`;失败形状与其余校验不一致。
+- P5(次要,命名,**决定不改** — 2026-10-13)`src/uq/pipeline/readiness.py:239` 的 `observable_counts` 实际保存 required − suspended,名字与语义不符。
+  - 已试过改名 `required_tradable_counts`,但 `evidence/a500-pilot/2025-08-29-to-2025-09-30/evidence-index.json:60` 钉了该文件的 SHA-256,钉的是「跑出该 pilot 证据的那份代码」。改名后 `tests/test_adv_review_fixes.py::test_evidence_indexes_are_fresh_and_never_index_themselves` 立即失败;若顺手刷新 digest,等于宣称「改名后的代码跑出了那份 pilot 结果」,属于伪造证据血缘。已回滚。
+  - 处置:留待下次对 `readiness.py` 做**实质**改动时一并改名,并同步重跑 pilot、重出证据索引。
+- P6(文档)`docs/user-guide.md` 未说明研究链 v5 请求所需六类**预发布**制品,而这些 family 在生产代码里只读(生产者仅存在于测试 helper),纯按用户指南走会在发布前一步卡住。
+
+## 本轮 CR 未复现项(不要按这些施工)
+
+- "pandas 3 下 `Series.fillna` 被移除 / `dataset.py`、`labels.py` 会崩":本机 pandas 2.3.3,`Series.fillna` 与 `ffill(axis=1)` 均可用;`rg "\.fillna\(|ffill\(axis" src/uq/models src/uq/backtest src/uq/portfolio` 零命中;所引行号超出文件长度(`dataset.py` 167 行、`labels.py` 161 行)。
+- "非交易日触发 `RuntimeError(\"no expected sessions\")` 回归":`src/uq/routing/router.py` 无该 raise,`TradingCalendar.between` 返回空集,`DailyIngestPipeline.run` 捕获 `OSError/RuntimeError` 后返回报告的契约不变;所引测试文件与测试名不存在。
+- "`daily.py:57` 新增 `fromisoformat` 校验":`pipeline/daily.py`、`store/reader.py`、`store/pit.py`、`store/pit_store.py` 内 `rg fromisoformat` 零命中。
+- "EastMoney `_ensure` 缓存捷径不可靠":`min(fetch_start, self._certified[0])` 只会在已认证区间之外扩大抓取窗口,方向保守,不是缺陷。
+- "`readiness._session_tail`":该函数不存在(仅存在 P5 的命名问题)。
+
+## 待办(按依赖顺序)
+
+- [x] 1. 修 P1:`--start/--end` 校验失败输出 `{"status":"configuration_failure","error":...}` 并 exit=2,与 `validate_training_readiness.py` 同形。
+- [x] 2. 修 P2:新增 `tests/test_publish_market_datasets.py`,覆盖非法日期、`--skip-independent-calendar` 时 `cross_check_result == "skipped"`、重复运行按不可变语义跳过。
+- [x] 3. 修 P4:naive `upstream_created_at` 改抛 `ContractError`(只收紧失败形状,不改已接受输入的 identity 语义),并补回归测试。
+- [x] 4. P5 决定不改(理由见上文 P5:化妆性改名会破坏 A500 pilot 证据的 digest 锁)。
+- [x] 5. 修 P6:`docs/user-guide.md` 列出六类预发布 family 并指明生产者尚未随仓库提供,交叉引用 `docs/layer-architecture.md`。
+- [ ] 6. 决策 P3(A/B/C 三选一)后再实施:该决策改变 canonical 口径,必须由用户确认,不得单方面放宽已 reviewed 定义;决策与理由追加到本节。
+
+实施记录(2026-10-13):
+- 1:`scripts/publish_market_datasets.py` 的日期解析改 `try/except ValueError` → 打印 `{"status":"configuration_failure","error":...}` 并 `return 2`;`--end` 早于 `--start` 同样结构化拒绝(原先是 `SystemExit`,exit 1 且无 JSON)。
+- 2:新增 `tests/test_publish_market_datasets.py`(6 例):非法日期、倒序窗口、`--skip-independent-calendar` → `cross_check_result="skipped"` 且 `independent_source="not_checked"`、两家一致 → `"agreement"`、两家分歧 → `ContractError` fail-closed、重跑记 `already_present` 且不重复发布(set binding 逐字节不变)。
+- 3:`_iso_datetime` 在入口处拒绝 naive `datetime` 与 naive ISO 串(`ContractError: upstream_created_at must be timezone-aware`)与不可解析串;字符串入参仍原样返回,已发布分区的 identity 字节不受影响。回归测试 `tests/test_factor_store.py::test_naive_upstream_timestamp_is_a_typed_refusal`。
+- 5:`docs/user-guide.md` §6 新增「execute 前必须已发布的上游制品」表(六类绑定 + 谁读它 + 仓库内是否有生产者),并说明 dry-run 不解析这些 store、v5 日历快照的 `skipped`/`agreement` 口径。
