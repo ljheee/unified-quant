@@ -187,6 +187,11 @@ P3 实施记录(2026-10-13,方案 A)
   - **两个 canonical 发布器与 reader 的 manifest 版本不兼容**:`uq.store.pit_store.CanonicalStore`(ingest pipeline 用的、也是 `data/bars-a500-store` 实际形状)写 `manifest_version: 1` + `schema_version: "v2"`;`uq.contracts.canonical_v2.CanonicalV2Store` 写 `manifest_version: 2` + `package_provenance`。而 `ManifestFirstReader` 固定按 `canonical-v1.json` 校验,读 CanonicalV2Store 的分区会直接 `manifest schema validation failed`。后果:凡是只用 `CanonicalV2Store` 造的数据,受治理读路径都读不了(本层测试改用 `CanonicalStore` 以对齐真实 store)。需要单独评审决定是收敛写侧还是让 reader 支持双版本分派。
   - **`FactorEngine.create_result` 的报告 taxonomy 与发布契约不兼容**:engine 每列各发一个同名 `null_rate`,而 `FactorStore._reports_agree` 遇到重名直接 `duplicate quality checks reject publication`,且发布侧还要求 `null_rate__<col>`/`finite_values__<col>` 命名。后果:engine 产出的 `quality_report` 永远无法用于发布,发布侧报告必须由 `_validate_factor_frame`(publish 内部用的同一函数)生成——A-2 入口就是这么做的。修它要改因子层 Phase 4 的验收语义,应另开一轮。
   - **因子分区只绑一个上游 generation**:滚动窗口实际用了 20 个 canonical 分区,但 manifest 的 `inputs` 只记录决策 session 那一个 `generation_id`/checksum,其余 19 个不在因子血缘里(research-v1 时代同样如此,不是本次引入)。要精确复现需要把窗口内的 bars 集合绑定进来。
+- 这三条的修复排期与前置决策(2026-10-13 定;先把两条无决策可加固的变成 CI 锁 `tests/test_known_contract_divergences.py`,它们**故意断言"问题仍然存在"**,真修时必须同一次改动里删掉对应 pin):
+  - **R1(下一个做)engine 报告 taxonomy 与发布契约不兼容**:建议让 `FactorEngine.create_result` 直接复用 `_validate_factor_frame` 产生 checks/status,取消第二套口径;顺带决定 `empty`/`rejected` 在发布侧的映射(publish 现在对空帧直接抛)。半径只在因子层,但会动到 Phase 4 验收语义,需你点头。
+  - **R2(其后)canonical manifest 版本收敛**:先决策生产写侧以谁为准。建议:**生产固定 `CanonicalStore`(manifest_version 1,即 `data/bars-a500-store` 的现实形状)**;`CanonicalV2Store` 要么产出 reader 能校验的 manifest,要么迁到独立 dataset/version 命名空间,不再与 v1 写同一路径布局;`ManifestFirstReader` 则按 `manifest_version` 白名单显式分派,不再默认 v1。半径覆盖所有层的 canonical 读路径,要挑没有其它大改动的窗口单独做。
+  - **R3(有明确触发条件才做)因子只绑决策 session 的上游 generation**:改它就是改因子 manifest 身份(canonical 变更 → 现有分区要按新版本重发)。触发条件:出现"必须逐窗口精确复现/审计因子输入"的实际需求(例如监管式回溯、或跨数据源对账对不平)。在那之前用 bars 侧 inventory(`scripts/build_store_evidence.py` 逐分区 checksum)+ `factor_partition_set` 做近似审计。**在此之前不要动。**
+
 - 仍未 reviewed 的输入线:
   - `alpha158/1.0.0` 仍只接受 `research-v1`;要做 qlib 线过 v2,需另开一个 reviewed 版本(它牵涉 qlib 引擎版本与表达式字段口径),不在本次范围。
   - `adjusted/1.0.0` 仍绑 `bars_adjusted/adjusted-v1`。v2 上虽然带了 `adj_factor`,但"带字段"不等于"该线已 reviewed",复权线要单独走一次评审。
