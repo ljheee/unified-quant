@@ -633,3 +633,22 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试**：`tests/test_model_definition.py::TestMetricReport` 由 1 例扩为 6 例（默认截面 + 截面=逐日相关均值 + pooled 显式且与截面不同 + rank 变体 + 退化截面跳过 + 无可用截面 fail-closed + 未支持指标 fail-closed）。全量 **992 passed / 23 skipped / exit 0**（基线 986+6 吻合；qlib 门控本地 skip）。
 
 **未夸大声明**：口径分派与退化截面两处源改动的变异杀伤为监工亲做；全量套件监工亲跑。`MetricReport` 目前在 src 内仍无生产调用方（仅测试），故本轮不改任何已发布制品身份。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.21 自 CR：§8.18–§8.20 三轮提交的提交后复核（2026-10-14）
+
+三轮修复（§8.18 latent 批次、§8.19 N1、§8.20 B11）以三个独立提交落地并推送后，对**合并后的树**做了一轮对抗自 CR（逐提交读码 + 对可触达路径做运行时探针 + 变异验证）。**发现并修复 1 处自引入回归**，其余结论为无新增缺陷。
+
+| 项 | 结论 | 证据 |
+|---|---|---|
+| **B13 回归（自引入，已修）** | `_requested_bar_estimate` 被提升到 `fetch` 的 per-instrument `try` **之外**，于是畸形 ISO 日期不再走 per-instrument 的 `errors.append(...)`，而是把 `ValueError` **抛出适配器**。`fetch` 的既有契约是"请求级错误也返回 typed `FetchResult` 信封，绝不外抛"。已改为捕获该 `ValueError` 并返回 `UNSUPPORTED_REQUEST` 信封 | 变异：去掉捕获 → 新锁 `test_mootdx_malformed_dates_return_an_envelope_not_an_exception` 复现裸 `ValueError`；修复后 993 passed |
+| B1 风险门 | 读码复核：`_LEGACY_BLOCKED_ACTIONS` 与 `EXECUTABLE_ACTIONS` 分派正确（block 系保留历史文案，其余非可执行动作 `not executable`）；`RiskRunStore.publish` 全部调用点已传 payloads；`read_verified_risk_run` 按 `run_scope` 分派，portfolio 载荷（决策体）与 order 载荷（候选单+决策体）各自校验 | 全量套件 + 既有篡改锁 |
+| B2 标签 | `output` 的 `data_checksum` / `logical_fingerprint` 均不依赖 index，故新增的 `.reset_index(drop=True)` 不改分区身份；`row_count` 与过滤前一致 | 既有 label 锁 + 新 B2 锁 |
+| B3 trainer | 三处 `isfinite` 均在权重求解前后，顺序无副作用 | 新 B3 锁 |
+| B5 回测门 | 停牌判定移到门调用之前；全停牌日 `run=None` 且 `risk_run` schema 的 `minItems:1` 不被触发 | 新 B5 两锁 |
+| N1 | 其余 `read_members` 调用点（`scripts/build_store_evidence.py`、`scripts/publish_universe_snapshots.py`）均为 **`IndexMembershipStore`**（另一类，签名不同），不受必填参数影响；`UniverseSnapshotStore` 仅数据集/组合两阶段 + 测试调用 | grep 调用点枚举 |
+| B11 | `groupby("decision_date")` 依赖 merge 后的键列（恒存在）；metric 名非白名单值 fail-closed；`rank_ic` 先 rank 再 pearson，与 pooled 变体共用同一 `_correlate` | 新 6 锁 + 变异 |
+| 提交卫生 | 三个提交的改动文件集互不重叠（仅 `cr.md`/`pendding.md` 分段落叠加）；无 `.pyc`/`data`/`evidence` 误入；提交前分别在 r1/r2 中间态各跑一次全量（984 / 986） | `git show --stat` + 中间态全量 |
+
+**测试**：新增 1 例（mootdx 畸形日期信封）。全量 **993 passed / 23 skipped / exit 0**。
+
+**未夸大声明**：本自 CR 的探针与变异为监工亲做；三轮各自的变异验证见 §8.18–§8.20。合并树全量监工亲跑。`code-review-unified-quant.md` 保持未跟踪。
