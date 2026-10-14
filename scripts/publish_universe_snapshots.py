@@ -71,6 +71,19 @@ def _tiles(store: IndexMembershipStore, universe_id: str) -> list[dict[str, Any]
         raise ContractError(
             f"index membership snapshots share a visible_from date and cannot be tiled: {overlaps}"
         )
+    # cr.md feat MAJOR-2: IndexMembershipStore.as_of serves the newest
+    # snapshot_date among the snapshots visible on a day, so a tile boundary at
+    # visible_from only agrees with the store when snapshot_date increases along
+    # visible_from order.  A mixed publish lag breaks that ordering and would
+    # serve a stale membership open-ended; refuse instead of tiling a lie.
+    for previous, current in zip(records, records[1:]):
+        if current["snapshot_date"] <= previous["snapshot_date"]:
+            raise ContractError(
+                "index membership snapshot_date does not increase in visible_from order "
+                f"({previous['snapshot_date'].isoformat()} visible {previous['visible_from'].isoformat()} -> "
+                f"{current['snapshot_date'].isoformat()} visible {current['visible_from'].isoformat()}); "
+                "mixed publish lags would make the tiles diverge from IndexMembershipStore.as_of"
+            )
     for position, record in enumerate(records):
         if position + 1 < len(records):
             record["valid_to"] = records[position + 1]["visible_from"] - dt.timedelta(days=1)

@@ -273,6 +273,16 @@ def main() -> int:
         ))
         return 2
     families = args.family or list(FAMILIES)
+    if "corporate-action" in families and args.dividend_root is None:
+        # cr.md contracts MINOR-1: this refusal must precede every family
+        # publish and take the same structured shape as the window checks
+        # above, not a raw SystemExit after earlier families already landed.
+        print(json.dumps(
+            {"status": "configuration_failure",
+             "error": "--family corporate-action requires --dividend-root"},
+            ensure_ascii=False,
+        ))
+        return 2
     publisher = MarketDatasetPublisher(args.market_dataset_root)
 
     adapter = Tushare2kAdapter()
@@ -317,8 +327,6 @@ def main() -> int:
             )
         ]
     if "corporate-action" in families:
-        if args.dividend_root is None:
-            raise SystemExit("--family corporate-action requires --dividend-root")
         result["families"]["corporate-action"] = [
             manifest["generation_id"]
             for manifest in _publish_corporate_actions(

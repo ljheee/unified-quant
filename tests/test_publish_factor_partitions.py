@@ -11,8 +11,10 @@ the calculator.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
+import shutil
 from datetime import date
 from pathlib import Path
 
@@ -189,6 +191,74 @@ def test_non_trading_rows_never_reach_the_calculator(tmp_path, monkeypatch, caps
     assert halted["volume_ratio_20d"].isna().all()
     others = frame[frame["instrument"] != suspended_instrument]
     assert others["volume_ratio_20d"].unique().tolist() == [pytest.approx(1.0)]
+
+
+def test_orphaned_quality_report_is_completed_not_mislabeled(tmp_path, monkeypatch, capsys):
+    """cr.md feat MAJOR-1: an interrupted run can leave the immutable quality
+    report on disk without the partition.  A re-run must finish that
+    publication -- the old classifier read the report's "already published"
+    refusal as a published partition and covered a day with nothing on disk."""
+    days = sessions(21)
+    build_store(tmp_path, days)
+    factor_root = tmp_path / "factors"
+    first_code, first = run(monkeypatch, capsys, bars_root=tmp_path, factor_root=factor_root,
+                            start=days[19], end=days[19])
+    assert first_code == 0 and first["status"] == "published"
+    partition = Path(first["published"][0]["partition"])
+    shutil.rmtree(partition)  # the interruption: report survives, partition is gone
+
+    second_code, second = run(monkeypatch, capsys, bars_root=tmp_path, factor_root=factor_root,
+                              start=days[19], end=days[19])
+    assert second_code == 0 and second["status"] == "published", second
+    assert partition.is_dir()
+    assert len(read_factor_partition(partition)) == len(INSTRUMENTS)
+
+
+def test_divergent_orphaned_quality_report_fails_loudly(tmp_path, monkeypatch, capsys):
+    """The orphaned report may only be reused byte-identically; a rewritten
+    report is tampering and must fail the run, never read as already published."""
+    days = sessions(21)
+    build_store(tmp_path, days)
+    factor_root = tmp_path / "factors"
+    first_code, first = run(monkeypatch, capsys, bars_root=tmp_path, factor_root=factor_root,
+                            start=days[19], end=days[19])
+    assert first_code == 0 and first["status"] == "published"
+    partition = Path(first["published"][0]["partition"])
+    generation = first["published"][0]["generation_id"]
+    report_path = factor_root / "reports" / "factor_v1" / generation / "report.json"
+    document = json.loads(report_path.read_text(encoding="utf-8"))
+    document["warnings"] = ["operator note smuggled into the immutable report"]
+    content = json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    report_path.write_bytes(content)
+    (report_path.parent / "report.sha256").write_text(hashlib.sha256(content).hexdigest() + "\n")
+    shutil.rmtree(partition)
+
+    code, result = run(monkeypatch, capsys, bars_root=tmp_path, factor_root=factor_root,
+                       start=days[19], end=days[19])
+    assert code == 1 and result["status"] == "failed", result
+    assert "disagrees with the recomputed decision" in result["failed"][0]["error"]
+    assert not partition.exists()
+
+
+def test_expression_defined_set_is_refused_up_front(tmp_path, monkeypatch, capsys):
+    """cr.md feat OBS-5: an expression-defined set used to pass every
+    config-stage check and then fail identically on every session inside the
+    governed engine; the refusal now happens before anything is read or written."""
+    days = sessions(21)
+    build_store(tmp_path, days)
+    factor_root = tmp_path / "factors"
+    monkeypatch.setattr("sys.argv", [
+        "publish_factor_partitions.py",
+        "--bars-root", str(tmp_path), "--factor-root", str(factor_root),
+        "--factor-set", "alpha158", "--factor-version", "1.0.0",
+        "--start", days[0].isoformat(), "--end", days[-1].isoformat(),
+        "--input-visibility", "session_close",
+    ])
+    code = module.main()
+    result = json.loads(capsys.readouterr().out)
+    assert code == 2 and result["status"] == "configuration_failure", result
+    assert "expression-defined factors" in result["error"]
+    assert not factor_root.exists()
 
 
 def test_projection_refuses_unknown_lines_and_missing_reviewed_columns():

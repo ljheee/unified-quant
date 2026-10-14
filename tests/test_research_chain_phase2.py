@@ -596,6 +596,47 @@ def test_dataset_stage_rejects_missing_upstream_binding(tmp_path: Path) -> None:
         )
 
 
+def test_dataset_stage_reports_tampered_adjusted_price_manifest_loudly(tmp_path: Path) -> None:
+    """cr.md contracts MINOR-2: a manifest that names the bound generation but
+    fails validation is tampering; it must not be silently skipped and reported
+    as "unpublished" (schema-valid, identity-broken: the checksum flip keeps
+    every required key but breaks the derived identities)."""
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    binding = plan.stage_bindings[2]
+    manifest_path = next(
+        path for path in tmp_path.rglob("manifest.json")
+        if json.loads(path.read_text(encoding="utf-8")).get("generation_id") == binding.generation_id
+    )
+    document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    document["data_checksum_sha256"] = "0" * 64
+    manifest_path.write_text(json.dumps(document, sort_keys=True), encoding="utf-8")
+    with pytest.raises(ContractError, match="invalid manifest for published adjusted price generation"):
+        adapter.run(
+            plan,
+            runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+            **_execute_decisions(plan),
+        )
+
+
+def test_dataset_stage_keeps_a_non_object_manifest_in_the_unpublished_branch(tmp_path: Path) -> None:
+    """A manifest that is not a JSON object cannot name a generation, so the scan
+    must not dereference it: the run fails with the typed "unpublished" refusal
+    instead of an AttributeError from a non-dict ``.get()``."""
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    binding = plan.stage_bindings[2]
+    manifest_path = next(
+        path for path in tmp_path.rglob("manifest.json")
+        if json.loads(path.read_text(encoding="utf-8")).get("generation_id") == binding.generation_id
+    )
+    manifest_path.write_text("[]", encoding="utf-8")
+    with pytest.raises(ContractError, match="unpublished adjusted price dataset"):
+        adapter.run(
+            plan,
+            runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+            **_execute_decisions(plan),
+        )
+
+
 def test_dataset_stage_rejects_preprocessing_input_mismatch(tmp_path: Path) -> None:
     adapter, plan, factor_store = _prepare_dataset_store(tmp_path)
     binding = plan.stage_bindings[0]

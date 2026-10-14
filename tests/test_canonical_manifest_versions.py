@@ -19,6 +19,7 @@ out-of-band trust anchor and the bound quality report.
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import date
 from pathlib import Path
 
@@ -93,6 +94,23 @@ def test_manifest_version_outside_the_allowlist_fails_closed(tmp_path, change):
     rewrite_manifest(manifest_path(tmp_path, schema), **change)
     with pytest.raises(ContractError, match="unsupported canonical manifest_version"):
         ManifestFirstReader(tmp_path).read(schema, DAY)
+
+
+def test_relocated_partition_is_not_served_as_the_wrong_date(tmp_path):
+    """cr.md contracts OBS-3: a partition directory relocated under a wrong date
+    passes the anchor/checksum checks, so the reader must also verify the
+    manifest's own partition_date against the requested path -- for both
+    manifest versions now that R2 made both readable here."""
+    other_day = date(2026, 3, 3)
+    for label, publish in (("v1", lambda root: build_store(root, [DAY])), ("v2", publish_v2)):
+        root = tmp_path / label
+        publish(root)
+        schema = load_schema(V2_SCHEMA)
+        assert len(ManifestFirstReader(root).read(schema, DAY)) > 0
+        partition = root / "canonical" / "bars_daily" / "v2" / f"date={DAY.isoformat()}"
+        shutil.copytree(partition, partition.with_name(f"date={other_day.isoformat()}"))
+        with pytest.raises(ContractError, match="partition_date does not match"):
+            ManifestFirstReader(root).read(schema, other_day)
 
 
 def test_tampered_v2_manifest_identity_fails_closed(tmp_path):

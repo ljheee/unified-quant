@@ -1,4 +1,5 @@
 import json
+import sys
 from datetime import date, datetime
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from uq.contracts.artifacts import QualityReportStore
 from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.contracts.factor_governance import FactorRegistry
 from uq.errors import ContractError
+from uq.factors.qlib_adapter import QlibNotInstalledError
 from uq.factors.raw_price import calculate_raw_price_factors
 from uq.factors.store import FactorStore, _validate_factor_frame, factor_generation, read_factor_partition
 
@@ -186,7 +188,7 @@ def test_naive_upstream_timestamp_is_a_typed_refusal(tmp_path):
         store.publish(**{**arguments, "upstream_created_at": "20th-of-July-2026"})
 
 
-def test_unreviewed_input_binding_names_the_reviewed_line(tmp_path):
+def test_unreviewed_input_binding_names_the_reviewed_line(tmp_path, monkeypatch):
     """cr.md P3: a refusal must name the reviewed line so the caller can act.
 
     These two input-binding guards are why governed factors cannot consume the
@@ -230,3 +232,16 @@ def test_unreviewed_input_binding_names_the_reviewed_line(tmp_path):
         })
     assert "factor input schema is not reviewed: v2" in str(alpha.value)
     assert "reviewed schema versions for bars_daily: ['research-v1']" in str(alpha.value)
+
+    # The narrated continuation is executed too (cr.md feat MINOR-3): past the
+    # schema guard, the same fixture reaches the Qlib dependency and fails on
+    # the missing optional extra -- proving the guard runs before any Qlib
+    # computation rather than merely claiming so.  The absence is pinned, not
+    # sampled from the interpreter (same idiom as test_qlib_adapter): four
+    # certified CI cells install pyqlib through the qlib extra, where the real
+    # import succeeds and this assertion could not hold.
+    monkeypatch.setitem(sys.modules, "qlib", None)
+    with pytest.raises(QlibNotInstalledError, match="pyqlib"):
+        alpha_store.publish(**{
+            **kwargs(), "factor_set": "alpha158", "factor_version": "1.0.0",
+        })

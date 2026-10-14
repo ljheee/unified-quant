@@ -54,11 +54,23 @@ class AdjustedPriceDatasetStore:
         for path in candidates:
             try:
                 manifest = json.loads(path.read_text(encoding="utf-8"))
-                validate_canonical_v2_manifest(manifest)
-            except (OSError, json.JSONDecodeError, ContractError):
+            except (OSError, json.JSONDecodeError):
                 continue
-            if manifest.get("generation_id") == generation_id:
-                matches.append(path.parent)
+            # A document that is not an object cannot name a generation, so it is
+            # not a candidate; it stays in the "unpublished" branch rather than
+            # escaping as an AttributeError from a non-dict .get().
+            if not isinstance(manifest, dict) or manifest.get("generation_id") != generation_id:
+                continue
+            try:
+                validate_canonical_v2_manifest(manifest)
+            except ContractError as exc:
+                # cr.md contracts MINOR-2: a manifest that names the queried
+                # generation but fails validation is tampering, not "unpublished"
+                # -- the diagnostics must say so loudly.
+                raise ContractError(
+                    f"invalid manifest for published adjusted price generation: {generation_id}"
+                ) from exc
+            matches.append(path.parent)
         if not matches:
             raise ContractError(f"unpublished adjusted price dataset: {generation_id}")
         if len(matches) > 1:

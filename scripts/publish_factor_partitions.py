@@ -122,6 +122,18 @@ def main() -> int:
         definition = registry.get(args.factor_set, args.factor_version)
     except ContractError as exc:
         return _refuse(f"unknown or unreviewed factor set: {exc}")
+    # This entry point computes raw-price factors only.  An expression-defined
+    # set (alpha158/alpha360) satisfies the input_bindings checks below and then
+    # fails identically on every session inside the governed engine; refuse it
+    # up front like the other un-reviewed combinations (cr.md feat OBS-5).
+    if "qlib_expression_set" in definition.document or any(
+        "expression" in factor for factor in definition.factors
+    ):
+        return _refuse(
+            f"{args.factor_set}/{args.factor_version} declares expression-defined factors, "
+            "which this raw-price entry point does not compute; publish it through its "
+            "reviewed qlib entry point"
+        )
     bindings = definition.document.get("input_bindings")
     if bindings is None:
         # The two v1 definitions predate input_bindings; their reviewed pair is the
@@ -256,7 +268,7 @@ def main() -> int:
                     + ("".join(f"; {message}" for message in result.errors))
                 )
             local_quality = result.quality_report
-            QualityReportStore().save(report_root, {
+            report_document = {
                 "report_version": 1,
                 "binding_type": "factor_v1",
                 "bound_generation_id": generation,
@@ -265,7 +277,26 @@ def main() -> int:
                 "checks": local_quality["checks"],
                 "errors": local_quality["errors"],
                 "warnings": local_quality["warnings"],
-            })
+            }
+            report_store = QualityReportStore()
+            report_path = report_root / "reports" / "factor_v1" / generation / "report.json"
+            if report_path.exists():
+                # cr.md feat MAJOR-1: an earlier run can die between saving the
+                # report and publishing the partition, leaving an orphaned report.
+                # The immutable report may be reused to finish that run only when
+                # it is byte-identical to the decision this run recomputed;
+                # anything else is tampering, never an "already published" day.
+                report_store.read(report_root, generation, binding_type="factor_v1")
+                intended = json.dumps(
+                    report_document, sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")
+                if report_path.read_bytes() != intended:
+                    raise ContractError(
+                        f"existing quality report for {day.isoformat()} disagrees "
+                        "with the recomputed decision"
+                    )
+            else:
+                report_store.save(report_root, report_document)
             arguments["quality_report_checksum"] = file_sha256_bytes(
                 (report_root / "reports" / "factor_v1" / generation / "report.json").read_bytes()
             )
@@ -281,7 +312,11 @@ def main() -> int:
             })
             covered.append(day)
         except (ContractError, OSError, ValueError) as exc:
-            if "already published" in str(exc):
+            # Only the store's partition-immutability refusal may cover the day:
+            # the quality-report save used a similar "already published" message,
+            # and conflating them once covered a day that had no partition on
+            # disk (cr.md feat MAJOR-1).  Orphaned reports are handled above.
+            if "immutable factor partition already published" in str(exc):
                 skipped.append({"session": day.isoformat(), "reason": "already_published"})
                 covered.append(day)
                 continue

@@ -189,10 +189,16 @@ class FactorEngine:
         advisory context instead of downgrading the status.
         """
         def check_results(report: dict[str, Any]) -> dict[tuple[str, float], str]:
-            return {
-                (item["name"], float(item["threshold"])): item["result"]
-                for item in report.get("checks", [])
-            }
+            # cr.md contracts OBS-4: a malformed check entry (missing key,
+            # non-numeric threshold) must surface as a typed refusal, not a
+            # bare KeyError/ValueError escaping the governed error channel.
+            try:
+                return {
+                    (item["name"], float(item["threshold"])): item["result"]
+                    for item in report.get("checks", [])
+                }
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ContractError(f"malformed quality report check entry: {exc}") from exc
 
         def failure_message(name: str) -> str:
             if name == "coverage":
@@ -242,6 +248,12 @@ class FactorEngine:
             raise ContractError("factor result quality status disagrees with local checks")
         expected_checks = check_results(local_report)
         supplied_checks = check_results(report)
+        # cr.md contracts OBS-5: an externally supplied report must carry real
+        # checks.  R1's empty-frame branch produces an empty local check list,
+        # so without this clause a supplied ``checks: []`` would pass equality
+        # where the pre-R1 rule refused it (``not supplied_checks``).
+        if quality_report is not None and not supplied_checks:
+            raise ContractError("supplied factor quality report carries no checks")
         if supplied_checks != expected_checks:
             raise ContractError("factor result quality checks disagree with local computation")
         return FactorResult(

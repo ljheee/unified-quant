@@ -154,6 +154,42 @@ def test_external_quality_report_must_match_local_decision():
         engine().create_result(request, frame, quality_report=mismatched_checks)
 
 
+def test_external_quality_report_with_empty_checks_is_refused():
+    """cr.md contracts OBS-5: R1's empty-frame branch produces an empty local
+    check list, so a supplied ``checks: []`` report would pass equality where
+    the pre-R1 rule (``not supplied_checks``) refused it.  The refusal is
+    restored for supplied reports; the local dry-run path stays accepted."""
+    request = engine().build_request(
+        trade_date=date(2026, 8, 21), factor_set="basic", factor_version="1.0.0"
+    )
+    empty_frame = pd.DataFrame(columns=[
+        "instrument", "datetime",
+        *[item["name"] for item in request.definition.factors],
+    ])
+    result = engine().create_result(request, empty_frame)
+    assert result.status == "empty"
+    with pytest.raises(ContractError, match="carries no checks"):
+        engine().create_result(request, empty_frame,
+                               quality_report={**result.quality_report, "checks": []})
+
+
+def test_external_quality_report_with_malformed_threshold_fails_typed():
+    """cr.md contracts OBS-4: a non-numeric threshold in a supplied report must
+    surface as a typed ContractError, not a bare ValueError escaping the
+    governed error channel."""
+    request = engine().build_request(
+        trade_date=date(2026, 8, 21), factor_set="basic", factor_version="1.0.0"
+    )
+    frame = pd.DataFrame([{
+        "instrument": "A", "datetime": pd.Timestamp(2026, 8, 21),
+        **{name: 1.0 for name in [item["name"] for item in request.definition.factors]},
+    }])
+    passing = engine().create_result(request, frame).quality_report
+    malformed = {**passing, "checks": [{**passing["checks"][0], "threshold": "not-a-number"}]}
+    with pytest.raises(ContractError, match="malformed quality report check entry"):
+        engine().create_result(request, frame, quality_report=malformed)
+
+
 def test_publication_intent_rejects_empty_result():
     request = engine().build_request(
         trade_date=date(2026, 8, 21), factor_set="basic", factor_version="1.0.0",

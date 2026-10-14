@@ -31,6 +31,13 @@ class ManifestFirstReader:
             raise ContractError("manifest trust anchor mismatch")
         if manifest.get("dataset") != schema.dataset or manifest.get("schema_version") != schema.version:
             raise ContractError("manifest does not match requested schema")
+        # cr.md contracts OBS-3: the manifest must also name the partition this
+        # path claims to be -- a directory relocated under a wrong date passes
+        # the anchor/checksum checks above and would be served as that date.
+        # ``read_canonical_v2`` enforces the same physical identity
+        # (canonical_v2.py).  Both governed writers always record the field.
+        if manifest.get("partition_date") is not None and manifest["partition_date"] != partition_date.isoformat():
+            raise ContractError("manifest partition_date does not match the requested partition path")
         if verify_checksum:
             actual_checksum = hashlib.sha256(data_path.read_bytes()).hexdigest()
             if manifest.get("data_checksum_sha256") != actual_checksum:

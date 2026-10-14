@@ -64,6 +64,31 @@ def run(monkeypatch, capsys, *, membership_root: Path, universe_root: Path,
     return code, json.loads(capsys.readouterr().out)
 
 
+def test_mixed_publish_lags_are_refused_instead_of_tiled(tmp_path, monkeypatch, capsys):
+    """cr.md feat MAJOR-2: IndexMembershipStore.as_of serves the newest
+    snapshot_date visible on a day, so tiles only agree with the store when
+    snapshot_date increases in visible_from order.  A mixed publish lag breaks
+    that ordering (here the newer snapshot becomes visible first) and must be
+    refused rather than tiled into an open-ended stale membership."""
+    store = IndexMembershipStore(tmp_path / "membership")
+    for snapshot_date, lag in ((date(2026, 1, 30), 25), (date(2026, 2, 27), 0)):
+        store.publish(
+            universe_id=UNIVERSE,
+            index_code="000510.SH",
+            source="tushare:index_weight:000510.SH",
+            source_fetched_at=datetime(2026, 4, 1, tzinfo=timezone.utc),
+            snapshot_date=snapshot_date,
+            publish_lag_days=lag,
+            trading_days=TRADING_DAYS,
+            members=pd.DataFrame({"instrument": ["600000.XSHG"]}),
+        )
+    code, result = run(monkeypatch, capsys, membership_root=tmp_path / "membership",
+                       universe_root=tmp_path / "research")
+    assert code == 2 and result["status"] == "configuration_failure", result
+    assert "does not increase in visible_from order" in result["error"]
+    assert not (tmp_path / "research" / "universes").exists()
+
+
 def test_tiles_snapshots_over_visibility(tmp_path, monkeypatch, capsys):
     build_membership(tmp_path / "membership")
     universe_root = tmp_path / "research"

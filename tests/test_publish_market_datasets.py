@@ -72,6 +72,19 @@ def _calendar_manifest(market_root: Path) -> dict:
     return json.loads((market_root / CALENDAR / END.isoformat() / "manifest.json").read_text())
 
 
+def test_corporate_action_without_dividend_root_refuses_before_any_publish(monkeypatch, tmp_path, capsys):
+    """cr.md contracts MINOR-1: the refusal must precede every family publish
+    and take the structured configuration_failure shape -- not a raw SystemExit
+    raised after earlier families already landed in the store."""
+    code, paths = _run(monkeypatch, tmp_path, argv=["--family", "corporate-action"],
+                       independent=set(SESSIONS))
+    assert code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "configuration_failure"
+    assert "--dividend-root" in payload["error"]
+    assert not (paths["market_root"] / CALENDAR).exists()
+
+
 def test_malformed_window_is_a_structured_refusal(monkeypatch, tmp_path, capsys):
     code, paths = _run(monkeypatch, tmp_path, argv=["--start", "2025-08-29x"], independent=set(SESSIONS))
     assert code == 2
