@@ -12,6 +12,7 @@ import pytest
 
 from uq.errors import ContractError
 from uq.risk import PortfolioPublicationRiskGate, RiskEngine
+from uq.contracts.model_layer import sha256_json
 from uq.risk.contracts import (
     build_risk_review_decision,
     risk_contract_identities,
@@ -222,6 +223,10 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
         if finding["result"] == "failed"
     ]
     assert failed_findings == ["order_insufficient_cash"]
+    # OBS-1: the old assertion compared a value with itself
+    # (``decision_digest(payloads)`` just read the stored field), so it could never
+    # fail.  ``decision_digest`` now recomputes, so this is a real check: the
+    # published digest must match a fresh hash of the decision content.
     assert payloads["decision-0.json"]["decision"]["decision_digest"] == decision_digest(payloads)
     verified_run, _ = gate.read_verified_risk_run(risk_run["generation_id"])
     assert len(verified_run["event_bindings"]) == 1
@@ -235,7 +240,19 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
 
 
 def decision_digest(payloads: dict) -> str:
-    return payloads["decision-0.json"]["decision"]["decision_digest"]
+    """Recompute the decision digest from the published decision content.
+
+    OBS-1: this used to return the stored ``decision_digest`` field, which made
+    every caller's equality check a tautology.  It now hashes the same
+    (action, constraints, findings) triple ``RiskEngine`` hashes, so an assertion
+    against it is a real check.
+    """
+    decision = payloads["decision-0.json"]["decision"]
+    return sha256_json({
+        "action": decision["action"],
+        "constraints": decision["constraints"],
+        "findings": decision["findings"],
+    })
 
 
 def _permissive_portfolio_policy(threshold: float = 1.0) -> tuple[dict, dict]:
@@ -618,6 +635,95 @@ def test_risk_run_tampering_rejects_read(tmp_path):
     tampered["manifest_digest_sha256"] = "1" * 64
     decision_manifest_path.write_text(json.dumps(tampered))
     with pytest.raises(ContractError, match="identity mismatch"):
+        gate.read_verified_risk_run(run["generation_id"])
+
+
+def test_risk_run_rejects_a_payload_the_decision_store_disagrees_with(tmp_path):
+    """OBS-7: the byte chain (file sha256/byte_size) proves the run's own ``files[]``
+    match what is on disk, but it cannot catch a *publisher* that writes a
+    well-formed payload whose decision body disagrees with the decision it signed
+    into the decision store.  Only the readback's semantic comparison -- binding
+    equality plus the per-scope payload comparison -- can.  This drives that layer:
+    the payload on disk is self-consistent (correct digests), yet its decision body
+    says ``block_order`` while the decision store holds ``allow``.
+    """
+    root = tmp_path / "store"
+    gate = PortfolioPublicationRiskGate(root)
+    policy, review = _order_policy()
+    order = {"order_id": "order-1", "instrument": "A", "side": "buy", "shares": 100}
+    decision = gate.evaluate_order(
+        policy=policy, policy_review=review, order=order,
+        execution_date="2026-01-05", execution_price=10.0, previous_close=10.0,
+        decision_date_volume=100000.0, holdings={"A": 0}, cash=100000.0,
+        suspended=False, sellable_shares=0, limit_ratio=0.10, board_lot=100,
+        slippage_bps=0.0,
+    )
+    assert decision["action"] == "allow"
+    event = {
+        "contract_version": 1, "schema_version": "1.0.0", "event_id": "0" * 64,
+        "event_class": "risk_cleared", "scope_type": "order", "scope_id": "backtest_pre_trade",
+        "event_sequence_number": 1, "as_of_date": decision["as_of_date"],
+        "visible_through": decision["visible_through"],
+        "policy_generation_id": policy["generation_id"], "state_generation_id": None,
+        "decision_generation_id": decision["generation_id"], "reason": "test",
+        "producer": decision["producer"], "serialization_profile": "json-canonical-v1",
+        "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64,
+    }
+    event["generation_id"], event["manifest_digest_sha256"] = risk_contract_identities(
+        event, schema_name="risk_event"
+    )
+    run = {
+        "contract_version": 1, "schema_version": "1.0.0", "run_scope": "order_submission",
+        "risk_policy_binding": {
+            "family": "risk_policy_v1", "generation_id": policy["generation_id"],
+            "manifest_digest_sha256": policy["manifest_digest_sha256"],
+        },
+        "risk_state_binding": None,
+        "consumer_binding": {
+            "family": "backtest_config_v1", "generation_id": "0" * 64,
+            "manifest_digest_sha256": "0" * 64,
+        },
+        "decision_bindings": [{
+            "family": "risk_decision_v1", "generation_id": decision["generation_id"],
+            "manifest_digest_sha256": decision["manifest_digest_sha256"],
+        }],
+        "event_bindings": [{
+            "family": "risk_event_v1", "generation_id": event["generation_id"],
+            "manifest_digest_sha256": event["manifest_digest_sha256"],
+        }],
+        "as_of_date": "2026-01-05", "visible_through": "2026-01-05T15:00:00+00:00",
+        "producer": decision["producer"], "serialization_profile": "json-canonical-v1",
+        "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64,
+    }
+    gate.event_store.publish(event)
+    # The decision store keeps the signed ``allow`` decision.
+    gate.decision_store.publish(decision, {
+        "action": decision["action"], "constraints": decision["constraints"],
+        "decision_digest": decision["decision_digest"], "findings": decision["findings"],
+    })
+    # The run payload lies about which action was taken, but is internally
+    # consistent, so the byte chain alone would pass it.
+    payload = {
+        "candidate_order": order,
+        "decision": {
+            "action": "block_order",
+            "constraints": decision["constraints"],
+            "decision_digest": decision["decision_digest"],
+            "findings": decision["findings"],
+        },
+    }
+    encoded = (json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+    run["files"] = [{
+        "path": "decision-0.json", "sha256": hashlib.sha256(encoded).hexdigest(),
+        "byte_size": len(encoded), "serialization_profile": "json-canonical-v1",
+    }]
+    run["generation_id"], run["manifest_digest_sha256"] = risk_contract_identities(
+        run, schema_name="risk_run"
+    )
+    gate.run_store.publish(run, {"decision-0.json": payload})
+    # The byte chain is intact (the file matches files[]); the semantic layer must
+    # still refuse because the payload's decision body disagrees with the store.
+    with pytest.raises(ContractError, match="decision payload mismatch"):
         gate.read_verified_risk_run(run["generation_id"])
 
 

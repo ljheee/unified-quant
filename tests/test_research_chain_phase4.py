@@ -360,7 +360,9 @@ def _publish_backtest_config(root: Path, universe_generation_id: str, price_chec
 
 
 def _extended_plan(tmp_path: Path, prediction_generation_id: str, config_generation_id: str, config_digest: str):
-    dataset_adapter, original_plan, _ = _prepare_dataset_store(tmp_path)
+    # OBS-6: this value is a DatasetStageAdapter, but every caller below only
+    # reads its ``universe_store``; naming it ``universe_adapter`` says that.
+    universe_adapter, original_plan, _ = _prepare_dataset_store(tmp_path)
     universe_binding = next(
         binding for binding in original_plan.stage_bindings if binding.output_family == "universe_snapshot"
     )
@@ -402,7 +404,7 @@ def _extended_plan(tmp_path: Path, prediction_generation_id: str, config_generat
     )
     plan = dataclasses.replace(original_plan, request=request)
     plan = dataclasses.replace(plan, stage_bindings=(*plan.stage_bindings, prediction_binding, config_binding))
-    return dataset_adapter, plan, universe_binding
+    return universe_adapter, plan, universe_binding
 
 
 def _definition_generation(plan, universe_generation_id: str, prediction_generation_id: str) -> str:
@@ -428,7 +430,7 @@ def _definition_generation(plan, universe_generation_id: str, prediction_generat
 
 def _prepare_portfolio(tmp_path: Path, decision_dates: list[str] | None = None, *, publish_all_predictions: bool = True):
     dates = decision_dates or ["2026-01-05"]
-    dataset_adapter, plan, universe_binding = _extended_plan(tmp_path, "9" * 64, "c" * 64, "c" * 64)
+    universe_adapter, plan, universe_binding = _extended_plan(tmp_path, "9" * 64, "c" * 64, "c" * 64)
     adjusted_binding = next(
         binding for binding in plan.stage_bindings
         if binding.output_family == "adjusted_price_dataset"
@@ -480,7 +482,7 @@ def _prepare_portfolio(tmp_path: Path, decision_dates: list[str] | None = None, 
         plan, universe_binding.generation_id, first_manifest["generation_id"]
     )
     portfolio = PortfolioStageAdapter(
-        universe_store=dataset_adapter.universe_store,
+        universe_store=universe_adapter.universe_store,
         portfolio_builder=PortfolioBuilder(tmp_path),
         target_weight_store=TargetWeightStore(tmp_path),
         run_store=FileResearchRunStore(tmp_path),
@@ -522,7 +524,7 @@ def test_portfolio_stage_refuses_a_snapshot_outside_the_request_window(tmp_path:
     universe snapshot's PIT validity, exactly as the dataset stage does.  Before
     the fix the window was silently defaulted to the snapshot's own ``valid_from``,
     so a request predating the snapshot passed the guard it was supposed to fail."""
-    plan, dataset_adapter, result, _ = _prepare_portfolio(tmp_path)
+    plan, universe_adapter, result, _ = _prepare_portfolio(tmp_path)
     # Rewind the request window before the snapshot's valid_from (2026-01-05).
     plan = dataclasses.replace(
         plan, request={**plan.request, "window_start_date": "2025-12-01"}
@@ -532,7 +534,7 @@ def test_portfolio_stage_refuses_a_snapshot_outside_the_request_window(tmp_path:
     # -- making the mutation a clean "did not raise".
     output_root = tmp_path / "second"
     portfolio = PortfolioStageAdapter(
-        universe_store=dataset_adapter.universe_store,
+        universe_store=universe_adapter.universe_store,
         portfolio_builder=PortfolioBuilder(output_root),
         target_weight_store=TargetWeightStore(output_root),
         run_store=FileResearchRunStore(output_root),
@@ -572,7 +574,7 @@ def test_portfolio_chain_reads_daily_predictions(tmp_path: Path) -> None:
 
 
 def test_portfolio_prediction_binding_mismatch_fails(tmp_path: Path) -> None:
-    plan, dataset_adapter, _, _ = _prepare_portfolio(tmp_path)
+    plan, universe_adapter, _, _ = _prepare_portfolio(tmp_path)
     adapter = PortfolioStageAdapter(
         universe_store=None, portfolio_builder=PortfolioBuilder(tmp_path),
         target_weight_store=TargetWeightStore(tmp_path), run_store=FileResearchRunStore(tmp_path),
@@ -597,11 +599,11 @@ def test_portfolio_prediction_binding_mismatch_fails(tmp_path: Path) -> None:
 
 
 def test_portfolio_missing_prediction_fails_closed(tmp_path: Path) -> None:
-    plan, dataset_adapter, result, _ = _prepare_portfolio(tmp_path, ["2026-01-05"], publish_all_predictions=False)
+    plan, universe_adapter, result, _ = _prepare_portfolio(tmp_path, ["2026-01-05"], publish_all_predictions=False)
     prediction_generation = first_prediction_generation(plan)
     prediction_manifest, _ = PredictionBuilder(tmp_path).read(prediction_generation, "2026-01-05")
     adapter = PortfolioStageAdapter(
-        universe_store=dataset_adapter.universe_store, portfolio_builder=PortfolioBuilder(tmp_path),
+        universe_store=universe_adapter.universe_store, portfolio_builder=PortfolioBuilder(tmp_path),
         target_weight_store=TargetWeightStore(tmp_path), run_store=FileResearchRunStore(tmp_path),
         prediction_builder=PredictionBuilder(tmp_path),
     )
@@ -621,7 +623,7 @@ def test_portfolio_missing_prediction_fails_closed(tmp_path: Path) -> None:
 
 
 def test_portfolio_tampered_prediction_fails_closed(tmp_path: Path) -> None:
-    plan, dataset_adapter, result, _ = _prepare_portfolio(tmp_path)
+    plan, universe_adapter, result, _ = _prepare_portfolio(tmp_path)
     prediction_generation = first_prediction_generation(plan)
     prediction_manifest, prediction_frame = PredictionBuilder(tmp_path).read(
         prediction_generation, "2026-01-05"
@@ -631,7 +633,7 @@ def test_portfolio_tampered_prediction_fails_closed(tmp_path: Path) -> None:
     )
     prediction_path.write_bytes(prediction_path.read_bytes() + b"tampered")
     adapter = PortfolioStageAdapter(
-        universe_store=dataset_adapter.universe_store, portfolio_builder=PortfolioBuilder(tmp_path),
+        universe_store=universe_adapter.universe_store, portfolio_builder=PortfolioBuilder(tmp_path),
         target_weight_store=TargetWeightStore(tmp_path), run_store=FileResearchRunStore(tmp_path),
         prediction_builder=PredictionBuilder(tmp_path),
     )
@@ -649,7 +651,7 @@ def test_portfolio_tampered_prediction_fails_closed(tmp_path: Path) -> None:
 
 
 def test_portfolio_universe_binding_mismatch_fails(tmp_path: Path) -> None:
-    dataset_adapter, plan, universe_binding = _extended_plan(tmp_path, "9" * 64, "c" * 64, "c" * 64)
+    universe_adapter, plan, universe_binding = _extended_plan(tmp_path, "9" * 64, "c" * 64, "c" * 64)
     adjusted_binding = next(
         binding for binding in plan.stage_bindings
         if binding.output_family == "adjusted_price_dataset"
@@ -671,7 +673,7 @@ def test_portfolio_universe_binding_mismatch_fails(tmp_path: Path) -> None:
         for binding in plan.stage_bindings
     ))
     adapter = PortfolioStageAdapter(
-        universe_store=dataset_adapter.universe_store,
+        universe_store=universe_adapter.universe_store,
         portfolio_builder=PortfolioBuilder(tmp_path),
         target_weight_store=TargetWeightStore(tmp_path), run_store=FileResearchRunStore(tmp_path),
         prediction_builder=PredictionBuilder(tmp_path),
@@ -710,7 +712,7 @@ def test_portfolio_weight_overwrite_fails(tmp_path: Path) -> None:
 
 
 def test_wrong_portfolio_quality_decision_fails(tmp_path: Path) -> None:
-    plan, dataset_adapter, result, _ = _prepare_portfolio(tmp_path)
+    plan, universe_adapter, result, _ = _prepare_portfolio(tmp_path)
     prediction_manifest, _ = PredictionBuilder(tmp_path).read(
         first_prediction_generation(plan), "2026-01-05"
     )

@@ -104,6 +104,75 @@ class TestModelTrainer:
         assert manifest["artifact_checksum_sha256"] != DIGEST
         assert len(artifact_bytes) > 0
 
+    def test_deterministic_training_same_seed(self) -> None:
+        trainer = ModelTrainer(Path("/tmp/model-store"))
+        d1, a1 = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"))
+        d2, a2 = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"))
+        assert a1 == a2  # same seed → same weights → same bytes (except run metadata)
+
+    def test_train_period_is_required_and_restricts_fit_rows(self) -> None:
+        # Regression for cr.md C2: the dataset frame spans all splits with
+        # labels, so training must declare and honor the train window.
+        trainer = ModelTrainer(Path("/tmp/model-store"))
+        with pytest.raises(ContractError, match="train_period"):
+            trainer.train(definition=_definition(), dataset_frame=_dataset(),
+                          feature_columns=["volume_ratio_20d"], label_column="label")
+        _, full_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(),
+                                      feature_columns=["volume_ratio_20d"], label_column="label",
+                                      train_period=("2026-01-01", "2026-12-31"))
+        _, early_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(),
+                                       feature_columns=["volume_ratio_20d"], label_column="label",
+                                       train_period=("2026-01-01", "2026-01-20"))
+        assert full_bytes != early_bytes  # later rows actually excluded from the fit
+        with pytest.raises(ContractError, match="supervised observation"):
+            trainer.train(definition=_definition(), dataset_frame=_dataset(),
+                          feature_columns=["volume_ratio_20d"], label_column="label",
+                          train_period=("2027-01-01", "2027-01-31"))
+
+    def test_non_finite_solver_output_fails_closed(self, monkeypatch) -> None:
+        # OBS-8: with finite inputs and alpha > 0 the ridge solution is provably
+        # finite, so the "trained weights are not finite" guard has no natural
+        # input.  That does not make it dead: it is the last line of defence if the
+        # solver ever changes or a future kernel overflows.  Drive it directly by
+        # making the solver return non-finite weights and assert the refusal, so a
+        # refactor that drops the guard fails here.
+        def non_finite_solve(a, b):
+            return np.array([np.nan])
+
+        monkeypatch.setattr(np.linalg, "solve", non_finite_solve)
+        with pytest.raises(ContractError, match="weights are not finite"):
+            ModelTrainer(Path("/tmp/model-store")).train(
+                definition=_definition(), dataset_frame=_dataset(),
+                feature_columns=["volume_ratio_20d"], label_column="label",
+                train_period=("2026-01-01", "2026-12-31"),
+            )
+
+    def test_non_finite_features_and_labels_fail_closed(self) -> None:
+        # cr.md latent B3: a null label is the declared insufficient-future policy
+        # and is dropped, but a non-finite feature or label is corrupt input.  The
+        # normal equations would propagate it into the weights and publish a NaN
+        # model under a legitimate-looking artifact checksum.
+        trainer = ModelTrainer(Path("/tmp/model-store"))
+        feature_frame = _dataset()
+        feature_frame.loc[0, "volume_ratio_20d"] = float("nan")
+        with pytest.raises(ContractError, match="features contain null or non-finite"):
+            trainer.train(
+                definition=_definition(), dataset_frame=feature_frame,
+                feature_columns=["volume_ratio_20d"], label_column="label",
+                train_period=("2026-01-01", "2026-12-31"),
+            )
+
+        label_frame = _dataset()
+        label_frame.loc[0, "label"] = float("inf")
+        with pytest.raises(ContractError, match="labels contain non-finite"):
+            trainer.train(
+                definition=_definition(), dataset_frame=label_frame,
+                feature_columns=["volume_ratio_20d"], label_column="label",
+                train_period=("2026-01-01", "2026-12-31"),
+            )
+
 
 class TestArtifactStore:
     def test_publish_and_readback(self, tmp_path: Path) -> None:
@@ -234,53 +303,3 @@ class TestArtifactStore:
         with pytest.raises(ContractError, match="unpublished or incomplete"):
             store.read("b" * 64, "c" * 64)
 
-    def test_deterministic_training_same_seed(self) -> None:
-        trainer = ModelTrainer(Path("/tmp/model-store"))
-        d1, a1 = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label",
-            train_period=("2026-01-01", "2026-12-31"))
-        d2, a2 = trainer.train(definition=_definition(), dataset_frame=_dataset(), feature_columns=["volume_ratio_20d"], label_column="label",
-            train_period=("2026-01-01", "2026-12-31"))
-        assert a1 == a2  # same seed → same weights → same bytes (except run metadata)
-
-    def test_train_period_is_required_and_restricts_fit_rows(self) -> None:
-        # Regression for cr.md C2: the dataset frame spans all splits with
-        # labels, so training must declare and honor the train window.
-        trainer = ModelTrainer(Path("/tmp/model-store"))
-        with pytest.raises(ContractError, match="train_period"):
-            trainer.train(definition=_definition(), dataset_frame=_dataset(),
-                          feature_columns=["volume_ratio_20d"], label_column="label")
-        _, full_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(),
-                                      feature_columns=["volume_ratio_20d"], label_column="label",
-                                      train_period=("2026-01-01", "2026-12-31"))
-        _, early_bytes = trainer.train(definition=_definition(), dataset_frame=_dataset(),
-                                       feature_columns=["volume_ratio_20d"], label_column="label",
-                                       train_period=("2026-01-01", "2026-01-20"))
-        assert full_bytes != early_bytes  # later rows actually excluded from the fit
-        with pytest.raises(ContractError, match="supervised observation"):
-            trainer.train(definition=_definition(), dataset_frame=_dataset(),
-                          feature_columns=["volume_ratio_20d"], label_column="label",
-                          train_period=("2027-01-01", "2027-01-31"))
-
-    def test_non_finite_features_and_labels_fail_closed(self) -> None:
-        # cr.md latent B3: a null label is the declared insufficient-future policy
-        # and is dropped, but a non-finite feature or label is corrupt input.  The
-        # normal equations would propagate it into the weights and publish a NaN
-        # model under a legitimate-looking artifact checksum.
-        trainer = ModelTrainer(Path("/tmp/model-store"))
-        feature_frame = _dataset()
-        feature_frame.loc[0, "volume_ratio_20d"] = float("nan")
-        with pytest.raises(ContractError, match="features contain null or non-finite"):
-            trainer.train(
-                definition=_definition(), dataset_frame=feature_frame,
-                feature_columns=["volume_ratio_20d"], label_column="label",
-                train_period=("2026-01-01", "2026-12-31"),
-            )
-
-        label_frame = _dataset()
-        label_frame.loc[0, "label"] = float("inf")
-        with pytest.raises(ContractError, match="labels contain non-finite"):
-            trainer.train(
-                definition=_definition(), dataset_frame=label_frame,
-                feature_columns=["volume_ratio_20d"], label_column="label",
-                train_period=("2026-01-01", "2026-12-31"),
-            )

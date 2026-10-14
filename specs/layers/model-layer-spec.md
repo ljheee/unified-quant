@@ -318,6 +318,14 @@ variants also record ``cross_section_count``. A cross-section whose scores or
 labels are constant has an undefined correlation; it is skipped rather than
 allowed to poison the mean, and a run with no usable cross-section fails closed.
 
+**Comparability note (OBS-4).** A metric named ``ic`` did not always mean the
+cross-sectional quantity above: reports produced before this convention defined
+``ic`` as the pooled correlation, and the name alone does not say which. A reader
+comparing ``ic`` across that boundary must compare period, not just metric name;
+a report's own ``basis`` field is authoritative for its rows. No ``ic`` is
+pinned in configuration and no source adapter consumes the name, so this is a
+documentation caveat rather than a live compatibility break.
+
 A model run records execution facts:
 
 - resolved definition and dataset generations;

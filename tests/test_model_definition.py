@@ -80,6 +80,9 @@ class TestMetricReport:
         result = report["results"][0]
         assert result["basis"] == "cross_sectional"
         assert result["cross_section_count"] == 3
+        # OBS-2: ``sample_count`` is the row count of the merged frame; nothing
+        # asserted it before, so it could drift unnoticed.
+        assert result["sample_count"] == 30
         assert -1 <= result["value"] <= 1
 
     def test_cross_sectional_ic_is_the_mean_of_per_date_correlations(self) -> None:
@@ -129,6 +132,8 @@ class TestMetricReport:
         assert cross["basis"] == "cross_sectional"
         assert pooled["basis"] == "pooled"
         assert pooled["cross_section_count"] == 0
+        assert pooled["sample_count"] == 18  # 3 dates * 6 instruments, pooled
+        assert cross["sample_count"] == 18
         assert cross["value"] == pytest.approx(1.0)
         assert pooled["value"] < cross["value"]
 

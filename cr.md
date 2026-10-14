@@ -625,7 +625,7 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 
 | 项 | 修复 | 变异验证（监工亲做） |
 |---|---|---|
-| 口径分派 | `MetricReport` 原对 `ic`/`rank_ic` 一律做全样本单次相关（pooled）。现改为按 metric **名**分派：`ic`/`rank_ic` = 逐 `decision_date` 截面相关再取无权重均值；`ic_pooled`/`rank_ic_pooled` = 全样本单次相关（旧行为，须显式命名）。`ic` 家族不再把日间共同移动算进相关性 | 把 `ic`/`rank_ic` 的 basis 改回 pooled → 4 条新锁失败 |
+| 口径分派 | `MetricReport` 原对 `ic`/`rank_ic` 一律做全样本单次相关（pooled）。现改为按 metric **名**分派：`ic`/`rank_ic` = 逐 `decision_date` 截面相关再取无权重均值；`ic_pooled`/`rank_ic_pooled` = 全样本单次相关（旧行为，须显式命名）。`ic` 家族不再把日间共同移动算进相关性 | 把 `ic`/`rank_ic` 的 basis 改回 pooled → **6 条新锁失败**（§8.24 复核更正：原记 4 条系少报） |
 | 报告可审计 | 每条结果新增 `basis`（`cross_sectional`/`pooled`）与 `cross_section_count`，口径不再靠推断 | 同上下（basis 断言） |
 | 退化截面 | 常量截面（分数或标签无变异）相关未定义：**跳过**而非让均值变 NaN；无任何可用截面则 fail-closed | 删 `nunique()<2` 跳过分支 → 2 条新锁失败（NaN / 未报错） |
 | 契约 | metric `name` 在 `model_definition`/`model_definition_template` 均为自由字符串（schema 无 enum），故**无需升版**；口径约定写入 `specs/layers/model-layer-spec.md` §8.1 | 不适用 |
@@ -668,7 +668,7 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 | CR22-7 | MINOR | `mootdx_source.py:112-113` | "end must not precede start" 分支无测试；删该分支（负 span 放行超页检查）不红 | **已修**（§8.24：倒置区间锁；`days<=0`→`days==0` 变异被杀） |
 | CR22-8 | MINOR | `tests/test_model_definition.py` | rank_ic 数值语义无判别：夹具线性使 rank==pearson，`_correlate` rank 分支（`definition.py:163`）变异不红 | **已修**（§8.24：平方分位夹具，spearman=1.0 / pearson≈0.9615；删 rank 分支变异被杀） |
 
-**OBS（8 条）**：① `test_risk_control_plane_phase2.py:225` 恒真断言（`decision_digest == decision_digest(payloads)`，X==X；真锁是 :224 的 `failed_findings` 精确断言）；② `sample_count` 字段全仓库无断言（既有字段，非本轮新增）；③ §8.20 称 B11 变异"4 条新锁失败"，抽样复做实杀 6 例——少报（保守方向）；④ 同名 `ic` 语义变更仅靠 spec §8.1 记录，历史报告跨期可比性注意（src/scripts 无生产消费方、无 config 钉 "ic"，不冲击在管管线）；⑤ mootdx refusal 测试未断言 `retryable=False`，`_FixedPageMootdxAdapter` 复用于多页场景会掩盖分页 bug；⑥ `test_model_trainer.py:264` 测试放错类、`test_research_chain_phase4.py:525` 变量名 `dataset_adapter` 实为 portfolio 适配器；⑦ `read_verified_risk_run` 语义比对层无负向测试（字节链已篡改 evident，该层只防发布方写错内容）；⑧ trainer 训练后 "weights are not finite" 实际不可达（输入有限且 alpha>0 解必有限），该处无测试锁。
+**OBS（8 条，均已于 §8.25 收口）**：① `test_risk_control_plane_phase2.py:225` 恒真断言（`decision_digest == decision_digest(payloads)`，X==X；真锁是 :224 的 `failed_findings` 精确断言）；② `sample_count` 字段全仓库无断言（既有字段，非本轮新增）；③ §8.20 称 B11 变异"4 条新锁失败"，抽样复做实杀 6 例——少报（保守方向）；④ 同名 `ic` 语义变更仅靠 spec §8.1 记录，历史报告跨期可比性注意（src/scripts 无生产消费方、无 config 钉 "ic"，不冲击在管管线）；⑤ mootdx refusal 测试未断言 `retryable=False`，`_FixedPageMootdxAdapter` 复用于多页场景会掩盖分页 bug；⑥ `test_model_trainer.py:264` 测试放错类、`test_research_chain_phase4.py:525` 变量名 `dataset_adapter` 实为 portfolio 适配器；⑦ `read_verified_risk_run` 语义比对层无负向测试（字节链已篡改 evident，该层只防发布方写错内容）；⑧ trainer 训练后 "weights are not finite" 实际不可达（输入有限且 alpha>0 解必有限），该处无测试锁。
 
 **验证安全（监工亲验）**：B1（readback 按 `run_scope` 分派覆盖 schema 枚举全部两值；`RiskRunStore.publish` 两调用方均传 payloads；读路径逐文件验 byte_size+sha256）；B2（mergesort 稳定排序先算后滤；`_formula_sha256` 仅构建时写入，无旧哈希校验方）；B3（三处 isfinite 含 inf）；B5（`is_suspended` 判定集 ⊇ 一切非正价格路径；`risk_run` schema `decision_bindings minItems:1`，空决策返回 None 是必需）；B13+fd2048e（跨度拒绝与满页回检在锚定最近交易日语义下自洽；oldest 边界双向有锁）；N1（两 stage 同口径传窗；守卫不再恒真）；B11（merged 必含 decision_date 键列；常数截面跳过与无截面 fail-closed 均为强判别；spec §8.1 与实现逐条吻合）。
 
@@ -719,3 +719,24 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数**：`test_risk_control_plane_phase2.py` +4 例（3 resize + 1 未知 action）、`test_real_chain.py` +1、`test_model_definition.py` +1 = 净 +6（1000→1006 吻合）。
 
 **未夸大声明**：CR22-1（两个变异）、CR22-7、CR22-8 的变异杀伤为监工亲做；CR22-2..CR22-6 为台账/注释锚点或与 CR22-1 同源的白名单分支。全量套件监工亲跑。本轮不改任何已发布制品身份（无 canonical schema 语义变更、无版本升迁）。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.25 §8.22 八条 OBS 收口轮（2026-10-14）
+
+对 §8.22 登记的 8 条 OBS 逐条处理。**6 条补锁/纠正（均做变异验证），2 条为文档化观察（非缺陷）。全量 1008 passed / 23 skipped / exit 0。**
+
+| ID | 原观察 | 处置 | 变异验证（监工亲做） |
+|---|---|---|---|
+| OBS-1 | `test_risk_control_plane_phase2.py:225` 恒真断言 `decision_digest == decision_digest(payloads)`（X==X） | **改真锁**：`decision_digest()` 助手改为**重算** `sha256_json({action, constraints, findings})`（与 `RiskEngine` 同式），断言比对发布值与重算值 | 变异：给 `RiskEngine` 的 digest payload 加一个字段 → 目标用例失败 |
+| OBS-2 | `sample_count` 字段全仓无断言 | **补断言**：默认截面用例断言 `sample_count==30`；pooled 用例断言 `sample_count==18` 且与 `cross_section_count==0` 独立 | 变异：`"sample_count": len(merged)` → `0` → 2 例失败 |
+| OBS-3 | §8.20 称 B11 变异杀"4 条新锁"，实为 6 | **更正台账**：§8.20 改为"**6 条新锁失败**（原记 4 条系少报）" | 抽样复做：`ic`/`rank_ic` basis 改回 pooled → 实杀 6 例，确认 |
+| OBS-4 | 同名 `ic` 语义变更仅靠 spec §8.1 记录，跨期可比性需注意 | **文档化**（非缺陷）：spec §8.1 增 "Comparability note"——报告自身的 `basis` 字段为准，跨约定边界比较须比同期而非同名；并核实无 config 钉 `ic`、无生产消费方 | 不适用（检索确认唯一 `"ic"` 引用在分派表自身） |
+| OBS-5 | mootdx refusal 测试未断言 `retryable=False` | **补断言**：超页跨度、倒置区间、畸形日期三条 refusal 锁各加 `result.retryable is False` | 变异：三条 refusal 的 `retryable=False` → `True` → 3 例失败 |
+| OBS-6 | `test_model_trainer.py:264` 测 trainer 却放在 `TestArtifactStore`；`test_research_chain_phase4.py:525` 变量名 `dataset_adapter` 实为 portfolio 用途 | **归位/改名**：3 个 trainer 用例移入 `TestModelTrainer`；`phase4` 中仅供 `universe_store` 的适配器统一改名 `universe_adapter`（14 处引用） | 不适用（结构/命名，全量套件仍绿） |
+| OBS-7 | `read_verified_risk_run` 语义比对层无负向测试（字节链已覆盖篡改，该层只防发布方写错内容） | **补负向锁**：发布**自洽**（`files[]` 摘要与文件一致）但决策体写 `block_order`、而 decision store 存 `allow` 的 run → 必须 `decision payload mismatch` 拒 | 变异：删除 `payload["decision"] != expected_decision` 分支 → 该用例失败 |
+| OBS-8 | trainer "trained weights are not finite" 无测试锁（有限输入 + alpha>0 时解必有限，自然不可达） | **补直接锁**：monkeypatch `np.linalg.solve` 返回 NaN 权重 → 必须拒（该守卫是求解器变更/未来核溢出的最后防线，非死代码） | 变异：删除 `if not np.isfinite(weights).all()` 守卫 → 该用例失败 |
+
+**关于 OBS-8 的取证**：先用 `1e154`/`1e200` 量级的有限特征实测——Gram 矩阵会溢出为 `inf`，但 `np.linalg.solve` 仍返回有限（0）权重，**自然路径确实到不了该守卫**。故采用 monkeypatch 直接驱动，并在注释中写明这是"最后防线"而非可达缺陷，避免把它误记成"已由真实输入触发"。
+
+**测试计数**：新增 2 例（`test_non_finite_solver_output_fails_closed`、`test_risk_run_rejects_a_payload_the_decision_store_disagrees_with`）+ 就地强化 5 处断言；3 例跨类移动（计数不变）。1006→1008 吻合。
+
+**未夸大声明**：OBS-1/2/5/7/8 的变异杀伤为监工亲做；OBS-3 为抽样复做确认；OBS-4/6 为文档化与结构性处置，无运行时语义变更。全量套件监工亲跑。本轮不改任何已发布制品身份（无 canonical schema 语义变更、无版本升迁）；`specs/layers/model-layer-spec.md` 仅增可比性说明，不动规范条款。`code-review-unified-quant.md` 保持未跟踪。

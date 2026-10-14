@@ -123,6 +123,9 @@ def test_mootdx_refuses_a_span_wider_than_one_page():
     result = adapter.fetch("bars_daily", ["600000.XSHG"], "2026-06-01", "2026-08-21", _BARS_FIELDS)
     assert result.status == FetchStatus.UNSUPPORTED_REQUEST
     assert "exceeds the 5-bar page" in result.errors[0]
+    # OBS-5: a request-level refusal is not retryable, so the caller must not loop
+    # on it.  The envelope has to say so explicitly, not rely on the dataclass default.
+    assert result.retryable is False
     assert result.rows.empty
 
 
@@ -134,6 +137,7 @@ def test_mootdx_refuses_a_reversed_date_span():
     result = adapter.fetch("bars_daily", ["600000.XSHG"], "2026-08-21", "2026-06-01", _BARS_FIELDS)
     assert result.status == FetchStatus.UNSUPPORTED_REQUEST
     assert "precede" in result.errors[0]
+    assert result.retryable is False
     assert result.rows.empty
 
 
@@ -145,6 +149,7 @@ def test_mootdx_malformed_dates_return_an_envelope_not_an_exception():
     result = adapter.fetch("bars_daily", ["600000.XSHG"], "not-a-date", "2026-08-21", _BARS_FIELDS)
     assert result.status == FetchStatus.UNSUPPORTED_REQUEST
     assert "ISO dates" in result.errors[0]
+    assert result.retryable is False
     assert result.rows.empty
 
 
