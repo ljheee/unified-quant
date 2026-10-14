@@ -750,8 +750,6 @@ def _run_gate_once(*, weight, capital, participation, price=10.0, volume=100000.
     engine's consumption of an arbitrary action can be exercised.
     """
     root = Path(tempfile.mkdtemp()) / "store"
-    gate = PortfolioPublicationRiskGate(root)
-    policy, review = _order_policy()
     panel = pd.DataFrame(
         {
             "date": ["2026-01-05", "2026-01-06"],
@@ -764,24 +762,33 @@ def _run_gate_once(*, weight, capital, participation, price=10.0, volume=100000.
     config = _gate_config("2026-01-05", "2026-01-06")
     config["initial_capital"] = capital
     config["execution_model"]["volume_participation_cap"] = participation
+    weight_partitions = {
+        "2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [weight]})
+    }
     from uq.backtest.engine import BacktestEngine
 
     if risk_gate_override is None:
+        # The real gate: it publishes a risk_run and hands the engine its decision.
+        gate = PortfolioPublicationRiskGate(root)
+        policy, review = _order_policy()
         manifest, artifacts, _ = gate.run_with_risk_gate(
             BacktestEngine(root),
             config=config,
             policy=policy,
             policy_review=review,
             portfolio_definition={"generation_id": "0" * 64},
-            weight_partitions={"2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [weight]})},
+            weight_partitions=weight_partitions,
             price_panel=panel.set_index(["date", "instrument"]),
         )
         return artifacts["fills"]
-    # A stub gate drives the engine directly, bypassing the real risk_run publish.
+    # A stub gate drives the engine directly.  ``risk_gate`` is the same injection
+    # point ``run_with_risk_gate`` uses, so the engine's action handling is exercised
+    # without the real gate's policy evaluation or risk_run publication -- that is the
+    # point of the stub, and it is why no portfolio policy is built here.
     manifest, artifacts = BacktestEngine(root).run(
         config=config,
         portfolio_definition={"generation_id": "0" * 64},
-        weight_partitions={"2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [weight]})},
+        weight_partitions=weight_partitions,
         price_panel=panel.set_index(["date", "instrument"]),
         risk_gate=risk_gate_override,
     )
