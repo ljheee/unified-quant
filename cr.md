@@ -561,3 +561,27 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **证据与残余**：`evidence/paper-execution-research-integration/phase-0/evidence-index.json` 对 `model_layer.py` 的钉值按既有约定重钉（该文件被 B8/B9 两批改到，一个会话内重钉两次本身是"被钉文件是热路径"的信号，已在此记录）。B9 同类残余两点未收敛并已注释说明：`contracts/artifacts.py:228` 与未配置 root 的 `ModelContractLoader`。`code-review-unified-quant.md` 保持未跟踪（外部输入件，是否入库由用户定）。
 
 **未夸大声明**：全量 `python -m pytest tests/` = 960 passed / 24 skipped（监工亲跑；qlib 门控本地 skip）；变异验证为监工逐条亲做；"不可达"结论来自代码检索（调用方枚举），非运行时覆盖统计。
+
+### 8.17 7970eec..11a11c9 十提交 CR 与修复轮（2026-10-14，发布入口与契约读路径）
+
+监工对 7970eec..11a11c9（10 提交，70 文件 +4489/−349）两路独立代理分簇审查，**全部 10 条 finding 逐条亲开锚点对 HEAD（及 R1 diff 旧侧 `git show 226370a^`）读验**，得 2 MAJOR + 3 MINOR + 5 OBS（contracts/R1R2 簇 APPROVE，无 BLOCKER/MAJOR）。用户指示修复，9 条落地，每条修复均做**变异验证**（stash 单文件回滚 → 新测试必失败 → 恢复全绿，监工亲做）。
+
+| ID | 档 | 位置（引入提交） | 修复 | 变异验证 |
+|---|---|---|---|---|
+| feat-1 | MAJOR | `publish_factor_partitions.py:253-288`（44a0286） | 报告落盘改为存在性感知：盘上报告经 `read()` 篡改校验并与本次重算**逐字节比对**——一致方复用以完成中断的发布（自愈），不一致响亮失败；异常分类器收窄为仅匹配分区不可变错误，杜绝"报告已存+分区不存在"被误记 `already_published`+`covered`（旧形态对该基准日永久无分区且 headline 成功） | 回滚 → 孤儿自愈与分歧孤儿两测试双双失败（旧码复现误标） |
+| feat-2 | MAJOR | `publish_universe_snapshots.py:55-78` × `index_membership.py:160-172`（9cb8a6b） | `_tiles` 增加单调性拒绝：snapshot_date 在 visible_from 序上必须严格递增（切瓦与 `as_of` 逐点一致的充要条件），混合 publish lag fail-closed | 回滚 → 混合 lag 用例以 published 落盘分叉切瓦，测试失败 |
+| contracts-1 | MINOR | `publish_market_datasets.py:321`（126e462） | `--family corporate-action` 缺 `--dividend-root` 的拒绝前移至任何 family 发布之前，结构化 `configuration_failure`+exit 2；内层 SystemExit 删除 | 回滚 → 复现 :321 SystemExit，测试失败 |
+| contracts-2 | MINOR | `owning_contracts.py:56`（11a11c9/R2） | 候选循环重构：JSON 解析失败仍跳过；**id 命中但校验失败 → 响亮** `invalid manifest for published adjusted price generation`，不再静默报 "unpublished" | 回滚 → 篡改用例报 unpublished，regex 不匹配，测试失败 |
+| feat-3 | MINOR | `tests/test_factor_store.py:200-260`（7617362） | 注释叙述的 research-v1 过关路径改为实际执行：探针实证其撞 `QlibNotInstalledError`（ContractError 子类），锁定 schema 关卡先于任何 qlib 计算 | 探针实证（非变异）：`pyqlib==0.9.7 is required for qlib factor computation` |
+| contracts-3 | OBS | `store/reader.py:32`（R2 放大） | 受治理读路径新增 manifest `partition_date` 与请求路径日期比对（两个 governed writer 恒写该字段，v1/v2 同覆盖；`read_canonical_v2` 早有同级校验） | 回滚 → 搬迁分区被当错误日期读出（DID NOT RAISE），测试失败 |
+| contracts-4 | OBS | `factors/engine.py:243-246`（226370a/R1） | 恢复外部供给报告空 checks 拒绝（仅限 `quality_report is not None`；本地空帧 dry-run 路径不受影响，与旧码 `not supplied_checks` 语义对等） | 回滚 → 空 checks 外部报告被接受，测试失败 |
+| contracts-5 | OBS | `factors/engine.py:191-195` | `check_results` 畸形条目（缺键/非数值 threshold）包成 ContractError，不再裸 KeyError/ValueError 逃逸治理错误通道 | 回滚 → 复现裸 `ValueError: could not convert string to float` |
+| feat-5 | OBS | `publish_factor_partitions.py:141-152`（44a0286） | 定义加载后即拒表达式定义集（`qlib_expression_set`/factor `expression` 键，数据驱动非名称匹配），一句 `configuration_failure` 指明 qlib 入口，取代 N 条相同逐日失败 | 回滚 → alpha158 不再前置拒绝，测试失败 |
+
+**未修（登记不隐藏）**：feat-4（CR#9，开放式尾瓦片无退役/取代机制——`artifacts.py:217-218` 的 `valid_to=None` 窗口短路是明写设计 "deliberately open-ended"，真正修复需请求侧陈旧检测或治理退役协议，属设计裁决非代码缺陷，待用户定夺）；contracts-5 附带项（外部报告 `observed` 字段不比对：与发布侧 `_reports_agree` 同层级，精确比对有浮点表示风险，身份与结论已由两层 (name,threshold)→result 比对 + 校验和兜住）。
+
+**测试**：新增 10 例（孤儿自愈/分歧孤儿/alpha158 前置/混合 lag/dividend 前置/篡改响亮/v1+v2 搬迁/空 checks/畸形 threshold/非 dict manifest 留在 unpublished 分支），目标 7 文件 65/65 绿；全量 **971 passed / 23 skipped / exit 0**（基线 961+10 精确吻合）。
+
+**提交形态**：修复本体由并行会话提交为 **`4bb29b1` 并已推送**（"fix: close nine second-pass CR findings on the R1/R2/review commits"）。该提交在监工修复基础上含两处协同增补，监工已逐行复核语义正确且更健壮：① owning_contracts 候选循环加 `isinstance(manifest, dict)` 守卫（非对象 JSON 文档留在 "unpublished" 分支而非裸 AttributeError）并配行为测试；② F5 的 qlib 缺失断言改为 `monkeypatch.setitem(sys.modules, "qlib", None)` 钉住缺失条件（四个认证 CI 环境会经 qlib extra 安装 pyqlib，采样式断言在该类环境会失效）。
+
+**未夸大声明**：6 处源修复的变异杀伤为监工逐一亲做（stash 单文件回滚法，先于 4bb29b1 落地）；增补两处的验证依赖 4bb29b1 后全量套件（971/23/exit 0，监工亲跑），未对其单独做变异杀伤。代理执行类结论（R2 探针矩阵、23 在盘 manifest 运行时核对、17 快照实数）本轮未重跑，但与监工读验一致。修复期间 `11a11c9` 被 amend（70da6a6→11a11c9，本轮 CR 与修复均基于 amend 后版本）、外部评审 8 项 B 类修复由并行会话提交为 `cd7cf10`（其 owning_contracts.py B9 区与本轮 contracts-2 区域不重叠，git diff 证实无冲突）。`code-review-unified-quant.md` 保持未跟踪（§8.16 既定口径）。
