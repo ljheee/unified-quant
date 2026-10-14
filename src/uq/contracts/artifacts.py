@@ -15,6 +15,7 @@ import pandas as pd
 
 from .canonical_v2 import file_sha256_bytes
 from .gate_contracts import adjustment_snapshot_generation, validate_contract
+from .paths import reject_symlinks_within
 from ..errors import ContractError
 
 
@@ -229,8 +230,11 @@ class UniverseSnapshotReader:
             safe = False
         if artifact_path.is_absolute() or ".." in artifact_path.parts or not safe or resolved.is_symlink() or resolved.is_file() and resolved.is_symlink():
             raise ContractError("unsafe universe member artifact path")
-        if directory.is_symlink() or any(parent.is_symlink() for parent in [directory, *directory.parents]):
-            raise ContractError("unsafe universe snapshot directory link")
+        # external review B9-A: this read is on the research chain's main path
+        # (both the dataset and the portfolio stage reach it), so it must use the
+        # one scoped rule.  Walking every lexical ancestor refused a legitimate
+        # snapshot whenever the store root sat under ``/tmp`` or ``$TMPDIR``.
+        reject_symlinks_within(self.root, directory, label="universe snapshot directory")
         try:
             content = path.read_bytes()
         except FileNotFoundError as exc:

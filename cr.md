@@ -652,3 +652,49 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试**：新增 1 例（mootdx 畸形日期信封）。全量 **993 passed / 23 skipped / exit 0**。
 
 **未夸大声明**：本自 CR 的探针与变异为监工亲做；三轮各自的变异验证见 §8.18–§8.20。合并树全量监工亲跑。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.22 b81b44a..HEAD 五提交 CR（2026-10-14，对 §8.18–§8.21 修复轮的对抗复审）
+
+对 `10d2d0e`（B1/B2/B3/B5/B13）、`0d0df5b`（N1）、`b52f669`（B11）、`fd2048e`（信封回归）、`1e81940`（本节前的台账）做修复轮复审：监工逐行亲读全部 src diff，两个专项 agent（测试体逐条 / 台账规格溯源），全量套件监工亲跑 **993 passed / 23 skipped / exit 0**（与提交声明逐字吻合）。结论：**7 处源码修复全部验证安全，无代码级缺陷；1 MAJOR（测试判别力缺口）+ 7 MINOR + 8 OBS，均未修、逐条登记如下。**
+
+| ID | 档 | 位置 | 发现 | 处置 |
+|---|---|---|---|---|
+| CR22-1 | **MAJOR** | `backtest/engine.py:257/:274/:307/:357` | 回测门 resize **消费路径**零端到端覆盖：白名单放行、缺 allowed_shares 拒、min 限幅三个分支均无测试驱动 resize 决策经 `run_with_risk_gate`；变异（白名单删 resize / 忽略 allowed_shares）全绿。代码逐行读验正确，缺的是锁 | 未修（补 resize 端到端测试） |
+| CR22-2 | MINOR | `risk/contracts.py`、`risk/adapter.py`、`backtest/engine.py` 注释 + §8.18 + `pendding.md:242` | 规格引用 "spec 7.2" 应为 **7.3**：§7.2 是 `risk_state.v1`，所引 fail-closed 规则原文在 §7.3（spec:345-346）。规则真实存在，编号错位，审计锚点断链（台账 agent 评 MAJOR，监工定 MINOR：无运行时影响，但波及 5 处含台账） | 未修（5 处改编号） |
+| CR22-3 | MINOR | `pendding.md:255` | "N1 已修"与同节收尾"N1/N2/N5 是既定口径……本轮未据此改动任何东西"自相矛盾（旧轮残留句） | 未修（删/改收尾句） |
+| CR22-4 | MINOR | §8.20 | "由 1 例扩为 6 例"与同行括号自列 7 项矛盾；实际 7 个测试方法（净 +6，986+6=992 总数不错），应为"扩为 7 例" | 未修（改计数措辞） |
+| CR22-5 | MINOR | §8.19 | "§8.16 把 N1 判为'不可达的一致性缺口'"转述失真；§8.16 原文是"非缺陷 / REFUTED"，该措辞是外部报告自身用语 | 未修（改正转述） |
+| CR22-6 | MINOR | `backtest/engine.py:257` | 回测门下 de_risk/flatten/escalate_review 的 `skipped_risk_blocked` 无桩测试；当前连线 `RiskEngine.evaluate_order` 只产 allow/resize/block_order 故不可达，但"未知 action 一律 blocked"的修复主旨无锁 | 未修（补桩 gate 测试） |
+| CR22-7 | MINOR | `mootdx_source.py:112-113` | "end must not precede start" 分支无测试；删该分支（负 span 放行超页检查）不红 | 未修 |
+| CR22-8 | MINOR | `tests/test_model_definition.py` | rank_ic 数值语义无判别：夹具线性使 rank==pearson，`_correlate` rank 分支（`definition.py:163`）变异不红 | 未修（需非单调秩相关夹具） |
+
+**OBS（8 条）**：① `test_risk_control_plane_phase2.py:225` 恒真断言（`decision_digest == decision_digest(payloads)`，X==X；真锁是 :224 的 `failed_findings` 精确断言）；② `sample_count` 字段全仓库无断言（既有字段，非本轮新增）；③ §8.20 称 B11 变异"4 条新锁失败"，抽样复做实杀 6 例——少报（保守方向）；④ 同名 `ic` 语义变更仅靠 spec §8.1 记录，历史报告跨期可比性注意（src/scripts 无生产消费方、无 config 钉 "ic"，不冲击在管管线）；⑤ mootdx refusal 测试未断言 `retryable=False`，`_FixedPageMootdxAdapter` 复用于多页场景会掩盖分页 bug；⑥ `test_model_trainer.py:264` 测试放错类、`test_research_chain_phase4.py:525` 变量名 `dataset_adapter` 实为 portfolio 适配器；⑦ `read_verified_risk_run` 语义比对层无负向测试（字节链已篡改 evident，该层只防发布方写错内容）；⑧ trainer 训练后 "weights are not finite" 实际不可达（输入有限且 alpha>0 解必有限），该处无测试锁。
+
+**验证安全（监工亲验）**：B1（readback 按 `run_scope` 分派覆盖 schema 枚举全部两值；`RiskRunStore.publish` 两调用方均传 payloads；读路径逐文件验 byte_size+sha256）；B2（mergesort 稳定排序先算后滤；`_formula_sha256` 仅构建时写入，无旧哈希校验方）；B3（三处 isfinite 含 inf）；B5（`is_suspended` 判定集 ⊇ 一切非正价格路径；`risk_run` schema `decision_bindings minItems:1`，空决策返回 None 是必需）；B13+fd2048e（跨度拒绝与满页回检在锚定最近交易日语义下自洽；oldest 边界双向有锁）；N1（两 stage 同口径传窗；守卫不再恒真）；B11（merged 必含 decision_date 键列；常数截面跳过与无截面 fail-closed 均为强判别；spec §8.1 与实现逐条吻合）。
+
+**未夸大声明**：993/23/exit 0 为监工亲跑（提交态）。审查期间工作树出现并行会话的**区间外**改动（artifacts.py、model_layer.py、paths.py、runner.py + 未跟踪 `test_external_review_20261014.py`），脏树上 2 个 evidence 新鲜度测试失败——属在途新工作，不计入本节结论。变异验证：B1/B13/B11 由台账 agent 在干净克隆抽样复做；CR22-1 的变异推理由监工复核成立（未实际执行回退）；测试体 agent 复跑 7 文件 128 例全绿。两 agent 由同一份修复清单派发，**非隔离审查**；全部 MAJOR/MINOR 锚点经监工逐一亲验定级，与 agent 定级分歧处（CR22-2）已注明双方档位与理由。本轮仅评审未改码，故无"修复-变异"记录；`code-review-unified-quant.md` 保持未跟踪。
+
+**§8.22 更正（2026-10-14）**：上段把工作树里的 4 个改动记为"区间外并行会话在途工作"，其中 2 条判断有误。`model_layer.py` / `runner.py` 的改动确是本轮 B9-B 修复的一部分；它们改动了 `evidence/paper-execution-research-integration/phase-0/evidence-index.json` 钉住的两个 sha256，pin 未同刷，**2 个 evidence 新鲜度测试红是本轮引入的、不是"区间外"**。已在 §8.23 一并修复。
+
+### 8.23 B9 三残余修复与 B9-C 自引入洞的收口（2026-10-14）
+
+对 §8.22 登记的三处 B9 同族残余（工作树未提交改动）做修复轮复审。**结论：三处修复方向正确，但其中 B9-C 的第一版兜底自身引入新洞（B9-D），且本轮把套件弄红。两条均已修，全量 1000 passed / 23 skipped / exit 0。**
+
+| ID | 档 | 位置 | 发现 | 处置 |
+|---|---|---|---|---|
+| CR23-1 | **MAJOR** | `evidence/.../phase-0/evidence-index.json:174,186` | 本轮改了 `model_layer.py`/`runner.py`，两个 sha256 pin 未刷新 → `test_evidence_indexes_are_fresh_and_never_index_themselves`、`test_phase_0_evidence_index_hashes_are_complete` 红（本轮态 2 failed/996 passed；HEAD 态 4 failed）。刷 pin 是既有约定（cd7cf10 同文件刷过） | **已修**（刷为 53ebe423…/a57e3d5d…） |
+| CR23-2 | **MAJOR** | `contracts/paths.py:43-58`（§8.22 工作树版） | "两侧拼写任一即可"兜底：`(resolved_root, resolved_path)` 命中即 `break`，而 resolve 已折叠在库链接 → 调用方预解析路径时在库软链被静默放行（运行时复现 ACCEPTED） | **已修**（恢复一致拼写要求） |
+| CR23-3 | MINOR | `research_chain/runner.py:1099` | `_read_receipt` 的 loader 作用域修复无测试锁：单独回退该行全量仍绿 | **已修**（补 `test_qlib_receipt_readback_scopes_the_loader_to_the_run_store`） |
+| CR23-4 | OBS | `pendding.md:248` | "B9 残余同类点…仍未修"已过时（B9-A/B/C 本轮均收口） | **已修**（改写为"已收口"） |
+| CR23-5 | OBS | `tests/test_external_review_20261014.py:16` | 测试文件 docstring 仍把 B9-C 描述为"调用方解析、守卫应接受" | **已修**（改写为一致拼写口径 + B9-D 说明） |
+
+**B9-A/B/C 修复安全（监工亲验，逐条变异）**：
+- **B9-A** `contracts/artifacts.py:237` 改 `reject_symlinks_within(self.root, directory)`——回退成父目录全扫，`test_universe_snapshot_reads_through_a_symlinked_store_root` 必失败。
+- **B9-B** `research_chain/runner.py:805/:1099` 传 `self.run_store.root`——两处分别回退为无 root，`test_run_state_readback_scopes_the_loader_to_the_run_store` / `test_qlib_receipt_readback_scopes_the_loader_to_the_run_store` 必失败（后者为本轮新补）。
+- **B9-C** `research_chain/owning_contracts.py:95` 不再预解析——回退为 `canonical_root.resolve()`，`test_adjusted_price_dataset_reads_through_a_symlinked_store_root` 必失败。
+
+**B9-D 修复口径**：`reject_symlinks_within` 要求 `path` 能 `relative_to(root)`（两侧同拼写：都未解析或都已解析）；"已解析路径 + 未解析根"一律 `path is outside the governed root` 拒发，不再有"走解析路径"的放行分支。负向锁：`test_reject_symlinks_within_refuses_a_resolved_path_that_hid_a_link`（复现原 ACCEPTED 形状，现必拒）、`test_reject_symlinks_within_still_refuses_a_link_inside_the_store`（在库链接、越根、`..` 逃逸三向仍拒）。口径写入 `contracts/paths.py` 模块与函数 docstring。
+
+**测试**：`test_external_review_20261014.py` 由 5 例扩为 7 例（改 1 例口径 + 净增 2 例：B9-D 走私锁、receipt 回读锁）。全量 **1000 passed / 23 skipped / exit 0**（监工亲跑）。
+
+**未夸大声明**：本节的变异验证由监工亲做（逐条回退源码 → 新锁必失败 → 还原）；三处 B9 源码修复经监工逐行亲读；CR23-1 的"本轮引入"结论由 stash 对照实测（HEAD 态 vs 本轮态）。`code-review-unified-quant.md` 保持未跟踪。

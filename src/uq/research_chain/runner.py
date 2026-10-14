@@ -799,7 +799,10 @@ class ResearchChainRunner:
     def _plan_with_stage_outputs(
         self, plan: ResolvedExecutionPlan, state_path: Path
     ) -> ResolvedExecutionPlan:
-        state = ModelContractLoader().load("research_run_state", state_path)
+        # The state lives in this run's own store, so scope the link rule to that
+        # store: without a root the loader refuses the OS's ``/tmp`` and ``/var``
+        # links and every state readback fails (external review B9-B).
+        state = ModelContractLoader(self.run_store.root).load("research_run_state", state_path)
         output_bindings = state["stage_records"][-1]["output_bindings"]
         stage = state["stage_records"][-1]["stage"]
         existing_families = {binding["output_family"] for binding in output_bindings}
@@ -1091,7 +1094,9 @@ class ResearchChainRunner:
         path = self.run_store.root / "external_quality_reviews" / f"{binding.generation_id}.json"
         if not path.is_file():
             raise ContractError("unpublished Qlib init receipt")
-        document = ModelContractLoader().load("qlib_init_receipt", path)
+        # Same scoping as the state readback: the receipt is written under this
+        # run's store, so that store is the governed root (external review B9-B).
+        document = ModelContractLoader(self.run_store.root).load("qlib_init_receipt", path)
         if document["generation_id"] != binding.generation_id:
             raise ContractError("Qlib init receipt generation mismatch")
         if document["manifest_digest_sha256"] != binding.manifest_digest_sha256:

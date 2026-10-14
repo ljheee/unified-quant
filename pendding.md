@@ -244,8 +244,10 @@ universe snapshot 生产者(2026-10-13)
   - **B3 trainer 不校验 X 的 NaN**:补 `np.isfinite` 三处(标签/特征/结果权重)拒训。
   - **B5 风控门对停牌标的传 `price=0.0`**:停牌判定移到风控调用之前;全停牌日返回 `run=None`(不伪造空 run)。
   - **B13 mootdx 长区间被静默截断到 800 根**:`_requested_bar_estimate` 返回请求跨度,超单页即拒发;另加满页覆盖校验(最老一根晚于请求起点则拒绝)。
-- 仍未修(附触发条件,不是回避):
-  - **B9 残余同类点**:`contracts/artifacts.py:228`(universe snapshot 目录,函数签名里没有 store root,故仍走父目录全扫)与 `ModelContractLoader` 未配置 root 时的严格扫描 —— 二者是"无根可限定"时的保守行为,已在代码注释写明;需要时在调用方传入 root 后收敛。
+- 已收口(2026-10-14 B9 三残余,详见 cr.md §8.23):
+  - **B9-A** `contracts/artifacts.py` universe snapshot 目录:改用 `reject_symlinks_within(self.root, directory)`,不再走父目录全扫。
+  - **B9-B** `ModelContractLoader` 未配置 root 时的严格扫描:两个生产调用方(`research_chain/runner.py` 的 state 回读与 Qlib receipt 回读)现传 `self.run_store.root` 作为作用域;未配置 root 的调用仍保守拒发(注释写明)。
+  - **B9-C** `research_chain/owning_contracts.py` 的 `AdjustedPriceDatasetStore` 预解析路径:改为保留 spelled 路径交给守卫,避免解析折叠在库链接、以及"已解析路径 + 未解析根"的拼写错配。
 
 外部评审 N1/N2/N5 处置(2026-10-14)
 - **N1 已修**:`UniverseSnapshotStore.read_members` 的 PIT 窗口参数由 `requested_valid_from: date | None = None` 改为**必填** `date`,不再回退到快照自身 `valid_from`(那会让 `UniverseSnapshotReader.read` 的有效性守卫对"忘记传窗口"的调用方退化成恒真)。组合阶段 `PortfolioStageAdapter.run` 现与数据集阶段同口径传请求窗口。附带发现并修正:`tests/test_research_chain_phase4.py` 的 `_extended_plan` 请求窗口(2025-12-01)本就在快照有效区间(2026-01-05 起)之外,旧默认把它掩盖了,已对齐到 2026-01-05~01-30。变异验证:两处改动分别回退后,新锁 `test_universe_snapshot_read_members_requires_the_pit_window` / `test_portfolio_stage_refuses_a_snapshot_outside_the_request_window` 必失败。
@@ -253,3 +255,9 @@ universe snapshot 生产者(2026-10-13)
 - **N5 非缺陷(既定约定)**:`session_close` 的输入可见时间是合成断言、在 artifact 侧不可证伪,属 close-to-close 既定约定,仅提示,未动。
 - **B11 已裁决并落地(2026-10-14)**:IC 口径定为**截面 IC 为默认、pooled 为显式可选**。`MetricReport` 现按 metric 名分派:`ic`/`rank_ic` = 逐决策日截面相关再取无权重均值(剔除日间共同移动),`ic_pooled`/`rank_ic_pooled` = 全样本单次相关(旧行为,须显式命名)。报告每条结果记录 `basis` 与 `cross_section_count`;常量截面(相关未定义)跳过而不污染均值,无可用截面则 fail-closed。口径写入 `specs/layers/model-layer-spec.md` §8.1。metric `name` 是自由字符串,schema 无需升版。
 - 处置边界声明:报告里 N1/N2/N5 是既定口径(非缺陷),N3/N4/B14 为 REFUTED,本轮未据此改动任何东西。`code-review-unified-quant.md` 保持**未跟踪**(是外部输入件,不入库;要入库由你决定)。
+
+B9 复核收口(2026-10-14,cr.md §8.23)
+- **触发**:对 §8.22 修复轮的对抗复审发现三处 B9 同族残余(见上),其中 B9-C 的第一版"两侧拼写任一即可"兜底**自身引入新洞**:调用方预解析路径时,在库软链已被 `resolve()` 折叠,守卫走解析路径必然放行(实测 ACCEPTED)。
+- **裁决**:`reject_symlinks_within` 恢复**要求两侧拼写一致**(`path` 须能 `relative_to(root)`),不再接受"已解析路径 + 未解析根";`owning_contracts` 调用方改为不预解析。口径写明在 `contracts/paths.py` 模块与函数 docstring。
+- **变异验证**:回退 `paths.py` 一致拼写规则 / 回退 `owning_contracts` 调用方 / 回退 `runner.py` 两处 loader 作用域,对应新锁必失败。
+- **附带**:`evidence/paper-execution-research-integration/phase-0/evidence-index.json` 刷新 `model_layer.py`、`runner.py` 两个 sha256 pin(§8.22 曾漏刷,导致 2 个 evidence 新鲜度测试红)。全量 **1000 passed / 23 skipped / exit 0**。

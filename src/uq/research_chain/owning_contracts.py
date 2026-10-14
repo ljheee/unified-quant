@@ -92,8 +92,13 @@ class AdjustedPriceDatasetStore:
             canonical_root = next(parent for parent in directory.parents if parent.name == "canonical")
         except StopIteration as exc:
             raise ContractError("invalid adjusted price dataset store layout") from exc
-        canonical_root = canonical_root.resolve()
-        if not canonical_root.is_relative_to(self.root.resolve()):
+        # ``directory`` was enumerated from ``self.root / "canonical"``, so it is
+        # spelled relative to the store root -- keep it that way.  Resolving here
+        # would collapse an in-store link before ``reject_symlinks_within`` can
+        # see it, and (when the root is spelled through macOS's ``/tmp`` shim)
+        # hand the guard a resolved path beside an unresolved root.  Containment
+        # is compared on resolved forms; the link audit walks the spelled path.
+        if not canonical_root.resolve().is_relative_to(self.root.resolve()):
             raise ContractError("unsafe adjusted price dataset store layout")
         reject_symlinks_within(self.root, canonical_root, label="adjusted price dataset root")
         report_root = canonical_root.parent

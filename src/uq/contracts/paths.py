@@ -11,6 +11,15 @@ resolved ``tmp_path``.
 The rule is therefore scoped to the store: the layout *above* the root is
 someone else's business, at and below the root nothing may be a link, and the
 resolved path must still land inside the resolved root.
+
+The walk runs over the *spelled* components, so the two arguments must be
+spelled consistently -- a ``path`` at or under the spelled ``root``.  A path
+that is only reachable after resolution cannot be audited for in-store links:
+once resolution collapses a link the component that pointed away is gone, so a
+resolved ``path`` beside an unresolved ``root`` is refused rather than waved
+through.  An earlier "either spelling" fallback walked the resolved path and
+silently accepted an in-store link (external review B9 follow-up); callers that
+hold a resolved path must re-spell it onto their store root before calling.
 """
 
 from __future__ import annotations
@@ -23,9 +32,15 @@ from ..errors import ContractError
 def reject_symlinks_within(root: Path, path: Path, *, label: str = "store path") -> Path:
     """Return ``path`` after proving no component at or below ``root`` is a link.
 
-    Raises :class:`ContractError` when ``path`` is not inside ``root``, when any
-    component from ``root`` down is a symlink, or when resolution leaves the
-    resolved root.
+    Raises :class:`ContractError` when ``path`` is not spelled at or under
+    ``root``, when any component from ``root`` down is a symlink, or when
+    resolution leaves the resolved root.
+
+    ``path`` must be spelled relative to ``root`` (both unresolved, or both
+    resolved): the walk descends the spelled components, and a resolved path
+    would have already dropped the very link this guard exists to find.  Callers
+    that hold a resolved path must re-spell it onto their store root first (see
+    ``AdjustedPriceDatasetStore``).
     """
     try:
         relative = path.relative_to(root)

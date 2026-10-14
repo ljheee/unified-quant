@@ -611,7 +611,12 @@ class ModelContractLoader:
             return reject_symlinks_within(root, path, label="accepted contract path")
         # Without a configured root there is no governed scope to scope to, so the
         # loader keeps the strictest reading available and refuses any link in the
-        # lexical path.
+        # lexical path.  That includes the operating system's own ``/tmp`` and
+        # ``/var`` links, so a caller reading from a store must pass that store's
+        # root as ``accepted_root`` -- omitting it turns an ordinary macOS store
+        # root into a refusal (external review B9-B).  The strict default is
+        # deliberate: an unscoped caller gets a conservative refusal, never a
+        # silently widened read.
         if any(item.is_symlink() for item in (path, *path.parents)):
             raise ContractError("symbolic links are forbidden in accepted contracts")
         return resolved
