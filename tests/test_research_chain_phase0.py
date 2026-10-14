@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -590,5 +591,9 @@ def test_universe_snapshot_store_read_boundaries(tmp_path: Path) -> None:
     manifest = json.loads(next((tmp_path / "universes").rglob("manifest.json")).read_text())
     store = UniverseSnapshotStore(tmp_path)
     assert store.read_manifest(manifest["generation_id"])["universe_id"] == "research-core"
-    stored = store.read_members(manifest["generation_id"], universe_id="research-core")
+    stored = store.read_members(
+        manifest["generation_id"],
+        universe_id="research-core",
+        requested_valid_from=date(2026, 1, 5),
+    )
     assert stored["instrument"].tolist() == ["A", "B"]

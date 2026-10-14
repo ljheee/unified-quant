@@ -128,6 +128,32 @@ def test_universe_artifact_five_acceptance_paths(tmp_path):
             "research-whitelist", outside.name, requested_valid_from=date(2026,8,20))
 
 
+def test_universe_snapshot_read_members_requires_the_pit_window(tmp_path):
+    """cr.md N1: ``read_members`` must never default the PIT window to the
+    snapshot's own ``valid_from``.  That default made the validity guard a
+    tautology for any caller that forgot the window -- the portfolio stage did
+    exactly that.  The window is now a required argument, and a request window
+    outside the snapshot's validity is refused."""
+    members = pd.DataFrame({"instrument": ["600000.XSHG"]})
+    document = universe_document("2026-08-20")
+    directory = UniverseSnapshotStore(tmp_path).save(tmp_path, document, members)
+    generation_id = directory.name
+    store = UniverseSnapshotStore(tmp_path)
+
+    with pytest.raises(TypeError):
+        store.read_members(generation_id, universe_id="research-whitelist")
+
+    frame = store.read_members(
+        generation_id, universe_id="research-whitelist", requested_valid_from=date(2026, 8, 20)
+    )
+    assert frame["instrument"].tolist() == ["600000.XSHG"]
+
+    with pytest.raises(ContractError, match="outside PIT validity"):
+        store.read_members(
+            generation_id, universe_id="research-whitelist", requested_valid_from=date(2026, 8, 19)
+        )
+
+
 def quality_report(generation="4" * 64):
     return {
         "report_version": 1, "binding_type": "factor_v1", "bound_generation_id": generation,

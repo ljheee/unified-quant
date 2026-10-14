@@ -605,3 +605,17 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 
 **未夸大声明**：6 处源修复 + 1 处回归修复的变异杀伤为监工逐一亲做（临时改单文件后新锁必失败，改回全绿），B5 的"停牌出场"变异复现了 §8.16 描述的原始崩溃。全量套件监工亲跑。B11（pooled vs 截面 IC）仍属 metrics 语义待裁决，本轮未动；`code-review-unified-quant.md` 保持未跟踪。
 
+### 8.19 外部评审 N1 硬化（2026-10-14，PIT 窗口参数改必填）
+
+§8.16 把外部报告 N1 判为"不可达的一致性缺口"，报告建议"顺手把窗口参数改必填"。本轮落地。
+
+| 项 | 修复 | 变异验证（监工亲做） |
+|---|---|---|
+| N1 契约层 | `UniverseSnapshotStore.read_members` 的 `requested_valid_from` 由 `date \| None = None` 改为**必填** `date`，删除"回退到快照自身 `valid_from`"的默认（该默认让 `UniverseSnapshotReader.read` 的有效性守卫对忘记传窗口的调用方恒真） | 把签名与默认改回旧形 → 新锁 `test_universe_snapshot_read_members_requires_the_pit_window` 的 `TypeError` 断言失败 |
+| N1 调用方 | `PortfolioStageAdapter.run` 与数据集阶段同口径传 `plan.request` 的 `window_start_date`/`window_end_date` | 把窗口改回 `universe_manifest["valid_from"]` → 新锁 `test_portfolio_stage_refuses_a_snapshot_outside_the_request_window` `DID NOT RAISE` |
+| N1 附带（测试夹具） | 硬化后暴露 `tests/test_research_chain_phase4.py::_extended_plan` 的请求窗口（沿用裸 fixture 的 2025-12-01）**本就在快照有效区间（2026-01-05 起）之外**，旧默认把它掩盖成"通过"。已把该夹具窗口对齐到 2026-01-05~01-30，与 `_dataset_plan` 一致 | 不适用（夹具修正本身即证明旧默认在掩盖不一致） |
+
+**测试**：新增 2 例（`test_factor_governance.py` 的必填参数 + 窗口外拒绝；`test_research_chain_phase4.py` 组合阶段窗口外拒绝）。全量 **986 passed / 23 skipped / exit 0**（基线 984+2 吻合；qlib 门控本地 skip）。
+
+**未夸大声明**：N1 的两处源改动 + 一处夹具修正的变异杀伤为监工亲做；全量套件监工亲跑。N2（因子血缘完整性）、N5（可见性声明可证伪性）仍为既定口径观察项，未动。`code-review-unified-quant.md` 保持未跟踪。
+

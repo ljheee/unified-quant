@@ -641,6 +641,11 @@ class PortfolioStageAdapter:
         members = self.universe_store.read_members(
             universe_binding.generation_id,
             universe_id=plan.request.get("universe_id", universe_manifest["universe_id"]),
+            # cr.md N1: the request window must be proven inside the snapshot's PIT
+            # validity here too, exactly as the dataset stage does; otherwise this
+            # read reuses a snapshot the request never covered.
+            requested_valid_from=date.fromisoformat(plan.request["window_start_date"]),
+            requested_valid_to=date.fromisoformat(plan.request["window_end_date"]),
         )
         universe_instruments = members["instrument"].astype(str).tolist()
 

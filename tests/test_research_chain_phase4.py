@@ -372,6 +372,12 @@ def _extended_plan(tmp_path: Path, prediction_generation_id: str, config_generat
     full_request["backtest_config_binding"].update({
         "generation_id": config_generation_id, "manifest_digest_sha256": config_digest,
     })
+    # The universe snapshot published by _prepare_dataset_store is valid from
+    # 2026-01-05; the request window must sit inside it (cr.md N1 makes the PIT
+    # window a required argument, so the raw fixture's earlier window no longer
+    # slips through a default).
+    full_request["window_start_date"] = "2026-01-05"
+    full_request["window_end_date"] = "2026-01-30"
     full_request["request_content_generation_id"] = DIGEST
     full_request["manifest_digest_sha256"] = DIGEST
     full_request["request_content_generation_id"], full_request["manifest_digest_sha256"] = research_contract_identities(
@@ -509,6 +515,45 @@ def test_portfolio_stage_binds_prediction_and_universe(tmp_path: Path) -> None:
     assert manifest["previous_target_weights_generation_id"] is None
     assert portfolio_result.published_state.manifest_path.is_file()
     assert len(portfolio_result.target_weight_frames["2026-01-05"]) == 2
+
+
+def test_portfolio_stage_refuses_a_snapshot_outside_the_request_window(tmp_path: Path) -> None:
+    """cr.md N1: the portfolio stage must prove the request window is inside the
+    universe snapshot's PIT validity, exactly as the dataset stage does.  Before
+    the fix the window was silently defaulted to the snapshot's own ``valid_from``,
+    so a request predating the snapshot passed the guard it was supposed to fail."""
+    plan, dataset_adapter, result, _ = _prepare_portfolio(tmp_path)
+    # Rewind the request window before the snapshot's valid_from (2026-01-05).
+    plan = dataclasses.replace(
+        plan, request={**plan.request, "window_start_date": "2025-12-01"}
+    )
+    # A fresh output root so that, if the guard is bypassed, the run would complete
+    # instead of colliding with the partitions ``_prepare_portfolio`` already wrote
+    # -- making the mutation a clean "did not raise".
+    output_root = tmp_path / "second"
+    portfolio = PortfolioStageAdapter(
+        universe_store=dataset_adapter.universe_store,
+        portfolio_builder=PortfolioBuilder(output_root),
+        target_weight_store=TargetWeightStore(output_root),
+        run_store=FileResearchRunStore(output_root),
+        prediction_builder=PredictionBuilder(tmp_path),
+    )
+    prediction_generation = first_prediction_generation(plan)
+    prediction_manifest, prediction_frame = PredictionBuilder(tmp_path).read(
+        prediction_generation, "2026-01-05"
+    )
+    with pytest.raises(ContractError, match="outside PIT validity"):
+        portfolio.run(
+            plan,
+            prediction_stage_result=PredictionStageResult(
+                manifest=prediction_manifest,
+                frame=prediction_frame,
+                published_state=result.published_state,
+            ),
+            decision_dates=["2026-01-05"],
+            definition_quality_decision=_definition_decision(result.definition_manifest["generation_id"]),
+            weights_quality_decision=_weights_decision(), runner_identity=RUNNER,
+        )
 
 
 def first_prediction_generation(plan) -> str:

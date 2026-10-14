@@ -247,4 +247,7 @@ universe snapshot 生产者(2026-10-13)
 - 仍未修(附触发条件,不是回避):
   - **B9 残余同类点**:`contracts/artifacts.py:228`(universe snapshot 目录,函数签名里没有 store root,故仍走父目录全扫)与 `ModelContractLoader` 未配置 root 时的严格扫描 —— 二者是"无根可限定"时的保守行为,已在代码注释写明;需要时在调用方传入 root 后收敛。
 
+外部评审 N1/N2/N5 处置(2026-10-14)
+- **N1 已修**:`UniverseSnapshotStore.read_members` 的 PIT 窗口参数由 `requested_valid_from: date | None = None` 改为**必填** `date`,不再回退到快照自身 `valid_from`(那会让 `UniverseSnapshotReader.read` 的有效性守卫对"忘记传窗口"的调用方退化成恒真)。组合阶段 `PortfolioStageAdapter.run` 现与数据集阶段同口径传请求窗口。附带发现并修正:`tests/test_research_chain_phase4.py` 的 `_extended_plan` 请求窗口(2025-12-01)本就在快照有效区间(2026-01-05 起)之外,旧默认把它掩盖了,已对齐到 2026-01-05~01-30。变异验证:两处改动分别回退后,新锁 `test_universe_snapshot_read_members_requires_the_pit_window` / `test_portfolio_stage_refuses_a_snapshot_outside_the_request_window` 必失败。
+- **N2 非缺陷(既定口径)**:因子分区血缘只声明"当日"一个输入,`specs/layers/factor-layer-spec.md` §3.1.2 明写"绑定同一会话"。要完整血缘需连 `factor_manifest` schema 一起开版本,属治理裁决,未动。
 - 处置边界声明:报告里 N1/N2/N5 是既定口径(非缺陷),N3/N4/B14 为 REFUTED,本轮未据此改动任何东西。`code-review-unified-quant.md` 保持**未跟踪**(是外部输入件,不入库;要入库由你决定)。

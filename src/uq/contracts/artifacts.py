@@ -110,13 +110,17 @@ class UniverseSnapshotStore:
         generation_id: str,
         *,
         universe_id: str,
-        requested_valid_from: date | None = None,
+        requested_valid_from: date,
         requested_valid_to: date | None = None,
     ) -> pd.DataFrame:
         if self.root is None:
             raise ContractError("universe snapshot store root is required")
-        manifest = self.read_manifest(generation_id, universe_id=universe_id)
-        requested_valid_from = requested_valid_from or date.fromisoformat(manifest["valid_from"])
+        # cr.md N1: the PIT validity window is a required argument, never defaulted to
+        # the snapshot's own ``valid_from``.  Defaulting made the guard at
+        # ``UniverseSnapshotReader.read`` a tautology for any caller that forgot to
+        # pass a window, which is exactly how the portfolio stage read a snapshot
+        # without proving the request window was inside its validity.
+        self.read_manifest(generation_id, universe_id=universe_id)
         return UniverseSnapshotReader(self.root).read(
             universe_id,
             generation_id,
