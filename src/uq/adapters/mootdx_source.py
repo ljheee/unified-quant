@@ -138,7 +138,13 @@ class MootdxSourceAdapter:
         # returns at most ``page_size`` bars, so this source cannot address an
         # arbitrary historical window.  Refuse instead of delivering the most recent
         # page as if the requested window had been served.
-        requested_span = self._requested_bar_estimate(start, end)
+        try:
+            requested_span = self._requested_bar_estimate(start, end)
+        except ValueError as exc:
+            # ``fetch`` returns an envelope for a request-level error rather than
+            # raising out of the adapter (the span estimate used to run inside the
+            # per-instrument try, so a malformed date surfaced as a fetch error).
+            return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=False, errors=(str(exc),))
         if requested_span is not None and requested_span > self.page_size:
             return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=False, errors=(f"requested span of {requested_span} days exceeds the {self.page_size}-bar page a TDX request can address; use a paginated governed source",))
         saw_full_page = False

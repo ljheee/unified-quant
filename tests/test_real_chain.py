@@ -126,6 +126,17 @@ def test_mootdx_refuses_a_span_wider_than_one_page():
     assert result.rows.empty
 
 
+def test_mootdx_malformed_dates_return_an_envelope_not_an_exception():
+    """The span estimate is evaluated before the per-instrument loop, so its
+    ``ValueError`` for a malformed date must still surface as a typed FetchResult
+    envelope -- ``fetch`` never raises for a request-level error."""
+    adapter = _FixedPageMootdxAdapter(_mootdx_page(["2026-08-21"]), page_size=5)
+    result = adapter.fetch("bars_daily", ["600000.XSHG"], "not-a-date", "2026-08-21", _BARS_FIELDS)
+    assert result.status == FetchStatus.UNSUPPORTED_REQUEST
+    assert "ISO dates" in result.errors[0]
+    assert result.rows.empty
+
+
 def test_mootdx_refuses_a_full_page_that_does_not_reach_the_requested_start():
     """A full page proves more history exists behind the window.  If the oldest bar
     it returned is newer than the requested start, the window was never delivered
