@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..errors import ContractError
+from .contracts import EXECUTABLE_ACTIONS
 
 
 class ConfigPublicationBinding:
@@ -34,5 +35,5 @@ class ConfigPublicationBinding:
 
 
 def _validate_decision(decision: dict[str, Any]) -> None:
-    if not isinstance(decision, dict) or decision.get("action") not in {"allow", "warn"}:
+    if not isinstance(decision, dict) or decision.get("action") not in EXECUTABLE_ACTIONS:
         raise ContractError("config publication risk decision is not executable")

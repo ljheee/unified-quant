@@ -260,3 +260,27 @@ class TestArtifactStore:
             trainer.train(definition=_definition(), dataset_frame=_dataset(),
                           feature_columns=["volume_ratio_20d"], label_column="label",
                           train_period=("2027-01-01", "2027-01-31"))
+
+    def test_non_finite_features_and_labels_fail_closed(self) -> None:
+        # cr.md latent B3: a null label is the declared insufficient-future policy
+        # and is dropped, but a non-finite feature or label is corrupt input.  The
+        # normal equations would propagate it into the weights and publish a NaN
+        # model under a legitimate-looking artifact checksum.
+        trainer = ModelTrainer(Path("/tmp/model-store"))
+        feature_frame = _dataset()
+        feature_frame.loc[0, "volume_ratio_20d"] = float("nan")
+        with pytest.raises(ContractError, match="features contain null or non-finite"):
+            trainer.train(
+                definition=_definition(), dataset_frame=feature_frame,
+                feature_columns=["volume_ratio_20d"], label_column="label",
+                train_period=("2026-01-01", "2026-12-31"),
+            )
+
+        label_frame = _dataset()
+        label_frame.loc[0, "label"] = float("inf")
+        with pytest.raises(ContractError, match="labels contain non-finite"):
+            trainer.train(
+                definition=_definition(), dataset_frame=label_frame,
+                feature_columns=["volume_ratio_20d"], label_column="label",
+                train_period=("2026-01-01", "2026-12-31"),
+            )

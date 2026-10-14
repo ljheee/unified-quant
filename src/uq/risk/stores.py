@@ -9,11 +9,11 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from ..contracts.canonical_v2 import file_sha256_bytes
 from ..errors import ContractError
 from .contracts import (
     validate_risk_file_payload,
     validate_risk_manifest,
+    canonical_payload_bytes,
 )
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -86,20 +86,24 @@ class RiskRunStore(_ImmutableRiskManifestStore):
 
     def publish(self, document: dict[str, Any], payloads: dict[str, dict[str, Any]] | None = None) -> Path:
         validate_risk_manifest(self.family, dict(document))
-        if payloads is not None:
-            if len(document.get("decision_bindings", [])) != len(payloads):
-                raise ContractError("risk run payload count does not match decision bindings")
-            expected_paths = [f"decision-{index}.json" for index in range(len(payloads))]
-            actual_paths = [entry["path"] for entry in document.get("files", [])]
-            if actual_paths != expected_paths:
-                raise ContractError("risk run decision payload paths are invalid")
+        # cr.md latent B1: a risk run exists to record which decisions were taken,
+        # so a run without its decision payloads is not a weaker record but a
+        # broken one.  The old signature defaulted to None and then iterated it, so
+        # the publisher that forgot the argument died as an AttributeError after the
+        # decision and event partitions had already landed.
+        if not isinstance(payloads, dict):
+            raise ContractError("risk run publication requires the decision payloads")
+        if len(document.get("decision_bindings", [])) != len(payloads):
+            raise ContractError("risk run payload count does not match decision bindings")
+        expected_paths = [f"decision-{index}.json" for index in range(len(payloads))]
+        actual_paths = [entry["path"] for entry in document.get("files", [])]
+        if actual_paths != expected_paths:
+            raise ContractError("risk run decision payload paths are invalid")
         partition = self._partition(document)
         partition.mkdir(parents=True, exist_ok=False)
         try:
             for path, payload in payloads.items():
-                content = (
-                    json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
-                ).encode("utf-8")
+                content = canonical_payload_bytes(payload)
                 validate_risk_file_payload(document, path=path, content=content)
                 tmp = partition / f"{path}.tmp"
                 tmp.write_bytes(content)
@@ -225,9 +229,7 @@ class RiskDecisionStore(_ImmutableRiskManifestStore):
         file_entry = document["files"][0]
         if file_entry["path"] != "decision.json":
             raise ContractError("risk decision artifact path must be decision.json")
-        content = (
-            json.dumps(expected_payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
-        ).encode("utf-8")
+        content = canonical_payload_bytes(expected_payload)
         validate_risk_file_payload(document, path="decision.json", content=content)
         partition = self._partition(document)
         manifest_path = partition / "manifest.json"

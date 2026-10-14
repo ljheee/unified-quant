@@ -136,6 +136,51 @@ class TestLabelBuilder:
             }).itertuples(index=False)
         ]})
 
+    def test_ineligible_row_does_not_redefine_the_horizon(self) -> None:
+        # cr.md latent B2: eligibility decides which rows may be trained on, but it
+        # must not redefine the forward horizon.  A gap in the middle of a series
+        # must still measure 5 trading rows ahead on the *full* grid -- otherwise a
+        # suspension quietly turns a 5-day return into a 6-day one for that
+        # instrument while the manifest keeps declaring horizon_trading_days.
+        builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
+        frame = _adjusted_frame(n_instruments=1, n_days=12)
+        frame["close"] = [10.0 + 0.5 * index for index in range(len(frame))]
+        frame.loc[3, "suspended"] = True  # ineligible row in the middle
+        manifest = builder.build(frame, upstream_bindings=[_binding(frame)])
+
+        ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort").reset_index(drop=True)
+        adjusted_close = ordered["close"].astype(float) * ordered["adj_factor"].astype(float)
+        grid_labels = (
+            adjusted_close.groupby(ordered["instrument"], sort=False)
+            .transform(lambda values: values.shift(-5) / values - 1)
+        )
+        expected = (
+            pd.DataFrame({
+                "instrument": ordered["instrument"],
+                "decision_date": ordered["datetime"],
+                "label": grid_labels,
+            })
+            .drop(index=3)
+            .reset_index(drop=True)
+        )
+        assert manifest["row_count"] == len(expected) == 11
+        assert manifest["data_checksum_sha256"] == sha256_json({"rows": [
+            [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2])]
+            for row in expected.itertuples(index=False)
+        ]})
+
+        # The old (buggy) build shifted the already-filtered frame, which yields a
+        # different label vector -- so the checksum above is a real discriminator.
+        survivors = frame.drop(index=3)
+        survivor_adjusted = survivors["close"].astype(float) * survivors["adj_factor"].astype(float)
+        shifted_after_filter = (
+            survivor_adjusted.groupby(survivors["instrument"], sort=False)
+            .transform(lambda values: values.shift(-5) / values - 1)
+        )
+        assert [round(value, 12) for value in shifted_after_filter.tolist()[:6]] != [
+            round(value, 12) for value in expected["label"].tolist()[:6]
+        ]
+
 
 class TestLabelValidator:
     def test_validate_passes_on_valid_manifest(self) -> None:

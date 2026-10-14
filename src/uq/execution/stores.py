@@ -493,7 +493,7 @@ def _validate_executable_risk_decision(
     decision: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
     from ..contracts.gate_contracts import validate_contract
-    from ..risk.contracts import risk_contract_identities
+    from ..risk.contracts import EXECUTABLE_ACTIONS, risk_contract_identities
 
     validate_contract("risk_decision.v1.json", decision)
     if decision.get("binding_config_generation_id") != manifest.get("generation_id"):
@@ -512,7 +512,7 @@ def _validate_executable_risk_decision(
         raise ContractError("risk decision does not bind this execution config")
     if decision.get("decision_scope") != "order_submission":
         raise ContractError("paper execution requires an order_submission risk decision")
-    if decision.get("action") not in {"allow", "warn"}:
+    if decision.get("action") not in EXECUTABLE_ACTIONS:
         raise ContractError(f"paper execution risk decision is not executable: {decision.get('action')}")
 
 

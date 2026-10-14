@@ -60,8 +60,18 @@ class ModelTrainer:
         X_v, y_v = X[valid], y[valid]
         if len(X_v) == 0:
             raise ContractError("training requires at least one supervised observation")
+        # cr.md latent B3: a null label is the declared insufficient-future policy and
+        # is dropped above, but a non-finite feature or label is corrupt input.  The
+        # normal equations happily propagate it into the weights, and the artifact
+        # checksum then records a NaN model as a legitimate publication.
+        if not np.isfinite(y_v).all():
+            raise ContractError("training labels contain non-finite values")
+        if not np.isfinite(X_v).all():
+            raise ContractError("training features contain null or non-finite values")
         n_features = X_v.shape[1]
         weights = np.linalg.solve(X_v.T @ X_v + alpha * np.eye(n_features), X_v.T @ y_v)
+        if not np.isfinite(weights).all():
+            raise ContractError("trained weights are not finite")
 
         model_state = {"weights": weights.tolist(), "alpha": alpha, "seed": seed}
         artifact_bytes = json.dumps(model_state).encode()

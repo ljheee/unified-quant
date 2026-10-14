@@ -238,12 +238,13 @@ universe snapshot 生产者(2026-10-13)
   - **B9 symlink 守卫误伤合法 store 根**:守卫遍历**未解析路径的全部祖先**,macOS 的 `/tmp`、`/var` 都是符号链接 → 落在其下的根必拒;`pytest` 的 `tmp_path` 已解析所以测试全绿掩盖了它。新增单源 `src/uq/contracts/paths.py::reject_symlinks_within(root, path)`:**根以上是操作系统的事,根以内不许有链接,解析后仍须在根内**;已接入 `market_dataset_publisher`(4 处)、`execution/stores`(2 处)、`models/dataset_writer`、`contracts/model_layer`(仅当配置了 accepted root)、`research_chain/owning_contracts`。
   - **B10a `max_turnover > 0` 首个调仓日必崩** + **B10b `max_turnover == 0` 静默跳过约束**:builder 现在要求显式 `initial_state`(仅一次运行的首份分区可为真;真时豁免并因 manifest `previous_target_weights_generation_id: null` 可审计),adapter 传 `initial_state=previous_frame is None`。`max_turnover=0` 且有前序状态时真正冻结。
   - **B12 split purge/embargo 对声明顺序敏感**:改为**先按时间排序再逐相邻对**判重叠/隔离带,顺序无关且不漏报(相邻满足则非相邻自动满足)。
-- 已核实为真但**本轮不修**(附触发条件,不是回避):
-  - **B1 风控发布门 allow 路径必 AttributeError**(`risk/adapter.py:154` `run_store.publish(run)` 未传 payloads;且 `:105` 阻断集合不含 `de_risk/flatten`)。`PortfolioPublicationRiskGate` 在 src 内零调用方。**修它要一并定两件事**:① risk_run 记录里 `files[]` 载荷到底放什么(逐决策 `decision-N.json` 还是摘要);② `de_risk/flatten` 算不算阻断。只补 payloads 会把缺口变成 fail-open。**需要你裁决后再动。**
-  - **B2 标签先过滤后 `shift(-horizon)`**:horizon 变成"第 N 个幸存行"而非"第 N 个交易日",且 manifest 仍声明交易日口径 —— 属真危害。今天不可达:`LabelBuilder` 无 src 调用方、`label_set` 还没有受治理写入器。**硬前置:写 label 生产者之前必须先修这条。**
-  - **B3 trainer 不校验 X 的 NaN**:链上唯一在用模板是 `missing_policy=fail_closed` 且数据集阶段已拦空值。触发条件:任何模板改用 `declared_fill`。
-  - **B5 风控门对停牌标的传 `price=0.0`**:链上回测不传 `risk_gate`(仅 `run_with_risk_gate` 测试路径)。与 B1 同批修(风控门真正接入执行链时),修法是把停牌判定移到风控调用之前。
-  - **B13 mootdx 长区间被静默截断到 800 根**:当前唯一生产调用是 `start == end` 的日线 ingest。触发条件:任何多年回填经 SourceRouter。修法是把 `_requested_bar_estimate` 的估算真正用于分页循环。
-  - **B11 IC 是 pooled 还是截面**:PLAUSIBLE,仓库无 spec 锁定 → 属模型层 metrics 语义**待裁决**,不是代码缺陷。
+- 已核实为真、已修复(2026-10-14 latent 批次,详见 cr.md §8.18;每条均做变异验证):
+  - **B1 风控发布门 allow 路径必 AttributeError**:`PortfolioPublicationRiskGate.gate` 现把 allow/warn 之外一律拒发(spec 7.2:执行契约未定前 `de_risk`/`flatten`/`halt_strategy` 不可执行,`escalate_review` 及未来枚举同拒),决策载荷钉进 run `files[]`;`RiskRunStore.publish` 的 payloads 改必填。裁决结论:**`de_risk/flatten` 算阻断**(fail-closed,不是 fail-open);`files[]` 放**逐决策 `decision-N.json`**(portfolio 路径为决策体、order 路径为候选单+决策体)。附带修掉该轮自己引入的 `read_verified_risk_run` 按 order 形状硬读 portfolio 载荷的回归。
+  - **B2 标签先过滤后 `shift(-horizon)`**:改为先在完整交易行网格上算 label 再过滤,`formula_sha256` 写明 D 在过滤前计数。
+  - **B3 trainer 不校验 X 的 NaN**:补 `np.isfinite` 三处(标签/特征/结果权重)拒训。
+  - **B5 风控门对停牌标的传 `price=0.0`**:停牌判定移到风控调用之前;全停牌日返回 `run=None`(不伪造空 run)。
+  - **B13 mootdx 长区间被静默截断到 800 根**:`_requested_bar_estimate` 返回请求跨度,超单页即拒发;另加满页覆盖校验(最老一根晚于请求起点则拒绝)。
+- 仍未修(附触发条件,不是回避):
   - **B9 残余同类点**:`contracts/artifacts.py:228`(universe snapshot 目录,函数签名里没有 store root,故仍走父目录全扫)与 `ModelContractLoader` 未配置 root 时的严格扫描 —— 二者是"无根可限定"时的保守行为,已在代码注释写明;需要时在调用方传入 root 后收敛。
+
 - 处置边界声明:报告里 N1/N2/N5 是既定口径(非缺陷),N3/N4/B14 为 REFUTED,本轮未据此改动任何东西。`code-review-unified-quant.md` 保持**未跟踪**(是外部输入件,不入库;要入库由你决定)。

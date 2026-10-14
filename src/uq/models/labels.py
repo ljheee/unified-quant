@@ -33,7 +33,15 @@ def _validate_adjusted_price_frame(frame: pd.DataFrame) -> None:
 
 
 def _formula_sha256(horizon: int) -> str:
-    formula = f"adjusted_close[D+{horizon}] / adjusted_close[D] - 1"
+    # cr.md latent B2: the row basis is part of the formula identity.  D counts
+    # per-instrument trading rows of the *unfiltered* series and eligibility removes
+    # rows afterwards.  An earlier build shifted the already filtered frame, which
+    # silently made the horizon "the Nth surviving row" while the manifest went on
+    # declaring horizon_trading_days.
+    formula = (
+        f"adjusted_close[D+{horizon}] / adjusted_close[D] - 1; "
+        "D counts per-instrument trading rows before eligibility filtering"
+    )
     return hashlib.sha256(formula.encode("utf-8")).hexdigest()
 
 
@@ -99,14 +107,17 @@ class LabelBuilder:
             & (~ordered["limit_down"].astype(bool))
             & (~ordered["delisted"].astype(bool))
         )
-        if not eligible.all():
-            ordered = ordered.loc[eligible].copy()
-
+        # cr.md latent B2: compute the label on the complete trading-row grid first.
+        # Eligibility decides whether a row may be *trained on*; it must never
+        # redefine the horizon, or a five-session suspension quietly turns a 5-day
+        # forward return into a 10-day one, instrument by instrument.
         adjusted_close = ordered["close"].astype(float) * ordered["adj_factor"].astype(float)
         ordered["label"] = (
             adjusted_close.groupby(ordered["instrument"], sort=False)
             .transform(lambda values: values.shift(-self.horizon) / values - 1)
         )
+        if not eligible.all():
+            ordered = ordered.loc[eligible].copy().reset_index(drop=True)
         # Rows without complete future observations remain null.
         output = ordered[["instrument", "decision_date", "label"]].copy()
 

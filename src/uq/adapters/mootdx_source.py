@@ -111,10 +111,12 @@ class MootdxSourceAdapter:
             raise ValueError("start/end must be ISO dates") from exc
         if days <= 0:
             raise ValueError("end must not precede start")
-        # TDX start/offset counts backward from the latest session, not from
-        # ``end``. A full page makes recent historical requests deterministic;
-        # longer ranges remain covered by bounded pagination.
-        return self.page_size
+        # cr.md latent B13: this used to answer "one page" whatever was asked, which
+        # both hid the truncation from the caller and made the pagination loop
+        # terminate after a single page.  It is a span estimate for the refusal in
+        # ``fetch``: trading days never exceed calendar days, so a span within one
+        # page is provably deliverable and anything larger is refused outright.
+        return days
 
     @staticmethod
     def _schema_version_for(fields: list[str]) -> str:
@@ -132,6 +134,14 @@ class MootdxSourceAdapter:
         schema_version = self._schema_version_for(fields)
         if dataset != "bars_daily":
             return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, errors=("dataset unsupported",))
+        # TDX start/offset counts backward from the latest session, and one request
+        # returns at most ``page_size`` bars, so this source cannot address an
+        # arbitrary historical window.  Refuse instead of delivering the most recent
+        # page as if the requested window had been served.
+        requested_span = self._requested_bar_estimate(start, end)
+        if requested_span is not None and requested_span > self.page_size:
+            return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=False, errors=(f"requested span of {requested_span} days exceeds the {self.page_size}-bar page a TDX request can address; use a paginated governed source",))
+        saw_full_page = False
         frames: list[pd.DataFrame] = []
         warnings: list[str] = []
         errors: list[str] = []
@@ -155,8 +165,7 @@ class MootdxSourceAdapter:
             for instrument in instruments:
                 code = instrument.split(".", 1)[0]
                 try:
-                    estimate = self._requested_bar_estimate(start, end) or self.page_size
-                    remaining = estimate
+                    remaining = self.page_size
                     offset = 0
                     instrument_frames: list[pd.DataFrame] = []
                     while remaining > 0:
@@ -185,6 +194,7 @@ class MootdxSourceAdapter:
                         instrument_frames.append(local)
                         if len(page) < size:
                             break
+                        saw_full_page = True
                         offset += size
                         remaining -= size
                     if not instrument_frames:
@@ -208,6 +218,17 @@ class MootdxSourceAdapter:
             normalized = self._normalize(raw, start, end)
         except Exception as exc:
             return FetchResult(pd.DataFrame(), FetchStatus.UPSTREAM_ERROR, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=False, errors=(f"normalization failed: {exc}",), metadata={"server": getattr(self, "server", self.servers[0])})
+        # cr.md latent B13: a full page proves that more history exists beyond what
+        # this request addressed.  If the oldest bar the source could reach is still
+        # newer than the requested start, the window was never delivered, and the
+        # partial tail must not flow on as a successful fetch.
+        if saw_full_page and start:
+            try:
+                oldest = pd.to_datetime(raw["datetime"]).min()
+            except (KeyError, TypeError, ValueError):
+                oldest = None
+            if oldest is not None and oldest.date() > date.fromisoformat(start):
+                return FetchResult(pd.DataFrame(), FetchStatus.UNSUPPORTED_REQUEST, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=False, errors=(f"one {self.page_size}-bar page only reaches back to {oldest.date()}, which does not cover the requested start {start}",), metadata={"server": getattr(self, "server", self.servers[0])})
         key_field = "session_date" if schema_version == "v2" else "datetime"
         if key_field != "datetime":
             normalized = normalized.rename(columns={"datetime": key_field})

@@ -24,6 +24,7 @@ from ..contracts.model_layer import (
     reviewed_allowed_statuses,
 )
 from ..errors import ContractError
+from ..risk.contracts import ORDER_GATE_EXECUTABLE_ACTIONS
 
 ANNUALIZATION_DAYS = 252
 _FILL_COLUMNS = [
@@ -31,7 +32,11 @@ _FILL_COLUMNS = [
     "gross_execution_price", "net_execution_price", "commission_fee",
     "stamp_duty_fee", "status",
 ]
-_RISK_BLOCKED_ACTIONS = {"block", "block_order", "block_new_buy", "halt_strategy"}
+# cr.md latent B5 / spec 7.2: this engine can execute allow/warn/resize (resize via
+# an allowed_shares constraint) and nothing else.  Listing the executable set rather
+# than the blocked set means de_risk, flatten, escalate_review or an action added to
+# the schema later blocks the order instead of executing it unexamined.  The fill
+# status stays "skipped_risk_blocked" for every one of them.
 
 
 def _order_direction(target_shares: int, current_total: int) -> str:
@@ -223,7 +228,12 @@ class BacktestEngine:
                 risk_side = _order_direction(target_shares, current_total)
                 risk_candidate_shares = _candidate_shares(target_shares, current_total)
                 risk_allowed_shares: int | None = None
-                if risk_gate is not None and risk_candidate_shares > 0:
+                # cr.md latent B5: a suspended queue has no execution price (a missing
+                # or non-positive open price is exactly what makes it suspended here),
+                # so it must not reach a pre-trade gate that requires a positive one.
+                # No fill is possible either way, and the suspension branch below
+                # records the skipped delta.
+                if risk_gate is not None and risk_candidate_shares > 0 and not is_suspended:
                     candidate = {
                         "order_id": f"{date}:{exec_date}:{inst}:{risk_side}",
                         "instrument": inst,
@@ -244,7 +254,7 @@ class BacktestEngine:
                         "slippage_bps": cost_model["slippage_bps"],
                     }
                     decision = risk_gate(candidate, context)
-                    if decision["action"] in _RISK_BLOCKED_ACTIONS:
+                    if decision["action"] not in ORDER_GATE_EXECUTABLE_ACTIONS:
                         fills_rows.append(self._fill_row(
                             date=exec_date, instrument=inst, side=risk_side,
                             target_shares=risk_candidate_shares, filled_shares=0,

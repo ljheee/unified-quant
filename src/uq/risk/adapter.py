@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
 
-from ..contracts.canonical_v2 import file_sha256_bytes
 from ..contracts.model_layer import sha256_json
 from ..errors import ContractError
-from .contracts import risk_contract_identities
+from .contracts import (
+    EXECUTABLE_ACTIONS,
+    canonical_payload_bytes,
+    risk_contract_identities,
+    risk_file_entry,
+)
 from .engine import RiskEngine
 from .stores import RiskDecisionStore, RiskEventStore, RiskPolicyStore, RiskRunStore, RiskStateStore, make_binding
 
@@ -21,6 +24,14 @@ from .stores import RiskDecisionStore, RiskEventStore, RiskPolicyStore, RiskRunS
 _BACKTEST_GATE_CODE_FINGERPRINT = hashlib.sha256(
     b"uq/risk/backtest-pre-trade-gate-v1"
 ).hexdigest()
+
+# The actions this gate has always refused with the "publication blocked" wording.
+# Anything else outside the executable set refuses with "not executable" instead,
+# so extending the taxonomy in the schema cannot silently widen what passes.
+_LEGACY_BLOCKED_ACTIONS = frozenset({"block", "block_order", "block_new_buy", "halt_strategy"})
+# Must match the store-side expectation ``decision-<index>.json`` for the single
+# decision binding a portfolio publication run carries.
+_RUN_DECISION_PAYLOAD_PATH = "decision-0.json"
 
 
 def _candidate_binding(order: Mapping[str, Any]) -> dict[str, str]:
@@ -101,10 +112,20 @@ class PortfolioPublicationRiskGate:
             "decision_digest": decision["decision_digest"],
             "findings": decision["findings"],
         }
+        payload_content = canonical_payload_bytes(payload)
         self.decision_store.publish(decision, payload)
-        if decision["action"] in {"block", "block_order", "block_new_buy", "halt_strategy"}:
+        # cr.md latent B1 / spec 7.2: this gate can execute allow/warn and nothing
+        # else, so every other action refuses publication -- resize, de_risk,
+        # flatten, escalate_review and any action added to the enum later.  The
+        # actions that were always refused here keep their historical message.
+        action = decision["action"]
+        if action in _LEGACY_BLOCKED_ACTIONS:
             raise ContractError(
                 f"portfolio publication blocked by risk decision: {decision['generation_id']}"
+            )
+        if action not in EXECUTABLE_ACTIONS:
+            raise ContractError(
+                f"portfolio publication risk decision is not executable: {action}"
             )
         event = {
             "contract_version": 1,
@@ -141,6 +162,10 @@ class PortfolioPublicationRiskGate:
             "consumer_binding": make_binding(target_weights, family="target_weights_v1"),
             "decision_bindings": [make_binding(decision, family="risk_decision_v1")],
             "event_bindings": [make_binding(event, family="risk_event_v1")],
+            # The run is the record of which decision was taken, so the decision
+            # payload is part of it: files[] is pinned before the identities are
+            # computed, and the store re-verifies bytes against this entry.
+            "files": [risk_file_entry(_RUN_DECISION_PAYLOAD_PATH, payload_content)],
             "as_of_date": decision["as_of_date"],
             "visible_through": decision["visible_through"],
             "producer": decision["producer"],
@@ -151,7 +176,7 @@ class PortfolioPublicationRiskGate:
         run_generation, run_digest = risk_contract_identities(run, schema_name="risk_run")
         run["generation_id"] = run_generation
         run["manifest_digest_sha256"] = run_digest
-        self.run_store.publish(run)
+        self.run_store.publish(run, {_RUN_DECISION_PAYLOAD_PATH: dict(payload)})
         return decision
 
     def evaluate_order(
@@ -256,7 +281,13 @@ class PortfolioPublicationRiskGate:
             return decision
 
         manifest, artifacts = engine.run(config=config, **kwargs, risk_gate=gate)
-
+        # cr.md latent B5 follow-up: an execution day whose candidates were all
+        # suspended (or otherwise unable to produce a candidate order) produces no
+        # decision at all.  risk_run requires at least one decision binding, and a
+        # run recording nothing is not weaker evidence but a fabricated row, so the
+        # call returns None and the fills tell the story.
+        if not decisions:
+            return manifest, artifacts, None
         payloads = {
             f"decision-{index}.json": {
                 "candidate_order": candidate_orders[index],
@@ -289,15 +320,12 @@ class PortfolioPublicationRiskGate:
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
+        # The bytes are serialized once and described from those bytes: the previous
+        # inline recipe measured ``byte_size`` with len() over the *characters*, so a
+        # finding containing a non-ASCII character pinned a size the artifact could
+        # never match.
         run["files"] = [
-            {
-                "path": path,
-                "sha256": file_sha256_bytes(
-                    (json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
-                ),
-                "byte_size": len(json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))) + 1,
-                "serialization_profile": "json-canonical-v1",
-            }
+            risk_file_entry(path, canonical_payload_bytes(payload))
             for path, payload in payloads.items()
         ]
         run_generation, run_digest = risk_contract_identities(run, schema_name="risk_run")
@@ -312,21 +340,27 @@ class PortfolioPublicationRiskGate:
             decision, decision_payload = self.decision_store.read(binding["generation_id"])
             if binding != make_binding(decision, family="risk_decision_v1"):
                 raise ContractError(f"risk run decision binding mismatch at index {index}")
-            expected_payload = {
-                "decision": {
-                    "action": decision["action"],
-                    "constraints": decision["constraints"],
-                    "decision_digest": decision["decision_digest"],
-                    "findings": decision["findings"],
-                },
+            expected_decision = {
+                "action": decision["action"],
+                "constraints": decision["constraints"],
+                "decision_digest": decision["decision_digest"],
+                "findings": decision["findings"],
             }
             path = f"decision-{index}.json"
             if payloads.get(path) is None:
                 raise ContractError(f"risk run decision payload mismatch: {path}")
-            actual_candidate = payloads[path]["candidate_order"]
-            if _candidate_binding(actual_candidate) != decision["input_bindings"][0]:
-                raise ContractError(f"risk run candidate order lineage mismatch: {path}")
-            if payloads[path]["decision"] != expected_payload["decision"]:
+            payload = payloads[path]
+            # The two scopes pin different payloads: an order run carries the
+            # candidate order alongside the decision, a portfolio run carries the
+            # decision alone (there is no candidate order at publication time).
+            if run["run_scope"] == "order_submission":
+                if payload.get("candidate_order") is None:
+                    raise ContractError(f"risk run candidate order payload missing: {path}")
+                if _candidate_binding(payload["candidate_order"]) != decision["input_bindings"][0]:
+                    raise ContractError(f"risk run candidate order lineage mismatch: {path}")
+                if payload.get("decision") != expected_decision:
+                    raise ContractError(f"risk run decision payload mismatch: {path}")
+            elif payload != expected_decision:
                 raise ContractError(f"risk run decision payload mismatch: {path}")
         for index, binding in enumerate(run["event_bindings"]):
             event = self.event_store.read(binding["generation_id"])

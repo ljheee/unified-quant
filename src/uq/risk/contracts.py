@@ -40,6 +40,35 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SIGNATURE = re.compile(r"^[0-9a-f]{128}$")
 _VALIDATORS: dict[str, Draft202012Validator] = {}
 
+# Spec risk-control-plane-spec.md 7.2: every action other than ``allow``/``warn`` is
+# not executable until the consuming layer defines an execution contract, and it
+# "must fail closed in backtest/execution rather than being interpreted ad hoc".
+# A consumer therefore declares the actions it can actually execute, so an action
+# added to the enum later refuses instead of silently passing as "not blocked".
+EXECUTABLE_ACTIONS = frozenset({"allow", "warn"})
+ORDER_GATE_EXECUTABLE_ACTIONS = EXECUTABLE_ACTIONS | {"resize"}
+
+
+def canonical_payload_bytes(payload: Mapping[str, Any]) -> bytes:
+    """The one serialization shared by every risk file artifact.
+
+    The manifest pins ``byte_size`` and ``sha256`` of these bytes, so publisher and
+    verifier must not keep separate copies of the recipe.
+    """
+    return (
+        json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
+
+
+def risk_file_entry(path: str, content: bytes) -> dict[str, Any]:
+    """A ``files[]`` entry for ``content`` in the shape every risk manifest declares."""
+    return {
+        "path": path,
+        "sha256": hashlib.sha256(content).hexdigest(),
+        "byte_size": len(content),
+        "serialization_profile": "json-canonical-v1",
+    }
+
 
 def canonical_json(value: Any) -> bytes:
     return json.dumps(

@@ -166,6 +166,15 @@ def test_risk_participation_and_notional_resize_exact():
 def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
     root = tmp_path / "store"
     gate = PortfolioPublicationRiskGate(root)
+    # cr.md latent B5: a suspended instrument must not reach the pre-trade gate at
+    # all, because its execution price is undefined -- so "suspended" can no longer
+    # be the vehicle for a blocked order.  The fixture blocks an order the account
+    # cannot fund instead, on an instrument the engine could otherwise trade: a
+    # target weight above 1.0 asks for more shares than the cash can settle, so the
+    # gate refuses with ``order_insufficient_cash`` and the engine records the
+    # skipped delta without ever filling.  The slippage is what keeps the requested
+    # notional under ``order_notional_limit`` while the slipped cash outlay is not,
+    # so the insufficient-cash rule is the only one that fails.
     policy, review = _order_policy()
     price_panel = pd.DataFrame(
         {
@@ -184,7 +193,7 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
         "initial_capital": 100000.0,
         "start_date": "2026-01-05",
         "end_date": "2026-01-06",
-        "cost_model": {"commission_bps": 0, "stamp_duty_bps": 0, "slippage_bps": 0},
+        "cost_model": {"commission_bps": 0, "stamp_duty_bps": 0, "slippage_bps": 500.0},
         "execution_model": {"board_lot": 100, "volume_participation_cap": 0.10},
         "limit_rules": {"limit_ratio": 0.10},
         "price_source_binding": {"source": "test"},
@@ -199,15 +208,20 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
         policy_review=review,
         portfolio_definition={"generation_id": "0" * 64},
         weight_partitions={
-            "2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [1.0]})
+            "2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [1.05]})
         },
         price_panel=price_panel.set_index(["date", "instrument"]),
-        suspension_dates={("2026-01-06", "A")},
     )
     assert len(risk_run["decision_bindings"]) == 1
     stored_run, payloads = gate.run_store.read(risk_run["generation_id"])
     assert len(payloads) == 1
     assert payloads["decision-0.json"]["decision"]["action"] == "block_order"
+    failed_findings = [
+        finding["rule_id"]
+        for finding in payloads["decision-0.json"]["decision"]["findings"]
+        if finding["result"] == "failed"
+    ]
+    assert failed_findings == ["order_insufficient_cash"]
     assert payloads["decision-0.json"]["decision"]["decision_digest"] == decision_digest(payloads)
     verified_run, _ = gate.read_verified_risk_run(risk_run["generation_id"])
     assert len(verified_run["event_bindings"]) == 1
@@ -222,6 +236,262 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
 
 def decision_digest(payloads: dict) -> str:
     return payloads["decision-0.json"]["decision"]["decision_digest"]
+
+
+def _permissive_portfolio_policy(threshold: float = 1.0) -> tuple[dict, dict]:
+    """A portfolio policy whose gross-exposure rule cannot fail the fixture."""
+    from tests.test_risk_control_plane_phase1 import _policy, _policy_review
+
+    policy = _policy()
+    policy["rules"][0]["threshold"] = threshold
+    review = _policy_review(policy)
+    policy["approval_binding"] = {
+        "family": "risk_review_decision_v1",
+        "review_generation_id": review["generation_id"],
+        "review_manifest_digest_sha256": review["manifest_digest_sha256"],
+    }
+    policy["generation_id"], policy["manifest_digest_sha256"] = risk_contract_identities(
+        policy, schema_name="risk_policy"
+    )
+    return policy, review
+
+
+def _gate_portfolio(gate: PortfolioPublicationRiskGate, *, threshold: float = 1.0):
+    from tests.test_risk_control_plane_phase1 import (
+        _definition,
+        _previous_weights,
+        _target_weights,
+        _universe,
+    )
+
+    policy, review = _permissive_portfolio_policy(threshold)
+    definition = _definition()
+    universe = _universe()
+    target, frame = _target_weights(definition, universe)
+    decision = gate.gate(
+        policy=policy,
+        policy_review=review,
+        target_weights=target,
+        target_weights_frame=frame,
+        definition=definition,
+        universe=universe,
+        previous_target_weights=_previous_weights(),
+    )
+    return decision
+
+
+def test_portfolio_publication_run_records_and_verifies_its_decision_payload(tmp_path):
+    """cr.md latent B1: the allow path used to die with ``run_store.publish(run)``
+    (no payloads) *after* the decision/event partitions had already landed.  The run
+    now pins ``files[]`` and the readback verifies the portfolio-shaped payload
+    (decision only, no candidate order)."""
+    gate = PortfolioPublicationRiskGate(tmp_path)
+    decision = _gate_portfolio(gate)
+    assert decision["action"] == "allow"
+
+    runs = list((tmp_path / "risk" / "runs").glob("generation=*"))
+    assert len(runs) == 1
+    run_generation_id = runs[0].name.split("=", 1)[1]
+    stored_run, payloads = gate.run_store.read(run_generation_id)
+    assert stored_run["run_scope"] == "portfolio_publication"
+    assert [entry["path"] for entry in stored_run["files"]] == ["decision-0.json"]
+    assert payloads["decision-0.json"]["action"] == decision["action"]
+    assert "candidate_order" not in payloads["decision-0.json"]
+
+    verified_run, verified_payloads = gate.read_verified_risk_run(run_generation_id)
+    assert verified_run["generation_id"] == run_generation_id
+    assert verified_payloads["decision-0.json"]["decision_digest"] == decision["decision_digest"]
+
+
+def test_portfolio_publication_run_payload_tampering_is_rejected(tmp_path):
+    """The portfolio payload is now covered by the readback, so a rewritten
+    decision body must not verify."""
+    gate = PortfolioPublicationRiskGate(tmp_path)
+    _gate_portfolio(gate)
+    run_generation_id = next((tmp_path / "risk" / "runs").glob("generation=*")).name.split("=", 1)[1]
+    payload_path = tmp_path / "risk" / "runs" / f"generation={run_generation_id}" / "decision-0.json"
+    payload = json.loads(payload_path.read_text())
+    payload["action"] = "block_order"
+    payload_path.write_text(json.dumps(payload))
+    with pytest.raises(ContractError, match="byte size mismatch|tampered"):
+        gate.read_verified_risk_run(run_generation_id)
+
+
+@pytest.mark.parametrize("action", ["de_risk", "flatten", "escalate_review"])
+def test_portfolio_publication_refuses_non_executable_actions(tmp_path, action):
+    """cr.md latent B1 / spec 7.2: only allow/warn are executable at the publication
+    gate.  Every other action -- including ones added to the enum later -- refuses
+    instead of silently passing as "not blocked"."""
+    from tests.test_risk_control_plane_phase1 import (
+        _definition,
+        _policy,
+        _policy_review,
+        _previous_weights,
+        _target_weights,
+        _universe,
+    )
+
+    policy = _policy()
+    policy["rules"][0]["threshold"] = 0.5  # guaranteed failure -> rule action applies
+    policy["rules"][0]["action"] = action
+    review = _policy_review(policy)
+    policy["approval_binding"] = {
+        "family": "risk_review_decision_v1",
+        "review_generation_id": review["generation_id"],
+        "review_manifest_digest_sha256": review["manifest_digest_sha256"],
+    }
+    policy["generation_id"], policy["manifest_digest_sha256"] = risk_contract_identities(
+        policy, schema_name="risk_policy"
+    )
+    definition = _definition()
+    universe = _universe()
+    target, frame = _target_weights(definition, universe)
+    gate = PortfolioPublicationRiskGate(tmp_path)
+    with pytest.raises(ContractError, match="not executable"):
+        gate.gate(
+            policy=policy,
+            policy_review=review,
+            target_weights=target,
+            target_weights_frame=frame,
+            definition=definition,
+            universe=universe,
+            previous_target_weights=_previous_weights(),
+        )
+    # No run is published for a refused decision.
+    assert list((tmp_path / "risk" / "runs").glob("generation=*")) == []
+
+
+def test_risk_run_publication_requires_decision_payloads(tmp_path):
+    """cr.md latent B1: a risk run without its decision payloads is a broken record,
+    not a weaker one.  The store refuses rather than publishing a bare manifest."""
+    gate = PortfolioPublicationRiskGate(tmp_path)
+    decision = _gate_portfolio(gate)
+    run = {
+        "contract_version": 1,
+        "schema_version": "1.0.0",
+        "run_scope": "portfolio_publication",
+        "risk_policy_binding": {
+            "family": "risk_policy_v1",
+            "generation_id": decision["risk_policy_binding"]["generation_id"],
+            "manifest_digest_sha256": decision["risk_policy_binding"]["manifest_digest_sha256"],
+        },
+        "risk_state_binding": None,
+        "consumer_binding": {
+            "family": "target_weights_v1",
+            "generation_id": "0" * 64,
+            "manifest_digest_sha256": "0" * 64,
+        },
+        "decision_bindings": [{
+            "family": "risk_decision_v1",
+            "generation_id": decision["generation_id"],
+            "manifest_digest_sha256": decision["manifest_digest_sha256"],
+        }],
+        "event_bindings": [],
+        "as_of_date": decision["as_of_date"],
+        "visible_through": decision["visible_through"],
+        "producer": decision["producer"],
+        "serialization_profile": "json-canonical-v1",
+        "generation_id": "0" * 64,
+        "manifest_digest_sha256": "0" * 64,
+    }
+    run["generation_id"], run["manifest_digest_sha256"] = risk_contract_identities(
+        run, schema_name="risk_run"
+    )
+    with pytest.raises(ContractError, match="requires the decision payloads"):
+        gate.run_store.publish(run)
+
+
+def _gate_config(start: str, end: str) -> dict:
+    return {
+        "generation_id": "0" * 64,
+        "manifest_digest_sha256": "0" * 64,
+        "contract_version": 1,
+        "schema_version": "1.0.0",
+        "initial_capital": 100000.0,
+        "start_date": start,
+        "end_date": end,
+        "cost_model": {"commission_bps": 0, "stamp_duty_bps": 0, "slippage_bps": 0.0},
+        "execution_model": {"board_lot": 100, "volume_participation_cap": 0.10},
+        "limit_rules": {"limit_ratio": 0.10},
+        "price_source_binding": {"source": "test"},
+    }
+
+
+def test_backtest_gate_with_only_suspended_candidates_records_no_run(tmp_path):
+    """cr.md latent B5 follow-up: an execution day whose only candidate is suspended
+    yields no decision at all, so the run is ``None`` instead of a fabricated
+    ``risk_run`` with zero decision bindings (the schema requires at least one)."""
+    root = tmp_path / "store"
+    gate = PortfolioPublicationRiskGate(root)
+    policy, review = _order_policy()
+    # The only decision date wants A, but A has no execution price that day, so the
+    # engine drops it from the target map and never forms a candidate order.
+    price_panel = pd.DataFrame(
+        {
+            "date": ["2026-01-05", "2026-01-06"],
+            "instrument": ["A", "A"],
+            "open": [10.0, None],
+            "close": [10.0, 10.0],
+            "volume": [100000.0, 100000.0],
+        }
+    )
+    from uq.backtest.engine import BacktestEngine
+
+    engine = BacktestEngine(tmp_path)
+    manifest, artifacts, risk_run = gate.run_with_risk_gate(
+        engine,
+        config=_gate_config("2026-01-05", "2026-01-06"),
+        policy=policy,
+        policy_review=review,
+        portfolio_definition={"generation_id": "0" * 64},
+        weight_partitions={
+            "2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [1.0]})
+        },
+        price_panel=price_panel.set_index(["date", "instrument"]),
+    )
+    assert risk_run is None
+    assert list((root / "risk" / "runs").glob("generation=*")) == []
+
+
+def test_backtest_gate_suspended_exit_never_reaches_the_pre_trade_gate(tmp_path):
+    """cr.md latent B5: a held position whose execution-day price is missing is
+    suspended, and a suspended queue has no execution price.  Before the fix the
+    engine still handed the gate ``price=0.0`` and the whole run died with
+    ``candidate order execution price must be positive``.  The exit must instead be
+    recorded as ``skipped_suspended`` while the earlier buy keeps its decision."""
+    root = tmp_path / "store"
+    gate = PortfolioPublicationRiskGate(root)
+    policy, review = _order_policy()
+    price_panel = pd.DataFrame(
+        {
+            "date": ["2026-01-05", "2026-01-06", "2026-01-07"],
+            "instrument": ["A", "A", "A"],
+            "open": [10.0, 10.0, None],
+            "close": [10.0, 10.0, 10.0],
+            "volume": [100000.0, 100000.0, 100000.0],
+        }
+    )
+    from uq.backtest.engine import BacktestEngine
+
+    engine = BacktestEngine(tmp_path)
+    manifest, artifacts, risk_run = gate.run_with_risk_gate(
+        engine,
+        config=_gate_config("2026-01-05", "2026-01-07"),
+        policy=policy,
+        policy_review=review,
+        portfolio_definition={"generation_id": "0" * 64},
+        weight_partitions={
+            "2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [1.0]}),
+            "2026-01-06": pd.DataFrame({"instrument": ["A"], "weight": [0.0]}),
+        },
+        price_panel=price_panel.set_index(["date", "instrument"]),
+    )
+    # The 01-06 buy filled (one decision); the 01-07 exit was suspended and recorded
+    # without ever forming an order for the gate.
+    assert risk_run is not None
+    assert len(risk_run["decision_bindings"]) == 1
+    assert "filled" in set(artifacts["fills"]["status"])
+    assert "skipped_suspended" in set(artifacts["fills"]["status"])
 
 
 def test_backtest_result_v1_contract_remains_frozen():

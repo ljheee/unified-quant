@@ -585,3 +585,23 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **提交形态**：修复本体由并行会话提交为 **`4bb29b1` 并已推送**（"fix: close nine second-pass CR findings on the R1/R2/review commits"）。该提交在监工修复基础上含两处协同增补，监工已逐行复核语义正确且更健壮：① owning_contracts 候选循环加 `isinstance(manifest, dict)` 守卫（非对象 JSON 文档留在 "unpublished" 分支而非裸 AttributeError）并配行为测试；② F5 的 qlib 缺失断言改为 `monkeypatch.setitem(sys.modules, "qlib", None)` 钉住缺失条件（四个认证 CI 环境会经 qlib extra 安装 pyqlib，采样式断言在该类环境会失效）。
 
 **未夸大声明**：6 处源修复的变异杀伤为监工逐一亲做（stash 单文件回滚法，先于 4bb29b1 落地）；增补两处的验证依赖 4bb29b1 后全量套件（971/23/exit 0，监工亲跑），未对其单独做变异杀伤。代理执行类结论（R2 探针矩阵、23 在盘 manifest 运行时核对、17 快照实数）本轮未重跑，但与监工读验一致。修复期间 `11a11c9` 被 amend（70da6a6→11a11c9，本轮 CR 与修复均基于 amend 后版本）、外部评审 8 项 B 类修复由并行会话提交为 `cd7cf10`（其 owning_contracts.py B9 区与本轮 contracts-2 区域不重叠，git diff 证实无冲突）。`code-review-unified-quant.md` 保持未跟踪（§8.16 既定口径）。
+
+### 8.18 latent 批次（B1/B2/B3/B5/B13）修复轮（2026-10-14，§8.16 登记的五条潜伏项）
+
+§8.16 把 B1/B2/B3/B5/B13 判为"机制为真但当前不可达"并挂起（B1 需先裁决两件事、B2 是写 label 生产者的硬前置）。本轮按登记的条件落地这五条，工作区起点是一份**半成品**（源码已改、测试只覆盖 B13、B5 用例红），监工补齐红用例、发现并修掉该轮自己引入的一处读回回归，并为每条补上变异验证过的锁。
+
+| ID | 判定 | 修复 | 变异验证（监工亲做） |
+|---|---|---|---|
+| B1 | 真问题（不可达→已闭合） | `PortfolioPublicationRiskGate.gate` 的 allow 路径原 `run_store.publish(run)` 漏传 payloads：decision/event 分区已落盘后抛 `AttributeError`，留下无 run 的半个会话。现改为 **allow/warn 之外一律拒发**（`EXECUTABLE_ACTIONS`，spec 7.2：`de_risk`/`flatten`/`halt_strategy` 在消费方定义执行契约前不可执行；`escalate_review` 及未来新增枚举同样拒），并把决策载荷钉进 run 的 `files[]` 后再算身份。`RiskRunStore.publish` 的 `payloads` 默认 `None` 改为**必填**（缺参不再落盘半个 run） | 删 `action not in EXECUTABLE_ACTIONS` 分支 → 三条 `de_risk/flatten/escalate_review` 用例 `DID NOT RAISE`；把 store 守卫退回 `payloads is None: {}` → 守卫用例改报 "count does not match" |
+| B1 附带 | 该轮引入的回归 | 同轮把 portfolio 路径也写进 `files[]`，但 `read_verified_risk_run` 仍只按 order 形状读 `payloads[path]["candidate_order"]` → 合法 portfolio run 读回时裸 `KeyError: 'candidate_order'`。改为按 `run_scope` 分派：order 校验候选单血缘 + 决策体，portfolio 只校验决策体 | 把分派强制走 order 分支 → 新用例 `risk run candidate order payload missing` 失败 |
+| B2 | 真问题（不可达→已闭合） | `LabelBuilder` 原**先按 eligibility 过滤再 `shift(-horizon)`**，使 horizon 变成"第 N 个幸存行"而非"第 N 个交易日"（一次停牌把 5 日收益悄悄变成 6 日），manifest 却仍声明 `horizon_trading_days`。现改为**先在完整交易行网格上算 label，再过滤**；`formula_sha256` 文本显式写明 D 计数在过滤前 | 恢复"先过滤后 shift" → 新用例 checksum 判别失败（旧/新标签向量确实不同） |
+| B3 | 真问题（不可达→已闭合） | `ModelTrainer.train` 原只用 `~np.isnan(y)` 剔空标签，`inf` 或特征 NaN 会被正规方程传播成 NaN 权重，再被 artifact checksum 当作合法发布物记录。现补 `np.isfinite` 校验（标签、特征、结果权重三处） | 删两条 `isfinite` 守卫 → 新用例改报 "trained weights are not finite" |
+| B5 | 真问题（不可达→已闭合） | 回测引擎在**停牌队列**（执行日无有效开盘价）上仍把 `price=0.0` 交给预交易门，门要求正价即整轮崩；停牌本不可能成交。现把停牌判定移到风控调用**之前**（`... and not is_suspended`），停牌分支照记 `skipped_suspended`。附带：某执行日全部候选皆停牌时无任何决策，`run_with_risk_gate` 返回 `run=None`（schema 要求 `decision_bindings` 至少 1，空 run 是伪造行） | 去掉 `not is_suspended` → 原缺陷复现（`candidate order execution price must be positive`），两条 B5 用例失败 |
+| B13 | 真问题（不可达→已闭合） | `MootdxSourceAdapter._requested_bar_estimate` 原对任何区间都答 `page_size`，既向调用方掩盖截断、又让分页循环一页即止。现改为**返回请求的自然日跨度**：跨度大于单页即 `UNSUPPORTED_REQUEST` 拒发（不再把最近一页当作请求窗口交付）；另加**满页覆盖校验**——满页说明窗口背后还有历史，若最老一根仍晚于请求起点则拒绝 | 把估算改回 `page_size` → 跨度拒绝用例失败；`if False and saw_full_page` → 覆盖校验用例失败 |
+
+**附带清理**：本轮改动遗留的死导入（`risk/adapter.py` 的 `json`/`file_sha256_bytes`、`risk/stores.py` 的 `file_sha256_bytes`）删除。
+
+**测试**：新增 13 例——`test_risk_control_plane_phase2.py` 8 例（portfolio run 落盘+读回、载荷篡改拒绝、`de_risk/flatten/escalate_review` 三参数拒发、store 必填守卫、全停牌无 run、停牌出场不入门）、`test_model_labels_dataset.py` 1 例（中段不合格行不改写 horizon）、`test_model_trainer.py` 1 例（非有限特征/标签拒训）、`test_real_chain.py` 3 例（跨度超页拒、满页不达起点拒、满页达起点照常交付）。原红用例（B5 fixture）按新语义重造：用 weight 1.05 + 500bps 滑点让**只有** `order_insufficient_cash` 失败。全量 **984 passed / 23 skipped / exit 0**（基线 971+13 精确吻合；qlib 门控本地 skip）。
+
+**未夸大声明**：6 处源修复 + 1 处回归修复的变异杀伤为监工逐一亲做（临时改单文件后新锁必失败，改回全绿），B5 的"停牌出场"变异复现了 §8.16 描述的原始崩溃。全量套件监工亲跑。B11（pooled vs 截面 IC）仍属 metrics 语义待裁决，本轮未动；`code-review-unified-quant.md` 保持未跟踪。
+
