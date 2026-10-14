@@ -40,7 +40,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SIGNATURE = re.compile(r"^[0-9a-f]{128}$")
 _VALIDATORS: dict[str, Draft202012Validator] = {}
 
-# Spec risk-control-plane-spec.md 7.2: every action other than ``allow``/``warn`` is
+# Spec risk-control-plane-spec.md 7.3: every action other than ``allow``/``warn`` is
 # not executable until the consuming layer defines an execution contract, and it
 # "must fail closed in backtest/execution rather than being interpreted ad hoc".
 # A consumer therefore declares the actions it can actually execute, so an action

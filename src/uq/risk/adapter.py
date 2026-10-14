@@ -114,7 +114,7 @@ class PortfolioPublicationRiskGate:
         }
         payload_content = canonical_payload_bytes(payload)
         self.decision_store.publish(decision, payload)
-        # cr.md latent B1 / spec 7.2: this gate can execute allow/warn and nothing
+        # cr.md latent B1 / spec 7.3: this gate can execute allow/warn and nothing
         # else, so every other action refuses publication -- resize, de_risk,
         # flatten, escalate_review and any action added to the enum later.  The
         # actions that were always refused here keep their historical message.

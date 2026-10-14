@@ -144,6 +144,35 @@ class TestMetricReport:
         assert report["results"][0]["basis"] == "cross_sectional"
         assert report["results"][1]["basis"] == "pooled"
 
+    def test_rank_ic_is_rank_correlation_not_pearson(self) -> None:
+        # CR22-8: the shared fixture is linear, so its ranks equal its values and
+        # rank_ic == ic -- the ``_correlate`` rank branch could be deleted and the
+        # suite stayed green.  A strictly monotonic but non-linear score makes
+        # Pearson and Spearman diverge, so the rank conversion is load-bearing.
+        rows = []
+        for i in range(8):
+            rows.append({
+                "instrument": f"INST{i}",
+                "decision_date": pd.Timestamp("2026-01-05"),
+                "score": float(i) ** 2,  # strictly increasing in i, non-linear
+                "label": float(i),
+            })
+        df = pd.DataFrame(rows)
+        report = MetricReport.compute(
+            df[["instrument", "decision_date", "score"]],
+            df[["instrument", "decision_date", "label"]],
+            metric_definitions=[
+                {"name": "ic", "direction": "maximize"},
+                {"name": "rank_ic", "direction": "maximize"},
+            ],
+        )
+        pearson, spearman = (result["value"] for result in report["results"])
+        # Scores are a strictly increasing function of the labels, so the rank
+        # correlation is exactly 1.0 while the Pearson correlation is not.
+        assert spearman == pytest.approx(1.0)
+        assert pearson == pytest.approx(0.961524, abs=1e-5)
+        assert spearman != pytest.approx(pearson, abs=1e-6)
+
     def test_unsupported_metric_fails_closed(self) -> None:
         preds, actuals = self._frame()
         with pytest.raises(ContractError, match="unsupported metric"):

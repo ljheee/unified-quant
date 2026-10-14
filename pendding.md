@@ -239,7 +239,7 @@ universe snapshot 生产者(2026-10-13)
   - **B10a `max_turnover > 0` 首个调仓日必崩** + **B10b `max_turnover == 0` 静默跳过约束**:builder 现在要求显式 `initial_state`(仅一次运行的首份分区可为真;真时豁免并因 manifest `previous_target_weights_generation_id: null` 可审计),adapter 传 `initial_state=previous_frame is None`。`max_turnover=0` 且有前序状态时真正冻结。
   - **B12 split purge/embargo 对声明顺序敏感**:改为**先按时间排序再逐相邻对**判重叠/隔离带,顺序无关且不漏报(相邻满足则非相邻自动满足)。
 - 已核实为真、已修复(2026-10-14 latent 批次,详见 cr.md §8.18;每条均做变异验证):
-  - **B1 风控发布门 allow 路径必 AttributeError**:`PortfolioPublicationRiskGate.gate` 现把 allow/warn 之外一律拒发(spec 7.2:执行契约未定前 `de_risk`/`flatten`/`halt_strategy` 不可执行,`escalate_review` 及未来枚举同拒),决策载荷钉进 run `files[]`;`RiskRunStore.publish` 的 payloads 改必填。裁决结论:**`de_risk/flatten` 算阻断**(fail-closed,不是 fail-open);`files[]` 放**逐决策 `decision-N.json`**(portfolio 路径为决策体、order 路径为候选单+决策体)。附带修掉该轮自己引入的 `read_verified_risk_run` 按 order 形状硬读 portfolio 载荷的回归。
+  - **B1 风控发布门 allow 路径必 AttributeError**:`PortfolioPublicationRiskGate.gate` 现把 allow/warn 之外一律拒发(spec 7.3:执行契约未定前 `de_risk`/`flatten`/`halt_strategy` 不可执行,`escalate_review` 及未来枚举同拒),决策载荷钉进 run `files[]`;`RiskRunStore.publish` 的 payloads 改必填。裁决结论:**`de_risk/flatten` 算阻断**(fail-closed,不是 fail-open);`files[]` 放**逐决策 `decision-N.json`**(portfolio 路径为决策体、order 路径为候选单+决策体)。附带修掉该轮自己引入的 `read_verified_risk_run` 按 order 形状硬读 portfolio 载荷的回归。
   - **B2 标签先过滤后 `shift(-horizon)`**:改为先在完整交易行网格上算 label 再过滤,`formula_sha256` 写明 D 在过滤前计数。
   - **B3 trainer 不校验 X 的 NaN**:补 `np.isfinite` 三处(标签/特征/结果权重)拒训。
   - **B5 风控门对停牌标的传 `price=0.0`**:停牌判定移到风控调用之前;全停牌日返回 `run=None`(不伪造空 run)。
@@ -254,7 +254,7 @@ universe snapshot 生产者(2026-10-13)
 - **N2 非缺陷(既定口径)**:因子分区血缘只声明"当日"一个输入,`specs/layers/factor-layer-spec.md` §3.1.2 明写"绑定同一会话"。要完整血缘需连 `factor_manifest` schema 一起开版本,属治理裁决,未动。
 - **N5 非缺陷(既定约定)**:`session_close` 的输入可见时间是合成断言、在 artifact 侧不可证伪,属 close-to-close 既定约定,仅提示,未动。
 - **B11 已裁决并落地(2026-10-14)**:IC 口径定为**截面 IC 为默认、pooled 为显式可选**。`MetricReport` 现按 metric 名分派:`ic`/`rank_ic` = 逐决策日截面相关再取无权重均值(剔除日间共同移动),`ic_pooled`/`rank_ic_pooled` = 全样本单次相关(旧行为,须显式命名)。报告每条结果记录 `basis` 与 `cross_section_count`;常量截面(相关未定义)跳过而不污染均值,无可用截面则 fail-closed。口径写入 `specs/layers/model-layer-spec.md` §8.1。metric `name` 是自由字符串,schema 无需升版。
-- 处置边界声明:报告里 N1/N2/N5 是既定口径(非缺陷),N3/N4/B14 为 REFUTED,本轮未据此改动任何东西。`code-review-unified-quant.md` 保持**未跟踪**(是外部输入件,不入库;要入库由你决定)。
+- 处置边界声明:N2/N5 是既定口径(非缺陷)、N3/N4/B14 为 REFUTED,未据此改动;N1 与 B11 已按裁决落地(见上两条)。`code-review-unified-quant.md` 保持**未跟踪**(是外部输入件,不入库;要入库由你决定)。
 
 B9 复核收口(2026-10-14,cr.md §8.23)
 - **触发**:对 §8.22 修复轮的对抗复审发现三处 B9 同族残余(见上),其中 B9-C 的第一版"两侧拼写任一即可"兜底**自身引入新洞**:调用方预解析路径时,在库软链已被 `resolve()` 折叠,守卫走解析路径必然放行(实测 ACCEPTED)。

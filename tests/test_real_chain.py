@@ -126,6 +126,17 @@ def test_mootdx_refuses_a_span_wider_than_one_page():
     assert result.rows.empty
 
 
+def test_mootdx_refuses_a_reversed_date_span():
+    """CR22-7: the span estimate refuses ``end`` before ``start``.  Removing that
+    branch would let a negative span slip under the one-page refusal and reach the
+    per-instrument loop, so the branch needs its own lock."""
+    adapter = _FixedPageMootdxAdapter(_mootdx_page(["2026-08-21"]), page_size=5)
+    result = adapter.fetch("bars_daily", ["600000.XSHG"], "2026-08-21", "2026-06-01", _BARS_FIELDS)
+    assert result.status == FetchStatus.UNSUPPORTED_REQUEST
+    assert "precede" in result.errors[0]
+    assert result.rows.empty
+
+
 def test_mootdx_malformed_dates_return_an_envelope_not_an_exception():
     """The span estimate is evaluated before the per-instrument loop, so its
     ``ValueError`` for a malformed date must still surface as a typed FetchResult

@@ -592,7 +592,7 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 
 | ID | 判定 | 修复 | 变异验证（监工亲做） |
 |---|---|---|---|
-| B1 | 真问题（不可达→已闭合） | `PortfolioPublicationRiskGate.gate` 的 allow 路径原 `run_store.publish(run)` 漏传 payloads：decision/event 分区已落盘后抛 `AttributeError`，留下无 run 的半个会话。现改为 **allow/warn 之外一律拒发**（`EXECUTABLE_ACTIONS`，spec 7.2：`de_risk`/`flatten`/`halt_strategy` 在消费方定义执行契约前不可执行；`escalate_review` 及未来新增枚举同样拒），并把决策载荷钉进 run 的 `files[]` 后再算身份。`RiskRunStore.publish` 的 `payloads` 默认 `None` 改为**必填**（缺参不再落盘半个 run） | 删 `action not in EXECUTABLE_ACTIONS` 分支 → 三条 `de_risk/flatten/escalate_review` 用例 `DID NOT RAISE`；把 store 守卫退回 `payloads is None: {}` → 守卫用例改报 "count does not match" |
+| B1 | 真问题（不可达→已闭合） | `PortfolioPublicationRiskGate.gate` 的 allow 路径原 `run_store.publish(run)` 漏传 payloads：decision/event 分区已落盘后抛 `AttributeError`，留下无 run 的半个会话。现改为 **allow/warn 之外一律拒发**（`EXECUTABLE_ACTIONS`，spec 7.3：`de_risk`/`flatten`/`halt_strategy` 在消费方定义执行契约前不可执行；`escalate_review` 及未来新增枚举同样拒），并把决策载荷钉进 run 的 `files[]` 后再算身份。`RiskRunStore.publish` 的 `payloads` 默认 `None` 改为**必填**（缺参不再落盘半个 run） | 删 `action not in EXECUTABLE_ACTIONS` 分支 → 三条 `de_risk/flatten/escalate_review` 用例 `DID NOT RAISE`；把 store 守卫退回 `payloads is None: {}` → 守卫用例改报 "count does not match" |
 | B1 附带 | 该轮引入的回归 | 同轮把 portfolio 路径也写进 `files[]`，但 `read_verified_risk_run` 仍只按 order 形状读 `payloads[path]["candidate_order"]` → 合法 portfolio run 读回时裸 `KeyError: 'candidate_order'`。改为按 `run_scope` 分派：order 校验候选单血缘 + 决策体，portfolio 只校验决策体 | 把分派强制走 order 分支 → 新用例 `risk run candidate order payload missing` 失败 |
 | B2 | 真问题（不可达→已闭合） | `LabelBuilder` 原**先按 eligibility 过滤再 `shift(-horizon)`**，使 horizon 变成"第 N 个幸存行"而非"第 N 个交易日"（一次停牌把 5 日收益悄悄变成 6 日），manifest 却仍声明 `horizon_trading_days`。现改为**先在完整交易行网格上算 label，再过滤**；`formula_sha256` 文本显式写明 D 计数在过滤前 | 恢复"先过滤后 shift" → 新用例 checksum 判别失败（旧/新标签向量确实不同） |
 | B3 | 真问题（不可达→已闭合） | `ModelTrainer.train` 原只用 `~np.isnan(y)` 剔空标签，`inf` 或特征 NaN 会被正规方程传播成 NaN 权重，再被 artifact checksum 当作合法发布物记录。现补 `np.isfinite` 校验（标签、特征、结果权重三处） | 删两条 `isfinite` 守卫 → 新用例改报 "trained weights are not finite" |
@@ -607,7 +607,7 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 
 ### 8.19 外部评审 N1 硬化（2026-10-14，PIT 窗口参数改必填）
 
-§8.16 把外部报告 N1 判为"不可达的一致性缺口"，报告建议"顺手把窗口参数改必填"。本轮落地。
+§8.16 把外部报告 N1 判为**非缺陷**（REFUTED，"不可达的一致性缺口"是报告自身措辞，非本台账结论）；报告建议"顺手把窗口参数改必填"，本轮据此落地。
 
 | 项 | 修复 | 变异验证（监工亲做） |
 |---|---|---|
@@ -630,7 +630,7 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 | 退化截面 | 常量截面（分数或标签无变异）相关未定义：**跳过**而非让均值变 NaN；无任何可用截面则 fail-closed | 删 `nunique()<2` 跳过分支 → 2 条新锁失败（NaN / 未报错） |
 | 契约 | metric `name` 在 `model_definition`/`model_definition_template` 均为自由字符串（schema 无 enum），故**无需升版**；口径约定写入 `specs/layers/model-layer-spec.md` §8.1 | 不适用 |
 
-**测试**：`tests/test_model_definition.py::TestMetricReport` 由 1 例扩为 6 例（默认截面 + 截面=逐日相关均值 + pooled 显式且与截面不同 + rank 变体 + 退化截面跳过 + 无可用截面 fail-closed + 未支持指标 fail-closed）。全量 **992 passed / 23 skipped / exit 0**（基线 986+6 吻合；qlib 门控本地 skip）。
+**测试**：`tests/test_model_definition.py::TestMetricReport` 由 1 例扩为 7 例（净 +6，默认截面 + 截面=逐日相关均值 + pooled 显式且与截面不同 + rank 变体 + 退化截面跳过 + 无可用截面 fail-closed + 未支持指标 fail-closed）。全量 **992 passed / 23 skipped / exit 0**（基线 986+6 吻合；qlib 门控本地 skip）。
 
 **未夸大声明**：口径分派与退化截面两处源改动的变异杀伤为监工亲做；全量套件监工亲跑。`MetricReport` 目前在 src 内仍无生产调用方（仅测试），故本轮不改任何已发布制品身份。`code-review-unified-quant.md` 保持未跟踪。
 
@@ -659,14 +659,14 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 
 | ID | 档 | 位置 | 发现 | 处置 |
 |---|---|---|---|---|
-| CR22-1 | **MAJOR** | `backtest/engine.py:257/:274/:307/:357` | 回测门 resize **消费路径**零端到端覆盖：白名单放行、缺 allowed_shares 拒、min 限幅三个分支均无测试驱动 resize 决策经 `run_with_risk_gate`；变异（白名单删 resize / 忽略 allowed_shares）全绿。代码逐行读验正确，缺的是锁 | 未修（补 resize 端到端测试） |
-| CR22-2 | MINOR | `risk/contracts.py`、`risk/adapter.py`、`backtest/engine.py` 注释 + §8.18 + `pendding.md:242` | 规格引用 "spec 7.2" 应为 **7.3**：§7.2 是 `risk_state.v1`，所引 fail-closed 规则原文在 §7.3（spec:345-346）。规则真实存在，编号错位，审计锚点断链（台账 agent 评 MAJOR，监工定 MINOR：无运行时影响，但波及 5 处含台账） | 未修（5 处改编号） |
-| CR22-3 | MINOR | `pendding.md:255` | "N1 已修"与同节收尾"N1/N2/N5 是既定口径……本轮未据此改动任何东西"自相矛盾（旧轮残留句） | 未修（删/改收尾句） |
-| CR22-4 | MINOR | §8.20 | "由 1 例扩为 6 例"与同行括号自列 7 项矛盾；实际 7 个测试方法（净 +6，986+6=992 总数不错），应为"扩为 7 例" | 未修（改计数措辞） |
-| CR22-5 | MINOR | §8.19 | "§8.16 把 N1 判为'不可达的一致性缺口'"转述失真；§8.16 原文是"非缺陷 / REFUTED"，该措辞是外部报告自身用语 | 未修（改正转述） |
-| CR22-6 | MINOR | `backtest/engine.py:257` | 回测门下 de_risk/flatten/escalate_review 的 `skipped_risk_blocked` 无桩测试；当前连线 `RiskEngine.evaluate_order` 只产 allow/resize/block_order 故不可达，但"未知 action 一律 blocked"的修复主旨无锁 | 未修（补桩 gate 测试） |
-| CR22-7 | MINOR | `mootdx_source.py:112-113` | "end must not precede start" 分支无测试；删该分支（负 span 放行超页检查）不红 | 未修 |
-| CR22-8 | MINOR | `tests/test_model_definition.py` | rank_ic 数值语义无判别：夹具线性使 rank==pearson，`_correlate` rank 分支（`definition.py:163`）变异不红 | 未修（需非单调秩相关夹具） |
+| CR22-1 | **MAJOR** | `backtest/engine.py:257/:274/:307/:357` | 回测门 resize **消费路径**零端到端覆盖：白名单放行、缺 allowed_shares 拒、min 限幅三个分支均无测试驱动 resize 决策经 `run_with_risk_gate`；变异（白名单删 resize / 忽略 allowed_shares）全绿。代码逐行读验正确，缺的是锁 | **已修**（§8.24：3 例端到端 resize 锁；两个变异均被杀） |
+| CR22-2 | MINOR | `risk/contracts.py`、`risk/adapter.py`、`backtest/engine.py` 注释 + §8.18 + `pendding.md:242` | 规格引用 "spec 7.2" 应为 **7.3**：§7.2 是 `risk_state.v1`，所引 fail-closed 规则原文在 §7.3（spec:345-346）。规则真实存在，编号错位，审计锚点断链（台账 agent 评 MAJOR，监工定 MINOR：无运行时影响，但波及 5 处含台账） | **已修**（§8.24：5 处改 7.3） |
+| CR22-3 | MINOR | `pendding.md:255` | "N1 已修"与同节收尾"N1/N2/N5 是既定口径……本轮未据此改动任何东西"自相矛盾（旧轮残留句） | **已修**（§8.24：收尾句改为 N2/N5 既定、N1/B11 已落地） |
+| CR22-4 | MINOR | §8.20 | "由 1 例扩为 6 例"与同行括号自列 7 项矛盾；实际 7 个测试方法（净 +6，986+6=992 总数不错），应为"扩为 7 例" | **已修**（§8.24：改"扩为 7 例（净 +6）"） |
+| CR22-5 | MINOR | §8.19 | "§8.16 把 N1 判为'不可达的一致性缺口'"转述失真；§8.16 原文是"非缺陷 / REFUTED"，该措辞是外部报告自身用语 | **已修**（§8.24：改为 §8.16 判 N1 非缺陷，措辞系报告自身） |
+| CR22-6 | MINOR | `backtest/engine.py:257` | 回测门下 de_risk/flatten/escalate_review 的 `skipped_risk_blocked` 无桩测试；当前连线 `RiskEngine.evaluate_order` 只产 allow/resize/block_order 故不可达，但"未知 action 一律 blocked"的修复主旨无锁 | **已修**（§8.24：桩 gate 喂 `halt_strategy`，必落 `skipped_risk_blocked`） |
+| CR22-7 | MINOR | `mootdx_source.py:112-113` | "end must not precede start" 分支无测试；删该分支（负 span 放行超页检查）不红 | **已修**（§8.24：倒置区间锁；`days<=0`→`days==0` 变异被杀） |
+| CR22-8 | MINOR | `tests/test_model_definition.py` | rank_ic 数值语义无判别：夹具线性使 rank==pearson，`_correlate` rank 分支（`definition.py:163`）变异不红 | **已修**（§8.24：平方分位夹具，spearman=1.0 / pearson≈0.9615；删 rank 分支变异被杀） |
 
 **OBS（8 条）**：① `test_risk_control_plane_phase2.py:225` 恒真断言（`decision_digest == decision_digest(payloads)`，X==X；真锁是 :224 的 `failed_findings` 精确断言）；② `sample_count` 字段全仓库无断言（既有字段，非本轮新增）；③ §8.20 称 B11 变异"4 条新锁失败"，抽样复做实杀 6 例——少报（保守方向）；④ 同名 `ic` 语义变更仅靠 spec §8.1 记录，历史报告跨期可比性注意（src/scripts 无生产消费方、无 config 钉 "ic"，不冲击在管管线）；⑤ mootdx refusal 测试未断言 `retryable=False`，`_FixedPageMootdxAdapter` 复用于多页场景会掩盖分页 bug；⑥ `test_model_trainer.py:264` 测试放错类、`test_research_chain_phase4.py:525` 变量名 `dataset_adapter` 实为 portfolio 适配器；⑦ `read_verified_risk_run` 语义比对层无负向测试（字节链已篡改 evident，该层只防发布方写错内容）；⑧ trainer 训练后 "weights are not finite" 实际不可达（输入有限且 alpha>0 解必有限），该处无测试锁。
 
@@ -698,3 +698,24 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试**：`test_external_review_20261014.py` 由 5 例扩为 7 例（改 1 例口径 + 净增 2 例：B9-D 走私锁、receipt 回读锁）。全量 **1000 passed / 23 skipped / exit 0**（监工亲跑）。
 
 **未夸大声明**：本节的变异验证由监工亲做（逐条回退源码 → 新锁必失败 → 还原）；三处 B9 源码修复经监工逐行亲读；CR23-1 的"本轮引入"结论由 stash 对照实测（HEAD 态 vs 本轮态）。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.24 §8.22 台账项收口轮（2026-10-14，CR22-1..CR22-8 全部落地）
+
+对 §8.22 登记的 1 MAJOR + 7 MINOR（此前全部"未修"）逐条修复。**8 条全部闭合，每条新增锁均做变异验证（回退源码 → 新锁必失败 → 还原）。全量 1006 passed / 23 skipped / exit 0。**
+
+| ID | 修复 | 变异验证（监工亲做） |
+|---|---|---|
+| CR22-1（MAJOR） | `tests/test_risk_control_plane_phase2.py` 新增 3 例端到端 resize 锁：(a) 白名单放行 → 引擎消费 allowed_shares 并成交；(b) min 限幅（把引擎自身 participation 设 **高于** 风控 cap，使忽略约束会填 50,000 而非 10,000，断言可判别）；(c) `resize` 决策缺 `allowed_shares` → `ContractError` | 变异 A：`ORDER_GATE_EXECUTABLE_ACTIONS` 去掉 `resize` → 3 例失败；变异 B：买入路径 `min(shares_to_buy, risk_allowed_shares)` 改 `pass` → 2 例失败（首版夹具 participation=0.05 时风险 cap 与引擎 cap 同值，变异 B 不红——已改为 0.50 使二者分离） |
+| CR22-2 | `risk/contracts.py:43`、`risk/adapter.py:117`、`backtest/engine.py:35` 注释 + `pendding.md:242` + `cr.md` §8.18 的 "spec 7.2" → **7.3**（fail-closed 规则原文在 spec §7.3 `risk_decision.v1`，行 345-347） | 不适用（纯台账/注释锚点） |
+| CR22-3 | `pendding.md` 收尾句改为"N2/N5 是既定口径、N3/N4/B14 为 REFUTED，未据此改动；N1 与 B11 已按裁决落地" | 不适用 |
+| CR22-4 | `cr.md` §8.20 计数改为"由 1 例扩为 7 例（净 +6…）" | 不适用 |
+| CR22-5 | `cr.md` §8.19 改为"§8.16 把 N1 判为**非缺陷**（REFUTED，'不可达的一致性缺口'系报告自身措辞）" | 不适用 |
+| CR22-6 | 同 CR22-1 文件新增桩 gate 用例：喂 `action="halt_strategy"`（引擎从未执行的枚举）→ 必落 `skipped_risk_blocked`、`filled_shares=0` | 该锁锁住 `engine.py:257` 的 `not in ORDER_GATE_EXECUTABLE_ACTIONS` 白名单分支（与 CR22-1 变异 A 同源） |
+| CR22-7 | `tests/test_real_chain.py` 新增倒置区间锁：`start=2026-08-21, end=2026-06-01` → `UNSUPPORTED_REQUEST` + "precede" | 变异：`days <= 0` → `days == 0` → 新锁失败（返回 `EMPTY` 而非 envelope） |
+| CR22-8 | `tests/test_model_definition.py` 新增 `test_rank_ic_is_rank_correlation_not_pearson`：分数=秩²（严格递增非线性），spearman=1.0、pearson≈0.961524，二者必不相等 | 变异：`definition.py:163` 的 rank 转换改 `pass` → 新锁失败（rank_ic 塌成 ic=0.9615） |
+
+**排查记录（工装而非代码）**：CR22-7 复核时一度看到倒置区间返回 `EMPTY`、`days<=0` 分支"失效"。定位为**变异实验遗留的 `.pyc`**：回退源码时我保留了原 mtime，Python 的 mtime 缓存未失效，加载到的是变异字节码（`dis` 显示 `COMPARE_OP ==`）。清 `__pycache__` 后行为恢复、源码 `git diff` 为空——**源码自始正确**。该坑记此以备后续变异流程：**回退后须同时失效 pyc（或改 mtime）**。
+
+**测试计数**：`test_risk_control_plane_phase2.py` +4 例（3 resize + 1 未知 action）、`test_real_chain.py` +1、`test_model_definition.py` +1 = 净 +6（1000→1006 吻合）。
+
+**未夸大声明**：CR22-1（两个变异）、CR22-7、CR22-8 的变异杀伤为监工亲做；CR22-2..CR22-6 为台账/注释锚点或与 CR22-1 同源的白名单分支。全量套件监工亲跑。本轮不改任何已发布制品身份（无 canonical schema 语义变更、无版本升迁）。`code-review-unified-quant.md` 保持未跟踪。

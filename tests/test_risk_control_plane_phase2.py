@@ -741,3 +741,120 @@ def test_order_submission_source_fails_closed_on_missing_context() -> None:
     source = RiskPolicyOrderSubmissionSource(policy={}, policy_review={})
     with pytest.raises(ContractError, match="missing context"):
         source("2026-01-05", "a" * 64, {})
+
+
+def _run_gate_once(*, weight, capital, participation, price=10.0, volume=100000.0, risk_gate_override=None):
+    """One decision date, one instrument; returns (gate, artifacts) for assertions.
+
+    ``risk_gate_override`` lets a stub gate stand in for the real evaluator so the
+    engine's consumption of an arbitrary action can be exercised.
+    """
+    root = Path(tempfile.mkdtemp()) / "store"
+    gate = PortfolioPublicationRiskGate(root)
+    policy, review = _order_policy()
+    panel = pd.DataFrame(
+        {
+            "date": ["2026-01-05", "2026-01-06"],
+            "instrument": ["A", "A"],
+            "open": [price, price],
+            "close": [price, price],
+            "volume": [volume, volume],
+        }
+    )
+    config = _gate_config("2026-01-05", "2026-01-06")
+    config["initial_capital"] = capital
+    config["execution_model"]["volume_participation_cap"] = participation
+    from uq.backtest.engine import BacktestEngine
+
+    if risk_gate_override is None:
+        manifest, artifacts, _ = gate.run_with_risk_gate(
+            BacktestEngine(root),
+            config=config,
+            policy=policy,
+            policy_review=review,
+            portfolio_definition={"generation_id": "0" * 64},
+            weight_partitions={"2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [weight]})},
+            price_panel=panel.set_index(["date", "instrument"]),
+        )
+        return artifacts["fills"]
+    # A stub gate drives the engine directly, bypassing the real risk_run publish.
+    manifest, artifacts = BacktestEngine(root).run(
+        config=config,
+        portfolio_definition={"generation_id": "0" * 64},
+        weight_partitions={"2026-01-05": pd.DataFrame({"instrument": ["A"], "weight": [weight]})},
+        price_panel=panel.set_index(["date", "instrument"]),
+        risk_gate=risk_gate_override,
+    )
+    return artifacts["fills"]
+
+
+def test_backtest_gate_resize_whitelist_is_executed_end_to_end():
+    """CR22-1: a ``resize`` decision must actually reach the engine and cap shares.
+
+    The engine lists ``resize`` as executable, so an allowed_shares constraint has
+    to travel through ``run_with_risk_gate`` and land as a filled, capped order --
+    not merely be asserted at the ``RiskEngine`` boundary.
+
+    The engine's own participation cap is set *above* the risk cap on purpose: if
+    the engine ignored the resize constraint it would fill 50,000 shares instead of
+    the 10,000 the decision allows, so the assertion discriminates.
+    """
+    fills = _run_gate_once(weight=1.0, capital=10_000_000.0, participation=0.50)
+    row = fills.iloc[0]
+    # Requested 1,000,000 shares; the risk participation rule caps at 10,000
+    # (0.10 * 100,000) and the notional rule at 10,000 (100,000 / 10), both well
+    # below the engine's own 50,000 (0.50 * 100,000) cap -- so only consuming the
+    # resize decision produces this fill.
+    assert row["target_shares"] == 10000
+    assert row["filled_shares"] == 10000
+    assert row["status"] == "filled"
+
+
+def test_backtest_gate_resize_min_constraint_is_the_cap():
+    """CR22-1: when several allowed_shares constraints disagree, the minimum wins.
+
+    The risk participation cap (0.10 * 10,000 = 1,000) is set strictly *below* the
+    notional cap (100,000 / 10 = 10,000), so only the ``min`` of the two produces
+    the observed fill: a first-constraint-wins bug would fill 10,000, and ignoring
+    the constraint entirely would fill the engine's own 5,000 (0.50 * 10,000).
+    """
+    fills = _run_gate_once(weight=1.0, capital=10_000_000.0, participation=0.50, volume=10000.0)
+    row = fills.iloc[0]
+    assert row["filled_shares"] == 1000
+
+
+def test_backtest_gate_resize_without_allowed_shares_fails_closed():
+    """CR22-1: a ``resize`` decision that names no allowed_shares is a contract
+    violation, not a silent no-op -- the engine must raise."""
+
+    def bad_gate(candidate, context):
+        return {
+            "action": "resize",
+            "constraints": [],
+            "decision_digest": "0" * 64,
+            "findings": [],
+        }
+
+    with pytest.raises(ContractError, match="allowed_shares"):
+        _run_gate_once(
+            weight=1.0, capital=10_000_000.0, participation=0.05, risk_gate_override=bad_gate
+        )
+
+
+def test_backtest_gate_blocks_any_unknown_action():
+    """CR22-6: the executable set is a whitelist, so an action the engine has never
+    heard of (or a future enum member) is recorded blocked, never executed."""
+
+    def unknown_gate(candidate, context):
+        return {
+            "action": "halt_strategy",
+            "constraints": [],
+            "decision_digest": "0" * 64,
+            "findings": [],
+        }
+
+    fills = _run_gate_once(
+        weight=1.0, capital=10_000_000.0, participation=0.05, risk_gate_override=unknown_gate
+    )
+    assert set(fills["status"]) == {"skipped_risk_blocked"}
+    assert fills.iloc[0]["filled_shares"] == 0

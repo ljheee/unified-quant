@@ -32,7 +32,7 @@ _FILL_COLUMNS = [
     "gross_execution_price", "net_execution_price", "commission_fee",
     "stamp_duty_fee", "status",
 ]
-# cr.md latent B5 / spec 7.2: this engine can execute allow/warn/resize (resize via
+# cr.md latent B5 / spec 7.3: this engine can execute allow/warn/resize (resize via
 # an allowed_shares constraint) and nothing else.  Listing the executable set rather
 # than the blocked set means de_risk, flatten, escalate_review or an action added to
 # the schema later blocks the order instead of executing it unexamined.  The fill
