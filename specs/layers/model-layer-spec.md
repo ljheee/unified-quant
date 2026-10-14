@@ -297,6 +297,27 @@ A reviewed model definition freezes semantic intent:
 - metric definitions and selection rule;
 - serialization format.
 
+### 8.1 Metric Basis Convention
+
+The metric ``name`` is the contract surface that fixes the basis, so a metric
+report is never ambiguous about what was measured. For the IC family:
+
+- ``ic`` and ``rank_ic`` are **cross-sectional**: each ``decision_date`` is one
+  cross-section, the per-date correlation between score and label is taken, and
+  the reported value is the unweighted mean over the dates that carry a usable
+  cross-section (>= 2 usable rows). This removes the day-over-day common move
+  (market beta) that a single pooled correlation would fold into the score, so
+  the value measures cross-sectional selection skill rather than selection plus
+  timing.
+- ``ic_pooled`` and ``rank_ic_pooled`` are the **pooled** variants: one
+  correlation over every (instrument, decision_date) row. They are an explicit
+  opt-in and must be named as such; they are not the default.
+
+The report records the resolved ``basis`` per result, and the cross-sectional
+variants also record ``cross_section_count``. A cross-section whose scores or
+labels are constant has an undefined correlation; it is skipped rather than
+allowed to poison the mean, and a run with no usable cross-section fails closed.
+
 A model run records execution facts:
 
 - resolved definition and dataset generations;

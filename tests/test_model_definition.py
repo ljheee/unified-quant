@@ -53,7 +53,7 @@ class TestModelDefinitionBuilder:
 
 
 class TestMetricReport:
-    def test_ic_computation(self) -> None:
+    def _frame(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         dates = pd.bdate_range("2026-01-05", periods=3)
         rows = []
         for d in dates:
@@ -65,8 +65,123 @@ class TestMetricReport:
                     "label": float(i) * 0.01,
                 })
         df = pd.DataFrame(rows)
-        preds = df[["instrument", "decision_date", "score"]].rename(columns={"score": "score"})
-        actuals = df[["instrument", "decision_date", "label"]].rename(columns={"label": "label"})
-        report = MetricReport.compute(preds, actuals, metric_definitions=[{"name": "ic", "direction": "maximize"}])
+        preds = df[["instrument", "decision_date", "score"]]
+        actuals = df[["instrument", "decision_date", "label"]]
+        return preds, actuals
+
+    def test_ic_defaults_to_cross_sectional_mean(self) -> None:
+        # cr.md B11: the IC family is cross-sectional by default -- each decision
+        # date is one cross-section, correlated separately, then averaged.
+        preds, actuals = self._frame()
+        report = MetricReport.compute(
+            preds, actuals, metric_definitions=[{"name": "ic", "direction": "maximize"}]
+        )
         assert len(report["results"]) == 1
-        assert -1 <= report["results"][0]["value"] <= 1
+        result = report["results"][0]
+        assert result["basis"] == "cross_sectional"
+        assert result["cross_section_count"] == 3
+        assert -1 <= result["value"] <= 1
+
+    def test_cross_sectional_ic_is_the_mean_of_per_date_correlations(self) -> None:
+        # Scores/labels rank-identical within every date, so each per-date Pearson
+        # correlation is 1.0 and the cross-sectional IC is exactly 1.0.
+        dates = pd.bdate_range("2026-01-05", periods=4)
+        rows = []
+        for d in dates:
+            for i in range(8):
+                rows.append({
+                    "instrument": f"INST{i}", "decision_date": d,
+                    "score": float(i), "label": float(i) * 0.5,
+                })
+        df = pd.DataFrame(rows)
+        report = MetricReport.compute(
+            df[["instrument", "decision_date", "score"]],
+            df[["instrument", "decision_date", "label"]],
+            metric_definitions=[{"name": "ic", "direction": "maximize"}],
+        )
+        assert report["results"][0]["value"] == pytest.approx(1.0)
+        assert report["results"][0]["cross_section_count"] == 4
+
+    def test_pooled_ic_is_opt_in_and_differs_from_cross_sectional(self) -> None:
+        # A common daily shift makes the pooled correlation differ from the
+        # cross-sectional mean: pooled folds the day effect in, cross-sectional
+        # removes it.  ``ic_pooled`` is the explicit opt-in for the old behaviour.
+        rows = []
+        day_shift = {0: 0.0, 1: 10.0, 2: -10.0}
+        for day_index, d in enumerate(pd.bdate_range("2026-01-05", periods=3)):
+            for i in range(6):
+                rows.append({
+                    "instrument": f"INST{i}", "decision_date": d,
+                    "score": float(i) * 0.1,
+                    "label": float(i) * 0.1 + day_shift[day_index],
+                })
+        df = pd.DataFrame(rows)
+        preds = df[["instrument", "decision_date", "score"]]
+        actuals = df[["instrument", "decision_date", "label"]]
+        report = MetricReport.compute(
+            preds, actuals,
+            metric_definitions=[
+                {"name": "ic", "direction": "maximize"},
+                {"name": "ic_pooled", "direction": "maximize"},
+            ],
+        )
+        cross, pooled = report["results"]
+        assert cross["basis"] == "cross_sectional"
+        assert pooled["basis"] == "pooled"
+        assert pooled["cross_section_count"] == 0
+        assert cross["value"] == pytest.approx(1.0)
+        assert pooled["value"] < cross["value"]
+
+    def test_rank_ic_variants_are_supported(self) -> None:
+        preds, actuals = self._frame()
+        report = MetricReport.compute(
+            preds, actuals,
+            metric_definitions=[
+                {"name": "rank_ic", "direction": "maximize"},
+                {"name": "rank_ic_pooled", "direction": "maximize"},
+            ],
+        )
+        assert report["results"][0]["basis"] == "cross_sectional"
+        assert report["results"][1]["basis"] == "pooled"
+
+    def test_unsupported_metric_fails_closed(self) -> None:
+        preds, actuals = self._frame()
+        with pytest.raises(ContractError, match="unsupported metric"):
+            MetricReport.compute(
+                preds, actuals, metric_definitions=[{"name": "sharpe", "direction": "maximize"}]
+            )
+
+    def test_degenerate_cross_section_is_skipped_not_averaged(self) -> None:
+        # A date whose scores are constant has an undefined correlation; it must be
+        # skipped, not allowed to turn the mean into NaN.
+        rows = []
+        for day_index, d in enumerate(pd.bdate_range("2026-01-05", periods=3)):
+            for i in range(4):
+                rows.append({
+                    "instrument": f"INST{i}", "decision_date": d,
+                    "score": float(i) if day_index != 1 else 0.0,
+                    "label": float(i) * 0.5,
+                })
+        df = pd.DataFrame(rows)
+        report = MetricReport.compute(
+            df[["instrument", "decision_date", "score"]],
+            df[["instrument", "decision_date", "label"]],
+            metric_definitions=[{"name": "ic", "direction": "maximize"}],
+        )
+        result = report["results"][0]
+        assert result["cross_section_count"] == 2
+        assert result["value"] == pytest.approx(1.0)
+
+    def test_no_usable_cross_section_fails_closed(self) -> None:
+        df = pd.DataFrame({
+            "instrument": ["A", "B"],
+            "decision_date": pd.to_datetime(["2026-01-05", "2026-01-05"]),
+            "score": [1.0, 1.0],  # constant -> undefined correlation
+            "label": [0.1, 0.2],
+        })
+        with pytest.raises(ContractError, match="no usable cross-section"):
+            MetricReport.compute(
+                df[["instrument", "decision_date", "score"]],
+                df[["instrument", "decision_date", "label"]],
+                metric_definitions=[{"name": "ic", "direction": "maximize"}],
+            )

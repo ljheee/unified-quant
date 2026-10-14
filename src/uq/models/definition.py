@@ -85,7 +85,29 @@ class ModelDefinitionBuilder:
 
 
 class MetricReport:
-    """Compute and serialize metric values from predictions vs actuals."""
+    """Compute and serialize metric values from predictions vs actuals.
+
+    The IC family is computed **cross-sectionally by default**: each decision date
+    is one cross-section, the per-date correlation is taken, and the metric is the
+    unweighted mean over the dates that carry a usable cross-section.  This removes
+    the day-over-day common move (market beta) that a single pooled correlation
+    would fold into the score, so the value measures cross-sectional selection
+    skill rather than selection plus timing.
+
+    A pooled correlation over the whole frame remains available as an explicit
+    opt-in by naming the metric ``ic_pooled`` / ``rank_ic_pooled``.  ``ic`` and
+    ``rank_ic`` are the cross-sectional variants.  The metric ``name`` is the
+    contract surface (the schema leaves it a free string), so the basis is always
+    visible in the report's ``basis`` field and never inferred silently.
+    """
+
+    # name -> (basis, correlation_kind)
+    _METRIC_BASIS = {
+        "ic": ("cross_sectional", "pearson"),
+        "rank_ic": ("cross_sectional", "rank"),
+        "ic_pooled": ("pooled", "pearson"),
+        "rank_ic_pooled": ("pooled", "rank"),
+    }
 
     @staticmethod
     def compute(
@@ -108,12 +130,18 @@ class MetricReport:
         for metric_def in metric_definitions:
             name = metric_def["name"]
             direction = metric_def["direction"]
-            value = MetricReport._compute_single(merged[score_col], merged[label_col], name)
+            basis, correlation_kind = MetricReport._resolve_metric(name)
+            value, cross_section_count = MetricReport._compute(
+                merged, score_col=score_col, label_col=label_col,
+                basis=basis, correlation_kind=correlation_kind,
+            )
             results.append({
                 "name": name,
                 "direction": direction,
+                "basis": basis,
                 "value": value,
                 "sample_count": len(merged),
+                "cross_section_count": cross_section_count,
             })
 
         report = {
@@ -124,15 +152,51 @@ class MetricReport:
         return report
 
     @staticmethod
-    def _compute_single(scores: pd.Series, labels: pd.Series, name: str) -> float:
-        valid = scores.notna() & labels.notna()
-        s = scores[valid]
-        y = labels[valid]
-        if len(s) < 2:
-            raise ContractError("insufficient samples for metric computation")
-        if name == "ic":
-            return float(s.corr(y, method="pearson"))
-        elif name == "rank_ic":
-            return float(s.rank().corr(y.rank(), method="pearson"))
-        else:
-            raise ContractError(f"unsupported metric: {name}")
+    def _resolve_metric(name: str) -> tuple[str, str]:
+        try:
+            return MetricReport._METRIC_BASIS[name]
+        except KeyError as exc:
+            raise ContractError(f"unsupported metric: {name}") from exc
+
+    @staticmethod
+    def _correlate(scores: pd.Series, labels: pd.Series, correlation_kind: str) -> float:
+        if correlation_kind == "rank":
+            scores = scores.rank()
+            labels = labels.rank()
+        return float(scores.corr(labels, method="pearson"))
+
+    @staticmethod
+    def _compute(
+        merged: pd.DataFrame,
+        *,
+        score_col: str,
+        label_col: str,
+        basis: str,
+        correlation_kind: str,
+    ) -> tuple[float, int]:
+        if basis == "pooled":
+            valid = merged[score_col].notna() & merged[label_col].notna()
+            scores = merged.loc[valid, score_col]
+            labels = merged.loc[valid, label_col]
+            if len(scores) < 2:
+                raise ContractError("insufficient samples for metric computation")
+            return MetricReport._correlate(scores, labels, correlation_kind), 0
+        if basis != "cross_sectional":
+            raise ContractError(f"unsupported metric basis: {basis}")
+
+        per_date: list[float] = []
+        for _, cross_section in merged.groupby("decision_date", sort=True):
+            valid = cross_section[score_col].notna() & cross_section[label_col].notna()
+            scores = cross_section.loc[valid, score_col]
+            labels = cross_section.loc[valid, label_col]
+            if len(scores) < 2:
+                continue
+            # A constant cross-section has an undefined correlation; skip it up
+            # front (and avoid the numpy divide-by-zero warning) rather than let
+            # it poison the mean with NaN.
+            if scores.nunique() < 2 or labels.nunique() < 2:
+                continue
+            per_date.append(MetricReport._correlate(scores, labels, correlation_kind))
+        if not per_date:
+            raise ContractError("no usable cross-section for metric computation")
+        return float(sum(per_date) / len(per_date)), len(per_date)

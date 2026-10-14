@@ -619,3 +619,17 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 
 **未夸大声明**：N1 的两处源改动 + 一处夹具修正的变异杀伤为监工亲做；全量套件监工亲跑。N2（因子血缘完整性）、N5（可见性声明可证伪性）仍为既定口径观察项，未动。`code-review-unified-quant.md` 保持未跟踪。
 
+### 8.20 外部评审 B11 裁决与落地（2026-10-14，IC 口径：截面为默认 / pooled 显式可选）
+
+§8.16 把 B11（pooled IC vs 截面 IC）判为 PLAUSIBLE、需治理裁决。用户裁决：**截面 IC 为默认，pooled 作为显式可选**。落地如下。
+
+| 项 | 修复 | 变异验证（监工亲做） |
+|---|---|---|
+| 口径分派 | `MetricReport` 原对 `ic`/`rank_ic` 一律做全样本单次相关（pooled）。现改为按 metric **名**分派：`ic`/`rank_ic` = 逐 `decision_date` 截面相关再取无权重均值；`ic_pooled`/`rank_ic_pooled` = 全样本单次相关（旧行为，须显式命名）。`ic` 家族不再把日间共同移动算进相关性 | 把 `ic`/`rank_ic` 的 basis 改回 pooled → 4 条新锁失败 |
+| 报告可审计 | 每条结果新增 `basis`（`cross_sectional`/`pooled`）与 `cross_section_count`，口径不再靠推断 | 同上下（basis 断言） |
+| 退化截面 | 常量截面（分数或标签无变异）相关未定义：**跳过**而非让均值变 NaN；无任何可用截面则 fail-closed | 删 `nunique()<2` 跳过分支 → 2 条新锁失败（NaN / 未报错） |
+| 契约 | metric `name` 在 `model_definition`/`model_definition_template` 均为自由字符串（schema 无 enum），故**无需升版**；口径约定写入 `specs/layers/model-layer-spec.md` §8.1 | 不适用 |
+
+**测试**：`tests/test_model_definition.py::TestMetricReport` 由 1 例扩为 6 例（默认截面 + 截面=逐日相关均值 + pooled 显式且与截面不同 + rank 变体 + 退化截面跳过 + 无可用截面 fail-closed + 未支持指标 fail-closed）。全量 **992 passed / 23 skipped / exit 0**（基线 986+6 吻合；qlib 门控本地 skip）。
+
+**未夸大声明**：口径分派与退化截面两处源改动的变异杀伤为监工亲做；全量套件监工亲跑。`MetricReport` 目前在 src 内仍无生产调用方（仅测试），故本轮不改任何已发布制品身份。`code-review-unified-quant.md` 保持未跟踪。

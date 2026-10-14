@@ -250,4 +250,6 @@ universe snapshot 生产者(2026-10-13)
 外部评审 N1/N2/N5 处置(2026-10-14)
 - **N1 已修**:`UniverseSnapshotStore.read_members` 的 PIT 窗口参数由 `requested_valid_from: date | None = None` 改为**必填** `date`,不再回退到快照自身 `valid_from`(那会让 `UniverseSnapshotReader.read` 的有效性守卫对"忘记传窗口"的调用方退化成恒真)。组合阶段 `PortfolioStageAdapter.run` 现与数据集阶段同口径传请求窗口。附带发现并修正:`tests/test_research_chain_phase4.py` 的 `_extended_plan` 请求窗口(2025-12-01)本就在快照有效区间(2026-01-05 起)之外,旧默认把它掩盖了,已对齐到 2026-01-05~01-30。变异验证:两处改动分别回退后,新锁 `test_universe_snapshot_read_members_requires_the_pit_window` / `test_portfolio_stage_refuses_a_snapshot_outside_the_request_window` 必失败。
 - **N2 非缺陷(既定口径)**:因子分区血缘只声明"当日"一个输入,`specs/layers/factor-layer-spec.md` §3.1.2 明写"绑定同一会话"。要完整血缘需连 `factor_manifest` schema 一起开版本,属治理裁决,未动。
+- **N5 非缺陷(既定约定)**:`session_close` 的输入可见时间是合成断言、在 artifact 侧不可证伪,属 close-to-close 既定约定,仅提示,未动。
+- **B11 已裁决并落地(2026-10-14)**:IC 口径定为**截面 IC 为默认、pooled 为显式可选**。`MetricReport` 现按 metric 名分派:`ic`/`rank_ic` = 逐决策日截面相关再取无权重均值(剔除日间共同移动),`ic_pooled`/`rank_ic_pooled` = 全样本单次相关(旧行为,须显式命名)。报告每条结果记录 `basis` 与 `cross_section_count`;常量截面(相关未定义)跳过而不污染均值,无可用截面则 fail-closed。口径写入 `specs/layers/model-layer-spec.md` §8.1。metric `name` 是自由字符串,schema 无需升版。
 - 处置边界声明:报告里 N1/N2/N5 是既定口径(非缺陷),N3/N4/B14 为 REFUTED,本轮未据此改动任何东西。`code-review-unified-quant.md` 保持**未跟踪**(是外部输入件,不入库;要入库由你决定)。
