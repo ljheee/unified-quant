@@ -305,6 +305,22 @@ def assess_readiness(
                     "informational",
                 )
             )
+        if excused_excluded:
+            # The window-level counterpart of the file-level exclusion report:
+            # it names the exclusions that actually excused a gap *here*, so the
+            # verdict shows which names the exclusion changed rather than only
+            # that the file exists.  Kept apart from ``excluded_instruments``
+            # (the whole file) so a stale entry cannot hide behind a live one.
+            metrics["instruments_exclusion_excused"] = float(len(excused_excluded))
+            findings.append(
+                ReadinessFinding(
+                    "excluded_instruments_excused",
+                    f"{len(excused_excluded)} excluded instruments have a required session "
+                    f"{suspension_provenance} does not attribute to a suspension",
+                    tuple(excused_excluded[:50]),
+                    "informational",
+                )
+            )
         if gaps:
             findings.append(
                 ReadinessFinding(

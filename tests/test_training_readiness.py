@@ -705,3 +705,28 @@ def test_exclusion_excuses_a_gap_the_suspension_source_cannot_explain():
     excluded = [finding for finding in report.findings if finding.code == "excluded_instruments"]
     assert excluded and excluded[0].severity == "informational"
     assert excluded[0].instruments == ("000001.XSHE",)
+    # The window-level counterpart names the exclusion that actually excused a
+    # gap here, so the verdict shows *which* name the exclusion changed and not
+    # merely that the file exists (cr.md CR27-2: `excused_excluded` was collected
+    # but never consumed).
+    excused = [finding for finding in report.findings if finding.code == "excluded_instruments_excused"]
+    assert excused and excused[0].severity == "informational"
+    assert excused[0].instruments == ("000001.XSHE",)
+    assert report.metrics["instruments_exclusion_excused"] == 1.0
+
+
+def test_a_healthy_exclusion_does_not_claim_to_have_excused_a_gap():
+    # The excused finding is window evidence, not a restatement of the file: an
+    # excluded name with nothing missing must not appear in it (and is itself
+    # unjustified).
+    report = _assess(
+        _bars(),
+        _members(),
+        suspensions={"600000.XSHG": [], "000001.XSHE": []},
+        suspension_provenance="test:suspend_d",
+        excluded_instruments={"000001.XSHE": "stale exclusion"},
+        excluded_provenance="test:evidence",
+    )
+    assert "instruments_exclusion_excused" not in report.metrics
+    assert not [finding for finding in report.findings if finding.code == "excluded_instruments_excused"]
+    assert [finding for finding in report.findings if finding.code == "unjustified_exclusion"]

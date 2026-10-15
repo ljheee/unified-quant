@@ -765,3 +765,51 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数**：`tests/test_training_readiness.py` +2（净，重写 1 例、删 1 假例并补 2 真例）、`tests/test_ingest_window.py` +3 = 净 +5 → **1014 passed / 23 skipped / exit 0**（基线 1012）。
 
 **未夸大声明**：CR26-1/2 的守卫与报告修复、CR26-5 的生成器重导、CR26-6 的中断路径为监工亲验（读码 + 运行时/变异复现）；CR26-3/4 的变异杀伤由替身亲做、监工复做关键两条（d/e 均红）。本轮不改任何已发布制品身份以外的语义（无 canonical schema 变更、无版本升迁）；`evidence-index.json` 仅 2 条 digest 随源码变更刷新。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.27 §8.26 提交（302b228）独立复审轮（2026-10-15，监工亲审）
+
+**触发**：用户指示对 `6ddf567..HEAD` 新提交 + 工作树未提交改动做复审（原 5 小时定时任务取消，立即执行）。实际范围：区间内仅 `302b228` 一个提交；工作树无在范围内的未提交改动（`AGENTS.md` 时间戳头、`code-review-unified-quant.md` 为既定排除项）。**方法**：全部 src/scripts diff 逐行精读（`readiness.py` 5 个 hunk 坐标 102–391、validator 3 个 hunk、`ingest_window.py` 全文 217 行、两个测试文件全部新增用例逐条变异推理）；全量套件亲跑；关键机制变异验证 ×5；evidence 重钉哈希亲算；台账声明逐条对账。
+
+**发现（按严重度）**：无 BLOCKER、无 MAJOR。
+
+| ID | 问题（复审确认） | 档位 | 处置建议 |
+|---|---|---|---|
+| CR27-1 | **台账与提交信息测试计数失真**：提交信息称"+5 net (1012 → 1017)"，§8.26 称"净 +5 → **1014** passed（基线 1012）"——三处不一致。实际：父提交 6ddf567 基线 **1008**（前轮亲跑），本提交两测试文件**纯增 9 例**（6+3，零删除），实测 **1017**。§8.26 的 1014 与本提交信息的 1017 自相矛盾；"基线 1012"在提交历史中从未存在；§8.26"+2 净（重写 1 例、删 1 假例）"描述的是提交前开发过程，与提交 diff（纯 +6 例）不符。代码实质无影响（1017 全绿为真） | MINOR（台账防失真口径） | 后续轮次以"提交父节点实测数"为准基线；本条作为既往记录保留，不回改 §8.26（历史台账只增不改） |
+| CR27-2 | **`excused_excluded` 是死变量**（`readiness.py:272/:294`）：收集后从不消费，与 `excused_delisted`（产出 metric + informational finding，:297-307）不对称。suspension 源在场时报告看不出**本窗口**哪些 exclusion 实际抵消了 gap（仅有含窗口外条目的全文件级 informational finding）。**变异实证 M4a：删掉 `excused_excluded.append(...)` 后全套 44 例仍绿** | MINOR（死代码 + 可观测性缺口） | 二选一：补 `instruments_exclusion_excused` metric + informational finding（与 delisted 对齐），或删变量 |
+
+**纳入台账、本轮未改（OBS，非缺陷或需用户裁决）**：
+- **OBS-A**：exclusion 的 reason 字符串在门内只写不读（`excluded` 的 value 从未被 `readiness.py` 使用，finding 只带 provenance）；per-name reason 仅存于 validator 的 `notes`。设计可接受（报告=裁定、notes=审计），但 docstring 未点明。
+- **OBS-B**：`ingest_window.py:176` 节流仅在"本次运行已成功发布 ≥1 分区"后生效——连续失败会话之间不 sleep，失败会话本身可能已消耗近百次请求，失败连击下有击穿 300/min 的残余风险。提交信息"paces sessions"略宽于实现。
+- **OBS-C**：`ingest_window.py:213` 的 `return 1 if failed or interrupted` 中 `interrupted` 不可达（:202 已重抛）。防御性死条件，无害。
+- **OBS-D**：驱动失败路径无测试锁：membership 失败分支（:168-175）与非 published 状态分支（:180-188)。逻辑直白，风险低。
+- **OBS-E**：validator 用裸 `raise SystemExit(...)` 报 JSON 形状错误（:273-281），邻近代码风格为 `return 2`。只读校验器无副作用，风格层面。
+- **OBS-F（遗留，未变）**：`QualityReportStore.read` 死祖先守卫（`artifacts.py:168-169`）、`_run_gate_once` 的 `mkdtemp` 未清理——前轮已报，仍开放，不重复计。
+
+**验证安全清单（本轮亲验）**：
+1. **守卫语义正确且 fail-closed**：非窗口成员、满面板健康成员均被 `unjustified_exclusion` 拒绝（与 docstring 一致）；"缺口全被 suspension 解释"的健康名同样不可剔（防静默缩表边界正确）。`_has_unexplained_gap` scoping 安全：`present_sessions`(:221)、`required_by_instrument`(:252) 无条件计算，`suspended_by_instrument` 来自 `suspensions or {}`(:127)，suspension 两分支均安全。
+2. **变异验证 ×5（监工亲做、亲恢复、`git status` 确认树净）**：M1 守卫置空→恰杀 2 例（healthy-blocking + 窗口外报告）；M2 删 short 过滤→恰杀 `test_excluded_instrument_does_not_appear_in_the_short_history_finding`；M3 删 member_without_bars 过滤→恰杀 `test_excluded_member_without_bars_is_not_reported_as_missing_bars`；M4b 删 suspension 分支 excuse→恰杀 `test_exclusion_excuses_a_gap_the_suspension_source_cannot_explain`；M5 报告改"仅窗口内"→恰杀窗口外报告例。另 M4a 证明 CR27-2 死变量（删 append 全绿）。五条机制均有独立测试锁，无恒真残留。
+3. **evidence 重钉合规**：新 sha256 与当前树两文件逐一吻合；旧 sha 在索引中 0 残留；键序恢复生成器规范序（`layer, record_version, status, note, records`）；diff 仅 2 行。
+4. **`ingest_window.py` 审计属性成立**：中断（`except BaseException`）先写 summary 再重抛（已落盘会话在列）；日历重试 fail-closed（含空 sessions 显式拒绝 :123-124）；续跑跳过已发布分区（manifest+data 双件检查）；`SystemExit` 仅用于副作用前的参数/日历错误；3 个新测试锁中断/续跑/日历失败三条关键路径。
+5. **§8.26 自检台账独立复核**：CR26-1..6 的机制性声明**全部复现为真**（M1/M5 复现 CR26-1/2，M2/M3 复现 CR26-3，M2 反证 CR26-4 恒真已消除，哈希+键序核对 CR26-5，读码+断言核 CR26-6）；OBS-A..D 披露属实。唯计数行失真（CR27-1）。
+6. **全量套件亲跑**：**1017 passed / 23 skipped / exit 0**（与提交信息终值一致）。
+
+**测试计数**：本轮零代码改动（纯复审）；套件维持 **1017 passed / 23 skipped**。
+
+**未夸大声明**：5 个变异均为监工逐个编辑→跑测→`git checkout` 恢复→确认树净（最终树仅余两项既定排除文件）；全量套件、哈希计算、台账对账均亲跑亲读，未委托子代理；读码覆盖本提交全部 hunk，`readiness.py` 392–579 行不属本提交 diff 未重读（前轮已覆盖其主体）；CR27-1 的"基线 1008"依据监工前轮亲跑记录 + 本提交 diff 纯增性质，非引用台账自述。**本轮实质缺陷为零，两个 MINOR 均不阻断使用。**`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.28 §8.27 处置轮（2026-10-15，用户判定"有问题直接改并推送"）
+
+**触发**：§8.27 报出 CR27-2（`excused_excluded` 死变量 + 可观测性缺口，MINOR）与 CR27-1（台账计数失真，MINOR）。用户裁决"有问题直接改并推送"。本轮处置两条，并补锁。
+
+| ID | 处置 | 变异验证（监工亲做） |
+|---|---|---|
+| CR27-2 | **补可观测性（采纳 §8.27 建议的第一支）**：`readiness.py` 的 `excused_excluded` 不再只收集。在 suspension 源在场的 gap 循环后新增 `instruments_exclusion_excused` metric + informational finding `excluded_instruments_excused`，与 `excused_delisted`/`delisted_members_excluded` 严格同形。它与文件级 `excluded_instruments`（全文件）**分开**，所以陈旧条目不能躲在活跃条目后面；只有"确实抵消了本窗口一条 susp 无法解释的必需会话"的剔除才会计入。`test_exclusion_excuses_a_gap_the_suspension_source_cannot_explain` 就地强化断言（finding 内容 + metric==1.0），并新增 `test_a_healthy_exclusion_does_not_claim_to_have_excused_a_gap` 负向锁（健康剔除不得出现该 finding/metric，且必须仍 `unjustified_exclusion`）。 | **M4a（§8.27 的原变异）复做**：删 `excused_excluded.append(...)` → 强化后的用例必失败（`assert ([])`）。修复前同变异全套 44 例绿，现必红——死变量已转活并上锁。负向锁由 `unjustified_exclusion` 分支独立覆盖。 |
+| CR27-1 | **不回改历史台账**（采纳 §8.27 处置）：§8.26 与提交信息 302b228 的计数按"历史台账只增不改"保留；本条记录口径纠正供后续轮次遵循——**基线一律取"提交父节点实测数"**。核对确认：`test_training_readiness.py` 35→41（+6）、`test_ingest_window.py` 0→3（+3）= 父提交 6ddf567 到 302b228 **净 +9**，终值 1017；§8.26 的"1014/基线 1012"为提交前开发过程数（含未提交态），与提交 diff 不符。 | 不适用（台账） |
+
+**本轮新增/变更**：`src/uq/pipeline/readiness.py`（+20 行：excused finding 块）、`tests/test_training_readiness.py`（就地强化 1 例 + 新增 1 例）、`evidence/a500-pilot/2025-08-29-to-2025-09-30/evidence-index.json`（`readiness.py` 单条 sha256 随源码刷新，生成器重导）。
+
+**真实窗复跑（全A 21 会话,csi-all,5068 成员,`--min-sessions 15` + 10 条 exclusion）**:`passed`,findings = `delisted_members_excluded`(1) + `excluded_instruments`(10) + `excluded_instruments_excused`(1),`instruments_exclusion_excused=1.0` —— 报告现在指出 10 条剔除里**哪 1 条**真正抵消了缺口。
+
+**测试计数（以父节点 302b228 实测为基线，遵循 CR27-1 口径）**：父节点 **1017**（监工亲跑）→ 本轮 **1018**，净 **+1**（就地强化不增计数,新增 1 例）。`exit 0`。
+
+**未夸大声明**：CR27-2 的变更为监工亲做，M4a 变异亲跑亲恢复（`cmp` 确认字节还原）；全量套件、真实窗复跑、evidence 重钉哈希均亲跑。本轮不改任何已发布制品的身份语义（无 canonical schema 变更、无版本升迁）；`evidence-index.json` 仅 1 条 digest 随源码刷新。`code-review-unified-quant.md` 保持未跟踪。
