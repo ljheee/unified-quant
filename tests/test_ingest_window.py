@@ -126,3 +126,63 @@ def test_calendar_that_cannot_certify_the_window_fails(monkeypatch, tmp_path):
             "--universe-id", "csi-all", "--start", "2025-09-01", "--end", "2025-09-02",
             "--skip-health-probe", "--calendar-attempts", "1", "--calendar-retry-seconds", "0",
         ])
+
+
+def test_tail_sessions_widen_the_universe_only_when_asked(monkeypatch, tmp_path):
+    # 600000.XSHG is a member on the first session only; 000001.XSHE on the second
+    # onwards.  With --tail-sessions 0 the departed name is never fetched; with
+    # N=2 it is fetched on the sessions that follow its last member day.
+    import pandas as pd
+
+    sessions = [date(2025, 9, 1), date(2025, 9, 2), date(2025, 9, 3), date(2025, 9, 4)]
+    membership = {
+        sessions[0]: ["600000.XSHG"],
+        sessions[1]: ["000001.XSHE"],
+        sessions[2]: ["000001.XSHE"],
+        sessions[3]: ["000001.XSHE"],
+    }
+    fetched: dict[date, list[str]] = {}
+
+    def run(session, instruments):
+        fetched[session] = sorted(instruments)
+        return _FakeReport({"status": "published", "rows": 1, "warnings": []})
+
+    class _Store:
+        def as_of(self, universe, session):
+            names = membership.get(session, [])
+            return None, pd.DataFrame({"instrument": list(names)})
+
+    monkeypatch.setattr(module, "EastMoneySessionProvider", lambda: _FakeProvider(sessions))
+    monkeypatch.setattr(module, "build_tushare_v2_pipeline", lambda *a, **k: type("P", (), {"run": staticmethod(run)})())
+    monkeypatch.setattr(module, "IndexMembershipStore", lambda root: _Store())
+    monkeypatch.setattr(module, "TradingCalendar", lambda **kwargs: object())
+
+    def invoke(tail, out):
+        fetched.clear()
+        code = module.main([
+            "--data-root", str(tmp_path), "--membership-root", str(tmp_path),
+            "--universe-id", "csi-all", "--start", "2025-09-01", "--end", "2025-09-04",
+            "--summary-out", str(out), "--skip-health-probe",
+            "--session-interval-seconds", "0", "--tail-sessions", str(tail),
+        ])
+        return code
+
+    plain, tailed = tmp_path / "plain.json", tmp_path / "tailed.json"
+    assert invoke(0, plain) == 0
+    assert fetched[sessions[1]] == ["000001.XSHE"]
+    assert fetched[sessions[2]] == ["000001.XSHE"]
+    assert json.loads(plain.read_text())["tail_sessions"] == 0
+
+    assert invoke(2, tailed) == 0
+    # the departed name is fetched on the two sessions that follow its last
+    # member day, and only there
+    assert fetched[sessions[0]] == ["600000.XSHG"]
+    assert fetched[sessions[1]] == ["000001.XSHE", "600000.XSHG"]
+    assert fetched[sessions[2]] == ["000001.XSHE", "600000.XSHG"]
+    assert fetched[sessions[3]] == ["000001.XSHE"]
+    summary = json.loads(tailed.read_text())
+    assert summary["tail_sessions"] == 2
+    # the widening is recorded in the run summary, not silently applied
+    assert [item.get("tail_members") for item in summary["published"]] == [
+        None, ["600000.XSHG"], ["600000.XSHG"], None,
+    ]

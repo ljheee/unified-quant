@@ -1,0 +1,12 @@
+{
+  "001314.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 001314.SZ last daily 20250926 (14 sessions in window)",
+  "002169.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 002169.SZ last daily 20250926 (14 sessions in window)",
+  "002185.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 002185.SZ last daily 20250924 (12 sessions in window)",
+  "002968.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 002968.SZ last daily 20251015 (11 sessions in window)",
+  "300111.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 300111.SZ last daily 20251015 (12 sessions in window)",
+  "300127.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 300127.SZ last daily 20251015 (11 sessions in window)",
+  "603496.XSHG": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 603496.SH last daily 20251015 (12 sessions in window)",
+  "605255.XSHG": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 605255.SH last daily 20250923 (6 sessions in window)",
+  "688381.XSHG": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 688381.SH last daily 20250926 (14 sessions in window)",
+  "920961.XBSE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 920961.BJ last daily 20251015 (16 sessions in window)"
+}

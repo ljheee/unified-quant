@@ -502,3 +502,22 @@ def test_reconcile_result_accepts_datetime64_results():
         for timestamp in dates
     ])
     adapter._reconcile_result(result, panel, list(instruments), str(dates[0].date()), str(dates[-1].date()))
+
+
+def test_reviewed_alpha158_v2_binding_is_accepted_by_the_adapter():
+    # cr.md: the refreshed alpha158/2.0.0 reviewed definition binds BARS_DAILY/V2
+    # so the factor line can run against the v2 input line. The adapter's document
+    # rules are version-independent, so both versions must validate.
+    v2 = ROOT / "config" / "factor-sets" / "alpha158-v2.json"
+    document = json.loads(v2.read_text())
+    assert document["factor_version"] == "2.0.0"
+    assert document["status"] == "reviewed"
+    assert document["input_bindings"]["required_schema_versions"] == {"bars_daily": ["v2"]}
+    # `datetime` stays the factor-frame key: the input-line rename is handled by
+    # the projection in src/uq/factors/inputs.py, and the qlib adapter requires
+    # `datetime` (qlib_adapter.py:206). Only the *binding* changed vs 1.0.0.
+    assert "datetime" == document["required_columns"][1]
+    QlibFactorAdapter._validate_document(document)
+
+    legacy = json.loads(DEFINITION.read_text())
+    QlibFactorAdapter._validate_document(legacy)

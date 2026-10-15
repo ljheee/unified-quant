@@ -1,0 +1,30 @@
+{
+  "exclusion_file": "excluded-instruments.json",
+  "exclusion_mechanism": {
+    "CLI": "--excluded-instruments <json>",
+    "code": "excluded_instruments (informational) + excluded_instruments_excused (informational)",
+    "guard": "unjustified_exclusion (blocking)",
+    "implementation": "src/uq/pipeline/readiness.py"
+  },
+  "index_code": "000985.CSI",
+  "layer": "csi_all_pilot_exclusions",
+  "members": 5068,
+  "note": "Instruments dropped from the csi-all universe for this window because the provider stops publishing daily bars mid-window and never resumes. Each reason names the upstream fact (provider last daily date, in-window session count) so the drop is re-derivable by re-querying tushare daily for the same window. The readiness gate refuses any exclusion that is not genuinely defective: a name at the session floor with no unexplained gap blocks as unjustified_exclusion.",
+  "record_version": 1,
+  "reproduction": [
+    "scripts/validate_training_readiness.py --bars-root <bars store> --membership-root data/csi-all-store --universe-id csi-all --start 2025-09-09 --end 2025-10-15 --min-sessions 15 --label-horizon 5 --excluded-instruments evidence/csi-all-pilot/2025-09-09-to-2025-10-15/excluded-instruments.json --output evidence/csi-all-pilot/2025-09-09-to-2025-10-15/training-readiness.json"
+  ],
+  "summary": {
+    "detail": "verified by scripts/validate_training_readiness.py against canonical/bars_daily/v2 partitions 2025-09-09..2025-10-15; the report is archived beside this record as training-readiness.json",
+    "excluded": 10,
+    "excused_a_gap": 1,
+    "unjustified": 0
+  },
+  "universe_id": "csi-all",
+  "window": {
+    "end": "2025-10-15",
+    "min_sessions_per_instrument": 15,
+    "sessions": 21,
+    "start": "2025-09-09"
+  }
+}

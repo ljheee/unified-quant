@@ -1,0 +1,93 @@
+# Reviewed adjusted-price line for the v2 bars input.
+#
+# The v1 line (`bars_adjusted/adjusted-v1`) was named by the factor store's
+# reviewed rule and by `config/factor-sets/adjusted-v1.json`, but no schema file
+# ever shipped for it, so nothing could satisfy the rule and no canonical
+# adjusted partition could ever be published.  This line closes that hole as a
+# NEW version: identical field set/units to `bars_daily/v2`, with the price
+# columns marked `adjustment: back_adjusted`.
+compatibility: exact
+dataset: bars_adjusted
+fields:
+  adj_factor:
+    dtype: float64
+    nullable: true
+    semantics: cumulative_adjustment_factor
+    unit: ratio
+  amount:
+    dtype: float64
+    nullable: false
+    unit: CNY
+  close:
+    adjustment: back_adjusted
+    dtype: float64
+    nullable: false
+    unit: CNY
+  high:
+    adjustment: back_adjusted
+    dtype: float64
+    nullable: false
+    unit: CNY
+  instrument:
+    dtype: string
+    nullable: false
+    pattern: ^[0-9]{6}\.(XSHG|XSHE|XBSE)$
+  limit_down:
+    dtype: float64
+    nullable: true
+    unit: CNY
+  limit_up:
+    dtype: float64
+    nullable: true
+    unit: CNY
+  low:
+    adjustment: back_adjusted
+    dtype: float64
+    nullable: false
+    unit: CNY
+  open:
+    adjustment: back_adjusted
+    dtype: float64
+    nullable: false
+    unit: CNY
+  session_date:
+    dtype: date32
+    meaning: trading_day
+    nullable: false
+    resolution: day
+    timezone: Asia/Shanghai
+  status:
+    default: unknown
+    dtype: string
+    enum:
+    - trading
+    - suspended
+    - delisted
+    - unknown
+    nullable: false
+  volume:
+    dtype: float64
+    nullable: false
+    unit: share
+    zero_policy: allowed_only_for_non_trading_status
+invariants:
+  high_body: high >= open and high >= close
+  high_low: high >= low
+  low_body: low <= open and low <= close
+  non_negative_amount: amount >= 0
+  non_negative_volume: volume >= 0
+  positive_adj_factor_when_present: adj_factor.isna() or adj_factor > 0
+  positive_limit_down_when_present: limit_down.isna() or limit_down > 0
+  positive_limit_up_when_present: limit_up.isna() or limit_up > 0
+migration:
+  from: bars_daily/v2
+  note: restate the four price columns by the vendor adj_factor; every other field,
+    unit and invariant is inherited unchanged from bars_daily/v2
+primary_key:
+- instrument
+- session_date
+sort_key:
+- instrument
+- session_date
+status: production_draft
+version: adjusted-v2

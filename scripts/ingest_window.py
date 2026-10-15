@@ -32,6 +32,7 @@ import datetime as dt
 import json
 import time
 from pathlib import Path
+from typing import Sequence
 
 from uq.adapters.eastmoney import EastMoneySessionProvider
 from uq.errors import IndependentCalendarError
@@ -52,6 +53,43 @@ def _partition_published(data_root: Path, session: dt.date) -> bool:
 def _members(store: IndexMembershipStore, universe_id: str, session: dt.date) -> list[str]:
     _, frame = store.as_of(universe_id, session)
     return sorted(str(value) for value in frame["instrument"])
+
+
+def _tail_members(
+    store: IndexMembershipStore,
+    universe_id: str,
+    session: dt.date,
+    members: list[str],
+    prior_sessions: Sequence[dt.date],
+    tail: int,
+) -> list[str]:
+    """Names that were members recently but are not members today.
+
+    A forward label needs bars through ``D + horizon``, so a name that leaves the
+    universe mid-window has decision dates whose labels cannot be computed unless
+    its bars are still fetched for a few sessions after its last member day.
+    The session list is supplied by the caller so this never widens the window.
+
+    This is deliberately an explicit argument rather than the default: per-day
+    PIT ingest means "the members visible today", and fetching for a departed
+    name is a widening of that contract that has to be recorded in the run
+    summary (``tail_members``) to stay auditable.
+    """
+    if tail <= 0:
+        return members
+    prior = list(prior_sessions)
+    if not prior:
+        return members
+    window_start = max(0, len(prior) - tail)
+    for earlier in reversed(prior[window_start:]):
+        try:
+            _, frame = store.as_of(universe_id, earlier)
+        except (ContractError, OSError, ValueError):
+            continue
+        for name in sorted(str(value) for value in frame["instrument"]):
+            if name not in members:
+                members.append(name)
+    return sorted(set(members))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -78,6 +116,18 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=3.0,
         help="pause between independent-calendar attempts",
+    )
+    parser.add_argument(
+        "--tail-sessions",
+        type=int,
+        default=0,
+        help=(
+            "also fetch bars for names that were PIT-visible members in the last N "
+            "sessions but are not members of this session, so their last decision "
+            "dates can still be labelled. Default 0 keeps ingest strictly per-day "
+            "PIT; passing N (typically the label horizon) widens that contract, so "
+            "the run summary records the widened membership under `tail_members`."
+        ),
     )
     parser.add_argument(
         "--session-interval-seconds",
@@ -143,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
             "membership_root": str(args.membership_root),
             "universe_id": args.universe_id,
             "window": {"start": start.isoformat(), "end": end.isoformat()},
+            "tail_sessions": args.tail_sessions,
             "calendar_provenance": provider.provenance,
             "calendar_evidence": provider.evidence,
             "sessions": len(sessions),
@@ -161,18 +212,25 @@ def main(argv: list[str] | None = None) -> int:
         return summary
 
     try:
-        for session in sessions:
+        for index, session in enumerate(sessions):
             if _partition_published(args.data_root, session):
                 skipped.append({"session": session.isoformat(), "reason": "already_published"})
                 continue
             try:
-                instruments = _members(membership, args.universe_id, session)
+                members = _members(membership, args.universe_id, session)
             except (ContractError, OSError, ValueError) as exc:
                 failed.append({"session": session.isoformat(), "stage": "membership", "error": f"{type(exc).__name__}: {exc}"})
                 continue
-            if not instruments:
+            if not members:
                 failed.append({"session": session.isoformat(), "stage": "membership", "error": "no PIT-visible members"})
                 continue
+            # The tail is resolved from the sessions already visited in this window,
+            # so it can never reach outside the certified session list.
+            instruments = _tail_members(
+                membership, args.universe_id, session, list(members),
+                sessions[:index], args.tail_sessions,
+            )
+            tail_added = sorted(set(instruments) - set(members))
             if published and args.session_interval_seconds > 0:
                 time.sleep(args.session_interval_seconds)
             report = pipeline.run(session, instruments)
@@ -189,7 +247,8 @@ def main(argv: list[str] | None = None) -> int:
             published.append({
                 "session": session.isoformat(),
                 "rows": payload.get("rows"),
-                "members": len(instruments),
+                "members": len(members),
+                **({"tail_members": tail_added} if tail_added else {}),
                 "warnings": payload.get("warnings", []),
             })
     except BaseException:

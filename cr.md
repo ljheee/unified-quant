@@ -813,3 +813,36 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数（以父节点 302b228 实测为基线，遵循 CR27-1 口径）**：父节点 **1017**（监工亲跑）→ 本轮 **1018**，净 **+1**（就地强化不增计数,新增 1 例）。`exit 0`。
 
 **未夸大声明**：CR27-2 的变更为监工亲做，M4a 变异亲跑亲恢复（`cmp` 确认字节还原）；全量套件、真实窗复跑、evidence 重钉哈希均亲跑。本轮不改任何已发布制品的身份语义（无 canonical schema 变更、无版本升迁）；`evidence-index.json` 仅 1 条 digest 随源码刷新。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.29 三项收口轮（2026-10-15，用户裁决后落地；调研 + 治理裁决 + 实现）
+
+**触发**：§8.28 之后用户对三项待决拍板——①尾段问题「业界怎么做」派调研；②「在 v2 上重新 reviewed」；③「alpha158 在 v2 上另开 reviewed 版本，一并做」。本轮全部落地并全量测试。多代理工具本轮不可用，调研由主线直接执行（源码 + 文献）。
+
+**Q1 调研结论（决定尾段口径）**
+- **Qlib（微软）**：`Alpha158`/`Alpha360` 的默认学习流水线首处理器即 `DropnaLabel`，实现 `df.dropna(subset=['label'])`（`qlib/data/dataset/processor.py:105`）；`is_for_infer()` 注释「按标签丢样本，故不可用于推理」——**标签缺失即丢样本**，无任何"为已退出 universe 的标的补取"步骤；`QlibDataLoader.filter_pipe` 默认 `None`（`loader.py:215`）即无成分股退出过滤。
+- **CRSP/Wermers + Shumway (1997)**：口径是"持有至退市事件、把退市收益计入最后一段"；Shumway 在退市原因缺失时给该样本赋 **−30%** 月收益（≈−100% 的月频率 1/4）而非丢弃。动机即"丢弃末段观测会引入偏差"。
+- **两者不冲突**：约束是"末段收益必须有"，分歧只在**谁提供末段价格**。Tushare 有这 5 只全部 42 个会话，故 (A) 数据上可行，代价是让入库偏离逐日 PIT 契约。
+- **裁决**：`--tail-sessions N` 默认 **0**（严守 PIT），显式 N 时扩窗并在 summary 留痕。
+
+**Q2 复权线 reviewed（用户：质量规则"够"）**
+- 新现状：`bars_adjusted/adjusted-v1` **连 schema 都不存在**（老线从来不可用、无已发布分区需迁移）→ 按"语义变更开新版本"新增 `config/schemas/bars_adjusted.adjusted-v2.yaml`，字段/单位/不变量从 `bars_daily/v2` 逐字继承，唯一语义变更 = 四价格列 `adjustment: raw` → `back_adjusted`；v1 未动。
+- 生产者 `src/uq/pipeline/adjusted_price.py`（该线唯一生产者）。三条强制规则按用户确认落地：①`adj_factor` 存在且为正；②复权价可由 `raw × adj_factor` 重算复现（容差 1e-3）；③复权价非零非 NaN。
+- **关键设计（本轮最重要）**：`publish_adjusted_partition` 要求**必填** `expected_restated`。"自己 restate 再校验自己"是恒等，会给任何输入盖上 `reject_all`/`passed` —— 没有独立复权源可校验时**拒绝发布**。quality report 的 check 名受 `QualityReportStore._validate_check_taxonomy` 封闭 taxonomy 限制，故三项检查经 `finite_values__*` 槽位落名。
+
+**Q3 alpha158 新版本 + exclusions 归档**
+- `config/factor-sets/alpha158-v2.json`：`set_definition_version=3`、`factor_version=2.0.0`、`input_bindings` → `bars_daily/v2`；157 个因子的表达式/指纹/`minimum_history`/排除项 `VWAP0`/`reviewed_engine_versions: [0.9.7]` **逐字继承**。**`required_columns` 保持 `datetime`**（输入线更名由 `inputs.py` 投影处理，qlib adapter 与 `_validate_factor_frame` 均要求 `datetime`；以已 reviewed 的 `basic-v2` 为同一口径）。v1 未动；`factor_set.v3.json` 是封闭 schema，故变更说明只入台账。
+- exclusions 归档到 `evidence/csi-all-pilot/2025-09-09-to-2025-10-15/`（外发文件扁平 instrument→reason、元数据分文件、真跑报告），provenance 由 `/tmp` 变仓库内路径。
+
+**本轮自查发现并修复的实现缺陷（非用户要求，但属必改）**
+| ID | 缺陷 | 处置 |
+|---|---|---|
+| CR29-1 | `verify_restatement` 用 `reindex(raw.index)` 只对齐 label、未对齐行列，A 标的与 B 标的错位比较（实测 1% 价格漂移可被判**通过**——跨标的错配正是该检查要防的） | `reindex(...).loc[raw.index]` + 行集合不一致即拒 |
+| CR29-2 | producer 原设计"restate 后退自己的产出去校验"= 恒等，质量门形同虚设 | 改为要求独立 `expected_restated`，缺失即拒发 |
+| CR29-3 | `set(_PRICE_COLUMNS) \| {"adj_factor"} - set(frame.columns)` 优先级错（`-` 先于 `\|`），恒报缺列 | 加括号 |
+| CR29-4 | alpha158-v2 初版误把 `required_columns[1]` 改成 `session_date`（会使投影找不到列、qlib 缺 `datetime`） | 以 `basic-v2` 为准改回 `datetime`；锁 `assert required_columns[1] == "datetime"` |
+
+**开放**（已入 pendding）：`adjusted_price` 的**独立复权源**尚无生产提供者（producer 已 fail-closed，真发布需定第二个口径从哪来——dividend 事件链在库但 importer 见 pendding 6 缺口）；`label_set` 仍无生产发布器。
+
+**测试计数（以父节点 a61cb1d 实测为基线）**：父节点 **1018** → 本轮 **1032**（净 +14：`test_ingest_window` +1、`test_adjusted_price_pipeline` +10、`test_factor_set_input_line_v2` +2、`test_qlib_adapter` +1）。全量 **1032 passed / 23 skipped / exit 0**。
+
+**未夸大声明**：本轮全部源码改动、三处治理新文件、四轮实现缺陷自查由主线亲做；Qlib 结论来自直接读取其源码（`processor.py`、`loader.py`），Shumway −30% 来自二次文献转述（未读原文）。多代理工具不可用（`unsupported call`），故未派 subagent；CR29-1/2 的缺陷由我在写测试时实测暴露并复验。本轮不改任何已发布制品身份（无 canonical schema 语义变更既有分区迁移、alpha158 v1 与 adjusted-v1 冻结未动）。`code-review-unified-quant.md` 保持未跟踪。

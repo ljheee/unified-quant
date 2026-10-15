@@ -1,0 +1,109 @@
+{
+  "status": "passed",
+  "window_start": "2025-09-09",
+  "window_end": "2025-10-15",
+  "sessions": 21,
+  "members": 5068,
+  "instruments_with_bars": 5067,
+  "usable_label_end": "2025-09-30",
+  "metrics": {
+    "instruments_delisted_excluded": 1.0,
+    "instruments_exclusion_excused": 1.0,
+    "instruments_excluded": 10.0,
+    "null_rate.instrument": 0.0,
+    "null_rate.session_date": 0.0,
+    "null_rate.open": 0.0,
+    "null_rate.high": 0.0,
+    "null_rate.low": 0.0,
+    "null_rate.close": 0.0,
+    "null_rate.volume": 0.0,
+    "null_rate.amount": 0.0,
+    "null_rate.status": 0.0,
+    "null_rate.adj_factor": 0.0,
+    "sessions": 21.0,
+    "members": 5068.0,
+    "instruments_with_bars": 5067.0
+  },
+  "findings": [
+    {
+      "code": "delisted_members_excluded",
+      "detail": "1 members have no bars in the window and tushare:stock_basic(list_status=D) marks them delisted",
+      "instruments": [
+        "601989.XSHG"
+      ],
+      "severity": "informational"
+    },
+    {
+      "code": "excluded_instruments_excused",
+      "detail": "1 excluded instruments have a required session tushare:suspend_d(21 sessions) does not attribute to a suspension",
+      "instruments": [
+        "920961.XBSE"
+      ],
+      "severity": "informational"
+    },
+    {
+      "code": "excluded_instruments",
+      "detail": "10 instruments are excluded from the universe by file:evidence/csi-all-pilot/2025-09-09-to-2025-10-15/excluded-instruments.json",
+      "instruments": [
+        "001314.XSHE",
+        "002169.XSHE",
+        "002185.XSHE",
+        "002968.XSHE",
+        "300111.XSHE",
+        "300127.XSHE",
+        "603496.XSHG",
+        "605255.XSHG",
+        "688381.XSHG",
+        "920961.XBSE"
+      ],
+      "severity": "informational"
+    }
+  ],
+  "universe_id": "csi-all",
+  "notes": {
+    "calendar_provenance": "tushare:trade_cal:SSE",
+    "min_sessions_per_instrument": 15,
+    "label_horizon_sessions": 5,
+    "max_null_rate": 0.0,
+    "skip_suspensions": false,
+    "skip_delistings": false,
+    "suspension_provenance": "tushare:suspend_d(21 sessions)",
+    "suspension_sessions": [
+      "2025-09-09",
+      "2025-09-10",
+      "2025-09-11",
+      "2025-09-12",
+      "2025-09-15",
+      "2025-09-16",
+      "2025-09-17",
+      "2025-09-18",
+      "2025-09-19",
+      "2025-09-22",
+      "2025-09-23",
+      "2025-09-24",
+      "2025-09-25",
+      "2025-09-26",
+      "2025-09-29",
+      "2025-09-30",
+      "2025-10-09",
+      "2025-10-10",
+      "2025-10-13",
+      "2025-10-14",
+      "2025-10-15"
+    ],
+    "delisted_universe_size": 339,
+    "excluded_instruments": {
+      "001314.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 001314.SZ last daily 20250926 (14 sessions in window)",
+      "002169.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 002169.SZ last daily 20250926 (14 sessions in window)",
+      "002185.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 002185.SZ last daily 20250924 (12 sessions in window)",
+      "002968.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 002968.SZ last daily 20251015 (11 sessions in window)",
+      "300111.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 300111.SZ last daily 20251015 (12 sessions in window)",
+      "300127.XSHE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 300127.SZ last daily 20251015 (11 sessions in window)",
+      "603496.XSHG": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 603496.SH last daily 20251015 (12 sessions in window)",
+      "605255.XSHG": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 605255.SH last daily 20250923 (6 sessions in window)",
+      "688381.XSHG": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 688381.SH last daily 20250926 (14 sessions in window)",
+      "920961.XBSE": "provider daily stops mid-window and does not resume; suspend_d does not flag it (2000-point suspend_d is unreliable for long halts); provider 920961.BJ last daily 20251015 (16 sessions in window)"
+    },
+    "excluded_provenance": "file:evidence/csi-all-pilot/2025-09-09-to-2025-10-15/excluded-instruments.json"
+  }
+}

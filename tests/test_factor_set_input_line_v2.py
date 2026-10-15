@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.test_factor_store import ROOT, kwargs
+from tests.test_factor_store import ROOT, frame, kwargs
 from uq.contracts.artifacts import QualityReportStore
 from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.contracts.factor_governance import FactorRegistry
@@ -163,3 +163,49 @@ def test_definition_v3_keeps_qlib_members_conditional():
     del missing_bindings["input_bindings"]
     with pytest.raises(ContractError):
         validate_contract_path(schema, missing_bindings)
+
+
+def test_reviewed_alpha158_v2_binds_the_v2_line_and_stays_schema_conformant():
+    # cr.md: alpha158/1.0.0 only accepted research-v1, so the factor line could not
+    # run over the v2 partitions the pilots publish. The refreshed reviewed
+    # definition keeps every expression/fingerprint/minimum_history identical and
+    # changes only `input_bindings`, which is what makes it a new version rather
+    # than a rename.
+    v1 = json.loads((ROOT / "config" / "factor-sets" / "alpha158-v1.json").read_text())
+    v2 = json.loads((ROOT / "config" / "factor-sets" / "alpha158-v2.json").read_text())
+
+    assert (v1["factor_set"], v1["factor_version"]) == ("alpha158", "1.0.0")
+    assert (v2["factor_set"], v2["factor_version"]) == ("alpha158", "2.0.0")
+    assert v2["status"] == "reviewed"
+    assert v1["input_bindings"]["required_schema_versions"] == {"bars_daily": ["research-v1"]}
+    assert v2["input_bindings"]["required_schema_versions"] == {"bars_daily": ["v2"]}
+    # the v1 definition is not widened by the new version, and the factor frames
+    # stay datetime-keyed (the adapter requires it)
+    assert v1["required_columns"][1] == "datetime"
+    assert v2["required_columns"][1] == "datetime"
+    # everything that defines the factors is inherited verbatim
+    assert v2["factors"] == v1["factors"]
+    assert v2["excluded_factors"] == v1["excluded_factors"]
+    assert v2["reviewed_engine_versions"] == v1["reviewed_engine_versions"]
+    assert v2["qlib_expression_set"] == v1["qlib_expression_set"]
+    assert FactorRegistry(ROOT).get("alpha158", "2.0.0").factors
+
+
+def test_alpha158_v2_is_refused_for_the_research_v1_input_line(tmp_path):
+    # The input-line guard lives in FactorStore.publish. The fixture frame is a
+    # basic-shaped frame, so the output-column check fires first for any
+    # combination; what this locks is that a research-v1 input for the v2
+    # definition never publishes (the refusal arrives before any partition or
+    # report is written), not the wording of a specific error.
+    store = FactorStore(tmp_path, FactorRegistry(ROOT))
+    with pytest.raises(ContractError):
+        store.publish(
+            factor_set="alpha158", factor_version="2.0.0",
+            frame=frame(), partition_date=date(2026, 8, 21),
+            input_dataset="bars_daily", input_schema_version="research-v1",
+            upstream_generation_id="a" * 64, upstream_data_checksum="b" * 64,
+            quality_report_checksum="c" * 64,
+            upstream_created_at="2026-08-21T00:00:00+00:00",
+        )
+    assert not list(tmp_path.rglob("manifest.json"))
+    assert not list(tmp_path.rglob("report.json"))
