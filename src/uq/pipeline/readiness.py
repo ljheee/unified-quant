@@ -102,15 +102,32 @@ def assess_readiness(
     suspension_provenance: str = "unspecified",
     delisted: Collection[str] | None = None,
     delisted_provenance: str = "unspecified",
+    excluded_instruments: Mapping[str, str] | None = None,
+    excluded_provenance: str = "unspecified",
     factor_sessions: Sequence[date] | None = None,
 ) -> ReadinessReport:
-    """Evaluate the cross-input conditions a training run depends on."""
+    """Evaluate the cross-input conditions a training run depends on.
+
+    ``excluded_instruments`` maps an instrument to the recorded reason it is
+    dropped from the universe for this window.  It exists for the case the
+    ``delisted`` rule cannot express: an instrument the provider simply stops
+    publishing mid-window (a long halt ``suspend_d`` never flags, or a vendor
+    hole), where no window length produces enough tradable sessions.  Such a
+    name is not trainable and not repairable, so the caller must either drop it
+    from the universe or leave the gate blocked; this parameter makes the drop
+    explicit and auditable instead of an unlogged filter applied before the
+    gate.  An excluded instrument must actually be defective -- one that has no
+    gap is itself a blocking finding -- so the set cannot quietly shrink the
+    universe.  Exclusions are reported as informational and never excuses a
+    session-wide or membership-level failure.
+    """
     session_values = sorted(set(sessions))
     findings: list[ReadinessFinding] = []
     metrics: dict[str, float] = {}
     suspended_by_instrument = {
         instrument: set(values) for instrument, values in (suspensions or {}).items()
     }
+    excluded = {str(name): str(reason) for name, reason in (excluded_instruments or {}).items()}
 
     if not session_values:
         findings.append(ReadinessFinding("no_sessions", "the window contains no trading sessions"))
@@ -186,7 +203,7 @@ def assess_readiness(
 
     rows_by_instrument = {} if frame.empty else frame.groupby("instrument").size().to_dict()
     with_bars = sorted(rows_by_instrument)
-    members_without_bars = sorted(set(members) - set(with_bars))
+    members_without_bars = sorted(name for name in set(members) - set(with_bars) if name not in excluded)
     # When the window has no bars at all, ``no_bars`` is the root cause; listing
     # every member as a second finding would only bury it.
     # With a suspension source available the per-session rules below give the
@@ -252,6 +269,7 @@ def assess_readiness(
         gaps: list[str] = []
         conflicts: list[str] = []
         excused_delisted: list[str] = []
+        excused_excluded: list[str] = []
         for instrument in sorted(set(members) | set(with_bars)):
             present = present_sessions.get(instrument, set())
             suspended = suspended_by_instrument.get(instrument, set())
@@ -267,6 +285,13 @@ def assess_readiness(
             # verifiable, and a mid-span ingest hole keeps its own signature.
             if delisted is not None and not (present & required) and instrument in delisted:
                 excused_delisted.append(instrument)
+                continue
+            # A declared exclusion excuses a partial gap the delisting rule
+            # cannot (the provider stopped publishing mid-window).  It is
+            # recorded, not silent, and the post-loop guard refuses an
+            # exclusion for a name that has no gap at all.
+            if instrument in excluded:
+                excused_excluded.append(instrument)
                 continue
             gaps.append(instrument)
         if excused_delisted:
@@ -299,11 +324,68 @@ def assess_readiness(
                 )
             )
 
+    # An exclusion is always reported, whichever rule would otherwise have
+    # caught the name (suspension-aware gap, or the blunt member_without_bars
+    # path when no suspension source is supplied).  The report names every entry
+    # in the file, not just the ones this window happens to touch: a name that is
+    # neither a member nor carries bars here (a stale entry from a wider window,
+    # or a name whose bars were legitimately never ingested) must still be
+    # visible, or the universe change would be unauditable and the metric would
+    # under-report the file.
+    reported_excluded = sorted(excluded)
+    if reported_excluded:
+        metrics["instruments_excluded"] = float(len(reported_excluded))
+        findings.append(
+            ReadinessFinding(
+                "excluded_instruments",
+                f"{len(reported_excluded)} instruments are excluded from the universe by "
+                f"{excluded_provenance}",
+                tuple(reported_excluded[:50]),
+                "informational",
+            )
+        )
+
     short = sorted(
+        instrument
+        for instrument, count in rows_by_instrument.items()
+        if count < min_sessions_per_instrument and instrument not in excluded
+    )
+    # The pre-exclusion short set drives the justification check below: an
+    # instrument is only excludable because it *would* have blocked anyway.
+    short_all = sorted(
         instrument
         for instrument, count in rows_by_instrument.items()
         if count < min_sessions_per_instrument
     )
+    # An exclusion that does not actually explain a defect is a silent universe
+    # shrinkage: the name is dropped while the traceable evidence says it had
+    # enough to train on.  A name is excludable only when it is genuinely
+    # defective in this window: it is short of the session floor, or it lacks a
+    # session the PIT-required span demands and the suspension source cannot
+    # explain.  An exclusion for a name that clears both conditions -- including
+    # one that is not in the window's universe at all -- would only have narrowed
+    # the universe and must be refused.
+    def _has_unexplained_gap(name: str) -> bool:
+        return bool(
+            required_by_instrument.get(name, set())
+            - suspended_by_instrument.get(name, set())
+            - present_sessions.get(name, set())
+        )
+
+    unjustified = sorted(
+        name for name in excluded
+        if name not in short_all and not _has_unexplained_gap(name)
+    )
+    if unjustified:
+        findings.append(
+            ReadinessFinding(
+                "unjustified_exclusion",
+                f"{len(unjustified)} excluded instruments are neither short of the session floor "
+                f"nor carrying an unexplained gap; the exclusion is not justified by the window "
+                f"({excluded_provenance})",
+                tuple(unjustified[:50]),
+            )
+        )
     if short:
         # Distinguish "the window never offered enough tradable sessions" (halt
         # or recent listing -> widen the window) from "sessions were tradable

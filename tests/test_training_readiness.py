@@ -577,3 +577,131 @@ def test_script_reports_configuration_failure_when_the_delisting_source_fails(tm
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "configuration_failure"
     assert "stock_basic" in payload["error"]
+
+
+# --- excluded_instruments (full-A pilot: provider stops publishing mid-window) ---
+
+def test_excluded_instrument_is_informational_when_it_is_genuinely_gapped():
+    # 000001 trades on the first half of the window only; no suspension source is
+    # supplied, so it is a real gap the caller can evidence and exclude.
+    half = SESSIONS[: len(SESSIONS) // 2]
+    bars = pd.concat([_bars(["600000.XSHG"]), _bars(["000001.XSHE"], sessions=half)], ignore_index=True)
+    report = _assess(
+        bars,
+        _members(["600000.XSHG", "000001.XSHE"]),
+        excluded_instruments={"000001.XSHE": "provider daily stops mid-window"},
+        excluded_provenance="test:evidence",
+    )
+    assert report.status == "passed", report.findings
+    # The exclusion is reported, and it is the only thing the report says: no
+    # blocking finding rides along (a genuine gap must not be laundered into an
+    # informational row).
+    assert not [finding for finding in report.findings if finding.severity == "blocking"]
+    excluded = [finding for finding in report.findings if finding.code == "excluded_instruments"]
+    assert excluded and excluded[0].severity == "informational"
+    assert excluded[0].instruments == ("000001.XSHE",)
+    assert report.metrics["instruments_excluded"] == 1.0
+
+
+def test_exclusion_of_a_healthy_instrument_is_blocking():
+    # 000001 has every session; excluding it only narrows the universe and must
+    # be refused rather than silently shrink the training set.
+    report = _assess(
+        _bars(),
+        _members(),
+        excluded_instruments={"000001.XSHE": "stale exclusion"},
+        excluded_provenance="test:evidence",
+    )
+    assert report.status == "blocked"
+    unjustified = [finding for finding in report.findings if finding.code == "unjustified_exclusion"]
+    assert unjustified and unjustified[0].severity == "blocking"
+    assert unjustified[0].instruments == ("000001.XSHE",)
+
+
+def test_excluded_instrument_does_not_appear_in_the_short_history_finding():
+    # 000001 has five of the twenty required sessions, so it *is* short: without
+    # the exclusion it lands in insufficient_history.  The exclusion must move
+    # exactly that name out of the short-history finding while a non-excluded
+    # short name in the same window still blocks -- otherwise the filter is
+    # indistinguishable from a no-op.
+    short_sessions = SESSIONS[:5]
+    bars = pd.concat(
+        [
+            _bars(["600000.XSHG"]),
+            _bars(["000001.XSHE"], sessions=short_sessions),
+            _bars(["000003.XSHE"], sessions=short_sessions),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        _members(["600000.XSHG", "000001.XSHE", "000003.XSHE"]),
+        excluded_instruments={"000001.XSHE": "provider daily stops mid-window"},
+        excluded_provenance="test:evidence",
+    )
+    short = [finding for finding in report.findings if finding.code in {"insufficient_history", "limited_tradable_history"}]
+    assert short, "the non-excluded short name must still produce a short-history finding"
+    assert all("000001.XSHE" not in finding.instruments for finding in short)
+    assert any("000003.XSHE" in finding.instruments for finding in short)
+    assert report.status == "blocked"
+
+
+def test_exclusion_is_reported_even_for_a_name_outside_the_window():
+    # A stale exclusion for a name that is neither a member nor carries bars
+    # must not disappear from the report: the universe change has to stay
+    # auditable, and such an entry is also unjustified for this window.
+    report = _assess(
+        _bars(),
+        _members(),
+        excluded_instruments={"600000.XSHG": "kept by mistake", "999999.XSHG": "stale entry"},
+        excluded_provenance="test:evidence",
+    )
+    excluded = [finding for finding in report.findings if finding.code == "excluded_instruments"]
+    assert excluded and excluded[0].severity == "informational"
+    assert excluded[0].instruments == ("600000.XSHG", "999999.XSHG")
+    assert report.metrics["instruments_excluded"] == 2.0
+    unjustified = [finding for finding in report.findings if finding.code == "unjustified_exclusion"]
+    assert unjustified and unjustified[0].severity == "blocking"
+    assert unjustified[0].instruments == ("600000.XSHG", "999999.XSHG")
+
+
+def test_excluded_member_without_bars_is_not_reported_as_missing_bars():
+    # With no suspension source, a member with zero bars is normally the blunt
+    # member_without_bars blocking finding; an evidenced exclusion must move it
+    # to the informational exclusion finding instead.
+    report = _assess(
+        _bars(["600000.XSHG"]),
+        _members(["600000.XSHG", "000001.XSHE"]),
+        excluded_instruments={"000001.XSHE": "provider daily stops mid-window"},
+        excluded_provenance="test:evidence",
+    )
+    assert report.status == "passed", report.findings
+    codes = {finding.code for finding in report.findings}
+    assert "member_without_bars" not in codes
+    excluded = [finding for finding in report.findings if finding.code == "excluded_instruments"]
+    assert excluded and excluded[0].instruments == ("000001.XSHE",)
+
+
+def test_exclusion_excuses_a_gap_the_suspension_source_cannot_explain():
+    # With a suspension source present, an unexplained partial gap is normally
+    # blocking; an evidenced exclusion must downgrade exactly that name to
+    # informational while other gapped names stay blocking.
+    half = SESSIONS[: len(SESSIONS) // 2]
+    bars = pd.concat(
+        [_bars(["600000.XSHG"]), _bars(["000001.XSHE"], sessions=half), _bars(["000002.XSHE"], sessions=half)],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        _members(["600000.XSHG", "000001.XSHE", "000002.XSHE"]),
+        suspensions={"000001.XSHE": [], "000002.XSHE": []},
+        suspension_provenance="test:suspend_d",
+        excluded_instruments={"000001.XSHE": "provider daily stops mid-window"},
+        excluded_provenance="test:evidence",
+    )
+    assert report.status == "blocked"
+    gap = [finding for finding in report.findings if finding.code == "unexplained_bar_gap"]
+    assert gap and gap[0].instruments == ("000002.XSHE",)
+    excluded = [finding for finding in report.findings if finding.code == "excluded_instruments"]
+    assert excluded and excluded[0].severity == "informational"
+    assert excluded[0].instruments == ("000001.XSHE",)

@@ -740,3 +740,28 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数**：新增 2 例（`test_non_finite_solver_output_fails_closed`、`test_risk_run_rejects_a_payload_the_decision_store_disagrees_with`）+ 就地强化 5 处断言；3 例跨类移动（计数不变）。1006→1008 吻合。
 
 **未夸大声明**：OBS-1/2/5/7/8 的变异杀伤为监工亲做；OBS-3 为抽样复做确认；OBS-4/6 为文档化与结构性处置，无运行时语义变更。全量套件监工亲跑。本轮不改任何已发布制品身份（无 canonical schema 语义变更、无版本升迁）；`specs/layers/model-layer-spec.md` 仅增可比性说明，不动规范条款。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.26 全A 窗口入库驱动 + 就绪门 exclusion 机制轮（2026-10-15，提交 self-CR 与替身复审）
+
+**触发**：完成全A（中证全指 `000985.CSI`）实盘训练的前置工作——补上"整窗入库"入口、把供应商中途停发（长停牌 `suspend_d` 不标记 / 供应商空洞）的成员从 universe 里**显式、可审计**地剔除——并起一轮更短的全A 窗口做首次试跑。本轮改动：新增 `scripts/ingest_window.py`、`assess_readiness` 增 `excluded_instruments`/`excluded_provenance`、`scripts/validate_training_readiness.py` 增 `--excluded-instruments`、`evidence/a500-pilot/.../evidence-index.json` 重钉 2 条 sha256。
+
+**本轮提交后再做对抗复审（职责分离：一名替身只读审码，一名替身做变异验证，监工复验关键项）**，发现并修复以下问题——**这些是真问题，不是台账措辞**：
+
+| ID | 问题（复审确认） | 处置 | 变异验证（监工亲做） |
+|---|---|---|---|
+| CR26-1 | **`unjustified_exclusion` 守卫可被绕过**：文件里写一个"既非窗口成员、也无 bars"或"非成员但 bars 齐全"的标的，`short_all` 与 gap 集皆为空 → 判定为"有正当理由"，静默通过（实测：`excluded non-member full bars` → `passed`）。docstring 却声称"无缺口的剔除本身就是阻断项"，与实现不符 | 守卫改为**两个条件都必须证伪**才算正当：名在 `short_all` **或** 名存在 susp 无法解释的必需缺口；否则一律 `unjustified_exclusion`（blocking）。把 gap 判据提为 `_has_unexplained_gap()` 单源 | 回退守卫 → 新锁 `test_exclusion_is_reported_even_for_a_name_outside_the_window` 必失败（实测杀） |
+| CR26-2 | **exclusion 报告会漏项**：`reported_excluded` 只保留 `name in members ∪ with_bars`，文件里"本窗口既不在此 universe、也无 bars"的条目**在报告里完全消失**（既无 `excluded_instruments` 也无 `unjustified_exclusion`），`metrics.instruments_excluded` 少报。docstring 声称"exclusion 永远会被报告"，与实现不符 | 报告改为 `sorted(excluded)`（**报告文件里的每一条**），并改写 detail 文案为"instruments"而非"members" | 回退为按成员过滤 → 同一条新锁必失败（实测杀） |
+| CR26-3 | **两条修复分支无测试锁**：`short` 里的 `and instrument not in excluded` 过滤、`members_without_bars` 里的 `if name not in excluded` 过滤，**回退后全套仍绿**（替身变异 d/e 均存活） | 新增 `test_excluded_instrument_does_not_appear_in_the_short_history_finding`（真夹具：被剔名 5/20 会话，**保证它本会进 `insufficient_history`**，并断言同窗未被剔的短名仍 blocking）+ `test_excluded_member_without_bars_is_not_reported_as_missing_bars` | 变异 d（去掉 short 过滤）→ 杀 test3；变异 e（去掉 member_without_bars 过滤）→ 杀新锁。两者监工复做，均红 |
+| CR26-4 | **一条新测试是恒真的**：原 `test_excluded_instrument_does_not_appear_in_the_short_history_finding` 的夹具给被剔名**正好 `min` 条**（`count < min` 为假），`short` 列表为空，断言在空列表上恒过，不能区分修复前后；`test_excluded_instrument_is_informational...` 首句 `"excluded_instruments" not in codes or all(informational)` 亦恒真 | 前者按 CR26-3 重写为真夹具；后者删去恒真子句，改为断言"无任何 blocking finding" | 变异 f（删掉整个 `excluded_instruments` 块）→ 原 test1 与 test4 杀；重写后 test3 另由变异 d 杀 |
+| CR26-5 | **`evidence-index.json` 被手工重排**：`build_store_evidence.py` 固定键序（`layer, record_version, status, note, records`），工作副本却是 `sort_keys=True` 的字母序（`layer, note, ...`）。虽不影响 digest，但破坏了"索引由生成器产出"这一可追溯性 | **改由生成器重导**（`--kind index` + 原 14 条 `--record`、原 `--note`），键序恢复规范；diff 收敛为**仅 2 条 sha256** | 不适用（生成器产物 + 新鲜度测试绿） |
+| CR26-6 | **`scripts/ingest_window.py` 多小时后半途中断会丢审计记录**：循环里 `KeyboardInterrupt`/意外异常在写 summary 之前抛出，一次在 104 个会话中第 100 个被打断的run，**"哪些会话已落盘"的记录随之丢失** | summary 写入提为 `_write_summary()`，包 `try/except BaseException`：先写 summary（`status="interrupted"`、`interrupted=true`、已落盘会话在列）再重抛；新增 `tests/test_ingest_window.py` 3 例（中断仍写 summary、重跑跳过已发布分区、日历无法认证则 fail-closed） | 实测中断路径：summary 落盘且 `published=["2025-09-01"]`，确认后重抛（监工亲跑） |
+
+**纳入台账、本轮未改（OBS，非缺陷或需用户裁决）**：
+- **OBS-A**：`unjustified` 守卫里 `name not in short_all` 这一半在数学上可达性低（`count < min` 通常蕴含必需集有缺），但它**不是恒真**——CR26-1 的"非成员/无 bars"用例正是靠它之外的 gap 分支补齐判定；保留两个析取是为了同时覆盖"短"与"有洞"两类缺陷，且新文案不再声称"有足够会话"。
+- **OBS-B**：`scripts/ingest_window.py` 目前未进任何 evidence-index。它是**可重导的入口脚本**（逻辑受测、无 store 身份），按 §8.4 惯例入口脚本可在对应 pilot 证据里 pin；本轮未新增 pilot 证据目录，故未 pin。若后续把全A 试跑归档为 evidence，应连同 `ingest_window.py` 一起 pin。
+- **OBS-C**：`excluded_instruments` 的 reason 只作**审计字符串**入报告，代码不解析其语义（"供应商停发"这类判据靠人工证据）。这是有意的：机器可判定的部分（短/有洞）已由守卫强制，语义真伪留给研究侧证据，避免把供应商行为硬编码进就绪门。
+- **OBS-D**：`ingest_window.py` 对"分区文件存在但损坏"记 `already_published` 跳过（不做读回）。该行为继承 `CanonicalStore` 的不可变+manifest-first 契约（发布时已校验），非本轮引入；记此备忘。
+
+**测试计数**：`tests/test_training_readiness.py` +2（净，重写 1 例、删 1 假例并补 2 真例）、`tests/test_ingest_window.py` +3 = 净 +5 → **1014 passed / 23 skipped / exit 0**（基线 1012）。
+
+**未夸大声明**：CR26-1/2 的守卫与报告修复、CR26-5 的生成器重导、CR26-6 的中断路径为监工亲验（读码 + 运行时/变异复现）；CR26-3/4 的变异杀伤由替身亲做、监工复做关键两条（d/e 均红）。本轮不改任何已发布制品身份以外的语义（无 canonical schema 变更、无版本升迁）；`evidence-index.json` 仅 2 条 digest 随源码变更刷新。`code-review-unified-quant.md` 保持未跟踪。

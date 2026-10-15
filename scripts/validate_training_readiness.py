@@ -182,6 +182,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--exchange", default="SSE")
     parser.add_argument(
+        "--excluded-instruments",
+        type=Path,
+        default=None,
+        help=(
+            "JSON object mapping an instrument to the recorded reason it is dropped from "
+            "the universe for this window (long halts the provider stops publishing, vendor "
+            "holes). Reported as informational; an exclusion for a name that is not actually "
+            "defective is itself a blocking finding."
+        ),
+    )
+    parser.add_argument(
         "--independent-calendar",
         action="store_true",
         help="cross-check every session against an EastMoney index session list",
@@ -259,6 +270,19 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         delisted_provenance = "tushare:stock_basic(list_status=D)"
         notes["delisted_universe_size"] = len(delisted)
+    excluded: dict[str, str] | None = None
+    if args.excluded_instruments is not None:
+        try:
+            document = json.loads(args.excluded_instruments.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"unreadable excluded-instruments file {args.excluded_instruments}: {exc}") from exc
+        if not isinstance(document, dict) or not all(
+            isinstance(key, str) and isinstance(value, str) for key, value in document.items()
+        ):
+            raise SystemExit("excluded-instruments file must be a JSON object of instrument -> reason")
+        excluded = document
+        notes["excluded_instruments"] = excluded
+        notes["excluded_provenance"] = f"file:{args.excluded_instruments}"
     factor_sessions: list[dt.date] | None = None
     if args.factor_partition_set is not None:
         document = _read_factor_partition_set(args.factor_partition_set)
@@ -281,6 +305,8 @@ def main(argv: list[str] | None = None) -> int:
         suspension_provenance=str(notes.get("suspension_provenance", "unspecified")),
         delisted=delisted,
         delisted_provenance=delisted_provenance,
+        excluded_instruments=excluded,
+        excluded_provenance=str(notes.get("excluded_provenance", "unspecified")),
         factor_sessions=factor_sessions,
     )
     payload = report.to_json()

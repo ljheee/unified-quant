@@ -261,3 +261,9 @@ B9 复核收口(2026-10-14,cr.md §8.23)
 - **裁决**:`reject_symlinks_within` 恢复**要求两侧拼写一致**(`path` 须能 `relative_to(root)`),不再接受"已解析路径 + 未解析根";`owning_contracts` 调用方改为不预解析。口径写明在 `contracts/paths.py` 模块与函数 docstring。
 - **变异验证**:回退 `paths.py` 一致拼写规则 / 回退 `owning_contracts` 调用方 / 回退 `runner.py` 两处 loader 作用域,对应新锁必失败。
 - **附带**:`evidence/paper-execution-research-integration/phase-0/evidence-index.json` 刷新 `model_layer.py`、`runner.py` 两个 sha256 pin(§8.22 曾漏刷,导致 2 个 evidence 新鲜度测试红)。全量 **1000 passed / 23 skipped / exit 0**。
+
+全A 实盘训练前置工作(2026-10-15,首次试跑)
+- **整窗入库入口**:新增 `scripts/ingest_window.py`。此前 `uq-ingest daily --pipeline v2` 一次只发一个会话,A500 pilot 是**内联循环**驱动,仓库里没有可复现整窗的命令。该脚本逐会话从 `IndexMembershipStore` 取 PIT 可见成员、走同一个 `build_tushare_v2_pipeline` 发布不可变分区;分区已存在即记 `already_published` 跳过(可断点续跑);独立日历(EastMoney)带重试(`--calendar-attempts`/`--calendar-retry-seconds`,该端点实测约 1/6 概率掉连接),会话间隔默认 25s(单会话约 104 次 Tushare 请求,免费档 300/min)。**中断也写 summary**(`status=interrupted`、已落盘会话在列),不留半截 run。
+- **就绪门 exclusion 机制**:`assess_readiness` 增 `excluded_instruments`(instrument→reason)+ `excluded_provenance`,`validate_training_readiness.py` 增 `--excluded-instruments <json>`。用于 `delisted` 规则表达不了的情形——供应商中途停发(`suspend_d` 不标记长停牌、或供应商空洞),任何窗口长度都换不到足够可交易会话。设计:**只对"确实缺陷"的标的生效**——名必须在 `short_all`(少于会话下限)或存在 susp 无法解释的必需缺口,否则该条剔除本身报 `unjustified_exclusion`(blocking),防"静默缩表";剔除永远以 informational 的 `excluded_instruments` 报告(报告文件里的每一条)。
+- **全A(csi-all,中证全指 000985.CSI,~5070 成员)试跑数据**:`/tmp/uq-csiall` 42 个 canonical 会话分区(2025-08-11→2025-10-15)、universe 快照(5068 成员,valid 2025-09-08→2025-10-15)、`basic/2.0.0` 因子分区 21 个(2025-09-09→2025-10-15,绑 `bars_daily/v2`)。就绪门 21 会话窗(9/9–10/15,`--min-sessions 15`)`passed`。
+- **仍未决(见 cr.md §8.26 OBS-B/C/D 与本节下方)**:①更宽的 42 会话窗被**离场成员 label 尾段**阻断(逐日 PIT 入库不为离场成员抓 5 会话尾段,属设计缺口,需裁决"补尾段 vs 接受更窄 label 覆盖");②`adjusted_price`/`label_set` 两个预发布族仍只有测试 helper、无生产发布器(训练链路关键路径);③因子线 `alpha158/1.0.0` 仍绑 `research-v1`,过 v2 需另开 reviewed 版本(治理裁决)。
