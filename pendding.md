@@ -294,3 +294,10 @@ lineage 更正(2026-10-16,cr.md §8.32)
 - **但版本号选错了**:`hybrid-tushare200-mootdx.md:42` 为 TDX xdxr 链指定 `adj_factor.derived_v1`;`derived_v4` 属于公告派生的修订序列(v2→v3 修过现金分红量纲),TDX 派生是全新第 1 版、无此历史可继承——贴 v4 等于冒充演进史。
 - 已改:`TDX_DERIVATION_VERSION` → `adj_factor.derived_v1`;快照 schema 由 v4 改 **v5**,旧 `adjustment_snapshot.v4.json` 删除(**整号退役不复用**,避免"4"带上不同语义);未知版本哨兵 5→6;负向用例改名 `v5_formula_const_under_v1_schema` 并加 note 说明其语义。
 - 两处 spec 已对齐,写明 TDX 链是 `derived_v1`(schema v5)、`derived_v4` 仅指公告派生、两者互不可跨版本发布。
+
+收尾三项(2026-10-16,cr.md §8.33)
+- **`label_set` 发布器**:新增 `src/uq/models/label_store_writer.py::LabelSetWriter`(布局 `label_sets/generation=<id>/{manifest.json,data.parquet}`)。顺带修两处真缺陷:①`LabelBuilder.build` 只返回 manifest、丢弃帧 → 新增 `build_with_frame()`;②`LabelStore.read_frame` 从不校验 `data_checksum_sha256`(改写 label 后仍干净读回)→ 补校验。该校验暴露 8 个既有 fixture 长期用 `assign(label=0.01)` 伪造标签帧,已改为发布真实输出;phase2 因子/标签窗完全重合致末 5 日无标签被 fail_closed 拒,已把标签历史延伸过因子窗(符合生产口径)。
+- **复权线生产入口**:新增 `scripts/build_tdx_adjustments.py`(TDX xdxr → `adj_factor.derived_v1` 快照 + 可复核报告,refused 即 exit 1)。真跑全 A 21 会话窗发布 2 只,0 refused,provider 对账 max|diff| 3.5e-4 且 within public resolution。
+- **新浪 3 处分歧裁定**(用 vendor `adj_factor` 跳变反推每股派息):中国平安 2018-06-07 应有≈1.206 → **TDX(1.2)对**;五粮液 1999-06-08 应有≈1.243 → **新浪(1.25)对、TDX(1.0)低估**;平安银行 2007-06-18 送股一致、现金差 0.009 可忽略。**结论:没有来源处处正确**(TDX/新浪/Tushare dividend 各有错)。TDX 那处错在 2015 前、不在 83 事件验证窗内,故该验证不可外推全历史。已入 `docs/user-guide.md` §5.3。
+- **仍未决**:新浪未接入(裁定口径已定:三源分歧以 vendor 跳变裁定);复权线未在 A500/全A 试跑窗批量发布;`adjusted_price_binding` 的 `expected_restated` 生产提供者仍未接线。
+

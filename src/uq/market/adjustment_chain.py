@@ -495,7 +495,9 @@ def build_tdx_adjustment_chain(
     check = _provider_check(derivation.frame, instrument_bars, tolerance=tolerance)
     return AdjustmentChainResult(
         instrument=instrument,
-        events=ordered[EVENT_COLUMNS].reset_index(drop=True),
+        # keep source_event_id: publish_adjustment_snapshot selects EVENT_COLUMNS
+        # itself, and a caller reporting the lineage needs the per-event id
+        events=ordered.reset_index(drop=True),
         derivation=derivation,
         sessions=tuple(sessions),
         window_start=window_start,

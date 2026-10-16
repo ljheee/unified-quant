@@ -10,7 +10,7 @@ import pandas as pd
 from ..contracts.artifacts import QualityReportStore
 from ..contracts.canonical_v2 import file_sha256_bytes
 from ..contracts.manifest import validate_canonical_v2_manifest
-from ..contracts.model_layer import ModelContractLoader
+from ..contracts.model_layer import ModelContractLoader, sha256_json
 from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
@@ -173,6 +173,10 @@ class LabelStore:
         data_path = directory / "data.parquet"
         if not data_path.is_file():
             raise ContractError(f"unpublished label data: {generation_id}")
+        # cr.md: the manifest declares data_checksum_sha256 over the label rows, so
+        # a frame whose values were edited after publication must be refused. The
+        # shape checks below only cover columns, row count and dtypes, none of which
+        # moves when a label value is rewritten.
         frame = pd.read_parquet(data_path)
         if frame.columns.tolist() != manifest["columns"]:
             raise ContractError("label artifact column mismatch")
@@ -182,6 +186,21 @@ class LabelStore:
         expected_dtypes = {key: "datetime64[ns]" if value.startswith("datetime") else value for key, value in manifest["dtypes"].items()}
         if actual_dtypes != expected_dtypes:
             raise ContractError("label artifact dtype mismatch")
+        # The label manifest declares data_checksum_sha256 exactly as
+        # `models/labels.py` computes it: sha256_json over the rows of the
+        # *sorted* frame, each as (instrument, decision_date, label). Reproducing
+        # that definition here rather than calling logical_fingerprint matters
+        # because the two fields are not the same function and only one of them is
+        # the row checksum.
+        ordered = frame.sort_values(["instrument", "decision_date"], kind="mergesort")
+        actual_checksum = sha256_json({"rows": [
+            [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2])]
+            for row in ordered.itertuples(index=False)
+        ]})
+        if actual_checksum != manifest["data_checksum_sha256"]:
+            raise ContractError(
+                "label artifact checksum mismatch; the published rows were modified after publication"
+            )
         return manifest, frame
 
 

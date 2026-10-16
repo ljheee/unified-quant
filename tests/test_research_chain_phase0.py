@@ -469,12 +469,12 @@ def test_research_layout_resolves_relative_paths_under_data_root(tmp_path: Path)
 
 def test_owning_layer_read_boundaries(tmp_path: Path) -> None:
     frame = _adjusted_frame()
-    label_manifest = LabelBuilder(name="return_5d", semantic_version="1.0.0").build(
-        frame, upstream_bindings=[_binding(frame)]
-    )
+    label_manifest, label_output = LabelBuilder(
+        name="return_5d", semantic_version="1.0.0"
+    ).build_with_frame(frame, upstream_bindings=[_binding(frame)])
     directory = tmp_path / "label_sets" / f"generation={label_manifest['generation_id']}"
     directory.mkdir(parents=True)
-    frame[["instrument", "datetime"]].rename(columns={"datetime": "decision_date"}).assign(label=pd.Series([None] * len(_adjusted_frame()), dtype="float64")).to_parquet(directory / "data.parquet", index=False)
+    label_output.to_parquet(directory / "data.parquet", index=False)
     (directory / "manifest.json").write_text(json.dumps(label_manifest))
     manifest, stored = LabelStore(tmp_path).read_frame(label_manifest["generation_id"])
     assert manifest["generation_id"] == label_manifest["generation_id"]

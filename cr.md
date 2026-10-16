@@ -932,3 +932,33 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试**：全量 **1062 passed / 23 skipped / exit 0**（计数不变——本次是版本标识更正，无净增删）。docs §5.2 已同步为 `derived_v1` / `snapshot_version=5` 并加版本号说明。
 
 **补注（同日，回应用户"以补一句限定说明什么呢"）**：限定说明补在 `specs/real-data-chain/plan.md` 与 `specs/layers/factor-layer-spec.md` 上，内容是**给 `derived_v4` 标注适用范围**——即"这是**公告派生**链的 lineage（snapshot schema v3）"，并说明 TDX-xdxr 链是 `adj_factor.derived_v1`（schema v5）、二者都不可消费且不得跨版本发布。`plan.md` 那两处是**历史实施记录**（"那一轮做了什么"），不改写原文、只在下方加 Scope note 指明它已不是现行 lineage 映射；`factor-layer-spec.md:150` 的因子依赖示例是**可复制的 YAML 模板**，容易被人直接抄成 TDX 链的声明，故在其 `lineage` 行内联注释。docs/pendding/cr 无需再动。全量 **1062 passed / 23 skipped**。
+
+### 8.33 收尾三项：label_set 发布器 / 复权线生产入口 / 新浪分歧裁定（2026-10-16）
+
+**触发**：用户"继续做完"。做完 §8.31/§8.32 遗留的三项。
+
+**① `label_set` 生产发布器（训练链路最后一个洞）**
+- 新增 `src/uq/models/label_store_writer.py::LabelSetWriter`：`label_sets/generation=<id>/{manifest.json,data.parquet}`（与 `LabelStore` 读侧同布局）。写入前按 `label_set.v1.json` 校验 manifest；写后从磁盘读回并逐列/逐 dtype/逐行比对；分区不可变（已存在即拒）。
+- **发现并修掉两个真缺陷（由测试暴露）**：
+  - `LabelBuilder.build` **只返回 manifest、丢弃了它刚刚描述的帧**，导致任何想发布标签的调用方都拿不到那一帧。新增 `build_with_frame()` 返回 `(manifest, frame)`，`build()` 保持原签名委托给它。
+  - `LabelStore.read_frame` **只校验列/行数/dtype，从不校验 `data_checksum_sha256`** —— 改写一个 label 值后仍能干净读回。补上校验（用 `models/labels.py` 的同一口径：`sha256_json` over 排序后行），并在 writer 侧同样校验"帧必须与 manifest 声明的 checksum 一致"。
+- **附带暴露**：上述校验让 8 个既有 fixture 失败——它们用 `assign(label=0.01)` 伪造标签帧、与 manifest 从不一致（此前无人校验故长期潜伏）。已改为发布 `build_with_frame` 的真实输出。其中 phase2 的因子/标签窗**完全重合**，导致末 5 个决策日无前视标签、被 `fail_closed` 拒绝——这暴露的是**真实组合问题**（生产上就绪门要求因子侧止于 `usable_label_end`），故 fixture 的标签历史**延伸过因子窗**以符合该口径。
+
+**② 复权线生产入口**
+- 新增 `scripts/build_tdx_adjustments.py`（`build_dividend_adjustments.py` 的姊妹脚本）：从 TDX `xdxr` 派生 `adj_factor.derived_v1` 快照并写可复核报告，refused 即 exit 1（是门不是日志）。只向 TDX 要"窗口内已有 canonical bars"的标的（以 store 为界，不以服务器返回为界）；某标的取不到事件则**拒绝并记原因**，不静默跳过。
+- `adjustment_chain.build_tdx_adjustment_chain` 的返回事件改为保留 `source_event_id`（发布侧本就用 `EVENT_COLUMNS` 选取，调用方报告血缘需要逐事件 id）。
+- **真跑**：全 A 21 会话窗（`/tmp/uq-csiall`，2025-09-09~10-15）发布 2 只（600000/000001）`derived_v1` 快照，0 refused，provider 对账 verified=2、max|diff|=3.5e-4、all_within_public_resolution=true。
+- 锁：`tests/test_build_tdx_adjustments.py`（5 例：正常发布、缺事件拒绝、以 store 为界、未知 `--instrument` 配置失败、发散拒绝）。
+
+**③ 新浪 3 处真实分歧——用第三来源裁定（不是猜）**
+- 裁据：vendor `adj_factor` 除权日两端跳变（入库真正对账的权威口径）反推每股派息。
+| 标的/除权日 | 反推应有 | 新浪 | TDX | Tushare dividend | 裁定 |
+|---|---|---|---|---|---|
+| 中国平安 2018-06-07 | ≈1.206 | 1.0 | **1.2** | 0.2 | TDX 对 |
+| 五粮液 1999-06-08 | ≈1.243 | **1.25** | 1.0 | 1.25 | 新浪对，**TDX 低估 0.25** |
+| 平安银行 2007-06-18 | 送股主导 | 现金 0.009+送股 0.1 | 现金 0+送股 0.1 | 无记录 | 送股一致，现金差 0.009 可忽略 |
+- **结论**：**没有一个来源处处正确**——TDX（五粮液 1999）、新浪（中国平安 2018）、Tushare 自己的 `dividend`（中国平安给 0.2）**各有错**。TDX 那处错在 2015 年以前，**不在** §8.30 的 83 事件验证窗内，故"83/83 在 0.5% 内"成立但不能外推为"TDX 全历史都准"。已写入 `docs/user-guide.md` §5.3（含裁定表与"接入新浪须以 vendor 跳变裁定"的操作口径）。
+
+**测试计数**：`test_label_set_writer.py` 新增 9 例、`test_build_tdx_adjustments.py` 新增 5 例 = 净 **+14** → **1076 passed / 23 skipped / exit 0**（父节点 1062）。
+
+**未夸大声明**：①② 的实现、真跑、三处缺陷定位为监工亲做；③ 的三方裁定基于实测（含 vendor 跳变反推、TDX 原始帧复核）。①② 中"由测试暴露"的缺陷均如实记录，未掩饰 fixture 曾长期伪造标签帧这一事实。`code-review-unified-quant.md` 保持未跟踪。

@@ -65,6 +65,20 @@ class LabelBuilder:
         self.adjustment_basis = adjustment_basis
         self.code_fingerprint = code_fingerprint or sha256_json({"component": "LabelBuilder", "version": 1})
 
+    def build_with_frame(
+        self,
+        frame: pd.DataFrame,
+        *,
+        upstream_bindings: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], pd.DataFrame]:
+        """Compute labels and return ``(manifest, frame)``.
+
+        ``build`` returns only the manifest, which leaves a caller that wants to
+        publish the labels with no way to obtain the frame the manifest describes.
+        """
+        manifest, output = self._compute(frame, upstream_bindings=upstream_bindings)
+        return manifest, output
+
     def build(
         self,
         frame: pd.DataFrame,
@@ -72,6 +86,15 @@ class LabelBuilder:
         upstream_bindings: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Compute labels and produce a manifest without identity digests."""
+        manifest, _output = self._compute(frame, upstream_bindings=upstream_bindings)
+        return manifest
+
+    def _compute(
+        self,
+        frame: pd.DataFrame,
+        *,
+        upstream_bindings: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], pd.DataFrame]:
         _validate_adjusted_price_frame(frame)
         for binding in upstream_bindings:
             if binding.get("binding") != "adjusted_price":
@@ -159,7 +182,7 @@ class LabelBuilder:
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest
         ModelContractLoader.validate("label_set", manifest)
-        return manifest
+        return manifest, output
 
 
 class LabelValidator:

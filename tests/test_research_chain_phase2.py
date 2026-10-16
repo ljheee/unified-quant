@@ -372,6 +372,14 @@ def _prepare_dataset_store(tmp_path: Path) -> tuple[DatasetStageAdapter, Resolve
     preprocessing_directory.mkdir(parents=True)
     (preprocessing_directory / "manifest.json").write_text(json.dumps(preprocessing))
 
+    # The label set is derived from a bar history that runs past the factor
+    # window: a decision date D needs bars through D+5, so building the labels over
+    # exactly the factor window would leave the last five decision dates null and
+    # the dataset's fail_closed policy would reject them. This mirrors production,
+    # where the readiness gate requires the factor side to stop at the usable label
+    # end rather than the label side to be truncated.
+    horizon = 5
+    extra = pd.bdate_range(dates[-1], periods=horizon + 1)[1:]
     label_frame = factor_frame.copy()
     label_frame["close"] = 10.0
     label_frame["adj_factor"] = 1.0
@@ -380,6 +388,14 @@ def _prepare_dataset_store(tmp_path: Path) -> tuple[DatasetStageAdapter, Resolve
     label_frame["limit_up"] = False
     label_frame["limit_down"] = False
     label_frame["delisted"] = False
+    tail = pd.concat([
+        label_frame[label_frame["instrument"] == instrument].iloc[[-1]].assign(datetime=day)
+        for instrument in sorted(label_frame["instrument"].unique())
+        for day in extra
+    ], ignore_index=True)
+    label_frame = pd.concat([label_frame, tail], ignore_index=True).sort_values(
+        ["instrument", "datetime"], kind="mergesort"
+    ).reset_index(drop=True)
     label_checksum = sha256_json({"rows": [
         [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
         for row in label_frame.sort_values(["instrument", "datetime"], kind="mergesort")[["instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"]].itertuples(index=False)
@@ -389,10 +405,16 @@ def _prepare_dataset_store(tmp_path: Path) -> tuple[DatasetStageAdapter, Resolve
         "partition_date": "2026-01-30", "generation_id": adjusted_manifest["generation_id"],
         "data_checksum_sha256": label_checksum, "visible_cutoff": "2026-01-30T15:00:00+08:00",
     }
-    label_manifest = LabelBuilder(name="return_5d", semantic_version="1.0.0").build(label_frame, upstream_bindings=[binding])
+    # Publish the frame the builder actually described. Writing a fabricated
+    # `label=0.01` frame under the builder's manifest produced a store whose
+    # declared checksum did not describe its rows -- which the read path now
+    # refuses (the same rule AdjustedPriceDatasetStore already enforced).
+    label_manifest, label_output = LabelBuilder(
+        name="return_5d", semantic_version="1.0.0"
+    ).build_with_frame(label_frame, upstream_bindings=[binding])
     label_directory = tmp_path / "label_sets" / f"generation={label_manifest['generation_id']}"
     label_directory.mkdir(parents=True)
-    label_frame[["instrument", "datetime"]].rename(columns={"datetime": "decision_date"}).assign(label=0.01).to_parquet(label_directory / "data.parquet", index=False)
+    label_output.to_parquet(label_directory / "data.parquet", index=False)
     (label_directory / "manifest.json").write_text(json.dumps(label_manifest))
 
     plan = _dataset_plan(factor_manifest, universe_manifest, adjusted_manifest, label_manifest, preprocessing)
