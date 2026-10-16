@@ -303,6 +303,16 @@ Eleventh governance pass (2026-08-23):
    for the factor-facing breaking-change rule; persisted effective-date snapshots
    remain required before adjusted factor publication.
 
+   Scope note (2026-10-16): items 4 and the "Aligned factor documentation" entry
+   below are a dated record of that review round, not the current lineage map.
+   `adj_factor.derived_v4` is the lineage of the **disclosure-derived** factor
+   (Tushare `dividend` mapped into the exchange event shape, snapshot schema v3).
+   The TDX-xdxr derivation publishes `adj_factor.derived_v1` on snapshot schema v5
+   instead, because it is a first version with none of the v2-to-v3 revision
+   history that the `derived_vN` series numbers. Both are consumable; neither may
+   be published under the other's snapshot version. See
+   `specs/layers/factor-layer-spec.md` §14.
+
 Still open before broader research use: complete historical suspension coverage,
 longer multi-session/server-failover evidence, and retention execution after
 artifacts age beyond policy.
@@ -325,5 +335,5 @@ Remaining before research-grade claim:
 - Canonical manifests now carry schema, code, run, timestamp, lineage, quality, and raw-artifact lineage.
 - Adjustment derivations now emit a deterministic snapshot ID and effective-date-table checksum.
 - `FactorContext.read_bars` now supports verified date ranges, instrument filtering, field projection, and rejects unpublished dates.
-- Aligned factor documentation to `adj_factor.derived_v4`, nested Hive identity paths, and the runtime schema identifier.
+- Aligned factor documentation to `adj_factor.derived_v4` (disclosure-derived lineage; see the scope note above), nested Hive identity paths, and the runtime schema identifier.
 - Added regression coverage for manifest tampering, adjustment snapshot binding, and multi-partition factor reads.

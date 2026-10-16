@@ -147,6 +147,9 @@ factor:
     adjustment:
       dataset: adjustment_factors_daily
       schema_version: research-v1
+      # the disclosure-derived lineage (snapshot schema v3). A factor fed by the
+      # TDX-xdxr derivation declares adj_factor.derived_v1 instead (schema v5);
+      # both are consumable and neither may cross the other's snapshot version.
       lineage: adj_factor.derived_v4
   required_columns:
     - instrument

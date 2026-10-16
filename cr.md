@@ -930,3 +930,5 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 - spec 对齐：`hybrid-tushare200-mootdx.md` 标注实现落点、探测命令的教训、以及 lineage 选 v1 的理由；`factor-layer-spec.md:673` 限定 `derived_v4` 是**公告派生**的当前 lineage，并说明 TDX 链用 `derived_v1`（schema v5）、两者互不可跨版本发布。
 
 **测试**：全量 **1062 passed / 23 skipped / exit 0**（计数不变——本次是版本标识更正，无净增删）。docs §5.2 已同步为 `derived_v1` / `snapshot_version=5` 并加版本号说明。
+
+**补注（同日，回应用户"以补一句限定说明什么呢"）**：限定说明补在 `specs/real-data-chain/plan.md` 与 `specs/layers/factor-layer-spec.md` 上，内容是**给 `derived_v4` 标注适用范围**——即"这是**公告派生**链的 lineage（snapshot schema v3）"，并说明 TDX-xdxr 链是 `adj_factor.derived_v1`（schema v5）、二者都不可消费且不得跨版本发布。`plan.md` 那两处是**历史实施记录**（"那一轮做了什么"），不改写原文、只在下方加 Scope note 指明它已不是现行 lineage 映射；`factor-layer-spec.md:150` 的因子依赖示例是**可复制的 YAML 模板**，容易被人直接抄成 TDX 链的声明，故在其 `lineage` 行内联注释。docs/pendding/cr 无需再动。全量 **1062 passed / 23 skipped**。
