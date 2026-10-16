@@ -372,7 +372,7 @@ def publish_adjustment_snapshot(
     return directory.name
 
 
-# --- TDX xdxr as the event source (lineage adj_factor.derived_v4) ------------
+# --- TDX xdxr as the event source (lineage adj_factor.derived_v1) -------------
 #
 # `build_adjustment_chain` above takes Tushare *disclosures* and maps them into the
 # exchange event shape.  TDX publishes the exchange shape directly, so this path
@@ -380,7 +380,7 @@ def publish_adjustment_snapshot(
 # a disclosure row that is mis-staged (a plan or a shareholder-meeting record
 # carrying cash_div=0) or mis-mapped cannot distort the events, because nothing
 # here interprets a disclosure.
-TDX_DERIVATION_VERSION = "adj_factor.derived_v4"
+TDX_DERIVATION_VERSION = "adj_factor.derived_v1"
 
 
 def build_tdx_adjustment_chain(
@@ -397,7 +397,7 @@ def build_tdx_adjustment_chain(
 
     The event frame is used exactly as TDX publishes it (filtered to realised
     ex-right rows and ordered), so this derivation is lineage
-    ``adj_factor.derived_v4`` rather than the disclosure-mapped
+    ``adj_factor.derived_v1`` rather than the disclosure-mapped
     ``adj_factor.exchange_v2``.  Both are multiply-basis and anchored at 1.0 on
     the latest session, so a consumer may read either.
 

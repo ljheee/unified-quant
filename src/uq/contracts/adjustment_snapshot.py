@@ -37,24 +37,27 @@ _SESSION_COLUMNS = ["session_date"]
 # pinned it. The formula lineage is unchanged (still adj_factor.exchange_v2),
 # so v2 and v3 snapshots are equally consumable.
 #
-# 2026-10-16: v4 carries the TDX-xdxr lineage (``adj_factor.derived_v4``).  v3
-# pins formula_version to the disclosure-mapped lineage by const, and widening
-# that const in place would silently re-label every stored v3 snapshot, so the
-# new lineage gets its own version instead.  v3 stays byte-identical and keeps
-# rejecting ``derived_v4``; v4 keeps rejecting ``exchange_v2``.
+# 2026-10-16: the TDX-xdxr lineage gets its own snapshot version.  v3 pins
+# formula_version to the disclosure-mapped lineage by const, and widening that
+# const in place would silently re-label every stored v3 snapshot, so a new
+# version is the only honest way to publish a second lineage.
+#
+# The version number skips 4 on purpose: v4 was briefly used for this lineage
+# during development and was deleted before release, so no snapshot carries it
+# and the number stays retired rather than being reused with different semantics.
 SNAPSHOT_SCHEMA_BY_VERSION = {
     1: "adjustment_snapshot.v1.json",
     2: "adjustment_snapshot.v2.json",
     3: "adjustment_snapshot.v3.json",
-    4: "adjustment_snapshot.v4.json",
+    5: "adjustment_snapshot.v5.json",
 }
-LATEST_SNAPSHOT_VERSION = 4
+LATEST_SNAPSHOT_VERSION = 5
 # Which schema version a lineage is published under.  Both are consumable (see
 # CONSUMABLE_FORMULA_VERSIONS), so a reader may accept either, but a snapshot
 # records the version its lineage is declared against.
 FORMULA_VERSION_SNAPSHOT_VERSION = {
     "adj_factor.exchange_v2": 3,
-    "adj_factor.derived_v4": 4,
+    "adj_factor.derived_v1": 5,
 }
 # cr.md U6/U17: the formula lineages the factor side may consume. v1 documents
 # stay readable (audit/re-export) but are rejected at the consumption seam below
@@ -64,15 +67,19 @@ FORMULA_VERSION_SNAPSHOT_VERSION = {
 # different event sources, so both are listed rather than widened into a wildcard:
 #   * ``adj_factor.exchange_v2`` -- from Tushare ``dividend`` disclosures, mapped
 #     to the exchange XDXR shape (``market/adjustment_chain.py``);
-#   * ``adj_factor.derived_v4``   -- straight from TDX ``xdxr`` events, which are
+#   * ``adj_factor.derived_v1``   -- straight from TDX ``xdxr`` events, which are
 #     already in the exchange shape, so no disclosure mapping can distort them.
+#     Its derivation version is v1, not a continuation of the ``derived_vN``
+#     series: that series numbers revisions of the *disclosure* derivation
+#     (v2->v3 fixed a cash-dividend scale defect), and a TDX-derived factor has
+#     none of that history to inherit.
 # Both are multiply-basis and anchored at 1.0 on the latest session, which is why
 # a snapshot of either lineage can feed the same consumer. A lineage outside this
 # set is refused with the same fail-closed message as before, so the drift guard
 # is not weakened by adding a second known-good entry.
 CONSUMABLE_FORMULA_VERSIONS = (
     "adj_factor.exchange_v2",
-    "adj_factor.derived_v4",
+    "adj_factor.derived_v1",
 )
 CONSUMABLE_FORMULA_VERSION = CONSUMABLE_FORMULA_VERSIONS[0]
 
@@ -153,7 +160,7 @@ class AdjustmentSnapshotStore:
         generation_id = adjustment_snapshot_generation(unsigned)
         manifest = {**unsigned, "generation_id": generation_id}
         # Validate against the schema the manifest declares itself under, not the
-        # latest one: publishing a derived_v4 snapshot against the v3 contract (or
+        # latest one: publishing a derived_v1 snapshot against the v3 contract (or
         # vice versa) would be rejected by the reader, so the writer must use the
         # same rule the reader does.
         validate_contract(SNAPSHOT_SCHEMA_BY_VERSION[unsigned["snapshot_version"]], manifest)

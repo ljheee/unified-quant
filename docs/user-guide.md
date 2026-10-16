@@ -117,9 +117,11 @@ mkdir -p "$DATA_ROOT"
 | lineage | 事件来源 | 实现 | 说明 |
 |---|---|---|---|
 | `adj_factor.exchange_v2` | Tushare `dividend` 公告 | `src/uq/market/adjustment_chain.py::build_adjustment_chain` | 需把公告映射为交易所事件形状；只采用 `div_proc == 实施` 的记录，税前金额 |
-| `adj_factor.derived_v4` | **TDX `xdxr`（交易所原始事件）** | `src/uq/market/adjustment_chain.py::build_tdx_adjustment_chain` | 无需映射公告，事件即交易所形状；适合作为上面那条链的交叉校验 |
+| `adj_factor.derived_v1` | **TDX `xdxr`（交易所原始事件）** | `src/uq/market/adjustment_chain.py::build_tdx_adjustment_chain` | 无需映射公告，事件即交易所形状；适合作为上面那条链的交叉校验 |
 
-快照 schema 版本与 lineage 绑定（`snapshot_version=3` ↔ `exchange_v2`，`4` ↔ `derived_v4`），两个版本都**可读**，读取侧只拒绝血缘不在 `CONSUMABLE_FORMULA_VERSIONS` 内的快照。
+快照 schema 版本与 lineage 绑定（`snapshot_version=3` ↔ `exchange_v2`，`5` ↔ `derived_v1`），两个版本都**可读**，读取侧只拒绝血缘不在 `CONSUMABLE_FORMULA_VERSIONS` 内的快照。
+
+> 版本号注意：TDX 链是**全新的第 1 版**（`derived_v1`），不是 `derived_vN` 序列的延续——那个序列数的是**公告派生**的修订（v2→v3 修过现金分红量纲缺陷），TDX 派生没有这段历史可继承。
 
 **实测吻合度**：83 个除权事件（6 只标的）上，TDX 事件重算的因子跳变与 Tushare `adj_factor` 的跳变最大差 0.109%、平均 0.023%，83/83 在 0.5% 以内。
 

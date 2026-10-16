@@ -229,9 +229,9 @@ def test_unknown_snapshot_version_is_rejected(tmp_path):
     generation_id = _craft_legacy_v1_snapshot(tmp_path)
     path = tmp_path / "adjustments" / "snapshots" / "600000.XSHG" / generation_id / "manifest.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
-    # 4 is now a real version (the TDX-xdxr lineage), so the sentinel for "a
-    # version this reader does not know" has to be one beyond the supported set.
-    manifest["snapshot_version"] = 5
+    # The TDX-xdxr lineage occupies a real snapshot version, so the sentinel for
+    # "a version this reader does not know" has to be one beyond the supported set.
+    manifest["snapshot_version"] = 6
     path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(StoreContractError, match="unsupported adjustment snapshot version"):
         AdjustmentSnapshotReader(tmp_path).read_manifest("600000.XSHG", generation_id)

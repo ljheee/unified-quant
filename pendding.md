@@ -288,3 +288,9 @@ TDX xdxr 派生链 + 数据源文档(2026-10-16,cr.md §8.31)
 - 真跑:600000/000001 窗口 2025-06-01~08-01(含真实除权日),TDX xdxr → `derived_v4` 快照发布成功,provider check passed(max|diff| 3.3e-07 / 1.69e-04)。
 - `docs/user-guide.md` 新增「## 5. 可用数据源」(行情源/复权两条链/新浪/排查指引),后续小节顺延重编号。新浪**如实标注** 185/190 一致、2 处仅分类差异、3 处真实数值分歧,并写明勿装 akshare(pandas 3.x 与锁定的 2.3.3 冲突)。
 - **仍未决**:①新浪 3 处真实分歧成因未查,故未接入(仅文档登记);②复权线生产入口脚本仍未接线(目前需调用方提供 bars 与 closes);③`label_set` 生产发布器仍是训练链路最后一洞。
+
+lineage 更正(2026-10-16,cr.md §8.32)
+- 用户质疑 `derived_v4` 是否测试反例 → **不是**。它只出现在 `adjustment_snapshot.v1.json` 负向用例组里,该组语义是"v1 快照不得冒用别的东西"(同组还有 v2_formula_const_under_v1_schema 等);`factor-layer-spec.md:673` 明确写着它是"当前实现 lineage"。此前台账把它描述成"应被拒绝的值"是错的,已更正。
+- **但版本号选错了**:`hybrid-tushare200-mootdx.md:42` 为 TDX xdxr 链指定 `adj_factor.derived_v1`;`derived_v4` 属于公告派生的修订序列(v2→v3 修过现金分红量纲),TDX 派生是全新第 1 版、无此历史可继承——贴 v4 等于冒充演进史。
+- 已改:`TDX_DERIVATION_VERSION` → `adj_factor.derived_v1`;快照 schema 由 v4 改 **v5**,旧 `adjustment_snapshot.v4.json` 删除(**整号退役不复用**,避免"4"带上不同语义);未知版本哨兵 5→6;负向用例改名 `v5_formula_const_under_v1_schema` 并加 note 说明其语义。
+- 两处 spec 已对齐,写明 TDX 链是 `derived_v1`(schema v5)、`derived_v4` 仅指公告派生、两者互不可跨版本发布。

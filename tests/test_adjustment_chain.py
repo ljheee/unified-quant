@@ -430,7 +430,7 @@ def test_script_report_surfaces_skipped_provider_checks_separately(tmp_path, mon
     assert reconciliation["all_within_public_resolution"] is None
 
 
-# --- TDX xdxr as the event source (lineage adj_factor.derived_v4) ------------
+# --- TDX xdxr as the event source (lineage adj_factor.derived_v1) ------------
 
 
 def _xdxr(**overrides):
@@ -457,7 +457,7 @@ def test_tdx_chain_declares_the_derived_v4_lineage(tmp_path):
         events=_events(), bars=_bars(), instrument=INSTRUMENT,
         window_start=DATES[0], window_end=DATES[-1],
     )
-    assert result.derivation.version == "adj_factor.derived_v4"
+    assert result.derivation.version == "adj_factor.derived_v1"
     assert result.derivation.provenance == "tdx:xdxr"
 
 
@@ -543,8 +543,8 @@ def test_tdx_snapshot_publishes_as_v4_and_reads_back(tmp_path):
         tmp_path, result, visibility_time=dt.datetime(2026, 8, 22, tzinfo=dt.timezone.utc)
     )
     manifest = AdjustmentSnapshotReader(tmp_path).read_manifest(INSTRUMENT, generation_id)
-    assert manifest["snapshot_version"] == 4
-    assert manifest["formula_version"] == "adj_factor.derived_v4"
+    assert manifest["snapshot_version"] == 5
+    assert manifest["formula_version"] == "adj_factor.derived_v1"
 
 
 def test_a_derived_v4_snapshot_is_consumable(tmp_path):
@@ -568,7 +568,7 @@ def test_a_derived_v4_snapshot_is_consumable(tmp_path):
 
 def test_the_v3_contract_still_rejects_the_derived_v4_lineage(tmp_path):
     # v3 pins its lineage by const and stays byte-identical, so a snapshot that
-    # claims derived_v4 under snapshot_version 3 is a tampered document.
+    # claims derived_v1 under snapshot_version 3 is a tampered document.
     result = build_tdx_adjustment_chain(
         events=_events(), bars=_bars(), instrument=INSTRUMENT,
         window_start=DATES[0], window_end=DATES[-1],
@@ -597,5 +597,5 @@ def test_the_v4_contract_rejects_the_exchange_lineage(tmp_path):
     manifest = json.loads(path.read_text())
     manifest["formula_version"] = "adj_factor.exchange_v2"
     path.write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(ContractError, match="adjustment_snapshot.v4.json validation failed"):
+    with pytest.raises(ContractError, match="adjustment_snapshot.v5.json validation failed"):
         AdjustmentSnapshotReader(tmp_path).read_manifest(INSTRUMENT, generation_id)

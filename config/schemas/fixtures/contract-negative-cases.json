@@ -59,10 +59,11 @@
       }
     },
     {
-      "case": "bad_formula",
+      "case": "v5_formula_const_under_v1_schema",
       "patch": {
         "formula_version": "adj_factor.derived_v4"
-      }
+      },
+      "note": "v1 pins formula_version to adj_factor.exchange_v1, so a v1 document claiming any other lineage (including the real adj_factor.derived_v1 TDX lineage) must be rejected. This is a cross-version refusal, not a statement that the lineage itself is invalid."
     },
     {
       "case": "bad_visibility_type",

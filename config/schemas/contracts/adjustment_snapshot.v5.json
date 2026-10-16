@@ -1,7 +1,7 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
- "$id": "https://unified-quant.local/schemas/contracts/adjustment_snapshot.v4.json",
- "title": "Corporate-action adjustment snapshot v4",
+ "$id": "https://unified-quant.local/schemas/contracts/adjustment_snapshot.v5.json",
+ "title": "Corporate-action adjustment snapshot v5",
  "type": "object",
  "additionalProperties": false,
  "required": [
@@ -16,14 +16,14 @@
  ],
  "properties": {
   "snapshot_version": {
-   "const": 4
+   "const": 5
   },
   "instrument": {
    "type": "string",
    "pattern": "^[0-9]{6}\\.(XSHG|XSHE|XBSE)$"
   },
   "formula_version": {
-   "const": "adj_factor.derived_v4"
+   "const": "adj_factor.derived_v1"
   },
   "visibility_time": {
    "type": "string",

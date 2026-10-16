@@ -911,3 +911,22 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数**：`tests/test_adjustment_chain.py` +11 例（TDX 链 7 + v4/v3 互斥 2 + 可消费 1 + 忽略非除权/窗口外事件 2，部分重叠计入）。父节点 1051 → **1062 passed / 23 skipped / exit 0**。
 
 **未改动（有意）**：`MootdxSourceAdapter.DEFAULT_SERVERS` 未动（实测该默认主机对 xdxr 有效，§8.30 已证我此前的"陈旧"判断有误）；现有 Tushare dividend 链与 `exchange_v2` 一个字节未改（改它会触发 `adjustment_snapshot.py` 消费闸门拒收已发布制品）；Sina **未接入**（3 处真实分歧成因未查，仅文档登记）。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.32 lineage 更正轮（2026-10-16，用户指出 `derived_v4` 疑为测试反例）
+
+**触发**：用户质疑 §8.31 用的 `adj_factor.derived_v4`「不是用于测试反例吗？应该用 v2 版本？」。
+
+**核查结论：用户的第一个疑虑不成立，第二个指向的问题成立。**
+
+- `derived_v4` **不是**测试反例。它只出现在 `config/schemas/fixtures/contract-negative-cases.json` 的 `adjustment_snapshot.v1.json` 组里，而该组用例的语义是「**v1 快照不得冒用别的东西**」（同组还有 `v2_formula_const_under_v1_schema`、`v2_snapshot_version_under_v1_schema`）。v1 的 const 是 `adj_factor.exchange_v1`，所以该用例拒绝的是"v1 自称 v4 血缘"这个跨版本冒用，而不是 v4 血缘本身。§8.30/§8.31 我把它描述成"应被拒绝的值"是**错误表述**，已在 §8.32 更正；`specs/layers/factor-layer-spec.md:673` 明确写着它是"当前实现 lineage"。
+- **但版本号确实选错了**：`specs/real-data-chain/hybrid-tushare200-mootdx.md:42` 为 **TDX xdxr 链**指定的是 `adj_factor.derived_v1`。`derived_v4` 属于**公告派生**那条修订序列（v2→v3 修过现金分红量纲缺陷），而 TDX 派生是全新第 1 版、**没有那段历史可继承**——贴 v4 等于冒充一段不存在的演进史，正是 `factor-layer-spec.md:673` 自己警告的那类错误。
+
+**更正**
+- `src/uq/market/adjustment_chain.py::TDX_DERIVATION_VERSION` → `adj_factor.derived_v1`。
+- `config/schemas/contracts/adjustment_snapshot.v5.json`（新）承载该 lineage；`adjustment_snapshot.v4.json` **删除**（该版本号只在开发期间存在过、无任何快照使用，故整号退役不复用——复用会让"4"带上不同语义）。
+- `adjustment_snapshot.py`：`CONSUMABLE_FORMULA_VERSIONS` 第二项改 `derived_v1`；`FORMULA_VERSION_SNAPSHOT_VERSION` 映射改 `derived_v1 → 5`；`LATEST_SNAPSHOT_VERSION=5`。注释写明"v4 整号退役"的原因。
+- `tests/test_adv_review_fixes.py::test_unknown_snapshot_version_is_rejected` 的哨兵由 5 → **6**（5 现为真实版本）。
+- 负向夹具里那条用例的 `case` 名 `bad_formula` → `v5_formula_const_under_v1_schema`，并加 `note` 说明"这是跨版本拒用，不是该 lineage 非法"——防止下一个人重犯我这个错。
+- spec 对齐：`hybrid-tushare200-mootdx.md` 标注实现落点、探测命令的教训、以及 lineage 选 v1 的理由；`factor-layer-spec.md:673` 限定 `derived_v4` 是**公告派生**的当前 lineage，并说明 TDX 链用 `derived_v1`（schema v5）、两者互不可跨版本发布。
+
+**测试**：全量 **1062 passed / 23 skipped / exit 0**（计数不变——本次是版本标识更正，无净增删）。docs §5.2 已同步为 `derived_v1` / `snapshot_version=5` 并加版本号说明。

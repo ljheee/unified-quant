@@ -39,7 +39,7 @@ This is a **research prototype**, not a stable production base.
 | Amount | both sources | canonical CNY; verify units |
 | Historical trading calendar | index daily bars | mark `calendar_source=index_derived_v1` |
 | Corporate action events | Mootdx `xdxr()` | persist raw events with lineage |
-| Adjustment factor | derived from xdxr | algorithm-versioned `adj_factor.derived_v1` |
+| Adjustment factor | derived from xdxr | algorithm-versioned `adj_factor.derived_v1` (implemented: `market/adjustment_chain.py::build_tdx_adjustment_chain`, snapshot schema v5) |
 | Price limits | local rule engine | main board ±10%, ChiNext/STAR ±20%; special cases unsupported |
 | Suspension | unknown unless token permits `suspend_d` | never infer solely from zero volume |
 | Security master/universe | static whitelist first | avoid treating TDX list as A-share master |
@@ -81,6 +81,20 @@ MootdxAdapter
   -> fetch_daily_bars(cross-check)
   -> fetch_xdxr_events()
   -> derive_adj_factor()
+
+Implemented state (2026-10-16):
+
+* `fetch_xdxr_events` and `derive_adj_factor` both exist. The deriver is
+  `market/adjustment.py::XdxrAdjustmentDeriver` and the TDX-native entry point is
+  `market/adjustment_chain.py::build_tdx_adjustment_chain`.
+* Probe with the command you intend to issue: on the hosts measured, `bars` and
+  `quotes` return empty while `xdxr` returns real data, so a quote-shaped probe
+  misreports a working server as dead.
+* The lineage is `adj_factor.derived_v1`, deliberately not a continuation of the
+  `derived_vN` series that numbers revisions of the disclosure-derived factor.
+* Lineage drift stays fail-closed: only `adj_factor.exchange_v2` and
+  `adj_factor.derived_v1` are consumable, and a snapshot claiming either under
+  the other's schema version is refused.
 
 CalendarDeriver
   -> index bars -> historical session set

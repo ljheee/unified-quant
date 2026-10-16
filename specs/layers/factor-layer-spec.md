@@ -670,10 +670,15 @@ Rules:
 
 ## 14. Adjustment Versioning Clarification
 
-`adj_factor.derived_v4` is the current implementation lineage. The v2-to-v3
+`adj_factor.derived_v4` is the current implementation lineage **of the disclosure-derived factor**. The v2-to-v3
 change corrected a cash-dividend scale defect that materially changed outputs;
 under strict semantic-version discipline it should have introduced a new major
 factor-facing lineage rather than appearing as another minor derivation label.
+
+The TDX-derived factor does not share that series: it has no v2-to-v3 history, so
+its lineage is `adj_factor.derived_v1` (snapshot schema v5) rather than a
+continuation of this one. Both lineages are consumable; neither may be published
+under the other's snapshot version.
 
 For the factor layer:
 
