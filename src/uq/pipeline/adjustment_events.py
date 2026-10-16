@@ -15,7 +15,12 @@ price, which is why the comparison uses a tolerance rather than equality.
 The ex-right convention used here is the standard A-share one:
 
     除权参考价 = (前收盘 - 每股现金 + 配股价 * 配股比例) / (1 + 送股比例 + 转增比例)
-    ratio       = 前收盘 / 除权参考价
+    ratio       = 除权参考价 / 前收盘   (< 1)
+
+The factor is multiply-basis and anchored at 1.0 on the latest session, matching
+``market/adjustment.py``: an event multiplies the factor of every session strictly
+before its ex-date by ``ratio``, so ``adjusted_close = close * adj_factor`` is
+return-continuous across the event.
 
 TDX ``xdxr`` reports every amount per 10 shares -- cash included -- so each is
 divided by 10 to reach a per-share quantity (verified: a ``fenhong`` of 1.74 on a
@@ -62,7 +67,14 @@ class AdjustmentEvent:
         self.allot_price = allot_price
 
     def ratio(self, previous_close: float) -> float:
-        """``前收盘 / 除权参考价`` for this event, or ``NaN`` when undefined."""
+        """``除权参考价 / 前收盘`` for this event, or ``NaN`` when undefined.
+
+        The canonical deriver (``market/adjustment.py``) multiplies the factor of
+        every session *before* the ex-date by exactly this quantity --
+        ``ex_right_price / pre_close``, which is below 1 -- so the pre-event
+        adjusted close equals the ex-date adjusted close and the measured return
+        across the event is the true economic return.
+        """
         if previous_close is None or previous_close <= 0:
             return float("nan")
         denominator = 1.0 + self.send + self.transfer + self.allot
@@ -73,7 +85,7 @@ class AdjustmentEvent:
         ) / denominator
         if reference <= 0:
             return float("nan")
-        return previous_close / reference
+        return reference / previous_close
 
     def as_dict(self) -> dict[str, Any]:
         return {

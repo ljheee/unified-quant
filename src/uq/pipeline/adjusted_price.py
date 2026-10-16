@@ -217,12 +217,22 @@ def verify_jump_cross_check(
         raise AdjustedPriceQualityRejection(
             "event-based cross-check requires the previous session's independent restatement"
         )
-    reference = prepared["produced"].index
+    # Compare on the instruments BOTH partitions carry. The universe changes between
+    # sessions (names enter and leave the index), so requiring identical row sets
+    # would refuse every real window; an instrument present in one partition only has
+    # no jump to compare and is left out rather than failing the whole session.
+    reference = prepared["produced"].index.intersection(prepared["previous produced"].index)
     for name, frame in prepared.items():
-        if not frame.index.equals(reference):
+        missing = reference.difference(frame.index)
+        if missing.size:
             raise AdjustedPriceQualityRejection(
-                f"jump cross-check row sets differ in the {name} frame"
+                f"jump cross-check cannot compare: the {name} frame lacks "
+                f"{missing.tolist()[:5]}"
             )
+    if reference.empty:
+        raise AdjustedPriceQualityRejection(
+            "jump cross-check has no instruments in common between the two partitions"
+        )
     for column in _PRICE_COLUMNS:
         vendor_jump = pd.to_numeric(prepared["produced"][column]) / pd.to_numeric(
             prepared["previous produced"][column]
@@ -338,12 +348,15 @@ def restate_from_events(
     """Restate prices from TDX corporate-action events instead of the vendor factor.
 
     The independent side of the cross-check: it never reads ``adj_factor``.  For
-    each instrument it accumulates the ex-right ratio of every event at or before
-    ``session`` -- each event's ratio taken against the close of the session
-    before it -- and divides this session's prices by that product, which is the
-    backward-adjusted level implied by the events alone.  A vendor restatement
-    that agrees with this has been checked against another vendor's view of the
-    same corporate actions rather than against itself.
+    each instrument it accumulates the ex-right ratio of every event strictly
+    after ``session`` -- each event's ratio ``ex_right_price / pre_close`` taken
+    against the close of the session before its own ex-date -- and multiplies
+    this session's prices by that product, which is the backward-adjusted level
+    implied by the events alone (the canonical deriver's convention, see
+    ``market/adjustment.py``).  The ex-date session itself is not scaled: it is
+    already quoted on the post-event basis.  A vendor restatement that agrees
+    with this has been checked against another vendor's view of the same
+    corporate actions rather than against itself.
 
     An event whose prior close is absent (the vendor's daily history begins in the
     mid-1990s, so a long-listed name's earliest events are unreachable) is
@@ -356,16 +369,29 @@ def restate_from_events(
     for instrument in sorted({str(value) for value in out["instrument"]}):
         symbol = symbol_of(instrument)
         symbol_events = list(events.get(symbol) or events.get(instrument) or [])
-        if not symbol_events:
-            raise AdjustedPriceQualityRejection(
-                f"no independent corporate-action events for {instrument}"
-            )
+        # A name with no corporate action at all (no ex-right event in history, or
+        # no xdxr data for it) has an event product of exactly 1.0, so its
+        # restatement is trivially comparable: the vendor factor must be flat too.
+        # Refusing here would let one never-restructured symbol block an entire
+        # session, which is how a full-universe window would become unpublishable.
         history = closes.get(symbol) or closes.get(instrument) or {}
         skipped: list[dt.date] = []
         product = 1.0
         for event in sorted(symbol_events, key=lambda item: item.session):
-            if event.session > target:
+            # An event scales every session STRICTLY BEFORE its ex-date; the
+            # ex-date session itself is already quoted on the post-event basis and
+            # is left alone. Verified against the vendor on 000001's 2025-10-15
+            # ex-date: the event-side jump across it then reads 1.005823 against the
+            # vendor's 1.006178 (0.035%, exchange rounding), whereas also scaling
+            # the ex-date session makes the two partitions cancel and reads 4.2%
+            # apart.
+            if event.session <= target:
                 continue
+            # The ratio needs the close of the session immediately before the
+            # ex-date; the caller supplies `closes` per session, so the latest
+            # session before the ex-date is that predecessor. An ex-date with no
+            # earlier close at all is unresolvable and is reported rather than
+            # approximated.
             prior = max((d for d in history if d < event.session), default=None)
             if prior is None:
                 # The vendor's daily history starts in the mid-1990s, so events
@@ -389,7 +415,7 @@ def restate_from_events(
             ]
         mask = out["instrument"] == instrument
         for column in _PRICE_COLUMNS:
-            out.loc[mask, column] = pd.to_numeric(out.loc[mask, column], errors="coerce") / product
+            out.loc[mask, column] = pd.to_numeric(out.loc[mask, column], errors="coerce") * product
     return out
 
 
@@ -479,6 +505,10 @@ def publish_adjusted_partition(
         "rows": int(len(restated)),
         "schema": schema.name,
         "quality_report": str(directory),
+        # which cross-check actually ran, and any event whose ratio could not be
+        # resolved -- both belong in the caller's report, not only in the manifest
+        "cross_check_basis": observed["cross_check_basis"],
+        "skipped_events": observed.get("skipped_events"),
     }
 
 

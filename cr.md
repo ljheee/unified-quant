@@ -860,6 +860,7 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **复权口径修正**：§8.29 我实测「Tushare `dividend` 重算与 vendor 因子差 30.6%」，同样是错的，错在公式：
 
 - 正确 A 股除权参考价：`(前收盘 - 每股现金 + 配股价×配股比例) / (1 + 送股比例 + 转增比例)`，`ratio = 前收盘 / 参考价`。我把送股项加进了分子（应为分母），得到倒数型假差异。
+  - **本行口径于 §8.36 更正**：`AdjustmentEvent.ratio` 现取 `除权参考价 / 前收盘`（< 1，与 canonical 派生器 `XdxrAdjustmentDeriver._event_multiplier` 同向、乘基）。本节当时把 ratio 写成"前收盘/参考价"（> 1）并让调用方做除法，两者**数值上可互换**，但 §8.30 的 `restate_from_events` 还同时用错了事件集合（见 §8.36），故当时真跑结果整体是错的。此处仅记录口径，不改历史结论（83 事件的**因子跳变**吻合度仍成立，因为跳变对两种口径互为倒数、比较的是同一个量）。
 - 量纲：TDX xdxr 的 `fenhong`/`songzhuangu`/`peigu` **全部是每 10 股**，需除 10（`fenhong=1.74` 除 10 后 0.174 才复现 vendor 跳变；纯现金事件 2017-07-21 同样验证）。
 - **83 个除权事件大样本验证（6 只标的）**：重算跳变与 vendor 因子跳变 max 0.109%、mean 0.023%、83/83 在 0.5% 内、81/83 在 0.1% 内。
 
@@ -1009,3 +1010,41 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试**：`test_build_label_sets.py` +7、`test_corporate_action_reconcile.py` +10 = 净 **+17** → **1103 passed / 23 skipped / exit 0**（父节点 1086）。
 
 **未夸大声明**：两项的实现、接线中三处必错、状态拆分缺陷、以及真跑结果均为监工亲做；601318 自动命中与人工裁定同一事件是实测对上的，不是推断。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.36 复权线批量发布 + 事件互校常规门（2026-10-16，批量真跑暴露 3 项真缺陷）
+
+**触发**：用户"都做"——把 §8.35 遗留的两项收口：①事件互校从库函数升级为常规 `scripts/` 门；②复权线在真实全 A 窗上**批量**发布（此前只有单会话真跑）。
+
+**批量真跑暴露的最重要缺陷（我此前的口径是错的）**
+
+| ID | 缺陷 | 处置 |
+|---|---|---|
+| CR36-1 | `restate_from_events` 的 hfq 方向**整体反了**：它取 `ratio = 前收盘/参考价`（>1）后**除以** product，且事件集合用 `event.session > target`（应用"到本会话为止"的事件）。canonical 派生器（`market/adjustment.py`）是**乘基、锚定最新会话 1.0、事件作用于其除权日**。两处叠加使重算序列与 vendor 不在同一基准 | 改为 `ratio = 参考价/前收盘`（<1）**乘以** product，事件集合改 `event.session <= target: continue`（**除权日当日本身已按除权后报价，不再缩放**） |
+| CR36-2 | 无事件的标的直接**拒绝整个会话**：全 A 里"从无公司行为"的名字必然存在，逐个拒绝会让宽窗永不可发布 | 无事件 ⇒ product=1.0，**平凡可比**（vendor 因子也应平坦），不再拒绝 |
+| CR36-3 | 跳变互校要求两分区**行集合完全相同**：相邻会话 universe 本就会变（进出指数），实测每个真实窗都会拒 | 改为在**两分区共有标的上**比较；共有为空才拒；某侧缺共有标的仍拒（并报出缺哪些） |
+
+**CR36-1 是"我的代码错、vendor 对"**——先在 2025-10-14→10-15 实测确认方向：`000001` vendor 跳变 1.006178 vs 事件跳变（修正后）1.005823，差 **0.0355%**；修正前该名字 gap 达 **4.24%**。同日全 A 窗内 4932 个"有 vendor 跳变"的标的，事件跳变与 vendor 跳变最大相对差 **0.091%**（`600858`），与 §8.30 的 83 事件 0.109% 上界一致。
+
+**① 事件互校常规门 `scripts/reconcile_corporate_actions.py`**
+- 披露侧从**已发布的公告 store**（`DividendEventStore.as_of`）取，与派生链同一份记录（不再打 API）；TDX 侧取 `xdxr`；任一分歧即 **exit 1**。
+- **区分 `uncovered` 与 `refused`**（我写测试时发现并修正的真缺陷）：纯送股披露（无现金字段）无法映射成交易所事件形状，属**结构性排除**；把它算进 gate 失败会让门在多数真实标的上误红。故 `uncovered` 只进报告、不进失败计数，`refused`（整只无任何可比事件）才失败。另补一处：**降级后的第二次映射仍可能失败**（脏记录 / 同除权日两条修订冲突），此前会让 traceback 中断整轮，现改为干净的 refusal。
+- **真跑（6 只标的）**：3 `amount_diverged`（000001 / 601318 / 000858）、3 `coverage_diverged`（600000 / 000002 / 600016）。**两个方向都出现**——601318 @2018-06-07 公告 2.0 vs TDX 12.0（vendor 反推 ≈12.06 → TDX 对、公告错），000858 @1999-06-08 公告 12.5 vs TDX 10.0（vendor 反推 ≈12.43 → 公告对、TDX 错）。再次印证**没有来源处处正确**。
+- **结构性缺口（已在报告与文档登记）**：Tushare `dividend` 端点**完全不含配股**（`peigu`/`peigujia`），故 000001 的配股分歧是"披露侧无数据"而非金额争议；报告 `structural_note` 与 `docs/user-guide.md` §5.3 均写明。
+
+**② 复权线批量发布 `scripts/publish_adjusted_window.py`**
+- 逐会话发布 `bars_adjusted/adjusted-v2`，每分区背后一份质量报告，cross-check 跑 `tdx_corporate_actions`。
+- **注入一跳基线**：窗内首会话无前驱可比，脚本向前取一个会话作 jump baseline，报告为 `jump_baseline` 且**不发布**（此前会让首会话被误判为数据问题）。
+- 已发布分区记 `already_published` 跳过，中断可**重跑续做**；任一会话 refused 即 exit 1。
+- **真跑（全 A 21 会话窗）**：`2025-10-14`（5059 行，gen `129d775d66e3…`）与 `2025-10-15`（5059 行，gen `5b1528220dbd…`）发布成功，`cross_check_basis=tdx_corporate_actions`，**重跑幂等**（published 0，仅 `already_published`/`jump_baseline`）。
+
+**测试与变异验证**：新增 `tests/test_publish_adjusted_window.py`（4 例：基线不发布、报告带 cross_check_basis、重跑幂等、共有标的比较）、`tests/test_reconcile_corporate_actions.py`（6 例：agreed / amount_diverged 带两值 / coverage 不并入 amount / 纯送股 uncovered 非 refusal / 整只纯送股 refusal / 第二次映射失败为干净 refusal）。逐项变异（**每次先清 `__pycache__`**，避免 mtime 缓存掩盖）：
+- 除法↔乘法反转 → `test_restatement_from_events_never_reads_adj_factor` 红；
+- 事件边界 `<=` 改 `<` → **初次未杀**（既有跳变测试用 ratio=1.0 隐藏了它）⇒ 补 `test_an_event_exactly_on_the_session_is_not_applied_to_it`（非平凡 ratio），复做必红；
+- 无事件改回拒绝 → 5 例红；
+- 共有集交集改回 `produced.index` → 共有比较测试红；
+- `uncovered` 折回 `refusals` → uncovered 测试红；
+- 删第二次映射 guard → 干净 refusal 测试红。
+
+**测试计数**：本机 `python -m pytest tests/ -o addopts="" -q` → **1113 passed / 23 skipped / exit 0**（父节点 `493c0e2` 同命令实测 **1103 passed / 23 skipped**，净 **+10** 例）。
+
+**未夸大声明**：三项缺陷由**批量真跑**暴露，非事后推断；CR36-1 的方向修正以 vendor 实测反推确认（我的代码错、vendor 对），修正前后 000001 的 4.24% → 0.035% 与 4932 标的 0.091% 上界均为本机亲测；事件互校两个方向的分歧为真跑输出。`code-review-unified-quant.md` 保持未跟踪。

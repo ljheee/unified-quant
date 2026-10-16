@@ -239,38 +239,44 @@ def test_restatement_from_events_never_reads_adj_factor():
     # the event and its prior close.
     raw = _bars()
     raw["adj_factor"] = 7.5
-    closes = {"600000.XSHG": {date(2026, 8, 20): 10.0},
-              "000001.XSHE": {date(2026, 8, 20): 20.0}}
-    events = {symbol: [_events(cash=0.5)] for symbol in ("600000.XSHG", "000001.XSHE")}
+    # An event dated AFTER this session scales it down by ex_right/pre_close: the
+    # session is still on the pre-event basis. An event on or before this session is
+    # already reflected in the quoted price and is left alone.
+    closes = {"600000.XSHG": {date(2026, 8, 21): 10.0},
+              "000001.XSHE": {date(2026, 8, 21): 20.0}}
+    events = {symbol: [_events(session=date(2026, 8, 24), cash=0.5)] for symbol in ("600000.XSHG", "000001.XSHE")}
     out = restate_from_events(raw, events, closes, SESSION)
-    # 10.0 / (10.0 - 0.5) = 1.052631...
-    assert float(out.loc[0, "close"]) / float(raw.loc[0, "close"]) == pytest.approx(
-        1.0 / 1.0526315789473684, rel=1e-9
-    )
+    # (10.0 - 0.5) / 10.0 = 0.95
+    assert float(out.loc[0, "close"]) / float(raw.loc[0, "close"]) == pytest.approx(0.95, rel=1e-9)
 
 
-def test_an_event_before_the_vendor_history_is_recorded_not_fabricated():
-    # The vendor's daily history starts in the mid-1990s, so a long-listed name's
-    # earliest events cannot be resolved. They must be reported, not silently
-    # dropped, because the level claim would otherwise be quietly wrong.
+def test_an_instrument_without_events_is_trivially_comparable():
+    # A name with no corporate action in history has an event product of exactly
+    # 1.0, so its restatement is unchanged and still comparable against a flat
+    # vendor factor. Refusing it would let one never-restructured symbol block a
+    # whole session (cr.md 8.36).
     raw = _bars(["600000.XSHG"])
-    events = {
-        "600000.XSHG": [
-            _events(session=date(1990, 3, 1)),
-            _events(session=date(2024, 7, 19)),
-            _events(session=date(2026, 8, 21)),
-        ]
-    }
-    # `closes` is keyed by instrument; only the 2024 event has a prior close
-    closes = {"600000.XSHG": {date(2024, 7, 18): 12.0}}
-    observed: dict = {}
-    restate_from_events(raw, events, closes, SESSION, observed=observed)
-    assert observed["skipped_events"]["600000.XSHG"] == ["1990-03-01"]
+    out = restate_from_events(raw, {}, {"600000.XSHG": {}}, SESSION)
+    pd.testing.assert_series_equal(out["close"], raw["close"])
 
 
-def test_restatement_from_events_refuses_an_instrument_without_events():
-    with pytest.raises(ContractError, match="no independent corporate-action events"):
-        restate_from_events(_bars(), {"600000.XSHG": [_events()]}, {}, SESSION)
+def test_an_event_exactly_on_the_session_is_not_applied_to_it():
+    # The boundary that separates "already quoted post-event" from "still
+    # pre-event": an event whose ex-date IS this session leaves the session alone
+    # (product 1.0), while the same event one session later scales it. A `<=` that
+    # became `<` would apply the event to its own ex-date session and silently
+    # rescale it, so this locks the direction of the comparison with a non-trivial
+    # ratio (the existing jump test uses a ratio of exactly 1, which hides it).
+    raw = _bars(["600000.XSHG"])
+    closes = {"600000.XSHG": {date(2026, 8, 20): 10.0}}
+    on_session = restate_from_events(
+        raw, {"600000.XSHG": [_events(session=SESSION, cash=0.5)]}, closes, SESSION
+    )
+    pd.testing.assert_series_equal(on_session["close"], raw["close"])
+    after_session = restate_from_events(
+        raw, {"600000.XSHG": [_events(session=date(2026, 8, 24), cash=0.5)]}, closes, SESSION
+    )
+    assert float(after_session.loc[0, "close"]) < float(raw.loc[0, "close"])
 
 
 def test_production_requires_some_independent_restatement(tmp_path):

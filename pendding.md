@@ -276,7 +276,7 @@ B9 复核收口(2026-10-14,cr.md §8.23)
 
 TDX 独立复权源(2026-10-16,前判推翻 + 真跑落地)
 - **前判错误纠正**:此前记「TDX 42 主机全不可用」「Tushare dividend 重算差 30.6%」**两条均错**。前者错在探测命令(`bars` 被网络拦、`xdxr` 未被拦,同一连接上 `xdxr` 返回 88 行真数据,含默认主机 `115.238.90.165`);后者错在除权公式(送股项应入分母)与量纲(TDX xdxr 全部按每 10 股)。教训:**探测必须用真正要发的命令**。
-- **正确除权公式**:`除权参考价 = (前收盘 - 每股现金 + 配股价×配股比例) / (1 + 送股比例 + 转增比例)`,`ratio = 前收盘 / 参考价`。83 事件大样本(6 标的):重算跳变 vs vendor 因子跳变 max 0.109%、mean 0.023%。
+- **正确除权公式**:`除权参考价 = (前收盘 - 每股现金 + 配股价×配股比例) / (1 + 送股比例 + 转增比例)`,`ratio = 除权参考价 / 前收盘`(< 1,乘基,锚定最新会话 1.0,与 canonical 派生器同向)。83 事件大样本(6 标的):重算跳变 vs vendor 因子跳变 max 0.109%、mean 0.023%。(**口径与事件集合于 cr.md §8.36 更正**——本节曾写 `ratio = 前收盘 / 参考价` 并让 `restate_from_events` 做除法、事件集合也取错,批量真跑后已修;上句的 83 事件**跳变**吻合度不受影响,因跳变对两种口径互为倒数。)
 - **落地**:`src/uq/adapters/mootdx_source.py` 增 `fetch_xdxr_events`/`_xdxr_client`(按 xdxr 探测)/`connected_server`;新 `src/uq/pipeline/adjustment_events.py`(xdxr 归一化 + 除权 ratio);`adjusted_price.py` 的独立源支持 TDX 事件重算,新增 `verify_jump_cross_check`(按 instrument 对齐、两侧各除**自己**的前一帧)。
 - **真跑**:三只真实标的在 2025-09-19 发布 `bars_adjusted/adjusted-v2` 成功,四价格列 vendor 跳变 vs 事件跳变差异全 0.000000。
 - **仍未决**:①`label_set` 生产发布器(训练链路最后一洞);②复权线发布器目前由调用方提供 `closes`(事件 ratio 所需的前收盘),生产入口(`scripts/`)尚未接线;③`adjusted-v2` 尚未在 A500/全A 试跑窗上批量发布。
@@ -312,4 +312,11 @@ lineage 更正(2026-10-16,cr.md §8.32)
 - **`listing_date` 真实缺口**:canonical v2 无该字段而资格规则要 60 天上市年龄 → 从 `stock_basic(list_date)` 取,取不到即拒(不猜)。**局限已写入报告**:`limit_up/limit_down` 在 canonical 是价格非布尔,涨跌停事件无法识别、该类不剔除。
 - **`src/uq/market/corporate_action_reconcile.py`**:两份事件源逐除权日逐字段直接对撞,结论分 `agreed`/`amount_diverged`/`coverage_diverged`。真跑 6 只标的**自动复现**人工裁定:601318 报 `amount_diverged` @ 2018-06-07(公告 2.0/10股 vs TDX 12.0/10股),而 vendor 跳变反推应有 ≈12.06/10股 → TDX 对、公告错。600000 另报 `coverage_diverged`(TDX 多 2026-07-16)。报告不裁决谁对,交给 vendor 因子跳变那道门。
 - **仍未决**:①复权线未在 A500/全A 试跑窗批量发布;②`adjusted_price_binding` 的 `expected_restated` 生产提供者未接线;③新浪仍未接入(裁定口径已定)。
+
+复权线批量发布 + 事件互校常规门(2026-10-16,cr.md §8.36)
+- **批量真跑暴露 3 项真缺陷**:①`restate_from_events` 的 hfq 方向**整体反了**(取 `ratio = 前收盘/参考价` >1 后**除以** product,且事件集合用 `> target`),与 canonical 派生器(**乘基**、事件作用于除权日、除权日当日本身不缩放)**不同基准**——修正后 000001 在 2025-10-14→10-15 的 vendor 跳变 1.006178 vs 事件跳变 1.005823(差 0.0355%),修正前 gap 达 4.24%;全 A 4932 个"有 vendor 跳变"标的的事件跳变最大相对差 **0.091%**。**是我的代码错、vendor 对**。②无事件标的此前**拒绝整个会话**(全 A 里"从无公司行为"的名字必然存在,会让宽窗永不可发布)⇒ 改为 product=1.0 **平凡可比**。③跳变互校要求两分区行集合**完全相同**(相邻会话 universe 本就变,每个真实窗都拒)⇒ 改为在**两分区共有标的**上比较。
+- **事件互校常规门 `scripts/reconcile_corporate_actions.py`**:披露侧取**已发布公告 store**(与派生链同一份记录,不打 API)、TDX 取 `xdxr`,任一分歧即 exit 1。区分 `uncovered`(纯送股披露无法映射成交易所事件形状,结构性排除,**不进失败计数**——算进去会让门在多数真实标的误红)与 `refused`(整只无可比事件,才失败);另修"降级后第二次映射仍失败会让 traceback 中断整轮"⇒ 改干净 refusal。真跑 6 只:3 `amount_diverged`、3 `coverage_diverged`,**两个方向都出现**(601318 公告错 / 000858 TDX 错)。**结构性缺口已登记**:Tushare `dividend` 端点**完全不含配股**(`peigu`/`peigujia`),配股分歧是"披露侧无数据"而非金额争议。
+- **复权线批量发布 `scripts/publish_adjusted_window.py`**:逐会话发布 `bars_adjusted/adjusted-v2`,每分区带质量报告(cross-check `tdx_corporate_actions`);**注入一跳基线**(窗内首会话无前驱 ⇒ 向前取一会话作 baseline,报告 `jump_baseline` 且**不发布**);已发布记 `already_published` 可重跑续做;refused 即 exit 1。真跑全 A 21 会话窗:`2025-10-14`(5059 行,gen `129d775d66e3…`)与 `2025-10-15`(5059 行,gen `5b1528220dbd…`)发布成功,**重跑幂等**(published 0)。
+- **测试**:新增 `tests/test_publish_adjusted_window.py`(4)、`tests/test_reconcile_corporate_actions.py`(6);逐项变异(每次先清 `__pycache__`)——除法↔乘法、事件边界 `<=`→`<`(**初次未杀**,补非平凡 ratio 的边界测试)、无事件改回拒绝、共有集改回全量、`uncovered` 折回 `refusals`、删第二次映射 guard,全部被杀。全量 **1113 passed / 23 skipped / exit 0**(父节点 `493c0e2` 实测 1103/23,净 +10)。
+- **仍未决**:①`adjusted_price_binding` 的 `expected_restated` 生产提供者未接线;②复权线仍未在**更宽的**全 A 窗(42 会话)批量发布;③新浪仍未接入(裁定口径已定)。
 

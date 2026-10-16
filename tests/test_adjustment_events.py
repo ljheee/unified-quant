@@ -73,8 +73,11 @@ def test_ex_right_ratio_reproduces_the_measured_vendor_jump():
     # within the 0.5% band the 83-event run stayed inside.
     (event,) = events_from_xdxr(pd.DataFrame([_xdxr_row()]))
     ratio = event.ratio(19.80)
-    assert ratio == pytest.approx(1.210639, rel=1e-3)
-    assert abs(ratio - 1.210263) / 1.210263 < 0.005
+    # the event factor is ex_right/pre_close = 1/1.210639, and the vendor's factor
+    # jump across the ex-date is its reciprocal (1.210263), which is what the
+    # 83-event reconciliation compared
+    assert ratio == pytest.approx(1 / 1.210639, rel=1e-3)
+    assert abs(1 / ratio - 1.210263) / 1.210263 < 0.005
 
 
 def test_cash_only_event_matches_the_vendor_to_within_0_05_percent():
@@ -82,7 +85,7 @@ def test_cash_only_event_matches_the_vendor_to_within_0_05_percent():
     (event,) = events_from_xdxr(pd.DataFrame([_xdxr_row(year=2017, month=7, day=21,
                                                        fenhong=1.58, songzhuangu=0.0)]))
     ratio = event.ratio(10.97)
-    assert abs(ratio - 1.014806) / 1.014806 < 0.0005
+    assert abs(1 / ratio - 1.014806) / 1.014806 < 0.0005
 
 
 def test_send_ratio_belongs_in_the_denominator_not_the_numerator():
@@ -91,9 +94,9 @@ def test_send_ratio_belongs_in_the_denominator_not_the_numerator():
     (event,) = events_from_xdxr(pd.DataFrame([_xdxr_row()]))
     correct = event.ratio(19.80)
     # the wrong form: treating the send ratio as if it were a cash term
-    naive = 19.80 / (19.80 - 0.174 + 0.20 * 19.80)
-    assert correct > 1.0
-    assert naive < 1.0
+    naive = (19.80 - 0.174 + 0.20 * 19.80) / 19.80
+    assert correct < 1.0
+    assert naive > 1.0
     assert abs(correct - naive) > 0.1
 
 

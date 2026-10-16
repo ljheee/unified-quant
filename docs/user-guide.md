@@ -147,7 +147,9 @@ mkdir -p "$DATA_ROOT"
 - **新浪有真实缺陷**（中国平安 2018 事件）。
 - **Tushare 自己的 `dividend` 字段也有错**（中国平安该事件给 0.2）。这正是"复权链要用两个独立来源交叉校验"的意义：单一来源（含 Tushare 公告）都可能错。
 
-**事件互校（已落地）**：`src/uq/market/corporate_action_reconcile.py` 把两份事件源**逐除权日、逐字段**直接对撞（不再各自只对自己的因子），区分三种结论：`agreed` / `amount_diverged`（同一事件金额不一致）/ `coverage_diverged`（一方缺该事件）。真跑实测（6 只标的）复现了上述人工裁定——**601318 2018-06-07 自动报出 `amount_diverged`**（公告 2.0/10股 vs TDX 12.0/10股），无需人工仲裁即可发现。
+**事件互校（已落地为常规门）**：`src/uq/market/corporate_action_reconcile.py` 把两份事件源**逐除权日、逐字段**直接对撞（不再各自只对自己的因子），区分三种结论：`agreed` / `amount_diverged`（同一事件金额不一致）/ `coverage_diverged`（一方缺该事件）。生产入口 `scripts/reconcile_corporate_actions.py` 从**已发布的公告 store** 取披露侧（与派生链同一份记录，不再打 API），TDX 侧取 `xdxr`，任一分歧即 **exit 1**（门而非日志）。真跑实测（6 只标的）复现了上述人工裁定——**601318 2018-06-07 自动报出 `amount_diverged`**（公告 2.0/10股 vs TDX 12.0/10股），无需人工仲裁即可发现；同时 **000858 1999-06-08** 也报 `amount_diverged`（公告 12.5 vs TDX 10.0），方向与上一条相反——**再次印证"没有来源处处正确"**。
+
+**一个结构性缺口（已明确登记，不是缺陷）**：Tushare 的 `dividend` 端点**完全不含配股数据**（`peigu`/`peigujia`）。所以任何配股事件在披露侧只能表现为"缺该字段"，而不是"金额不一致"。报告里 `peigu`/`peigujia` 的 `amount_diverged` **只说明披露侧没有配股数据**，不是两源对同一金额的争议；`fenhong`/`songzhuangu` 的 `amount_diverged` 才是两源都携带同一金额却对不上的真分歧。另有少数**纯送股**披露（无任何现金字段）无法映射成交易所事件形状——脚本把它们计入报告的 `uncovered`（可复核）而**不是** gate 失败，因为把这类结构性排除算成失败会让门在多数真实标的上误红。
 
 **如果要接入新浪作为第三源**：
 
