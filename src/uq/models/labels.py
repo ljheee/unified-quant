@@ -12,6 +12,24 @@ from ..contracts.model_layer import ModelContractLoader, model_manifest_identiti
 from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
 
+
+def label_row_checksum(frame: pd.DataFrame) -> str:
+    """``sha256_json`` over the sorted label rows, as ``(instrument, decision_date, label)``.
+
+    The single definition of the label row checksum, shared by the writer (which
+    declares it in the manifest) and the reader (which refuses a frame that no
+    longer matches it). Two independent copies of this expression used to exist in
+    ``models/labels.py`` and ``research_chain/owning_contracts.py``; they agreed by
+    coincidence of both sides sorting on ``(instrument, decision_date)`` with a
+    stable sort, so a change to either would have silently published checksums the
+    governed reader rejects (cr.md OBS-F).
+    """
+    ordered = frame.sort_values(["instrument", "decision_date"], kind="mergesort")
+    return sha256_json({"rows": [
+        [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2])]
+        for row in ordered.itertuples(index=False)
+    ]})
+
 _LABEL_HORIZON = 5
 
 
@@ -166,10 +184,7 @@ class LabelBuilder:
             "row_count": len(output),
             "columns": list(output.columns),
             "dtypes": {column: str(dtype) for column, dtype in output.dtypes.items()},
-            "data_checksum_sha256": sha256_json({"rows": [
-                [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2])]
-                for row in output.itertuples(index=False)
-            ]}),
+            "data_checksum_sha256": label_row_checksum(output),
             "logical_fingerprint": logical_fingerprint(output.rename(columns={"decision_date": "datetime"})),
             "code_fingerprint": self.code_fingerprint,
             "serialization_profile_id": "parquet-v1",

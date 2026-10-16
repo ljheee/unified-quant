@@ -25,16 +25,14 @@ exists for.
 from __future__ import annotations
 
 import datetime as dt
-from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
 from ..contracts.artifacts import QualityReportStore
 from ..pipeline.adjustment_events import AdjustmentEvent, symbol_of
-from typing import Sequence
 from ..contracts.canonical_v2 import CanonicalV2Store, file_sha256_bytes
-from ..contracts.schema import Schema, load_schema
+from ..contracts.schema import load_schema
 from ..errors import ContractError
 
 ADJUSTED_V2_SCHEMA = "config/schemas/bars_adjusted.adjusted-v2.yaml"
@@ -104,9 +102,16 @@ def verify_restatement(
     :func:`restate` and is what ``publish_adjusted_partition`` uses to reject a
     restatement that drifts from ``price * adj_factor``.
     """
-    missing = sorted(set(_KEY_COLUMNS) - set(raw.columns) - set(restated.columns))
-    if missing:
-        raise AdjustedPriceQualityRejection(f"restatement verification missing keys: {missing}")
+    # Per side, not as one intersection: `set(raw) - set(restated) - set(restated)`
+    # only catches a column absent from *both* frames, so a key present in raw but
+    # missing in restated slips past this check and dies as a bare KeyError inside
+    # `set_index` below. A typed rejection names the side that is wrong.
+    for side, frame in (("raw", raw), ("restated", restated)):
+        missing = sorted(set(_KEY_COLUMNS) - set(frame.columns))
+        if missing:
+            raise AdjustedPriceQualityRejection(
+                f"restatement verification missing key columns on the {side} frame: {missing}"
+            )
     raw = raw.set_index(list(_KEY_COLUMNS))
     restated = restated.set_index(list(_KEY_COLUMNS))
     # A row that exists on only one side is a mismatch, not a pass: the check
@@ -497,7 +502,7 @@ def publish_adjusted_partition(
                 previous_restated,
                 restate_from_events(
                     previous_raw, events or {}, closes or {},
-                    _resolve_previous_session(previous_raw, previous_session, closes),
+                    _resolve_previous_session(previous_raw, previous_session),
                     observed=observed,
                 ) if previous_raw is not None else None,
                 tolerance=tolerance,
@@ -552,15 +557,15 @@ def _previous_raw_closes(previous_raw: pd.DataFrame | None) -> dict[str, float]:
 def _resolve_previous_session(
     previous_raw: pd.DataFrame,
     declared: Any,
-    closes: Mapping[str, Mapping[dt.date, float]],
 ) -> Any:
     """The session the previous partition describes.
 
     Taken from ``previous_raw``'s own ``session_date`` when present, because that
     is the session whose cumulative event product the frame actually carries.
-    Deriving it from ``closes`` (the latest close at or before the session) would
-    silently select a different session whenever the vendor history has gaps, and
-    then the jump comparison would divide by an unrelated factor.
+    Deriving it from the caller's ``closes`` map (the latest close at or before the
+    session) would silently select a different session whenever the vendor history
+    has gaps, and then the jump comparison would divide by an unrelated factor --
+    which is why no close map is accepted here at all.
     """
     if declared is not None:
         return declared

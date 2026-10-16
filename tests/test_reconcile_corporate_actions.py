@@ -185,3 +185,64 @@ def test_a_genuinely_unmappable_disclosure_is_a_refusal_not_a_traceback(tmp_path
     assert code == 1
     assert report["instruments_compared"] == 0
     assert "announced after its own ex-date" in report["refusals"][0]["reason"]
+
+
+def test_a_one_sided_source_fails_the_gate(tmp_path, monkeypatch):
+    # The disclosure side carries an event and TDX has nothing at all: the two
+    # sources agree on zero events, which is not a reconciliation. This must exit 1
+    # rather than pass the gate (cr.md CR38-1).
+    code, report = _run(
+        tmp_path, monkeypatch,
+        instruments=["600000.XSHG"],
+        disclosures=[_disclosure_row()],
+        tdx_frames={"600000": pd.DataFrame(columns=TDX_COLUMNS)},
+    )
+    assert code == 1
+    assert report["no_overlap"] == 1
+    assert report["no_overlap_instruments"] == ["600000.XSHG"]
+
+
+def test_a_tdx_frame_without_a_category_column_is_a_refusal(tmp_path, monkeypatch):
+    # Only category==1 rows carry ex-right meaning, and a frame with no category
+    # column cannot be classified at all. Passing it through unfiltered would
+    # compare unclassified 股本变化 rows against the disclosure side (cr.md OBS-B).
+    root = tmp_path / "dividend"
+    _publish_disclosures(root, _disclosure_row())
+    unclassified = pd.DataFrame({
+        "year": [2025], "month": [9], "day": [16],
+        "fenhong": [4.1], "songzhuangu": [0.0], "peigu": [0.0], "peigujia": [0.0],
+    })
+    monkeypatch.setattr(module, "MootdxSourceAdapter", lambda: _fake_adapter({"600000": unclassified}))
+    out = tmp_path / "report.json"
+    code = module.main([
+        "--dividend-root", str(root), "--instruments", "600000.XSHG",
+        "--as-of", "2026-01-01", "--out", str(out),
+    ])
+    report = json.loads(out.read_text())
+    assert code == 1
+    assert report["instruments_compared"] == 0
+    (refusal,) = report["refusals"]
+    assert refusal["side"] == "tdx"
+    assert "category" in refusal["reason"]
+    assert report["amount_diverged"] == 0
+    assert report["coverage_diverged"] == 0
+
+
+def test_a_fully_disjoint_source_pair_fails_the_gate(tmp_path, monkeypatch):
+    # The harder case: BOTH sides are non-empty, but they share no ex-date. Folding
+    # this into "coverage" only would hide it, and letting `no_overlap` pass would
+    # approve a comparison that reconciled nothing -- precisely the missing event
+    # that silently under-adjusts the derived factor.
+    code, report = _run(
+        tmp_path, monkeypatch,
+        instruments=["600000.XSHG"],
+        disclosures=[_disclosure_row()],
+        tdx_frames={"600000": _tdx((2010, 1, 5, 1, 1.0, 0.0, 0.0, 0.0))},
+    )
+    assert code == 1
+    (record,) = report["records"]
+    assert record["status"] == "no_overlap"
+    assert record["compared"] == 0
+    assert record["disclosure_only_dates"] == ["2025-09-16"]
+    assert record["tdx_only_dates"] == ["2010-01-05"]
+    assert report["no_overlap"] == 1

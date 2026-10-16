@@ -61,8 +61,11 @@ class MootdxSourceAdapter:
     def connected_server(self) -> tuple[str, int]:
         """The host that actually answered, falling back to the requested one.
 
-        ``server`` records what the caller asked for, which stays a stale entry
-        when every requested host is dead and the shipped list answers instead.
+        ``active_server`` is set only by a probe that returned real data; until
+        then (no client built yet) this reports the first configured server,
+        which is what the caller asked for. There is no fallback beyond the
+        configured ``servers``: when every one of them is dead the client builder
+        raises rather than silently trying another list.
         """
         return self.active_server or self.server
 
@@ -85,14 +88,6 @@ class MootdxSourceAdapter:
                 failures.append(f"{candidate}: {exc}")
         raise RuntimeError("all TDX servers failed: " + "; ".join(failures))
 
-    @staticmethod
-    def _shipped_hosts() -> tuple[tuple[str, int], ...]:
-        try:
-            from mootdx.consts import HQ_HOSTS
-        except Exception:
-            return ()
-        return tuple((str(ip), int(port)) for _name, ip, port in HQ_HOSTS)
-
     def _xdxr_client(self):
         """A client validated by the ``xdxr`` command, not by ``bars``.
 
@@ -105,7 +100,7 @@ class MootdxSourceAdapter:
         except ImportError as exc:
             raise RuntimeError("optional dependency mootdx is not installed") from exc
         failures: list[str] = []
-        for candidate in self._candidate_hosts():
+        for candidate in self.servers:
             try:
                 client = Quotes.factory(market="std", server=candidate, timeout=self.timeout, quiet=True)
                 probe = client.xdxr(symbol="600000")
@@ -117,9 +112,6 @@ class MootdxSourceAdapter:
             except Exception as exc:
                 failures.append(f"{candidate}: {exc}")
         raise RuntimeError("all TDX servers failed to answer xdxr: " + "; ".join(failures))
-
-    def _candidate_hosts(self) -> tuple[tuple[str, int], ...]:
-        return tuple(self.servers)
 
     def fetch_xdxr_events(self, symbols: Sequence[str]) -> dict[str, pd.DataFrame]:
         """Return TDX corporate-action (除权除息) events per symbol.

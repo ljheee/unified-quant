@@ -1,0 +1,28 @@
+{
+  "layer": "csi_all_pilot_readiness",
+  "record_version": 1,
+  "status": "archived",
+  "note": "digests recomputed by scripts/build_store_evidence.py at the recorded commit; the readiness gate reads the gitignored store, so these pins are what makes the run re-checkable",
+  "records": [
+    {
+      "path": "evidence/csi-all-pilot/2025-09-09-to-2025-10-15/excluded-instruments.json",
+      "sha256": "c5795bf1916a778ed2c935c23f5381864df517b5cde654ca040c8ddcd2b6dc4a"
+    },
+    {
+      "path": "evidence/csi-all-pilot/2025-09-09-to-2025-10-15/exclusions-record.json",
+      "sha256": "f31d8e99cc99f5b477f337cffd90b481d2a807b9cae64c937ee3497a68e71944"
+    },
+    {
+      "path": "evidence/csi-all-pilot/2025-09-09-to-2025-10-15/training-readiness.json",
+      "sha256": "a6baca90bd171ca00372cfc5c8ab4e19c4774c01960cda4dd6ebe691239ccace"
+    },
+    {
+      "path": "scripts/ingest_window.py",
+      "sha256": "f99745857e1521ba9b65f3516c96468029f840971b4e9d05280d7989d73c4852"
+    },
+    {
+      "path": "scripts/validate_training_readiness.py",
+      "sha256": "19b331a010ee39b60fde50c18fda374e6392de8dc9170793ab3a229415e6e4cd"
+    }
+  ]
+}

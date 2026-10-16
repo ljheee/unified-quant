@@ -186,13 +186,15 @@ def summarize(results: Iterable[ReconciliationResult]) -> dict[str, Any]:
     collected = list(results)
     amount_diverged = [item for item in collected if item.status == "amount_diverged"]
     coverage_diverged = [item for item in collected if item.status == "coverage_diverged"]
+    no_overlap = [item for item in collected if item.status == "no_overlap"]
     return {
         "instruments_compared": len(collected),
         "agreed": len([item for item in collected if item.status == "agreed"]),
-        "no_overlap": len([item for item in collected if item.status == "no_overlap"]),
+        "no_overlap": len(no_overlap),
         "amount_diverged": len(amount_diverged),
         "coverage_diverged": len(coverage_diverged),
         "amount_diverged_instruments": [item.instrument for item in amount_diverged],
         "coverage_diverged_instruments": [item.instrument for item in coverage_diverged],
+        "no_overlap_instruments": [item.instrument for item in no_overlap],
         "records": [item.as_dict() for item in collected],
     }

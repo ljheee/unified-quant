@@ -32,7 +32,7 @@ import datetime as dt
 import json
 import time
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from uq.adapters.eastmoney import EastMoneySessionProvider
 from uq.errors import IndependentCalendarError
@@ -62,7 +62,7 @@ def _tail_members(
     members: list[str],
     prior_sessions: Sequence[dt.date],
     tail: int,
-) -> list[str]:
+) -> tuple[list[str], list[dict[str, Any]]]:
     """Names that were members recently but are not members today.
 
     A forward label needs bars through ``D + horizon``, so a name that leaves the
@@ -74,22 +74,32 @@ def _tail_members(
     PIT ingest means "the members visible today", and fetching for a departed
     name is a widening of that contract that has to be recorded in the run
     summary (``tail_members``) to stay auditable.
+
+    Returns the widened list and any prior session whose membership could not be
+    read. A silent ``continue`` there would drop that session's departed names
+    from the tail with no trace, quietly shrinking the label coverage that
+    ``tail_sessions`` exists to control.
     """
     if tail <= 0:
-        return members
+        return members, []
     prior = list(prior_sessions)
     if not prior:
-        return members
+        return members, []
     window_start = max(0, len(prior) - tail)
+    unreadable: list[dict[str, Any]] = []
     for earlier in reversed(prior[window_start:]):
         try:
             _, frame = store.as_of(universe_id, earlier)
-        except (ContractError, OSError, ValueError):
+        except (ContractError, OSError, ValueError) as exc:
+            unreadable.append({
+                "session": earlier.isoformat(),
+                "error": f"{type(exc).__name__}: {exc}",
+            })
             continue
         for name in sorted(str(value) for value in frame["instrument"]):
             if name not in members:
                 members.append(name)
-    return sorted(set(members))
+    return sorted(set(members)), unreadable
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -184,6 +194,9 @@ def main(argv: list[str] | None = None) -> int:
     published: list[dict] = []
     skipped: list[dict] = []
     failed: list[dict] = []
+    # Prior sessions whose membership could not be read while resolving the tail.
+    # Collected across the window so a shrunken tail is visible in the run summary.
+    tail_read_failures: list[dict[str, Any]] = []
     interrupted = False
 
     def _write_summary() -> dict:
@@ -194,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
             "universe_id": args.universe_id,
             "window": {"start": start.isoformat(), "end": end.isoformat()},
             "tail_sessions": args.tail_sessions,
+            "tail_membership_read_failures": tail_read_failures,
             "calendar_provenance": provider.provenance,
             "calendar_evidence": provider.evidence,
             "sessions": len(sessions),
@@ -226,11 +240,12 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             # The tail is resolved from the sessions already visited in this window,
             # so it can never reach outside the certified session list.
-            instruments = _tail_members(
+            instruments, tail_unreadable = _tail_members(
                 membership, args.universe_id, session, list(members),
                 sessions[:index], args.tail_sessions,
             )
             tail_added = sorted(set(instruments) - set(members))
+            tail_read_failures.extend(tail_unreadable)
             if published and args.session_interval_seconds > 0:
                 time.sleep(args.session_interval_seconds)
             report = pipeline.run(session, instruments)
@@ -249,6 +264,8 @@ def main(argv: list[str] | None = None) -> int:
                 "rows": payload.get("rows"),
                 "members": len(members),
                 **({"tail_members": tail_added} if tail_added else {}),
+                **({"tail_membership_read_failures": tail_unreadable}
+                   if tail_unreadable else {}),
                 "warnings": payload.get("warnings", []),
             })
     except BaseException:

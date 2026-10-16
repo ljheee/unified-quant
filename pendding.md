@@ -326,3 +326,10 @@ lineage 更正(2026-10-16,cr.md §8.32)
 - **CR37-3**:报告的 `baseline_note` 断言了不存在的分支(注入的 baseline 恒在窗外)⇒ 改为描述真实行为。
 - **测试**:全量 **1115 passed / 23 skipped / exit 0**(父提交 `9c811ac` 实测 1113/23,净 +2);CR37-1 的下界做了变异验证(删下界即红)。
 
+§8.38 六条发现 + 可落地 OBS 收口(2026-10-16,cr.md §8.39,6 CR + 5 OBS 全修)
+- **§8.38 不是本轮所写**,用户要求先复核其分析是否正确 ⇒ 逐条对码复验,6 CR + 9 OBS **全部属实**。并向用户指出两点:①**CR38-1 定级偏低**——"完全不相交"(两侧都非空、无共有除权日)此前静默 exit 0,正是该检查要防的失败模式,已按 MAJOR 处置;②OBS-E 的死代码是**注释更好的那一个**(更窄的 `ordered` 检查永不执行),比"死代码"更值得警惕。
+- **CR38-1**:`no_overlap` 计入 gate 失败(单边 + 完全不相交两种都覆盖);stdout 补 `no_overlap`/`no_overlap_instruments`;`summarize` 增 `no_overlap_instruments`。**CR38-2**:补 `Mapping` import、删未用 `Path`/`Schema`;新增静态锁遍历本模块全部函数跑 `get_type_hints`(`from __future__ import annotations` 让注解惰性化,库内无任何东西求值,这条锁是唯一防线)。**CR38-3**:删零调用的 `_shipped_hosts`、内联 `_candidate_hosts`(正是这层间接让死代码显得在用)、docstring 改为真实行为。**CR38-4**:`build_label_sets` docstring 不再谎称短窗会拒绝(null 尾段照常发布,行为契约合规,是说谎的是文档)。**CR38-5**:补 `except BaseException` 中断审计包装 + `status` 字段。**CR38-6**:两个 v4 测试名收尾为 v5。
+- **OBS-A**:主键检查改**逐侧**(旧式只抓两侧同缺,单侧缺失抛裸 `KeyError`);删 `_resolve_previous_session` 未用的 `closes`。**OBS-B**:TDX 帧缺 `category` 不再放行(会把未分类的股本变化拿去对撞)改 refusal。**OBS-C**:跳变分母**优先读已发布分区**(`ManifestFirstReader`),仅注入 baseline 未发布时退回重算;报告逐会话记 `previous_basis`;检查放循环内(本次先发布的会话就是下一个的分母);真跑 generation id **不变**。**OBS-D**:`_tail_members` 返回读失败列表并记进 run summary(静默 `continue` 会悄悄缩小 tail 覆盖)。**OBS-E**:删不可达的重复离会话检查并把原因写进注释。**OBS-F**:label 行校验和收敛为单一定义 `models/labels.py::label_row_checksum`(此前两份复刻靠两侧都稳定排序恰好一致)。**OBS-G**:报告写明 binding 校验和含 live-API 的 `listing_date` ⇒ 仅凭受治理存储不可复现(未改身份)。**OBS-H**:生成 pilot 的 `evidence-index.json`(5 条 pin)。
+- **测试**:全量 **1124 passed / 23 skipped / exit 0**(父提交 `9a905d4` 实测 1115/23,净 +9);7 条变异全部实做并经 `git status` 核净。
+- **仍未决**:①`adjusted_price_binding` 的 `expected_restated` 生产提供者未接线;②复权线未在**更宽的**全 A 窗(42 会话)批量发布;③新浪仍未接入(裁定口径已定)。
+

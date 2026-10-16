@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from pathlib import Path
+import typing
 
 import pandas as pd
 import pytest
@@ -488,3 +489,36 @@ def test_the_tick_floor_absorbs_exchange_rounding_without_masking_a_drift():
             drifted, _one_name_frame(pre_close, current),
             prev_restated, prev_expected, tolerance=1e-3, previous_close=floor,
         )
+
+
+def test_every_public_annotation_resolves():
+    # `from __future__ import annotations` makes every annotation a lazy string, so
+    # a name used in a signature but never imported is invisible until something
+    # evaluates the hints -- `Mapping` was used in six signatures while only `Any`
+    # and `Sequence` were imported (cr.md CR38-2). Nothing in the library evaluates
+    # them today, so this lock is the only thing standing between that and a
+    # NameError in a future caller that does.
+    import inspect
+
+    import uq.pipeline.adjusted_price as module
+
+    names = [
+        name for name, obj in vars(module).items()
+        if inspect.isfunction(obj) and obj.__module__ == module.__name__
+    ]
+    assert names
+    for name in names:
+        typing.get_type_hints(getattr(module, name))
+
+
+def test_a_key_column_missing_from_only_one_side_is_a_typed_rejection():
+    # The check used to subtract both frames' columns, so it only caught a key
+    # absent from *both*; a key present in raw but missing in restated reached
+    # `set_index` and surfaced as a bare KeyError instead of a typed rejection
+    # naming the side at fault (cr.md OBS-A).
+    raw = _bars()
+    restated = restate(raw).drop(columns=["instrument"])
+    with pytest.raises(ContractError, match="on the restated frame"):
+        verify_restatement(raw, restated)
+    with pytest.raises(ContractError, match="on the raw frame"):
+        verify_restatement(raw.drop(columns=["session_date"]), restate(raw))

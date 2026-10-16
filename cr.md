@@ -1066,3 +1066,91 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数**：本机 `python -m pytest tests/ -o addopts="" -q` → **1115 passed / 23 skipped / exit 0**（父提交 `9c811ac` 实测 1113/23，净 **+2** 例）。
 
 **未夸大声明**：三项由自 CR 走查发现；CR37-1 的残差模型（`tick/前收盘`）由真实窗口 4 个标的的 `|diff|` 与 `0.005/前收盘` 比值（0.36–1.01）确认，非拟合；死分支与注释不符由代码枚举证明。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.38 §8.28–§8.37 区间（`302b228..9a905d4`，12 提交）独立复审轮（2026-10-16，监工亲审）
+
+**触发**：用户"已修复，CR最近的变更"。范围为 12 个提交（+6649/−47，49 文件：复权线 v2 全链、TDX xdxr 事件源与派生链、label_set 发布器与生产入口、事件互校门、tail-sessions、CR27-2 修复），工作树无在范围内的未提交改动。**方法**：全部 src/scripts diff 逐行精读，7 个新文件全文通读（`adjusted_price.py` 591 行、`corporate_action_reconcile.py` 198、`reconcile_corporate_actions.py` 206、`publish_adjusted_window.py` 208、`build_label_sets.py` 236、`build_tdx_adjustments.py` 198、`label_store_writer.py` 223）；全部新增/变更测试断言级审阅；HEAD 全量套件亲跑 **1115 passed / 23 skipped / exit 0**；关键机制变异验证 ×6（5 项改码 + 1 项直接执行），每项亲恢复并核树；§8.28–§8.37 与 pendding 新增条目逐条对账。
+
+**发现（按严重度）**：无 BLOCKER、无 MAJOR。
+
+| ID | 问题（复审确认） | 档位 | 处置建议 |
+|---|---|---|---|
+| CR38-1 | **事件互校门洞：`no_overlap` 逃逸 exit 1**（`reconcile_corporate_actions.py:201-202`）。披露侧有事件、TDX 侧为空或日期完全不相交时 `compared==0 → no_overlap` 优先于 coverage 判定，而 gate 只计 `amount_diverged + coverage_diverged` ⇒ 两来源对零个事件一致的标的（比 coverage_diverged 更可疑）反而放行 exit 0；docstring "Exit 1 if any instrument diverges" 在该场景不成立；stdout 摘要（:192-200）连 no_overlap 计数都不打印（文件报告 :170 有）。**直接执行实证**：disclosure 1 事件 + TDX 空 → `no_overlap, compared=0` → gate 逻辑返回 0；disjoint 双非空同样 no_overlap | MINOR（门洞 + 文档夸大） | 二选一：`no_overlap` 计入失败（保守、推荐——零重叠就是无法对账），或 docstring/stdout 如实声明该豁免 |
+| CR38-2 | **`Mapping` 六处注解从未 import**（`adjusted_price.py:178,359,360,445,446,555`，只 import 了 `Any`/`Sequence`），被 `from __future__ import annotations` 掩盖；`typing.get_type_hints(restate_from_events)` 实测抛 `NameError: name 'Mapping' is not defined`。当前无运行期引爆点（库内唯一 `inspect.signature` 调用只读 `.parameters` 不求值），属潜伏缺陷；另 `Path`(:28)、`Schema`(:37) 导入未用 | MINOR（潜伏 + 导入卫生） | 补 `from typing import Mapping`，删两个未用导入；可加一条"全 src 注解可求值"的静态锁防再生 |
+| CR38-3 | **`_shipped_hosts` 死代码 + docstring 描述不存在的行为**（`mootdx_source.py:89-94` 定义后全仓零调用，`_candidate_hosts`:121-122 只返回 `self.servers`；`connected_server` docstring :60-65 称"请求主机全死时内置清单应答"——该回退不存在） | MINOR（死代码 + 文档失真） | 接通或删除；docstring 改为描述真实行为 |
+| CR38-4 | **docstring 虚假拒绝声明**（`build_label_sets.py:13`）："this script refuses that rather than publishing a half-labelled set"——代码无任何窗口长度检查，短窗只产出带 null 尾段的标签并照常发布（§8.35 真跑即如此：各 12 行含 5 null、0 refused）。行为本身契约合规（`null_policy.insufficient_future=null` 声明在先），是文档说谎 | MINOR（文档失真） | 改 docstring 为真实行为（null 尾段照常发布、报告记 `null_labels`），或真加窗口长度拒绝（不推荐——与声明的 null 策略冲突） |
+| CR38-5 | **缺中断摘要纪律**（`publish_adjusted_window.py`）：姊妹脚本 `ingest_window.py` 在 CR26-6 落了 `except BaseException` 中断仍写审计记录的包装，本脚本未继承——窗口中段崩溃则本轮已发布/已拒绝记录全失（幂等重跑可补数据，补不了审计链） | MINOR（审计缺口） | 照 CR26-6 同形补包装 |
+| CR38-6 | **006e6c3 改名改了一半**（`tests/test_adjustment_chain.py:537` `test_tdx_snapshot_publishes_as_v4_and_reads_back`（断言 snapshot_version==5）、`:587` `test_the_v4_contract_rejects_the_exchange_lineage`（断言 v5.json 校验失败）仍指 v4——而 4e080ce 已把 v4 整号退役（schema 文件已删，grep 实证）。正是该提交要修的"名字把下一位读者引向退役 lineage"同类问题 | MINOR（测试名卫生） | 两例改名收尾 |
+
+**纳入台账、本轮未改（OBS，非缺陷或需用户裁决）**：
+
+- **OBS-A**：`adjusted_price.py` 主键检查 `set(_KEY_COLUMNS) - set(raw.columns) - set(restated.columns)` 只抓"两侧同缺"（单侧缺失落到 raw KeyError 而非 typed ContractError）；`_resolve_previous_session` 收未用的 `closes` 参数。
+- **OBS-B**：`reconcile_corporate_actions.py:144` TDX 帧缺 `category` 列时原样放行不过滤，与链路的严格度不一致。
+- **OBS-C**：`publish_adjusted_window.py` 的 `previous_restated=restate(previous_frame)` 本地重算而非读已发布存储（与"以库为准"口径有隙）。
+- **OBS-D**：`ingest_window.py` 前序会话 membership 读取失败静默 `continue`。
+- **OBS-E**：`adjustment_chain.py` 离会话检查计算两遍，第二遍（over `ordered`）不可达，约 16 行死重复。
+- **OBS-F**：label checksum 序列化在 `models/labels.py`（写侧）与 `owning_contracts.py:196`（读侧）两处独立复刻——同口径双实现，漂移风险。
+- **OBS-G**：label-set binding 的 content checksum 含 live-API 派生的 `listing_date`，仅凭受治理存储不可复现。
+- **OBS-H**：`evidence/csi-all-pilot/2025-09-09-to-2025-10-15/` 归档三件但无 evidence-index.json。
+- **OBS-I（台账卫生）**：§8.34 记 1085/24 而 §8.35 以 1086 为基线——系 pyarrow 环境翻转（见下"撤回项"），§8.34 已自披露；仅提示后续基线注明环境。
+
+**变异验证（监工亲做、亲恢复、`git status` 核净）**：
+
+| 变异 | 结果 |
+|---|---|
+| M4a 复做（删 `readiness.py` 的 `excused_excluded.append`） | 强化后的 `test_exclusion_excuses_a_gap_the_suspension_source_cannot_explain` **红** ✓（CR27-2 死变量已转活并上锁） |
+| hfq 边界 `event.session <= target` → `<` | `test_an_event_exactly_on_the_session_is_not_applied_to_it` **红** ✓（§8.36 补的非平凡 ratio 边界锁有效） |
+| 删 tick floor（`_PRICE_TICK/pre_close` 下界） | `test_the_tick_floor_absorbs_exchange_rounding_without_masking_a_drift` **红** ✓（CR37-1 锁有效） |
+| 禁 suogu 拒绝（`!= 0` → `False`） | `test_a_reverse_split_is_refused_rather_than_mis_signed` **红** ✓ |
+| 删 `owning_contracts.py` 读回 checksum 校验 | `test_a_tampered_published_frame_is_detected_by_the_reader` **红** ✓ |
+| CR38-1 门洞 | 直接执行证明（无需变异，见上） |
+
+恢复后五个受影响测试文件 122 例全绿，树仅余既定排除项。
+
+**撤回项（诚实登记）**：预审阶段曾疑"§8.34 记 1085/24 与实测 1086/23 不符（CR27-1 类计数失真）"——**不成立，撤回**。1085+24 = 1086+23 = 1109，收集总数一致；差的一例是 `test_repro_staging.py:63` 的 pyarrow 版本锁（锁 25.0.1）：作者环境 26.0.0 → 该例 skip（24 skipped），本机 `.venv` 为 25.0.1 → 该例 passed（23 skipped）。§8.34 原文已自披露该差异来源，非失真。
+
+**验证安全清单（亲验属实的主要声明）**：全量套件链 1017→1018→1032→1051→1062→1076→1103→1113→**1115** 逐环对账一致，HEAD 亲跑 1115/23；`alpha158-v2.json` vs v1 语义 diff 恰为 3 字段（factor_version / input_bindings→v2 / set_definition_version=3），表达式/指纹/排除项逐字继承；`bars_adjusted.adjusted-v2.yaml` vs `bars_daily.v2.yaml` 仅 4 价格列 `raw→back_adjusted` + dataset/version；`adjustment_snapshot.v5.json` const 锁定 `adj_factor.derived_v1`，v4 schema 已删除、消费闸双向互斥；反恒等门（无独立复权源即拒发）、jump-not-level 比较（每侧除自己的前一帧、按 instrument 交集对齐）、tick floor 物理模型（测试算术手算复核）、hfq 方向（事件严格晚于目标会话才作用、ratio<1 乘基、与 canonical 派生器同基准）、`LabelSetWriter` 全流程（校验→不可变→staging→读回对账→fsync→replace）与质量报告 subject/family/reviewed 绑定、fd 泄漏修复经共享 `fsync_tree` 落实——均读码 + 变异核实。台账诚实性：§8.30 两次推翻前判、§8.32 用户质疑的核实、§8.34/8.36/8.37 自 CR 缺陷均如实登记，未发现夸大或掩盖。
+
+**未夸大声明**：本轮全部 src/scripts 改动逐行亲读、7 个新文件全文亲读；全量套件与 5 项变异均亲跑亲恢复；CR38-1/2 由执行实证，非推断。真跑数字（83 事件 0.109% 上界、000001 的 4.24%→0.0355%、全 A 0.091%、generation id 逐字节不变）为台账转述，本轮未重跑真跑窗（无网络依赖项未复测）；新浪/TDX/Tushare 三方裁定表为台账声明，本轮只验证了对账代码机制本身。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.39 §8.38 六条发现 + 可落地 OBS 收口（2026-10-16，6 CR + 5 OBS 全修）
+
+**触发**：用户"都修复"。用户先要求复核 §8.38 分析是否正确——我**逐条对码复验**：CR38-1/2 用直接执行实证（`no_overlap` 逃逸 gate、`get_type_hints` 抛 `NameError`），其余四条读码确认，9 条 OBS 全部读码确认，全部属实。同时向用户指出两点：**CR38-1 定级偏低**（完全不相交时 gate 静默放行，正是该检查要防的失败模式，应为 MAJOR），以及 OBS-E 的死代码是**注释更好的那一个**（更窄的 `ordered` 检查永不执行），比"死代码"更值得警惕。以下按该判断处置。
+
+**CR38-1（升为 MAJOR 处置）**：`no_overlap` 计入 gate 失败。两种情形都覆盖——单边（披露有事件、TDX 空）与**完全不相交**（两侧都非空、无共有除权日）；后者此前静默 exit 0。stdout 补 `no_overlap`/`no_overlap_instruments`（此前文件报告有、摘要没有），docstring 改为如实描述。新增 `summarize` 的 `no_overlap_instruments` 字段（与另两类一致）。
+
+**CR38-2**：补 `from typing import Mapping`，删未用的 `Path`/`Schema`，合并两处 `typing` import；新增**静态锁** `test_every_public_annotation_resolves`——遍历本模块全部函数跑 `get_type_hints`。理由：`from __future__ import annotations` 让注解变惰性字符串，库内**没有任何东西求值**（唯一 `inspect.signature` 调用只读 `.parameters`），所以这条锁是这类潜伏 NameError 的唯一防线。
+
+**CR38-3**：删除零调用的 `_shipped_hosts`，并把 `_candidate_hosts`（只 `return tuple(self.servers)`）内联——正是这层间接让死代码看起来"在用"。`connected_server` docstring 改为描述真实行为（`active_server` 或首个配置服务器，无内置清单回退，全死即抛）。
+
+**CR38-4**：`build_label_sets.py` docstring 不再声称"短窗会拒绝"。真实行为：null 尾段照常发布（`null_policy.insufficient_future=null` 声明在先，行为契约合规，**说谎的是文档**），报告记 `null_labels`。未加窗口长度拒绝——与声明的 null 策略冲突。
+
+**CR38-5**：`publish_adjusted_window.py` 照 `ingest_window.py`（CR26-6）同形补 `except BaseException` 包装：中断仍写审计记录并标 `status=interrupted`，随后重抛。顺带给报告加 `status` 字段（`interrupted`/`failed`/`published`/`already_published`）。
+
+**CR38-6**：两个仍指 v4 的测试改名收尾（`test_tdx_snapshot_publishes_as_v5_and_reads_back`、`test_the_v5_contract_rejects_the_exchange_lineage`）并修同处注释。全仓已无 adjustment-snapshot 的 v4 引用（余下 `research_run_request_v4` 属无关家族）。
+
+**OBS-A**：主键检查改为**逐侧**检查——旧式 `set(raw) - set(restated) - set(restated)` 只抓"两侧同缺"，单侧缺失会落到 `set_index` 抛裸 `KeyError`。现报 typed 拒绝并指名是哪一侧。顺带删除 `_resolve_previous_session` 收而未用的 `closes` 参数（docstring 已解释为何不用，参数纯噪声）。
+
+**OBS-B**：TDX 帧缺 `category` 列时不再原样放行（会把未分类的 股本变化行拿去与披露侧对撞），改为 refusal。
+
+**OBS-C**：跳变分母**优先读已发布分区**（`ManifestFirstReader`），仅当该会话未发布（即注入的 baseline）才退回 `restate(previous_frame)`；报告新增 `previous_basis` 逐会话记录走哪条路。检查放在循环内而非循环前——**本次 run 先发布的会话就是下一个会话的正确分母**。真跑复验 generation id 不变（`5b1528220dbd…`），即该改动只改口径可追溯性、不改发布字节。
+
+**OBS-D**：`_tail_members` 改为返回 `(名单, 读失败列表)`，读失败的 prior 会话记进 run summary 的 `tail_membership_read_failures`（窗口级）与逐会话 `published` 项。静默 `continue` 会悄悄缩小 tail 覆盖且无痕。
+
+**OBS-E**：删除不可达的重复离会话检查（`unresolved` 即 `ordered`，与 `in_window` 同一集合），并把"为什么不再重复"写进注释——避免后来者以为那段注释更好看的死代码才是生效的那道门。
+
+**OBS-F**：label 行校验和收敛为**单一定义** `models/labels.py::label_row_checksum`，写侧声明、读侧校验都调它。此前两份独立复刻靠"两侧都按 (instrument, decision_date) 稳定排序"恰好一致——改任一侧都会静默发布受治理读侧拒绝的校验和。
+
+**OBS-G**：报告 `eligibility.reproducibility_note` 写明 binding 校验和含 `listing_date`（canonical 不含、取自 live API），故**仅凭受治理存储不可复现**。未改身份——改校验和会动已发布 generation id。
+
+**OBS-H**：用 `build_store_evidence.py --kind index` 生成 `evidence/csi-all-pilot/2025-09-09-to-2025-10-15/evidence-index.json`（5 条 pin）。
+
+**未改**：OBS-I（台账基线注明环境）——§8.34 已自披露 pyarrow 差异来源，且本轮核对后确认不成立（1085+24 = 1086+23，收集数一致），不另立条目。
+
+**变异验证（每条均先清 `__pycache__`、亲恢复）**：`no_overlap` 移出 gate → 2 例红；删 `Mapping` import → 注解锁红；`category` 放行 → OBS-B 锁红；主键改回两侧同缺 → OBS-A 锁红（裸 `KeyError`）；删中断包装 → CR38-5 锁红；分母改回恒重算 → OBS-C 锁红；`_tail_members` 恢复静默 `continue` → OBS-D 锁红。OBS-E/OBS-F/G/H 为删除/收敛/文档类，无独立变异。
+
+**测试计数**：本机 `python -m pytest tests/ -o addopts="" -q` → **1124 passed / 23 skipped / exit 0**（父提交 `9a905d4` 实测 1115/23，净 **+9** 例）。
+
+**真跑**：复权线在 `/tmp/uq-adj-v5` 重跑，generation id `5b1528220dbd…` 与 §8.36/8.37 的记录**逐字节一致**——OBS-C 只改分母来源的可追溯性、不改发布字节。事件互校门未重跑（真跑需网络，本轮只改 gate 逻辑与文档）。
+
+**未夸大声明**：CR38-1/2 由执行实证，其余读码确认；全部 7 条变异均实做并经 `git status` 核净（无残留）。OBS-E 的"死代码"判定基于 `unresolved` 与 `in_window` 定义相同这一读码结论，无运行时探针。§8.38 的 6 CR / 9 OBS 我逐条复验均属实，但 §8.38 不是我写的，本轮只承接其结论。`code-review-unified-quant.md` 保持未跟踪。

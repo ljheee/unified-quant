@@ -534,7 +534,7 @@ def test_tdx_chain_refuses_without_events(tmp_path):
         )
 
 
-def test_tdx_snapshot_publishes_as_v4_and_reads_back(tmp_path):
+def test_tdx_snapshot_publishes_as_v5_and_reads_back(tmp_path):
     result = build_tdx_adjustment_chain(
         events=_events(), bars=_bars(), instrument=INSTRUMENT,
         window_start=DATES[0], window_end=DATES[-1],
@@ -584,8 +584,8 @@ def test_the_v3_contract_still_rejects_the_derived_v1_lineage(tmp_path):
         AdjustmentSnapshotReader(tmp_path).read_manifest(INSTRUMENT, generation_id)
 
 
-def test_the_v4_contract_rejects_the_exchange_lineage(tmp_path):
-    # ...and the reverse: v4 is not a widening of v3, it is a different lineage.
+def test_the_v5_contract_rejects_the_exchange_lineage(tmp_path):
+    # ...and the reverse: v5 is not a widening of v3, it is a different lineage.
     result = build_tdx_adjustment_chain(
         events=_events(), bars=_bars(), instrument=INSTRUMENT,
         window_start=DATES[0], window_end=DATES[-1],

@@ -22,6 +22,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from uq.errors import ContractError
+
 _ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("ingest_window", _ROOT / "scripts" / "ingest_window.py")
 module = importlib.util.module_from_spec(_spec)
@@ -186,3 +188,53 @@ def test_tail_sessions_widen_the_universe_only_when_asked(monkeypatch, tmp_path)
     assert [item.get("tail_members") for item in summary["published"]] == [
         None, ["600000.XSHG"], ["600000.XSHG"], None,
     ]
+
+
+def test_an_unreadable_prior_membership_is_recorded_not_dropped(monkeypatch, tmp_path):
+    # A prior session whose membership cannot be read would silently drop its
+    # departed names from the tail, shrinking label coverage with no trace. The run
+    # summary must name it (cr.md OBS-D).
+    import pandas as pd
+
+    sessions = [date(2025, 9, 1), date(2025, 9, 2), date(2025, 9, 3)]
+    membership = {
+        sessions[0]: ["600000.XSHG"],
+        sessions[1]: ["000001.XSHE"],
+        sessions[2]: ["000001.XSHE"],
+    }
+    # Session 0's membership is readable the first time (it decides that session's
+    # own fetch set) but unreadable on every later read -- which is exactly what a
+    # tail lookup is, so only the tail widening is affected.
+    reads: dict[date, int] = {}
+
+    def run(session, instruments):
+        return _FakeReport({"status": "published", "rows": 1, "warnings": []})
+
+    class _Store:
+        def as_of(self, universe, session):
+            reads[session] = reads.get(session, 0) + 1
+            if session == sessions[0] and reads[session] > 1:
+                raise ContractError("membership partition unreadable")
+            names = membership.get(session, [])
+            return None, pd.DataFrame({"instrument": list(names)})
+
+    monkeypatch.setattr(module, "EastMoneySessionProvider", lambda: _FakeProvider(sessions))
+    monkeypatch.setattr(module, "build_tushare_v2_pipeline", lambda *a, **k: type("P", (), {"run": staticmethod(run)})())
+    monkeypatch.setattr(module, "IndexMembershipStore", lambda root: _Store())
+    monkeypatch.setattr(module, "TradingCalendar", lambda **kwargs: object())
+
+    out = tmp_path / "summary.json"
+    assert module.main([
+        "--data-root", str(tmp_path), "--membership-root", str(tmp_path),
+        "--universe-id", "csi-all", "--start", "2025-09-01", "--end", "2025-09-03",
+        "--summary-out", str(out), "--skip-health-probe",
+        "--session-interval-seconds", "0", "--tail-sessions", "2",
+    ]) == 0
+    summary = json.loads(out.read_text())
+    # 600000.XSHG cannot be added to the tail, and the session that failed is named
+    assert [item.get("tail_members") for item in summary["published"]] == [
+        None, None, None,
+    ]
+    failures = summary["tail_membership_read_failures"]
+    assert [item["session"] for item in failures] == ["2025-09-01", "2025-09-01"]
+    assert all("ContractError" in item["error"] for item in failures)

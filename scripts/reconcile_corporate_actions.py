@@ -13,6 +13,12 @@ the disclosure side is the same announcement-anchored record the derivation
 consumes. Exit 1 if any instrument diverges, so the report is a gate rather than
 a log.
 
+An instrument with **no comparable event at all** is a failure too, not a pass:
+two sources that agree on zero events have not been reconciled. That covers both
+the one-sided case (disclosure carries events, TDX has none) and the fully
+disjoint one (both sides non-empty but sharing no ex-date), since a date only one
+source knows about is exactly the missing event that silently under-adjusts.
+
 The report never names a winner: which side is right is settled by the vendor
 factor jump, which the adjustment chain checks separately.
 
@@ -141,7 +147,19 @@ def main(argv: list[str] | None = None) -> int:
         if disclosure.empty:
             continue
         raw = frames.get(instrument.split(".")[0], pd.DataFrame())
-        tdx = raw[raw["category"] == 1] if "category" in raw.columns else raw
+        # Only `category == 1` (除权除息) rows carry ex-right meaning: TDX also emits
+        # 股本变化 rows that describe share-count drift and have no ex-right
+        # meaning. Filter them here rather than passing the frame through when the
+        # column happens to be absent -- a missing category column means the events
+        # cannot be classified at all, so nothing is comparable.
+        if "category" not in raw.columns:
+            refusals.append({
+                "instrument": instrument, "side": "tdx", "kind": "refused",
+                "reason": "tdx xdxr frame carries no category column, so its events "
+                          "cannot be classified as ex-right",
+            })
+            continue
+        tdx = raw[raw["category"] == 1]
         results.append(reconcile_instrument(
             instrument, disclosure, tdx[list(EVENT_COLUMNS)], tolerance=args.tolerance
         ))
@@ -170,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         "no_overlap": summary["no_overlap"],
         "amount_diverged_instruments": summary["amount_diverged_instruments"],
         "coverage_diverged_instruments": summary["coverage_diverged_instruments"],
+        "no_overlap_instruments": summary["no_overlap_instruments"],
         "records": summary["records"],
         "uncovered": uncovered,
         "refusals": refusals,
@@ -194,11 +213,19 @@ def main(argv: list[str] | None = None) -> int:
         "agreed": report["agreed"],
         "amount_diverged": report["amount_diverged"],
         "coverage_diverged": report["coverage_diverged"],
+        "no_overlap": report["no_overlap"],
         "amount_diverged_instruments": report["amount_diverged_instruments"],
         "coverage_diverged_instruments": report["coverage_diverged_instruments"],
+        "no_overlap_instruments": summary["no_overlap_instruments"],
         "refusals": len(refusals),
     }, ensure_ascii=False))
-    diverged = summary["amount_diverged"] + summary["coverage_diverged"]
+    # An instrument with zero comparable events is a gate failure, not a pass: two
+    # sources that agree on nothing have not been reconciled at all, and the
+    # disjoint case (both sides non-empty, no shared ex-date) is exactly the
+    # "a missing event silently under-adjusts" failure this check exists to catch.
+    diverged = (
+        summary["amount_diverged"] + summary["coverage_diverged"] + summary["no_overlap"]
+    )
     return 1 if diverged or refusals else 0
 
 

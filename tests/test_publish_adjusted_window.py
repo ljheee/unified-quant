@@ -198,3 +198,58 @@ def test_a_window_with_no_earlier_partition_refuses_its_first_session(tmp_path, 
     published = {item["session"] for item in report["records"]}
     assert published == {day.date().isoformat() for day in DATES[1:]}
     assert report["skipped_sessions"] == []
+
+
+def test_an_interrupted_window_still_writes_its_audit_record(tmp_path, monkeypatch):
+    # A multi-hour window must not lose its audit trail to an unexpected raise: the
+    # partitions already published are durable and the run is resumable, so the
+    # report naming which sessions landed is written before the exception leaves.
+    start, end = DATES[1].date().isoformat(), DATES[-1].date().isoformat()
+    _publish_bars(tmp_path / "bars")
+    boom = RuntimeError("upstream died mid-window")
+
+    def _exploding(store, session, *args, **kwargs):
+        if session.isoformat() == DATES[3].date().isoformat():
+            raise boom
+        return _real_publish(store, session, *args, **kwargs)
+
+    _real_publish = module.publish_adjusted_partition
+    monkeypatch.setattr(module, "publish_adjusted_partition", _exploding)
+    monkeypatch.setattr(module, "MootdxSourceAdapter", lambda: _fake_adapter({}))
+    out = tmp_path / "report.json"
+    with pytest.raises(RuntimeError, match="upstream died mid-window"):
+        module.main([
+            "--bars-root", str(tmp_path / "bars"), "--adjusted-root", str(tmp_path / "adj"),
+            "--start", start, "--end", end, "--out", str(out),
+        ])
+    report = json.loads(out.read_text())
+    assert report["status"] == "interrupted"
+    # the sessions that landed before the raise are still recorded
+    assert [item["session"] for item in report["records"]] == [
+        day.date().isoformat() for day in DATES[1:3]
+    ]
+
+
+def test_the_report_status_distinguishes_published_from_already_published(tmp_path, monkeypatch):
+    start, end = DATES[1].date().isoformat(), DATES[-1].date().isoformat()
+    _run(tmp_path, monkeypatch, start=start, end=end)
+    code, report = _run(tmp_path, monkeypatch, start=start, end=end, setup=False)
+    assert code == 0
+    assert report["status"] == "already_published"
+
+
+def test_the_jump_denominator_comes_from_the_published_partition_when_it_exists(tmp_path, monkeypatch):
+    # The store is the reviewed line of record, so a resumed run must compare
+    # against the partition that is actually there rather than recomputing it from
+    # bars -- the two can disagree once the published line has moved on
+    # (cr.md OBS-C). The injected baseline is never published, so it stays on the
+    # recomputed path and that difference is recorded.
+    start, end = DATES[1].date().isoformat(), DATES[-1].date().isoformat()
+    code, report = _run(tmp_path, monkeypatch, start=start, end=end)
+    assert code == 0
+    bases = {item["session"]: item["basis"] for item in report["previous_basis"]}
+    assert bases[DATES[1].date().isoformat()] == "recomputed_from_bars"
+    assert all(
+        bases[day.date().isoformat()] == "published_partition"
+        for day in DATES[2:]
+    )

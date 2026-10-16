@@ -14,6 +14,7 @@ from ..contracts.model_layer import ModelContractLoader, sha256_json
 from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
+from ..models.labels import label_row_checksum
 
 
 class FeatureSchemaStore:
@@ -187,16 +188,12 @@ class LabelStore:
         if actual_dtypes != expected_dtypes:
             raise ContractError("label artifact dtype mismatch")
         # The label manifest declares data_checksum_sha256 exactly as
-        # `models/labels.py` computes it: sha256_json over the rows of the
-        # *sorted* frame, each as (instrument, decision_date, label). Reproducing
-        # that definition here rather than calling logical_fingerprint matters
-        # because the two fields are not the same function and only one of them is
-        # the row checksum.
-        ordered = frame.sort_values(["instrument", "decision_date"], kind="mergesort")
-        actual_checksum = sha256_json({"rows": [
-            [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2])]
-            for row in ordered.itertuples(index=False)
-        ]})
+        # `models/labels.py` computes it, so call that single definition rather
+        # than reproducing the expression here: the two copies used to drift
+        # independently (cr.md OBS-F). It is deliberately not
+        # logical_fingerprint -- the two fields are different functions and only
+        # this one is the row checksum the reader verifies.
+        actual_checksum = label_row_checksum(frame)
         if actual_checksum != manifest["data_checksum_sha256"]:
             raise ContractError(
                 "label artifact checksum mismatch; the published rows were modified after publication"

@@ -10,8 +10,11 @@ and writes a reviewable report. Exit 1 if any instrument is refused.
 The window must reach at least `horizon + 1` sessions *past the last decision
 date*, because a decision date's label needs bars through D+horizon. Passing
 exactly the decision window leaves the last `horizon` decision dates null, and
-this script refuses that rather than publishing a half-labelled set: the caller
-asks for the bars window, not the decision window.
+that is not an error: the label contract declares
+``null_policy.insufficient_future = null``, so a decision date without enough
+forward bars is a legitimate null label rather than a defect. The set is still
+published, and the report names how many rows are null per instrument
+(``null_labels``), so the tail is visible instead of being derived by hand.
 
 Usage:
   scripts/build_label_sets.py --bars-root data/bars-a500-store \
@@ -217,6 +220,13 @@ def main(argv: list[str] | None = None) -> int:
             "listing_date_source": "tushare:stock_basic(list_date)",
             "limit_events": "not recognised; limit_up/limit_down are prices in the "
                             "canonical field list, so no limit day is excluded",
+            "reproducibility_note": (
+                "the upstream binding checksum covers listing_date, which the "
+                "canonical v2 field list does not carry and which is therefore "
+                "fetched live from stock_basic. A label set published here is "
+                "reproducible only together with that listing_date mapping; the "
+                "governed bars store alone does not determine the checksum."
+            ),
         },
         "published": len(published),
         "refused": len(refused),

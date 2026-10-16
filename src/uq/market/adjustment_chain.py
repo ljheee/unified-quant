@@ -457,23 +457,9 @@ def build_tdx_adjustment_chain(
         window_start <= dt.date(int(row["year"]), int(row["month"]), int(row["day"])) <= window_end
         for _, row in selected.iterrows()
     ]].sort_values(["year", "month", "day"], kind="stable").reset_index(drop=True)
-    if not ordered.empty:
-        # Only in-window ex-dates can move this window's factors, so the
-        # off-session refusal is evaluated on those before anything is derived.
-        # Checking after the provider reconciliation would let an agreeing
-        # provider number publish a snapshot whose event table contradicts its own
-        # effective-date table.
-        unresolved = sorted(
-            dt.date(int(row["year"]), int(row["month"]), int(row["day"]))
-            for row in ordered.to_dict(orient="records")
-        )
-        off_session = [day for day in unresolved if day not in set(sessions)]
-        if off_session:
-            raise ContractError(
-                f"TDX ex-dates for {instrument} fall outside the bar sessions: "
-                f"{[day.isoformat() for day in off_session[:10]]}; the deriver can only apply an "
-                "event on a trading session — verify the event date against the exchange calendar"
-            )
+    # No second off-session check over `ordered`: it is the same in-window set the
+    # check above already covers, so a repeat would be dead code whose better
+    # comment makes it look like the one that actually fires (cr.md OBS-E).
     ordered["source_event_id"] = [
         f"tdx_xdxr:{instrument}:{int(r['year']):04d}{int(r['month']):02d}{int(r['day']):02d}"
         for _, r in ordered.iterrows()

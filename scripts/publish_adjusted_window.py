@@ -39,7 +39,11 @@ from uq.adapters.mootdx_source import MootdxSourceAdapter
 from uq.contracts.canonical_v2 import CanonicalV2Store
 from uq.contracts.schema import load_schema
 from uq.errors import ContractError
-from uq.pipeline.adjusted_price import publish_adjusted_partition, restate
+from uq.pipeline.adjusted_price import (
+    ADJUSTED_V2_SCHEMA,
+    publish_adjusted_partition,
+    restate,
+)
 from uq.pipeline.adjustment_events import events_from_xdxr
 from uq.store.reader import ManifestFirstReader
 
@@ -121,51 +125,23 @@ def main(argv: list[str] | None = None) -> int:
     published: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     refused: list[dict[str, Any]] = []
-    for index, session in enumerate(sessions):
-        if index == 0 and session < args.start:
-            # the injected jump baseline: used, never published
-            skipped.append({"session": session.isoformat(), "reason": "jump_baseline"})
-            continue
-        if _published(args.adjusted_root, session):
-            skipped.append({"session": session.isoformat(), "reason": "already_published"})
-            continue
-        previous = sessions[index - 1] if index else None
-        if previous is None:
-            # Only reachable when the store has exactly one partition: there is no
-            # baseline at all, and the run cannot be resumed by widening --start.
-            refused.append({
-                "session": session.isoformat(),
-                "reason": "no earlier partition exists to use as the jump baseline",
-            })
-            continue
-        frame = frames[session]
-        previous_frame = frames[previous]
-        try:
-            identity = publish_adjusted_partition(
-                store, session, frame,
-                events=events,
-                closes=closes,
-                previous_restated=restate(previous_frame),
-                previous_raw=previous_frame,
-                lineage={"upstream": ["bars_daily/v2"], "events": "tdx:xdxr"},
-                source_versions={"tushare": "tushare", "tdx": "mootdx xdxr"},
-                tolerance=args.tolerance,
-            )
-        except ContractError as exc:
-            refused.append({"session": session.isoformat(), "reason": str(exc)})
-            continue
-        published.append({
-            "session": session.isoformat(),
-            "generation_id": identity["generation_id"],
-            "rows": identity["rows"],
-            "cross_check_basis": identity["cross_check_basis"],
-            "skipped_events": identity.get("skipped_events"),
-        })
+    # How each session's jump denominator was obtained. Reading the already
+    # published partition is preferred (the store is the reviewed line of record,
+    # so a resumed run compares against what is actually there); recomputing it
+    # from bars is the fallback for a baseline session that was never published,
+    # which is the injected one (cr.md OBS-C).
+    previous_basis: list[dict[str, Any]] = []
+    adjusted_reader = ManifestFirstReader(args.adjusted_root)
+    adjusted_schema = load_schema(ADJUSTED_V2_SCHEMA)
 
-    report = {
+    def _write_report(*, interrupted: bool = False) -> dict[str, Any]:
+        report = {
         "record_version": 1,
         "kind": "adjusted_price_window",
         "schema": "bars_adjusted/adjusted-v2",
+        "status": "interrupted" if interrupted else (
+            "failed" if refused else ("published" if published else "already_published")
+        ),
         "window": {
             "requested_start": args.start.isoformat(),
             "requested_end": args.end.isoformat(),
@@ -189,16 +165,88 @@ def main(argv: list[str] | None = None) -> int:
         },
         "tolerance": args.tolerance,
         "instruments": len(instruments),
+            "previous_basis": previous_basis,
         "published": len(published),
         "skipped": len(skipped),
         "refused": len(refused),
         "records": published,
         "skipped_sessions": skipped,
         "refusals": refused,
-    }
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        }
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return report
+
+    try:
+        for index, session in enumerate(sessions):
+            if index == 0 and session < args.start:
+                # the injected jump baseline: used, never published
+                skipped.append({"session": session.isoformat(), "reason": "jump_baseline"})
+                continue
+            if _published(args.adjusted_root, session):
+                skipped.append({"session": session.isoformat(), "reason": "already_published"})
+                continue
+            previous = sessions[index - 1] if index else None
+            if previous is None:
+                # Only reachable when the store has exactly one partition: there is
+                # no baseline at all, and the run cannot be resumed by widening
+                # --start.
+                refused.append({
+                    "session": session.isoformat(),
+                    "reason": "no earlier partition exists to use as the jump baseline",
+                })
+                continue
+            frame = frames[session]
+            previous_frame = frames[previous]
+            # Checked per session, not once up front: a partition published earlier
+            # in this same run is the correct denominator for the next one.
+            try:
+                published_previous = (
+                    adjusted_reader.read(adjusted_schema, previous)
+                    if _published(args.adjusted_root, previous) else None
+                )
+            except ContractError:
+                published_previous = None
+            if published_previous is not None:
+                previous_restated = published_previous
+                basis = "published_partition"
+            else:
+                previous_restated = restate(previous_frame)
+                basis = "recomputed_from_bars"
+            previous_basis.append({"session": session.isoformat(), "basis": basis})
+            try:
+                identity = publish_adjusted_partition(
+                    store, session, frame,
+                    events=events,
+                    closes=closes,
+                    previous_restated=previous_restated,
+                    previous_raw=previous_frame,
+                    lineage={"upstream": ["bars_daily/v2"], "events": "tdx:xdxr"},
+                    source_versions={"tushare": "tushare", "tdx": "mootdx xdxr"},
+                    tolerance=args.tolerance,
+                )
+            except ContractError as exc:
+                refused.append({"session": session.isoformat(), "reason": str(exc)})
+                continue
+            published.append({
+                "session": session.isoformat(),
+                "generation_id": identity["generation_id"],
+                "rows": identity["rows"],
+                "cross_check_basis": identity["cross_check_basis"],
+                "skipped_events": identity.get("skipped_events"),
+            })
+    except BaseException:
+        # A multi-hour window must not lose its audit record to an unexpected raise:
+        # the partitions already published are durable and the run is resumable, so
+        # the summary naming which sessions landed has to be written before the
+        # exception leaves this function (the discipline ingest_window.py already
+        # follows).
+        _write_report(interrupted=True)
+        raise
+
+    report = _write_report()
     print(json.dumps({
+        "status": report["status"],
         "published": report["published"], "skipped": report["skipped"], "refused": report["refused"],
     }, ensure_ascii=False))
     return 1 if refused else 0
