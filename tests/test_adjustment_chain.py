@@ -452,7 +452,7 @@ def _events(*rows):
     return pd.DataFrame(list(rows) or [_xdxr()])
 
 
-def test_tdx_chain_declares_the_derived_v4_lineage(tmp_path):
+def test_tdx_chain_declares_the_derived_v1_lineage(tmp_path):
     result = build_tdx_adjustment_chain(
         events=_events(), bars=_bars(), instrument=INSTRUMENT,
         window_start=DATES[0], window_end=DATES[-1],
@@ -547,7 +547,7 @@ def test_tdx_snapshot_publishes_as_v4_and_reads_back(tmp_path):
     assert manifest["formula_version"] == "adj_factor.derived_v1"
 
 
-def test_a_derived_v4_snapshot_is_consumable(tmp_path):
+def test_a_derived_v1_snapshot_is_consumable(tmp_path):
     # The point of listing two consumable lineages: a snapshot derived from TDX
     # events feeds the same consumption seam as the disclosure-mapped one.
     result = build_tdx_adjustment_chain(
@@ -566,7 +566,7 @@ def test_a_derived_v4_snapshot_is_consumable(tmp_path):
     assert selected == generation_id
 
 
-def test_the_v3_contract_still_rejects_the_derived_v4_lineage(tmp_path):
+def test_the_v3_contract_still_rejects_the_derived_v1_lineage(tmp_path):
     # v3 pins its lineage by const and stays byte-identical, so a snapshot that
     # claims derived_v1 under snapshot_version 3 is a tampered document.
     result = build_tdx_adjustment_chain(
