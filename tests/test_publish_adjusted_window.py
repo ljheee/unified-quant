@@ -180,3 +180,21 @@ def test_the_cross_check_compares_the_instruments_both_sessions_share(tmp_path, 
     assert code == 0
     published = {item["session"] for item in json.loads(out.read_text())["records"]}
     assert last.date().isoformat() in published
+
+
+def test_a_window_with_no_earlier_partition_refuses_its_first_session(tmp_path, monkeypatch):
+    # When the requested window starts at the store's earliest partition there is
+    # no jump baseline to inject, so the first session has no predecessor to compare
+    # against and is refused (a gate failure, exit 1) rather than published without
+    # a cross-check. The remaining sessions still publish.
+    code, report = _run(
+        tmp_path, monkeypatch,
+        start=DATES[0].date().isoformat(), end=DATES[-1].date().isoformat(),
+    )
+    assert code == 1
+    assert report["refused"] == 1
+    assert report["refusals"][0]["session"] == DATES[0].date().isoformat()
+    assert report["refusals"][0]["reason"] == "no earlier partition exists to use as the jump baseline"
+    published = {item["session"] for item in report["records"]}
+    assert published == {day.date().isoformat() for day in DATES[1:]}
+    assert report["skipped_sessions"] == []

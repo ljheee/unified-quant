@@ -46,6 +46,13 @@ _KEY_COLUMNS = ("instrument", "session_date")
 # tolerance is the same order the bars schema allows for cross-source price
 # comparison, so it bounds rounding rather than a real restatement difference.
 _DEFAULT_TOLERANCE = 1e-3
+# The exchange rounds the ex-right reference price to the price tick, so the two
+# sources' jump ratio differs by up to about one tick over the pre-event close.
+# That is a physical resolution floor, not a data disagreement: on a 5.56 name it
+# is already 0.09% (89% of the 1e-3 budget) and on a 3-yuan name it exceeds the
+# budget outright, so a pure relative tolerance would refuse a whole session over
+# a legitimate rounding residual. The floor is added to the relative tolerance.
+_PRICE_TICK = 0.01
 
 
 class AdjustedPriceQualityRejection(ContractError):
@@ -168,6 +175,7 @@ def verify_jump_cross_check(
     previous_expected: pd.DataFrame | None,
     *,
     tolerance: float = _DEFAULT_TOLERANCE,
+    previous_close: Mapping[str, float] | None = None,
 ) -> dict[str, Any]:
     """Compare the *change* in restated prices between two adjacent partitions.
 
@@ -242,6 +250,15 @@ def verify_jump_cross_check(
         )
         difference = (vendor_jump - event_jump).abs()
         allowed = (event_jump.abs() * float(tolerance)).fillna(float(tolerance))
+        # The exchange rounds the ex-right reference price to the price tick, so
+        # the vendor's factor (built from the rounded price) and the event ratio
+        # (built from the exact formula) differ by up to about one tick over the
+        # pre-event close. Add that physical resolution floor, otherwise a
+        # legitimate rounding residual on a low-priced name exceeds the relative
+        # budget and refuses the whole session.
+        if previous_close:
+            closes = prepared["previous produced"].index.to_series().map(previous_close)
+            allowed = allowed + (_PRICE_TICK / pd.to_numeric(closes)).fillna(0.0)
         if bool((difference > allowed).fillna(True).any()):
             bad = difference[difference > allowed].index[:5].tolist()
             raise AdjustedPriceQualityRejection(
@@ -484,6 +501,7 @@ def publish_adjusted_partition(
                     observed=observed,
                 ) if previous_raw is not None else None,
                 tolerance=tolerance,
+                previous_close=_previous_raw_closes(previous_raw),
             )
         )
     observed["cross_check_basis"] = basis
@@ -509,6 +527,25 @@ def publish_adjusted_partition(
         # resolved -- both belong in the caller's report, not only in the manifest
         "cross_check_basis": observed["cross_check_basis"],
         "skipped_events": observed.get("skipped_events"),
+    }
+
+
+def _previous_raw_closes(previous_raw: pd.DataFrame | None) -> dict[str, float]:
+    """The previous partition's raw close per instrument, for the tick floor.
+
+    The exchange's ex-right reference price is rounded against the pre-event
+    close, so the residual between the two jump ratios is bounded by the tick over
+    that close. ``None`` (no previous frame) yields no floor, leaving the plain
+    relative tolerance.
+    """
+    if previous_raw is None or "close" not in previous_raw.columns:
+        return {}
+    frame = previous_raw[["instrument", "close"]].dropna(subset=["close"])
+    values = pd.to_numeric(frame["close"], errors="coerce")
+    return {
+        str(instrument): float(close)
+        for instrument, close in zip(frame["instrument"].astype(str), values)
+        if close == close and close > 0
     }
 
 

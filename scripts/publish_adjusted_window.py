@@ -81,15 +81,13 @@ def main(argv: list[str] | None = None) -> int:
     # it (which would look like a data problem), the window is extended by one
     # earlier session when one exists: that session is used as the jump baseline and
     # is not itself published unless it is inside the requested window.
-    baseline = sessions[0]
+    # Any partition strictly before the first in-window session is outside the
+    # requested window by construction (the first session is the earliest one in
+    # range), so it is used as the baseline and never published.
     earlier = [session for session in _partitions(args.bars_root, dt.date(1990, 1, 1), args.end)
-               if session < baseline]
-    if not earlier:
-        earlier = [session for session in _partitions(args.bars_root, dt.date(1990, 1, 1), dt.date(2100, 1, 1))
-                   if session < baseline]
+               if session < sessions[0]]
     if earlier:
-        baseline = earlier[-1]
-        sessions = [baseline, *sessions]
+        sessions = [earlier[-1], *sessions]
     schema = load_schema(INPUT_SCHEMA)
     reader = ManifestFirstReader(args.bars_root)
     frames: dict[dt.date, pd.DataFrame] = {
@@ -173,8 +171,10 @@ def main(argv: list[str] | None = None) -> int:
             "requested_end": args.end.isoformat(),
             "sessions": len(sessions),
             "baseline_session": sessions[0].isoformat(),
-            "baseline_note": "the first session is the jump baseline and is not published "
-                             "unless it is inside the requested window",
+            "baseline_note": "the first session is the jump baseline (an earlier partition "
+                             "injected outside the requested window); it is used but never "
+                             "published. It is absent only when no earlier partition exists, "
+                             "in which case the requested window's first session is refused",
         },
         "stores": {
             "bars_root": str(args.bars_root),

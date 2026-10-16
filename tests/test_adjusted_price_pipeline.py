@@ -450,3 +450,41 @@ def test_the_report_names_only_the_cross_check_that_ran(tmp_path):
         root_b, payload_b["generation_id"], binding_type="canonical_v2")["checks"]}
     assert "finite_values__restated_jump_matches_corporate_actions" in names_b
     assert "finite_values__restated_price_matches_independent_source" not in names_b
+
+
+def _one_name_frame(close, session):
+    return pd.DataFrame({
+        "instrument": ["600000.XSHG"], "session_date": [pd.Timestamp(session)],
+        "open": [close], "high": [close], "low": [close], "close": [close],
+    })
+
+
+def test_the_tick_floor_absorbs_exchange_rounding_without_masking_a_drift():
+    # The exchange rounds the ex-right reference price to the tick, so on a
+    # low-priced name the two jump ratios differ by ~tick/pre_close -- already
+    # ~0.09% on a 5.56 name (89% of the 1e-3 budget) and over the budget on a
+    # 3-yuan name. A pure relative tolerance refuses the whole session over that
+    # legitimate residual; the tick floor absorbs it, while a real 1% drift on the
+    # same name is still refused.
+    from uq.pipeline.adjusted_price import verify_jump_cross_check
+
+    previous, current = date(2026, 8, 20), date(2026, 8, 21)
+    pre_close = 3.00
+    prev_restated = _one_name_frame(pre_close, previous)
+    prev_expected = _one_name_frame(pre_close, previous)
+    # vendor built from the rounded reference price (2.97); events from the exact
+    # formula (2.9655): the rounding residual alone exceeds 1e-3 relative
+    rounded = _one_name_frame(pre_close * 2.97 / pre_close, current)
+    exact = _one_name_frame(pre_close * 2.9655 / pre_close, current)
+    floor = {"600000.XSHG": pre_close}
+    with pytest.raises(ContractError, match="jump disagrees"):
+        verify_jump_cross_check(rounded, exact, prev_restated, prev_expected, tolerance=1e-3)
+    verify_jump_cross_check(
+        rounded, exact, prev_restated, prev_expected, tolerance=1e-3, previous_close=floor
+    )
+    drifted = _one_name_frame(pre_close * 0.99, current)
+    with pytest.raises(ContractError, match="jump disagrees"):
+        verify_jump_cross_check(
+            drifted, _one_name_frame(pre_close, current),
+            prev_restated, prev_expected, tolerance=1e-3, previous_close=floor,
+        )

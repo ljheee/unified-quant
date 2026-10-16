@@ -1048,3 +1048,21 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数**：本机 `python -m pytest tests/ -o addopts="" -q` → **1113 passed / 23 skipped / exit 0**（父节点 `493c0e2` 同命令实测 **1103 passed / 23 skipped**，净 **+10** 例）。
 
 **未夸大声明**：三项缺陷由**批量真跑**暴露，非事后推断；CR36-1 的方向修正以 vendor 实测反推确认（我的代码错、vendor 对），修正前后 000001 的 4.24% → 0.035% 与 4932 标的 0.091% 上界均为本机亲测；事件互校两个方向的分歧为真跑输出。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.37 自 CR §8.36 提交（`9c811ac`）（2026-10-16，3 项真缺陷）
+
+**触发**：用户"提交&推送后自己 CR 一遍"。对刚推送的 `9c811ac` 做实现级走查。
+
+**三项均为真缺陷（先证是真，再修，再变异验证）**
+
+| ID | 位置 | 缺陷 | 锁 |
+|---|---|---|---|
+| CR37-1 | `adjusted_price.py::verify_jump_cross_check` | **跳变容差是纯相对量**，无法吸收交易所把除权参考价四舍五入到分位产生的残差。该残差 ≈ `tick / 前收盘`，是**价格网格的物理分辨率**：5.56 元的名字已用掉 1e-3 预算的 **89%**（实测 600858），3 元名字**直接超预算** ⇒ 一个合法标的会让**整个会话被拒**。已复现：3 元名字的四舍五入残差被拒（`open jump disagrees`），而真实 1% 漂移此前也会被拒——两者在旧口径下**不可区分** | 加**物理下界** `tick / 前收盘`（`previous_close` 由调用方从 `previous_raw` 提供）：3 元名字的残差放行、同一名字的 1% 真漂移仍被拒（`test_the_tick_floor_absorbs_exchange_rounding_without_masking_a_drift`，变异=删下界即红） |
+| CR37-2 | `publish_adjusted_window.py` baseline 注入 | 有一处**死分支**：`if not earlier:` 的 `end=2100` 回退永远走不到——`baseline` 是窗内最早会话，任何 `< baseline` 的会话必 `< args.end`，故第一次查询已完整。且注释"unless it is inside the requested window"与代码不符（注入的 baseline **必在窗内之外**） | 删除死分支，注释改为事实；新增 `test_a_window_with_no_earlier_partition_refuses_its_first_session`（窗从最早分区开始时首会话被拒、exit 1、其余照常发布） |
+| CR37-3 | `publish_adjusted_window.py` 报告 | `baseline_note` 断言"unless it is inside the requested window"——但注入的 baseline 恒在窗外，该分支不可达，是一句**描述不存在行为的说明** | 改为描述真实行为（无更早分区时首会话被拒） |
+
+**CR37-1 是本轮最重要的一条**：它是我在 §8.36 引入（该轮把容差当成纯相对量），且**只有低价值标的会触发**——真实全 A 窗内 19 个"有跳变"的标的中最贵残差（600858，5.56 元）已占预算 89%，说明它不是理论边界而是**逼近现实**的。修正后重跑全 A 窗，两个分区的 generation id **逐字节不变**（`129d775d66e3…` / `5b1528220dbd…`）——因为下界只放宽门、不改发布内容。
+
+**测试计数**：本机 `python -m pytest tests/ -o addopts="" -q` → **1115 passed / 23 skipped / exit 0**（父提交 `9c811ac` 实测 1113/23，净 **+2** 例）。
+
+**未夸大声明**：三项由自 CR 走查发现；CR37-1 的残差模型（`tick/前收盘`）由真实窗口 4 个标的的 `|diff|` 与 `0.005/前收盘` 比值（0.36–1.01）确认，非拟合；死分支与注释不符由代码枚举证明。`code-review-unified-quant.md` 保持未跟踪。
