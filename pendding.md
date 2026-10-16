@@ -280,3 +280,11 @@ TDX 独立复权源(2026-10-16,前判推翻 + 真跑落地)
 - **落地**:`src/uq/adapters/mootdx_source.py` 增 `fetch_xdxr_events`/`_xdxr_client`(按 xdxr 探测)/`connected_server`;新 `src/uq/pipeline/adjustment_events.py`(xdxr 归一化 + 除权 ratio);`adjusted_price.py` 的独立源支持 TDX 事件重算,新增 `verify_jump_cross_check`(按 instrument 对齐、两侧各除**自己**的前一帧)。
 - **真跑**:三只真实标的在 2025-09-19 发布 `bars_adjusted/adjusted-v2` 成功,四价格列 vendor 跳变 vs 事件跳变差异全 0.000000。
 - **仍未决**:①`label_set` 生产发布器(训练链路最后一洞);②复权线发布器目前由调用方提供 `closes`(事件 ratio 所需的前收盘),生产入口(`scripts/`)尚未接线;③`adjusted-v2` 尚未在 A500/全A 试跑窗上批量发布。
+
+TDX xdxr 派生链 + 数据源文档(2026-10-16,cr.md §8.31)
+- **先纠正一处台账措辞**:spec 要求的 `derive_adj_factor()` **早已存在**——`src/uq/market/adjustment.py::XdxrAdjustmentDeriver`(provenance 默认 `mootdx.xdxr`)+ `market/adjustment_chain.py` 的 build/publish + provider check + effective-date 表。真正缺的是"TDX 原始 xdxr 事件直接入链"(原路径需从 Tushare dividend 公告映射)与 lineage 落地。
+- 落地 `build_tdx_adjustment_chain`(lineage `adj_factor.derived_v4`、provenance `tdx:xdxr`):事件原样使用,只过滤 `category==1`、只取窗口内、按日排序,不经过任何公告解释——这正是第二派生链的意义。逐事件生成 `source_event_id`。
+- 新增 `config/schemas/contracts/adjustment_snapshot.v4.json`(**未改 v3**,因其 `formula_version` 是 const,就地放宽等于给已发布快照重新贴标);v3 逐字节不变且继续拒绝 `derived_v4`,v4 继续拒绝 `exchange_v2`(双向互斥已加锁)。`CONSUMABLE_FORMULA_VERSIONS` 扩为二元组(同语义不同来源,不用通配);`save()` 血缘改为声明式并按声明的 schema 版本校验(修掉"始终按 LATEST 校验"的 bug)。
+- 真跑:600000/000001 窗口 2025-06-01~08-01(含真实除权日),TDX xdxr → `derived_v4` 快照发布成功,provider check passed(max|diff| 3.3e-07 / 1.69e-04)。
+- `docs/user-guide.md` 新增「## 5. 可用数据源」(行情源/复权两条链/新浪/排查指引),后续小节顺延重编号。新浪**如实标注** 185/190 一致、2 处仅分类差异、3 处真实数值分歧,并写明勿装 akshare(pandas 3.x 与锁定的 2.3.3 冲突)。
+- **仍未决**:①新浪 3 处真实分歧成因未查,故未接入(仅文档登记);②复权线生产入口脚本仍未接线(目前需调用方提供 bars 与 closes);③`label_set` 生产发布器仍是训练链路最后一洞。

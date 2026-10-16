@@ -36,17 +36,45 @@ _SESSION_COLUMNS = ["session_date"]
 # versions stay readable, and v2 keeps rejecting ``.XBSE`` for anyone who
 # pinned it. The formula lineage is unchanged (still adj_factor.exchange_v2),
 # so v2 and v3 snapshots are equally consumable.
+#
+# 2026-10-16: v4 carries the TDX-xdxr lineage (``adj_factor.derived_v4``).  v3
+# pins formula_version to the disclosure-mapped lineage by const, and widening
+# that const in place would silently re-label every stored v3 snapshot, so the
+# new lineage gets its own version instead.  v3 stays byte-identical and keeps
+# rejecting ``derived_v4``; v4 keeps rejecting ``exchange_v2``.
 SNAPSHOT_SCHEMA_BY_VERSION = {
     1: "adjustment_snapshot.v1.json",
     2: "adjustment_snapshot.v2.json",
     3: "adjustment_snapshot.v3.json",
+    4: "adjustment_snapshot.v4.json",
 }
-LATEST_SNAPSHOT_VERSION = 3
-# cr.md U6/U17: the only formula lineage the factor side may consume. v1
-# documents stay readable (audit/re-export) but are rejected at the
-# consumption seam below instead of being silently consumed under v2
-# multiply-basis semantics.
-CONSUMABLE_FORMULA_VERSION = "adj_factor.exchange_v2"
+LATEST_SNAPSHOT_VERSION = 4
+# Which schema version a lineage is published under.  Both are consumable (see
+# CONSUMABLE_FORMULA_VERSIONS), so a reader may accept either, but a snapshot
+# records the version its lineage is declared against.
+FORMULA_VERSION_SNAPSHOT_VERSION = {
+    "adj_factor.exchange_v2": 3,
+    "adj_factor.derived_v4": 4,
+}
+# cr.md U6/U17: the formula lineages the factor side may consume. v1 documents
+# stay readable (audit/re-export) but are rejected at the consumption seam below
+# instead of being silently consumed under v2 multiply-basis semantics.
+#
+# Two derivations are consumable, and they are the *same* semantics reached by two
+# different event sources, so both are listed rather than widened into a wildcard:
+#   * ``adj_factor.exchange_v2`` -- from Tushare ``dividend`` disclosures, mapped
+#     to the exchange XDXR shape (``market/adjustment_chain.py``);
+#   * ``adj_factor.derived_v4``   -- straight from TDX ``xdxr`` events, which are
+#     already in the exchange shape, so no disclosure mapping can distort them.
+# Both are multiply-basis and anchored at 1.0 on the latest session, which is why
+# a snapshot of either lineage can feed the same consumer. A lineage outside this
+# set is refused with the same fail-closed message as before, so the drift guard
+# is not weakened by adding a second known-good entry.
+CONSUMABLE_FORMULA_VERSIONS = (
+    "adj_factor.exchange_v2",
+    "adj_factor.derived_v4",
+)
+CONSUMABLE_FORMULA_VERSION = CONSUMABLE_FORMULA_VERSIONS[0]
 
 
 def _csv_checksum(frame: pd.DataFrame) -> tuple[bytes, str]:
@@ -76,6 +104,7 @@ class AdjustmentSnapshotStore:
         effective_dates: pd.DataFrame,
         sessions: list[date],
         expected_effective_checksum: str | None = None,
+        formula_version: str = CONSUMABLE_FORMULA_VERSION,
     ) -> Path:
         try:
             date.fromisoformat(window_start.isoformat())
@@ -103,10 +132,19 @@ class AdjustmentSnapshotStore:
             )
         _, sessions_checksum = _csv_checksum(sessions_frame)
 
+        # The lineage is a declared identity, not a default: a snapshot records the
+        # derivation that actually produced it, so a caller deriving from a
+        # different event source states its own lineage and the reader refuses it
+        # if that lineage is not consumable.
+        if formula_version not in CONSUMABLE_FORMULA_VERSIONS:
+            raise ContractError(
+                f"adjustment snapshot formula_version {formula_version} is not consumable "
+                f"(requires one of {list(CONSUMABLE_FORMULA_VERSIONS)})"
+            )
         unsigned = {
-            "snapshot_version": LATEST_SNAPSHOT_VERSION,
+            "snapshot_version": FORMULA_VERSION_SNAPSHOT_VERSION[formula_version],
             "instrument": instrument,
-            "formula_version": CONSUMABLE_FORMULA_VERSION,
+            "formula_version": formula_version,
             "visibility_time": visibility_time.isoformat(),
             "event_artifact": {"path": "events.csv", "checksum_sha256": event_checksum},
             "effective_date_table": {"path": "effective_dates.csv", "checksum_sha256": effective_checksum},
@@ -114,7 +152,11 @@ class AdjustmentSnapshotStore:
         }
         generation_id = adjustment_snapshot_generation(unsigned)
         manifest = {**unsigned, "generation_id": generation_id}
-        validate_contract(SNAPSHOT_SCHEMA_BY_VERSION[LATEST_SNAPSHOT_VERSION], manifest)
+        # Validate against the schema the manifest declares itself under, not the
+        # latest one: publishing a derived_v4 snapshot against the v3 contract (or
+        # vice versa) would be rejected by the reader, so the writer must use the
+        # same rule the reader does.
+        validate_contract(SNAPSHOT_SCHEMA_BY_VERSION[unsigned["snapshot_version"]], manifest)
         directory = root / "adjustments" / "snapshots" / instrument / generation_id
         staging = directory.with_name(f"{directory.name}.staging.{uuid.uuid4().hex}")
         staging.mkdir(parents=True)
@@ -192,11 +234,11 @@ class AdjustmentSnapshotReader:
             # cr.md U6/U17: fail closed on lineage drift — a v1 candidate must
             # never be silently consumed under (or silently skipped into) the
             # v2 multiply basis; re-export it with the v2 deriver instead.
-            if manifest["formula_version"] != CONSUMABLE_FORMULA_VERSION:
+            if manifest["formula_version"] not in CONSUMABLE_FORMULA_VERSIONS:
                 raise ContractError(
                     f"adjustment snapshot lineage {manifest['formula_version']} is not consumable "
-                    f"(requires {CONSUMABLE_FORMULA_VERSION}); re-export by re-deriving the "
-                    "snapshot's raw events with the current deriver"
+                    f"(requires one of {list(CONSUMABLE_FORMULA_VERSIONS)}); re-export by re-deriving "
+                    "the snapshot's raw events with the current deriver"
                 )
             if datetime.fromisoformat(manifest["visibility_time"]) > as_of_time:
                 continue

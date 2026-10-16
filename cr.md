@@ -883,3 +883,31 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数（以父节点 a61cb1d 之后的 1032 为基线）**：`test_adjustment_events.py` 新增 10 例、`test_adjusted_price_pipeline.py` 由 10 增至 19 例 = 本轮净 **+19** → **1051 passed / 23 skipped / exit 0**。
 
 **未夸大声明**：Qlib/Shumway 的文献结论来自 §8.29 的调研（引用 URL 在 pendding）；本轮 TDX 可达性、除权公式、83 事件吻合度、真跑发布均为监工亲做（含 subagent 结论的逐条复现）。**前判两次被推翻（服务器可达性、公式）已如实登记，不掩盖**。`MootdxSourceAdapter.DEFAULT_SERVERS` 未改动（实测其主机对 xdxr 有效，我此前的"陈旧"判断也是错的）。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.31 TDX xdxr 派生链落地（lineage `adj_factor.derived_v4`）+ 数据源文档（2026-10-16）
+
+**触发**：用户确认 (a)「TDX 源 + derived_v4 新版本标识」、(b)「Sina 标注可用但已知分歧」，并要求实现 1（补 spec 的 `derive_adj_factor` 链）与 2（`docs/user-guide.md` 加「可用数据源」一节）。
+
+**核查结论（实现前，纠正台账措辞）**：spec 要求的 `derive_adj_factor()` **其实已存在**——`src/uq/market/adjustment.py::XdxrAdjustmentDeriver`（provenance 默认 `mootdx.xdxr`）+ `src/uq/market/adjustment_chain.py::build_adjustment_chain/publish_adjustment_snapshot`，含 provider check、effective-date 表、发布。真正缺的是**让 TDX 原始 xdxr 事件直接进入这条链**（原路径需从 Tushare `dividend` 公告映射成 xdxr 形状），以及 lineage 落地。
+
+**实现 1**
+- `adjustment_chain.py` 新增 `build_tdx_adjustment_chain`（lineage `TDX_DERIVATION_VERSION = "adj_factor.derived_v4"`，provenance `tdx:xdxr`）：事件**原样**使用（只过滤 `category==1`、只取窗口内、按日排序），不经过任何公告解释——这正是第二派生链的意义。逐事件生成 `source_event_id` 保留血缘。
+- 新增 `config/schemas/contracts/adjustment_snapshot.v4.json`：**不改 v3**（v3 的 `formula_version` 是 const，就地放宽等于给已发布快照重新贴标）。v3 仍逐字节不变且继续拒绝 `derived_v4`；v4 继续拒绝 `exchange_v2`（双向互斥已加测试锁）。
+- `adjustment_snapshot.py`：`CONSUMABLE_FORMULA_VERSIONS` 从单一值扩为二元组（`exchange_v2` / `derived_v4`，语义相同、来源不同，**不用通配**）；`save()` 新增 `formula_version` 参数（血缘是声明式身份而非默认值），并按声明的 schema 版本校验——修掉一处我引入的 bug：原先校验始终用 `LATEST`，会让 v4 快照按 v3 契约校验而必然失败；`read_manifest` 的分派本就按 manifest 自身版本，现在写侧与读侧同规则。
+- `publish_adjustment_snapshot` 透传 `result.derivation.version`，读方可分辨两种事件来源。
+
+**实现 2**
+- `docs/user-guide.md` 新增「## 5. 可用数据源」：5.1 行情与参考数据（Tushare/TDX/EastMoney，各含访问方式、状态、限制）、5.2 复权两条链（lineage/来源/实现/吻合度）、5.3 新浪（**如实标注 185/190 一致、2 处仅分类差异、3 处真实数值分歧**，并写明勿装 akshare 的 pandas 冲突）、5.4 取不到数据先查什么。后续小节顺延重编号，§5 交叉引用已同步改为 §6。
+
+**真跑（监工亲做）**：600000.XSHG / 000001.XSHE，窗口 2025-06-01~08-01（含真实除权日），TDX xdxr → `adj_factor.derived_v4` 快照**发布成功**（generation `45d2b030…`、`cddfef46…`），lineage/provenance 正确，provider check **passed**（max|diff| 3.3e-07 / 1.69e-04），因子区间 0.9706→1.0 / 0.9695→1.0（乘基、锚定最新交易日 1.0，符合约定）。
+
+**自查发现并修复的缺陷（3 条）**
+| ID | 缺陷 | 处置 |
+|---|---|---|
+| CR31-1 | `build_tdx_adjustment_chain` 初版把**全历史**事件做离会话检查与 pre_close 解析 → 短窗口永远不可用（上市以来任何窗口都覆盖不全历史） | 先按窗口过滤再检查；离会话检查也移到**派生之前**，否则 provider 一致时会发布出自相矛盾的快照（事件表与 effective-date 表矛盾） |
+| CR31-2 | `save()` 校验用 `LATEST_SNAPSHOT_VERSION` 而非 manifest 声明的版本 → v4 快照必失败（实测暴露） | 改为按 `unsigned["snapshot_version"]`，与 `read_manifest` 同规则 |
+| CR31-3 | `tests/test_adv_review_fixes.py::test_unknown_snapshot_version_is_rejected` 用 `snapshot_version=4` 当"未知版本"哨兵 → 新增 v4 后该用例语义反转 | 哨兵改为 5（超出支持集），并注释说明原因 |
+
+**测试计数**：`tests/test_adjustment_chain.py` +11 例（TDX 链 7 + v4/v3 互斥 2 + 可消费 1 + 忽略非除权/窗口外事件 2，部分重叠计入）。父节点 1051 → **1062 passed / 23 skipped / exit 0**。
+
+**未改动（有意）**：`MootdxSourceAdapter.DEFAULT_SERVERS` 未动（实测该默认主机对 xdxr 有效，§8.30 已证我此前的"陈旧"判断有误）；现有 Tushare dividend 链与 `exchange_v2` 一个字节未改（改它会触发 `adjustment_snapshot.py` 消费闸门拒收已发布制品）；Sina **未接入**（3 处真实分歧成因未查，仅文档登记）。`code-review-unified-quant.md` 保持未跟踪。

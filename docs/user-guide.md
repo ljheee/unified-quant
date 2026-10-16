@@ -98,7 +98,52 @@ mkdir -p "$DATA_ROOT"
 
 如果失败，先看 JSON 里的 `errors`。新手阶段不必强行修复数据源问题，可以先跳到下面的 dry-run。
 
-## 5. 运行一次安全的 Research Chain dry-run
+## 5. 可用数据源
+
+同一类数据往往有多个来源。下表列出当前**已实测**的取数路径、用途与限制，方便你在搭建真实数据链时选择，也方便判断某个来源能否作为另一个来源的交叉校验。
+
+### 5.1 行情与参考数据
+
+| 来源 | 取什么 | 访问方式 | 当前状态与限制 |
+|---|---|---|---|
+| Tushare（2000 积分账号） | `daily` 原始 OHLCV、`adj_factor`、`stk_limit`、`suspend_d`、`stock_basic`、`trade_cal`、`index_weight`（部分） | HTTP API，需 `TUSHARE_2K_TOKEN` | **本项目主力源**。CLI 不自动加载 `.env`，需 `env $(grep -E '^TUSHARE' .env \| xargs)` 传入。免费/低积分档限速约 300 次/分钟，一个全 A 交易日约 104 次请求。`income_vip` 类接口不可用。 |
+| TDX / 通达信（via `mootdx`） | **除权除息事件**（`xdxr`）、行情 `bars`、指数日线 | 原生 TCP 协议，端口 7709 | `xdxr` **实测可用**（默认主机 `115.238.90.165:7709`，实测返回真实事件）。`bars`/`quotes` 在部分网络下被拦截返回空，但 `xdxr` 仍可用——**探测时必须用真正要发的命令**，否则会把"命令族被拦"误判成"服务器不可用"。 |
+| EastMoney | 独立交易日历（指数日线推会话表） | HTTP | 实测可用，但**抖动明显**（约 1/6 概率掉连接），入库与就绪门都带重试。 |
+
+### 5.2 复权数据的两条链
+
+复权价 = 原始价格 × 复权因子。复权因子可以从**公司行为事件**推导，本项目有两条已实现的路径，lineage 不同、语义相同（都是乘基、锚定最新交易日 1.0）：
+
+| lineage | 事件来源 | 实现 | 说明 |
+|---|---|---|---|
+| `adj_factor.exchange_v2` | Tushare `dividend` 公告 | `src/uq/market/adjustment_chain.py::build_adjustment_chain` | 需把公告映射为交易所事件形状；只采用 `div_proc == 实施` 的记录，税前金额 |
+| `adj_factor.derived_v4` | **TDX `xdxr`（交易所原始事件）** | `src/uq/market/adjustment_chain.py::build_tdx_adjustment_chain` | 无需映射公告，事件即交易所形状；适合作为上面那条链的交叉校验 |
+
+快照 schema 版本与 lineage 绑定（`snapshot_version=3` ↔ `exchange_v2`，`4` ↔ `derived_v4`），两个版本都**可读**，读取侧只拒绝血缘不在 `CONSUMABLE_FORMULA_VERSIONS` 内的快照。
+
+**实测吻合度**：83 个除权事件（6 只标的）上，TDX 事件重算的因子跳变与 Tushare `adj_factor` 的跳变最大差 0.109%、平均 0.023%，83/83 在 0.5% 以内。
+
+### 5.3 新浪财经（仅调研，未接入）
+
+| 来源 | 取什么 | 访问方式 | 状态 |
+|---|---|---|---|
+| 新浪财经 | 分红送股方案页 | 纯 HTTP：`https://vip.stock.finance.sina.com.cn/corp/go.php/vISSUE_ShareBonus/stockid/{代码}.phtml` | **可用但已知有分歧，尚未接入** |
+
+实测（6 只标的、190 个匹配除权日）：**185 个完全一致**，2 个仅是送股/转增分类不同（总股本相同），**3 个存在真实数值分歧**（例如中国平安 2018-06-07 派息：新浪 1.0 vs TDX 1.2；五粮液 1999-06-08：1.25 vs 1.0）。
+
+如果要把它接入，注意：
+
+- 用**纯 `requests` + `pandas.read_html`**，**不要装 `akshare`**——它会连带升级 pandas 到 3.x，与仓库锁定的 pandas 2.3.3 冲突。
+- 必须先处理上面 3 处分歧的成因（是历史补丁差异、还是新浪页面的精度问题），再决定它能否作为第三源。
+
+### 5.4 取不到数据时先查什么
+
+1. **先确认是"命令族被拦"还是"主机不可达"**：TDX 上换 `xdxr` 再试一次。
+2. Tushare 报限流：请求之间加间隔（`scripts/ingest_window.py --session-interval-seconds`，默认 25 秒）。
+3. EastMoney 掉连接：加重试（`--calendar-attempts`）。
+4. 某只股票日线中途消失且不停牌：见 `--excluded-instruments`（供应商停发，属已知缺陷，需要在证据文件里显式剔除）。
+
+## 6. 运行一次安全的 Research Chain dry-run
 
 dry-run 不会训练模型，不会生成因子，也不会做回测。它只校验 research request 并落一个 request manifest 和初始 state manifest。
 
@@ -148,7 +193,7 @@ mkdir -p "$DATA_ROOT"
 
 > 注意：当前 CLI 的 dry-run 使用的是 v1 示例请求。仓库里也有更严格的 v2/v3 契约，但不要把 v3 fixture 直接复制进这个 CLI dry-run；它目前不会被 CLI 的 dry-run 按 v3 路由。
 
-## 6. execute 模式是什么？小白应该用吗？
+## 7. execute 模式是什么？小白应该用吗？
 
 `execute` 模式才是完整研究链：
 
@@ -225,7 +270,7 @@ v5 请求额外要求的两类绑定**有**随仓库提供的生产者:
 
 两点提醒:
 
-- §5 的 dry-run 只校验请求本身并写 request/state manifest,**不会**去解析上面这些 store;绑定是到 execute 阶段才逐个读取校验的,所以 dry-run 通过不代表可以 execute。
+- §6 的 dry-run 只校验请求本身并写 request/state manifest,**不会**去解析上面这些 store;绑定是到 execute 阶段才逐个读取校验的,所以 dry-run 通过不代表可以 execute。
 - 因此"一条命令从零跑到回测"按现有代码还做不到:上面六类要先产出并落到同一个 `--data-root`。已有生产入口的是两类:因子(`scripts/publish_factor_partitions.py`)与 universe snapshot(`scripts/publish_universe_snapshots.py`);其余四类(`adjusted_price`、`feature_schema`/`feature_preprocessing`、`label_set`、`backtest_config`)目前只有测试里的 helper 会产出。
 
 ### 论文执行(v5 请求)的两个额外参数
@@ -251,7 +296,7 @@ v5 请求额外要求的两类绑定**有**随仓库提供的生产者:
 
 日历快照的跨源核对口径:`--skip-independent-calendar` 会把 `independent_source` 记为 `not_checked`、`cross_check_result` 记为 `skipped`(而不是伪报 `agreement`);两家供应商会话列表不一致时直接 fail-closed。
 
-## 7. 结果在哪里看
+## 8. 结果在哪里看
 
 ### 数据入库结果
 
@@ -323,7 +368,7 @@ Target weights 是“某一天的组合目标权重”，不是买入/卖出命�
 
 它表示这四只股票各占目标组合 25%。至于今天应该买多少股、卖多少股、是否有现金、是否可卖、是否停牌，需要 Portfolio Execution/Paper Execution 和当前持仓状态共同决定。
 
-## 8. 常见错误与处理
+## 9. 常见错误与处理
 
 ### `uv: command not found`
 
@@ -381,7 +426,7 @@ config/schemas/contracts/backtest_result.v1.json
 config/schemas/contracts/research_run_result.v1.json
 ```
 
-## 9. 常用术语
+## 10. 常用术语
 
 | 术语 | 通俗解释 |
 |---|---|
@@ -398,7 +443,7 @@ config/schemas/contracts/research_run_result.v1.json
 | Risk Control Plane | 横切风控与治理层，负责 policy、event、decision、exception 和状态记录。 |
 | Research Chain | 把数据、因子、数据集、训练、预测、组合、回测串起来的顶层编排器。 |
 
-## 10. 新手推荐路线
+## 11. 新手推荐路线
 
 1. 安装依赖并跑通 `pytest`。
 2. 用 `uq-ingest daily` 尝试采集一个交易日。

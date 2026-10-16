@@ -362,8 +362,144 @@ def publish_adjustment_snapshot(
         events=result.events[EVENT_COLUMNS].reset_index(drop=True),
         effective_dates=result.derivation.effective_dates,
         sessions=list(result.sessions),
+        # persist the lineage the derivation declared, not the store's default,
+        # so a reader can tell the two event sources apart
+        formula_version=result.derivation.version,
         # the store refuses the write if the table it persists is not byte-
         # identical to the one the factor side declared
         expected_effective_checksum=result.derivation.effective_date_table_checksum,
     )
     return directory.name
+
+
+# --- TDX xdxr as the event source (lineage adj_factor.derived_v4) ------------
+#
+# `build_adjustment_chain` above takes Tushare *disclosures* and maps them into the
+# exchange event shape.  TDX publishes the exchange shape directly, so this path
+# skips the mapping entirely: that is the point of having a second derivation --
+# a disclosure row that is mis-staged (a plan or a shareholder-meeting record
+# carrying cash_div=0) or mis-mapped cannot distort the events, because nothing
+# here interprets a disclosure.
+TDX_DERIVATION_VERSION = "adj_factor.derived_v4"
+
+
+def build_tdx_adjustment_chain(
+    *,
+    events: pd.DataFrame,
+    bars: pd.DataFrame,
+    instrument: str,
+    window_start: dt.date,
+    window_end: dt.date,
+    provenance: str = "tdx:xdxr",
+    tolerance: float = PROVIDER_TOLERANCE,
+) -> AdjustmentChainResult:
+    """Derive one instrument's factors from raw TDX ``xdxr`` events.
+
+    The event frame is used exactly as TDX publishes it (filtered to realised
+    ex-right rows and ordered), so this derivation is lineage
+    ``adj_factor.derived_v4`` rather than the disclosure-mapped
+    ``adj_factor.exchange_v2``.  Both are multiply-basis and anchored at 1.0 on
+    the latest session, so a consumer may read either.
+
+    Everything the disclosure path enforces is still enforced here, because the
+    failure modes are the derivation's, not the source's:
+
+    * an ex-date that is not a trading session would be recorded in the snapshot's
+      event table yet never move a factor, so the window is refused rather than
+      published as a self-contradicting snapshot;
+    * the derived factors are reconciled against the provider's own ``adj_factor``
+      column, so a divergence beyond ``tolerance`` blocks publication.
+    """
+    required = {"instrument", "session_date", "close", "adj_factor"}
+    missing = required - set(bars.columns)
+    if missing:
+        raise ContractError(f"bars are missing columns: {sorted(missing)}")
+    if events is None or events.empty:
+        raise ContractError(f"no TDX xdxr events supplied for {instrument}")
+
+    instrument_bars = bars[bars["instrument"] == instrument].copy()
+    if instrument_bars.empty:
+        raise ContractError(f"no bars for {instrument} in the requested window")
+    instrument_bars["session_date"] = pd.to_datetime(instrument_bars["session_date"]).dt.date
+    instrument_bars = instrument_bars.sort_values("session_date").reset_index(drop=True)
+    sessions = sorted(set(instrument_bars["session_date"]))
+    if sessions[0] != window_start or sessions[-1] != window_end:
+        raise ContractError(
+            f"bar sessions for {instrument} span {sessions[0]}..{sessions[-1]}, which does not match "
+            f"the declared window {window_start}..{window_end}; pass the instrument's own session range"
+        )
+
+    if "category" not in events.columns:
+        raise ContractError("TDX xdxr events require a category column")
+    selected = events[events["category"] == 1].copy()
+    # TDX returns the instrument's whole history; only the ex-dates inside the
+    # declared window can move this window's factors, so the off-session check
+    # below must consider exactly those. Rejecting an out-of-window ex-date would
+    # make a short window unusable forever, since no window covers a listing's
+    # entire history.
+    in_window = [
+        dt.date(int(row["year"]), int(row["month"]), int(row["day"]))
+        for row in selected.to_dict(orient="records")
+        if window_start <= dt.date(int(row["year"]), int(row["month"]), int(row["day"])) <= window_end
+    ]
+    off_session = [day for day in in_window if day not in set(sessions)]
+    if off_session:
+        raise ContractError(
+            f"TDX ex-dates for {instrument} fall outside the bar sessions: "
+            f"{[day.isoformat() for day in off_session[:10]]}; the deriver can only apply an event "
+            "on a trading session — verify the event date against the exchange calendar"
+        )
+
+    # Keep only the in-window events: the deriver applies an event on its ex-date,
+    # so an out-of-window event would need a pre-ex close this window does not
+    # contain and would be unresolvable by construction.
+    ordered = selected[[
+        window_start <= dt.date(int(row["year"]), int(row["month"]), int(row["day"])) <= window_end
+        for _, row in selected.iterrows()
+    ]].sort_values(["year", "month", "day"], kind="stable").reset_index(drop=True)
+    if not ordered.empty:
+        # Only in-window ex-dates can move this window's factors, so the
+        # off-session refusal is evaluated on those before anything is derived.
+        # Checking after the provider reconciliation would let an agreeing
+        # provider number publish a snapshot whose event table contradicts its own
+        # effective-date table.
+        unresolved = sorted(
+            dt.date(int(row["year"]), int(row["month"]), int(row["day"]))
+            for row in ordered.to_dict(orient="records")
+        )
+        off_session = [day for day in unresolved if day not in set(sessions)]
+        if off_session:
+            raise ContractError(
+                f"TDX ex-dates for {instrument} fall outside the bar sessions: "
+                f"{[day.isoformat() for day in off_session[:10]]}; the deriver can only apply an "
+                "event on a trading session — verify the event date against the exchange calendar"
+            )
+    ordered["source_event_id"] = [
+        f"tdx_xdxr:{instrument}:{int(r['year']):04d}{int(r['month']):02d}{int(r['day']):02d}"
+        for _, r in ordered.iterrows()
+    ]
+    pre_close = _pre_close_series(instrument_bars, instrument=instrument, events=ordered)
+    derivation = XdxrAdjustmentDeriver(provenance=provenance).derive(
+        instrument, ordered.copy(), pd.to_datetime(sessions), pre_close
+    )
+    # Publish the lineage this derivation actually declares, so a reader that
+    # refuses unknown lineages cannot mistake it for the disclosure-mapped one.
+    derivation = AdjustmentDerivation(
+        frame=derivation.frame,
+        version=TDX_DERIVATION_VERSION,
+        provenance=derivation.provenance,
+        snapshot_id=derivation.snapshot_id,
+        effective_date_table_checksum=derivation.effective_date_table_checksum,
+        effective_dates=derivation.effective_dates,
+    )
+    check = _provider_check(derivation.frame, instrument_bars, tolerance=tolerance)
+    return AdjustmentChainResult(
+        instrument=instrument,
+        events=ordered[EVENT_COLUMNS].reset_index(drop=True),
+        derivation=derivation,
+        sessions=tuple(sessions),
+        window_start=window_start,
+        window_end=window_end,
+        dropped=(),
+        provider_check=check,
+    )

@@ -15,6 +15,7 @@ from uq.errors import ContractError
 from uq.market.adjustment_chain import (
     EVENT_COLUMNS,
     build_adjustment_chain,
+    build_tdx_adjustment_chain,
     implemented_events,
     publish_adjustment_snapshot,
 )
@@ -427,3 +428,174 @@ def test_script_report_surfaces_skipped_provider_checks_separately(tmp_path, mon
     assert reconciliation["max_abs_diff"] is None
     assert reconciliation["worst_instrument"] is None
     assert reconciliation["all_within_public_resolution"] is None
+
+
+# --- TDX xdxr as the event source (lineage adj_factor.derived_v4) ------------
+
+
+def _xdxr(**overrides):
+    """One realised ex-right event in TDX's own (per-ten-share) shape."""
+    event = {
+        "year": 2026, "month": 8, "day": 20,
+        "category": 1,
+        "fenhong": 5.0,        # per 10 shares -> 0.5 per share
+        "peigujia": 0.0,
+        "songzhuangu": 0.0,
+        "peigu": 0.0,
+        "suogu": None,
+    }
+    event.update(overrides)
+    return event
+
+
+def _events(*rows):
+    return pd.DataFrame(list(rows) or [_xdxr()])
+
+
+def test_tdx_chain_declares_the_derived_v4_lineage(tmp_path):
+    result = build_tdx_adjustment_chain(
+        events=_events(), bars=_bars(), instrument=INSTRUMENT,
+        window_start=DATES[0], window_end=DATES[-1],
+    )
+    assert result.derivation.version == "adj_factor.derived_v4"
+    assert result.derivation.provenance == "tdx:xdxr"
+
+
+def test_tdx_chain_reconciles_against_the_provider_factor(tmp_path):
+    # 10.0 -> ex-right (10.0-0.5)/1.0 = 9.5, matching the fixture's 0.95 factor
+    result = build_tdx_adjustment_chain(
+        events=_events(), bars=_bars(), instrument=INSTRUMENT,
+        window_start=DATES[0], window_end=DATES[-1],
+    )
+    assert result.provider_check["status"] == "passed"
+
+
+def test_tdx_chain_refuses_a_diverging_derivation(tmp_path):
+    bars = _bars(factors=(0.5, 1.0, 1.0))
+    with pytest.raises(ContractError, match="diverges from the official adj_factor"):
+        build_tdx_adjustment_chain(
+            events=_events(), bars=bars, instrument=INSTRUMENT,
+            window_start=DATES[0], window_end=DATES[-1],
+        )
+
+
+def test_tdx_chain_ignores_events_outside_the_window(tmp_path):
+    # TDX returns a name's whole history; an ex-date before the window must not be
+    # applied (its pre-ex close is not in the window) nor rejected.
+    events = pd.DataFrame([
+        _xdxr(year=1999, month=5, day=10),
+        _xdxr(),
+    ])
+    result = build_tdx_adjustment_chain(
+        events=events, bars=_bars(), instrument=INSTRUMENT,
+        window_start=DATES[0], window_end=DATES[-1],
+    )
+    assert len(result.events) == 1
+    assert result.provider_check["status"] == "passed"
+
+
+def test_tdx_chain_ignores_non_ex_right_categories(tmp_path):
+    events = pd.DataFrame([
+        _xdxr(category=5),   # 股本变化: share-count drift, not an action
+        _xdxr(),
+    ])
+    result = build_tdx_adjustment_chain(
+        events=events, bars=_bars(), instrument=INSTRUMENT,
+        window_start=DATES[0], window_end=DATES[-1],
+    )
+    assert len(result.events) == 1
+
+
+def test_tdx_chain_refuses_an_ex_date_that_is_not_a_session(tmp_path):
+    # 2026-08-19 is inside the declared window but 2026-08-22 (a Saturday) is not,
+    # so the ex-date is in-window yet never applied by the deriver -- exactly the
+    # self-contradicting snapshot this refuses. (An out-of-window date is filtered
+    # instead; see test_tdx_chain_ignores_events_outside_the_window.)
+    window = [dt.date(2026, 8, 19), dt.date(2026, 8, 21)]   # 08-20 is not a session
+    bars = pd.DataFrame({
+        "instrument": [INSTRUMENT] * len(window),
+        "session_date": window,
+        "close": [10.0, 9.5],
+        "adj_factor": [1.0, 1.0],
+    })
+    events = pd.DataFrame([_xdxr(day=20)])   # in-window, but never applied
+    with pytest.raises(ContractError, match="fall outside the bar sessions"):
+        build_tdx_adjustment_chain(
+            events=events, bars=bars, instrument=INSTRUMENT,
+            window_start=window[0], window_end=window[-1],
+        )
+
+
+def test_tdx_chain_refuses_without_events(tmp_path):
+    with pytest.raises(ContractError, match="no TDX xdxr events"):
+        build_tdx_adjustment_chain(
+            events=pd.DataFrame(), bars=_bars(), instrument=INSTRUMENT,
+            window_start=DATES[0], window_end=DATES[-1],
+        )
+
+
+def test_tdx_snapshot_publishes_as_v4_and_reads_back(tmp_path):
+    result = build_tdx_adjustment_chain(
+        events=_events(), bars=_bars(), instrument=INSTRUMENT,
+        window_start=DATES[0], window_end=DATES[-1],
+    )
+    generation_id = publish_adjustment_snapshot(
+        tmp_path, result, visibility_time=dt.datetime(2026, 8, 22, tzinfo=dt.timezone.utc)
+    )
+    manifest = AdjustmentSnapshotReader(tmp_path).read_manifest(INSTRUMENT, generation_id)
+    assert manifest["snapshot_version"] == 4
+    assert manifest["formula_version"] == "adj_factor.derived_v4"
+
+
+def test_a_derived_v4_snapshot_is_consumable(tmp_path):
+    # The point of listing two consumable lineages: a snapshot derived from TDX
+    # events feeds the same consumption seam as the disclosure-mapped one.
+    result = build_tdx_adjustment_chain(
+        events=_events(), bars=_bars(), instrument=INSTRUMENT,
+        window_start=DATES[0], window_end=DATES[-1],
+    )
+    generation_id = publish_adjustment_snapshot(
+        tmp_path, result, visibility_time=dt.datetime(2026, 8, 22, tzinfo=dt.timezone.utc)
+    )
+    selected = AdjustmentSnapshotReader(tmp_path).select_visible_generation(
+        instrument=INSTRUMENT,
+        window_start=DATES[0], window_end=DATES[-1],
+        as_of_time=dt.datetime(2026, 8, 23, tzinfo=dt.timezone.utc),
+        candidates=[generation_id],
+    )
+    assert selected == generation_id
+
+
+def test_the_v3_contract_still_rejects_the_derived_v4_lineage(tmp_path):
+    # v3 pins its lineage by const and stays byte-identical, so a snapshot that
+    # claims derived_v4 under snapshot_version 3 is a tampered document.
+    result = build_tdx_adjustment_chain(
+        events=_events(), bars=_bars(), instrument=INSTRUMENT,
+        window_start=DATES[0], window_end=DATES[-1],
+    )
+    generation_id = publish_adjustment_snapshot(
+        tmp_path, result, visibility_time=dt.datetime(2026, 8, 22, tzinfo=dt.timezone.utc)
+    )
+    path = tmp_path / "adjustments" / "snapshots" / INSTRUMENT / generation_id / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["snapshot_version"] = 3
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ContractError, match="adjustment_snapshot.v3.json validation failed"):
+        AdjustmentSnapshotReader(tmp_path).read_manifest(INSTRUMENT, generation_id)
+
+
+def test_the_v4_contract_rejects_the_exchange_lineage(tmp_path):
+    # ...and the reverse: v4 is not a widening of v3, it is a different lineage.
+    result = build_tdx_adjustment_chain(
+        events=_events(), bars=_bars(), instrument=INSTRUMENT,
+        window_start=DATES[0], window_end=DATES[-1],
+    )
+    generation_id = publish_adjustment_snapshot(
+        tmp_path, result, visibility_time=dt.datetime(2026, 8, 22, tzinfo=dt.timezone.utc)
+    )
+    path = tmp_path / "adjustments" / "snapshots" / INSTRUMENT / generation_id / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["formula_version"] = "adj_factor.exchange_v2"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ContractError, match="adjustment_snapshot.v4.json validation failed"):
+        AdjustmentSnapshotReader(tmp_path).read_manifest(INSTRUMENT, generation_id)
