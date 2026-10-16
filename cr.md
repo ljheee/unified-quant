@@ -989,3 +989,23 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **本轮未动**：`backtest/engine.py` 首执行日 `prev_close` 退化为当日 open（`cr.md` Medium 条目，见一節）——它会改变已发布 PnL 与既有 golden 证据数值，属需裁决的口径变更，不在"CR 修缺陷"范围内。
 
 **测试计数**：本机 `python -m pytest tests/ -o addopts="" -p no:randomly -q` → **1085 passed / 24 skipped**（净 +10 例收集）。与上轮记录 1076/23 的 skip 差一来自 `tests/test_repro_staging.py:63`（工件校验和锁定 pyarrow 25.0.1，本机 26.0.0），与本轮变更无关。
+
+### 8.35 接线 label_set 发布器 + 事件互校（2026-10-16）
+
+**触发**：用户"都做"——把 §8.34 遗留的两项做完：①`LabelSetWriter` 接生产入口；②事件互校（此前明确延后）。
+
+**① `scripts/build_label_sets.py`（label_set 生产入口）**
+- 从 canonical bars（manifest-first 读）→ 逐标的 5 日前视标签 → `LabelSetWriter` 发布 → 可复核报告，refused 即 exit 1。
+- **真跑**：12 会话 × 2 标的的 canonical store，发布 2 份 label set、0 refused、各 12 行含 5 个 null（horizon 尾段，符合 `null_policy.insufficient_future=null`），并经 `LabelStore.read_frame` 读回通过。
+- **接线过程中修掉 3 个会必然失败的错**：binding checksum 用了 `hashlib(json)` 而 builder 校验的是 `sha256_json`（canonical JSON）；binding 形状不满足 `label_set.v1` 封闭契约（多了 `instrument`、缺 `visible_cutoff`）；canonical 列名是 `session_date` 而 builder 契约要 `datetime`（在边界 rename，与因子层同法）。
+- **`listing_date` 的真实缺口**：canonical v2 字段表**没有** `listing_date`，而标签资格规则要 60 天上市年龄。脚本改为从安全主数据 `tushare:stock_basic(list_date)` 取，取不到即拒（不猜——猜一个上市日是静默的 PIT 假设）。**局限如实写入报告**：`limit_up/limit_down` 在 canonical 里是价格而非布尔，故**涨跌停事件无法识别、该类不剔除**。
+
+**② 事件互校 `src/uq/market/corporate_action_reconcile.py`**
+- 把两份事件源**逐除权日逐字段直接对撞**（此前两份各自只对 vendor `adj_factor`，vendor 因子错则两边一起放过）。结论分三类：`agreed` / `amount_diverged`（同事件金额不一致）/ `coverage_diverged`（一方缺该事件）。
+- **拆分状态是我写测试时发现并修正的真缺陷**：初版把"金额不一致"与"一方缺事件"都归为 `diverged`，导致 `no_overlap` 不可达，且 run summary 无法区分"数据质量争议"与"漏事件导致少复权"——这两种要的动作不同。
+- **真跑（6 只标的，含此前人工裁定的样本）自动复现**：601318 报 `amount_diverged`，落在 **2018-06-07**，公告 `fenhong=2.0`/10股 vs TDX `12.0`/10股——正是 §8.33 人工裁定过的那个事件（vendor 跳变反推应有 ≈12.06/10股，即 **TDX 对、公告错**）。**无需人工仲裁即被发现。** 600000 另报 `coverage_diverged`（TDX 多一个 2026-07-16 事件）。
+- 报告侧**不裁决谁对**：只给两值与结论，谁对交给 vendor 因子跳变那道门（单一职责）。
+
+**测试**：`test_build_label_sets.py` +7、`test_corporate_action_reconcile.py` +10 = 净 **+17** → **1103 passed / 23 skipped / exit 0**（父节点 1086）。
+
+**未夸大声明**：两项的实现、接线中三处必错、状态拆分缺陷、以及真跑结果均为监工亲做；601318 自动命中与人工裁定同一事件是实测对上的，不是推断。`code-review-unified-quant.md` 保持未跟踪。

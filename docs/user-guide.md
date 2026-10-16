@@ -147,6 +147,8 @@ mkdir -p "$DATA_ROOT"
 - **新浪有真实缺陷**（中国平安 2018 事件）。
 - **Tushare 自己的 `dividend` 字段也有错**（中国平安该事件给 0.2）。这正是"复权链要用两个独立来源交叉校验"的意义：单一来源（含 Tushare 公告）都可能错。
 
+**事件互校（已落地）**：`src/uq/market/corporate_action_reconcile.py` 把两份事件源**逐除权日、逐字段**直接对撞（不再各自只对自己的因子），区分三种结论：`agreed` / `amount_diverged`（同一事件金额不一致）/ `coverage_diverged`（一方缺该事件）。真跑实测（6 只标的）复现了上述人工裁定——**601318 2018-06-07 自动报出 `amount_diverged`**（公告 2.0/10股 vs TDX 12.0/10股），无需人工仲裁即可发现。
+
 **如果要接入新浪作为第三源**：
 
 - 用**纯 `requests` + `pandas.read_html`**，**不要装 `akshare`**——它会连带升级 pandas 到 3.x，与仓库锁定的 pandas 2.3.3 冲突。

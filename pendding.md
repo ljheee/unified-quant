@@ -306,3 +306,10 @@ lineage 更正(2026-10-16,cr.md §8.32)
 - 另补 2 条既有实现的锁:`_formula_sha256` 必须把"行基准"计入身份;finiteness 收紧**不得吞掉**声明的 null 策略(NaN 标签仍在检查前丢弃)。
 - 删除未跟踪的 `tests/test_external_review_20261014_latent.py`(其机制在 `10d2d0e` 已分别锁入既有测试;去重前逐条核对,独有 2 条已补入)。
 - **仍未决(新增一条)**:`backtest/engine.py` 首执行日 `prev_close` 退化为当日 open ⇒ 首执行日涨跌停永不触发。会改变已发布 PnL 与既有 golden 证据数值,属需裁决的口径变更,未与本轮"修缺陷"混做。
+
+接线 label_set 入口 + 事件互校(2026-10-16,cr.md §8.35)
+- **`scripts/build_label_sets.py`**:canonical bars → 5 日前视标签 → `LabelSetWriter` 发布 + 报告,refused 即 exit 1。真跑 12 会话 ×2 标的:发布 2 份、0 refused、各 12 行含 5 个 null(horizon 尾段),读回通过。接线时修掉 3 处必错:binding checksum 误用 `hashlib(json)`(应为 `sha256_json`)、binding 形状不满足 `label_set.v1` 封闭契约、canonical 列名 `session_date` 而 builder 要 `datetime`。
+- **`listing_date` 真实缺口**:canonical v2 无该字段而资格规则要 60 天上市年龄 → 从 `stock_basic(list_date)` 取,取不到即拒(不猜)。**局限已写入报告**:`limit_up/limit_down` 在 canonical 是价格非布尔,涨跌停事件无法识别、该类不剔除。
+- **`src/uq/market/corporate_action_reconcile.py`**:两份事件源逐除权日逐字段直接对撞,结论分 `agreed`/`amount_diverged`/`coverage_diverged`。真跑 6 只标的**自动复现**人工裁定:601318 报 `amount_diverged` @ 2018-06-07(公告 2.0/10股 vs TDX 12.0/10股),而 vendor 跳变反推应有 ≈12.06/10股 → TDX 对、公告错。600000 另报 `coverage_diverged`(TDX 多 2026-07-16)。报告不裁决谁对,交给 vendor 因子跳变那道门。
+- **仍未决**:①复权线未在 A500/全A 试跑窗批量发布;②`adjusted_price_binding` 的 `expected_restated` 生产提供者未接线;③新浪仍未接入(裁定口径已定)。
+

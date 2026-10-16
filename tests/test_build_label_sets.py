@@ -1,0 +1,157 @@
+"""Regression tests for scripts/build_label_sets.py.
+
+The label set was the last pre-model family with no production publisher. These
+lock what the entry point must guarantee: the binding it stamps satisfies the
+closed label_set.v1 contract, the frame it hands the builder is the one the
+builder's own checksum describes (so the checksum the builder verifies is the
+checksum the caller computed), and a window that cannot label is refused.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from datetime import date
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from uq.contracts.artifacts import QualityReportStore
+from uq.contracts.canonical_v2 import CanonicalV2Store, file_sha256_bytes
+from uq.contracts.model_layer import sha256_json
+from uq.contracts.schema import load_schema
+from uq.research_chain.owning_contracts import LabelStore
+
+_ROOT = Path(__file__).resolve().parents[1]
+_spec = importlib.util.spec_from_file_location(
+    "build_label_sets", _ROOT / "scripts" / "build_label_sets.py"
+)
+module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(module)
+
+DATES = pd.bdate_range("2026-01-05", periods=12)
+INSTRUMENTS = ("600000.XSHG", "000001.XSHE")
+
+
+def _publish_bars(root: Path, instruments=INSTRUMENTS, listing_dates=None):
+    schema = load_schema("config/schemas/bars_daily.v2.yaml")
+    rows = []
+    for index, instrument in enumerate(instruments):
+        for position, day in enumerate(DATES):
+            close = 10.0 + position * 0.1 + index
+            rows.append({
+                "instrument": instrument, "session_date": day,
+                "open": close - 0.1, "high": close + 0.2, "low": close - 0.2,
+                "close": close, "volume": 10000.0, "amount": 100000.0,
+                "status": "trading", "limit_up": close * 1.1, "limit_down": close * 0.9,
+                "adj_factor": 1.0,
+            })
+    frame = pd.DataFrame(rows)
+    store = CanonicalV2Store(root)
+    for day in DATES:
+        part = frame[frame["session_date"] == day]
+        generation = store.prepare_generation(schema, day.date(), part, {}, {})
+        report = {
+            "report_version": 1, "binding_type": "canonical_v2",
+            "bound_generation_id": generation, "policy": "reject_all", "status": "passed",
+            "checks": [{"name": "coverage", "threshold": 0, "observed": 0,
+                        "level": "error", "result": "passed"}],
+            "errors": [], "warnings": [],
+        }
+        directory = QualityReportStore().save(root, report)
+        store.publish(schema, day.date(), part, {}, {},
+                      quality_checksum=file_sha256_bytes((directory / "report.json").read_bytes()))
+    return schema
+
+
+def _patch_listing_dates(monkeypatch, listing_dates=None):
+    defaults = {instrument: date(2010, 1, 4) for instrument in INSTRUMENTS}
+    if listing_dates is not None:
+        defaults.update(listing_dates)
+    monkeypatch.setattr(module, "_listing_dates", lambda instruments: defaults)
+
+
+def _run(tmp_path, monkeypatch, *, start="2026-01-05", end="2026-01-20", instrument=None, listing_dates=None):
+    bars_root = tmp_path / "bars"
+    _publish_bars(bars_root)
+    _patch_listing_dates(monkeypatch, listing_dates)
+    out = tmp_path / "report.json"
+    argv = [
+        "--bars-root", str(bars_root), "--label-root", str(tmp_path / "labels"),
+        "--start", start, "--end", end, "--out", str(out),
+    ]
+    if instrument is not None:
+        argv += ["--instrument", instrument]
+    code = module.main(argv)
+    report = json.loads(out.read_text()) if out.is_file() else None
+    return code, report
+
+
+def test_publishes_one_label_set_per_instrument(tmp_path, monkeypatch):
+    code, report = _run(tmp_path, monkeypatch)
+    assert code == 0
+    assert report["published"] == len(INSTRUMENTS)
+    assert report["refused"] == 0
+    # the horizon tail is null by contract, and that is reported rather than hidden
+    for record in report["records"]:
+        assert record["rows"] == len(DATES)
+        assert record["null_labels"] == 5
+
+
+def test_published_label_sets_read_back_through_the_governed_store(tmp_path, monkeypatch):
+    _run(tmp_path, monkeypatch)
+    store = LabelStore(tmp_path / "labels")
+    report = json.loads((tmp_path / "report.json").read_text())
+    for record in report["records"]:
+        manifest, frame = store.read_frame(record["label_generation_id"])
+        assert manifest["generation_id"] == record["label_generation_id"]
+        assert len(frame) == record["rows"]
+        assert list(frame.columns) == ["instrument", "decision_date", "label"]
+
+
+def test_the_stamped_binding_satisfies_the_closed_contract(tmp_path, monkeypatch):
+    # label_set.v1 closes the binding object: no `instrument` field and
+    # `visible_cutoff` is required. Getting this wrong fails at publish time with a
+    # schema message that does not name the caller.
+    _run(tmp_path, monkeypatch)
+    report = json.loads((tmp_path / "report.json").read_text())
+    store = LabelStore(tmp_path / "labels")
+    manifest, _ = store.read_frame(report["records"][0]["label_generation_id"])
+    (binding,) = manifest["upstream_adjusted_price_bindings"]
+    assert set(binding) == {
+        "binding", "dataset", "schema_version", "partition_date",
+        "generation_id", "data_checksum_sha256", "visible_cutoff",
+    }
+    assert binding["binding"] == "adjusted_price"
+
+
+def test_the_binding_checksum_is_the_one_the_builder_verifies(tmp_path, monkeypatch):
+    # The builder refuses a publish unless the binding's data_checksum_sha256 equals
+    # the checksum it computes over the frame it was handed, so the caller must use
+    # the same function (sha256_json over canonical JSON), not plain json.dumps.
+    code, report = _run(tmp_path, monkeypatch)
+    assert code == 0
+    assert report["refused"] == 0
+
+
+def test_an_instrument_without_a_listing_date_is_a_configuration_failure(tmp_path, monkeypatch):
+    # The real `_listing_dates` is exercised (not patched out), with a security
+    # master that does not cover the instrument: guessing a listing date would be a
+    # silent point-in-time assumption about label eligibility.
+    bars_root = tmp_path / "bars"
+    _publish_bars(bars_root, instruments=("600000.XSHG",))
+    frame = pd.DataFrame({"ts_code": ["600000.SH"], "list_date": ["20100104"]})
+    monkeypatch.setattr(module.Tushare2kAdapter, "stock_basic", lambda self: frame)
+    with pytest.raises(SystemExit, match="no listing date"):
+        module._listing_dates(["600000.XSHG", "000001.XSHE"])
+
+
+def test_an_unknown_instrument_filter_is_a_configuration_failure(tmp_path, monkeypatch):
+    with pytest.raises(SystemExit, match="not present in the window's bars"):
+        _run(tmp_path, monkeypatch, instrument="999999.XSHG")
+
+
+def test_a_window_with_no_bars_is_refused(tmp_path, monkeypatch):
+    with pytest.raises(SystemExit, match="no bars partitions"):
+        _run(tmp_path, monkeypatch, start="2030-01-05", end="2030-01-20")
