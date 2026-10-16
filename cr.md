@@ -846,3 +846,40 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数（以父节点 a61cb1d 实测为基线）**：父节点 **1018** → 本轮 **1032**（净 +14：`test_ingest_window` +1、`test_adjusted_price_pipeline` +10、`test_factor_set_input_line_v2` +2、`test_qlib_adapter` +1）。全量 **1032 passed / 23 skipped / exit 0**。
 
 **未夸大声明**：本轮全部源码改动、三处治理新文件、四轮实现缺陷自查由主线亲做；Qlib 结论来自直接读取其源码（`processor.py`、`loader.py`），Shumway −30% 来自二次文献转述（未读原文）。多代理工具不可用（`unsupported call`），故未派 subagent；CR29-1/2 的缺陷由我在写测试时实测暴露并复验。本轮不改任何已发布制品身份（无 canonical schema 语义变更既有分区迁移、alpha158 v1 与 adjusted-v1 冻结未动）。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.30 TDX 独立复权源落地轮（2026-10-16，调研推翻前判 + 真跑验证）
+
+**触发**：用户要求「派 subagent 完成 TDX 的独立源验证」。本轮先由 subagent 调研（一个做多源可达性扫描、一个做 Tushare `adj_factor` 语义与除权公式推导），再由监工**逐条复现**后才落地。
+
+**前判被推翻（本轮最重要的自我纠正）**：§8.29 我断言「TDX 42 个主机全部不可用」。**该结论错误**，错在探测方法：
+
+- 我用 `bars` 探测，而本机网络只拦了 **bars/quotes 命令族**；`xdxr`（除权除息）命令族从未被拦。
+- 实测：`mootdx` 默认服务器 `115.238.90.165:7709`（我此前称"陈旧失效"）**能返回 88 行真实 xdxr 数据**；同一连接上 `bars`/`quotes` 返回空。所以"服务器不可用"是把命令族可用性误当成主机可用性。
+- 教训登记：**探测必须用真正要发的命令**。已写入 `MootdxSourceAdapter` docstring 与 `_xdxr_client` 的注释。
+
+**复权口径修正**：§8.29 我实测「Tushare `dividend` 重算与 vendor 因子差 30.6%」，同样是错的，错在公式：
+
+- 正确 A 股除权参考价：`(前收盘 - 每股现金 + 配股价×配股比例) / (1 + 送股比例 + 转增比例)`，`ratio = 前收盘 / 参考价`。我把送股项加进了分子（应为分母），得到倒数型假差异。
+- 量纲：TDX xdxr 的 `fenhong`/`songzhuangu`/`peigu` **全部是每 10 股**，需除 10（`fenhong=1.74` 除 10 后 0.174 才复现 vendor 跳变；纯现金事件 2017-07-21 同样验证）。
+- **83 个除权事件大样本验证（6 只标的）**：重算跳变与 vendor 因子跳变 max 0.109%、mean 0.023%、83/83 在 0.5% 内、81/83 在 0.1% 内。
+
+**落地**：
+- `src/uq/adapters/mootdx_source.py`：新增 `fetch_xdxr_events`、`_xdxr_client`（用 xdxr 而非 bars 探测）、`connected_server`（暴露真正应答的主机）。
+- `src/uq/pipeline/adjustment_events.py`（新）：`events_from_xdxr`（归一量纲、只留 `category==1`、按日排序）、`AdjustmentEvent.ratio`（除权公式）、`TdxEventSource`。
+- `src/uq/pipeline/adjusted_price.py`：`publish_adjusted_partition` 的独立源现支持 `events`+`closes`+`previous_raw`（TDX 事件重算），与 `independent_restated` 二选一必填；新增 `verify_jump_cross_check`。
+
+**真跑（本轮亲做）**：`600000.XSHG`/`000001.XSHE`/`601318.XSHG` 在 `2025-09-19`（前一交易日 09-18）真实发布 `bars_adjusted/adjusted-v2` 分区成功，generation `9b4d2ea4e0fd5e05effd9f36edadb8763a76def9bec5fdebfce045f5d99d04c5`，quality report 四条检查全 passed。四价格列（open/high/low/close）的 vendor 跳变与 TDX 事件跳变**差异全为 0.000000**。
+
+**本轮自查发现并修复的实现缺陷（4 条，均先由真跑或变异暴露）**
+| ID | 缺陷 | 处置 |
+|---|---|---|
+| CR30-1 | `fenhong` 未除 10（量纲），单测与真跑均会错 | 除 `_PER_TEN_SHARES`；锁 `test_events_from_xdxr_normalises_units_to_per_share` |
+| CR30-2 | 跳变校验两侧同除 vendor 前一帧 = 恒等（永远通过） | 独立侧改用**它自己的**前一帧；缺 `previous_raw` 即拒；变异 B 杀 `test_a_disagreeing_event_recomputation_blocks_publication` |
+| CR30-3 | 跳变校验按 `(instrument, session_date)` 对齐，而两分区本就不同会话 → 永远不匹配 | 改为按 `instrument` 对齐；新增 `test_jump_cross_check_compares_partitions_from_different_sessions`，变异 C 复做必红 |
+| CR30-4 | `restate_from_events` 对 `observed=None` 无条件写入；`_previous_session` 从 `closes` 猜会话（与 `previous_raw` 实际会话不符） | 加 None 守卫；会话改从 `previous_raw.session_date` 解析，跨会话即拒 |
+
+**变异验证（监工亲做、亲恢复、`cmp` 确认字节还原）**：MUT-A（去 fenhong/10）杀 3 例；MUT-B（跳变校验恒等化）杀 1 例；MUT-C（按会话对齐）杀 1 例。三次均 `git diff` 确认恢复。
+
+**测试计数（以父节点 a61cb1d 之后的 1032 为基线）**：`test_adjustment_events.py` 新增 10 例、`test_adjusted_price_pipeline.py` 由 10 增至 19 例 = 本轮净 **+19** → **1051 passed / 23 skipped / exit 0**。
+
+**未夸大声明**：Qlib/Shumway 的文献结论来自 §8.29 的调研（引用 URL 在 pendding）；本轮 TDX 可达性、除权公式、83 事件吻合度、真跑发布均为监工亲做（含 subagent 结论的逐条复现）。**前判两次被推翻（服务器可达性、公式）已如实登记，不掩盖**。`MootdxSourceAdapter.DEFAULT_SERVERS` 未改动（实测其主机对 xdxr 有效，我此前的"陈旧"判断也是错的）。`code-review-unified-quant.md` 保持未跟踪。

@@ -3,13 +3,27 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import date, timedelta
 import time
+from typing import Sequence
+
 import pandas as pd
 
 from ..sources.fetch import FetchResult, FetchStatus
 
 
 class MootdxSourceAdapter:
-    """Research adapter for TDX standard quote servers via mootdx."""
+    """Research adapter for TDX standard quote servers via mootdx.
+
+    Server and command availability note (2026-10-16, measured):
+
+    * ``DEFAULT_SERVERS`` is NOT dead.  ``115.238.90.165:7709`` answers ``xdxr``
+      with real data.  An earlier conclusion that "all TDX servers are
+      unreachable" came from probing with ``bars``, which is the wrong probe for
+      this adapter's purpose.
+    * on the hosts measured, ``bars`` and ``quotes`` return empty while ``xdxr``
+      returns 88 rows, so a host that fails a quote-shaped probe must never be
+      treated as unavailable, and a quote probe must not decide whether an
+      ``xdxr`` request may run.
+    """
 
     DEFAULT_SERVERS: tuple[tuple[str, int], ...] = (
         ("115.238.90.165", 7709),
@@ -41,6 +55,16 @@ class MootdxSourceAdapter:
         self.retries = retries
         self.retry_backoff_seconds = retry_backoff_seconds
         self.server = self.servers[0]
+        self.active_server: tuple[str, int] | None = None
+
+    @property
+    def connected_server(self) -> tuple[str, int]:
+        """The host that actually answered, falling back to the requested one.
+
+        ``server`` records what the caller asked for, which stays a stale entry
+        when every requested host is dead and the shipped list answers instead.
+        """
+        return self.active_server or self.server
 
     def _client(self):
         try:
@@ -53,12 +77,73 @@ class MootdxSourceAdapter:
                 client = Quotes.factory(market="std", server=candidate, timeout=self.timeout)
                 probe = client.bars(symbol="600000", frequency=9, start=0, offset=1)
                 if probe is not None and not probe.empty:
+                    self.active_server = candidate
                     self.server = candidate
                     return client
                 failures.append(f"{candidate}: empty probe")
             except Exception as exc:
                 failures.append(f"{candidate}: {exc}")
         raise RuntimeError("all TDX servers failed: " + "; ".join(failures))
+
+    @staticmethod
+    def _shipped_hosts() -> tuple[tuple[str, int], ...]:
+        try:
+            from mootdx.consts import HQ_HOSTS
+        except Exception:
+            return ()
+        return tuple((str(ip), int(port)) for _name, ip, port in HQ_HOSTS)
+
+    def _xdxr_client(self):
+        """A client validated by the ``xdxr`` command, not by ``bars``.
+
+        ``_client`` probes with ``bars``, which is blocked on some networks while
+        ``xdxr`` still answers.  Probing with the command we actually intend to
+        issue keeps the adapter usable where only that family is available.
+        """
+        try:
+            from mootdx.quotes import Quotes
+        except ImportError as exc:
+            raise RuntimeError("optional dependency mootdx is not installed") from exc
+        failures: list[str] = []
+        for candidate in self._candidate_hosts():
+            try:
+                client = Quotes.factory(market="std", server=candidate, timeout=self.timeout, quiet=True)
+                probe = client.xdxr(symbol="600000")
+                if probe is not None and not probe.empty:
+                    self.active_server = candidate
+                    self.server = candidate
+                    return client
+                failures.append(f"{candidate}: empty xdxr probe")
+            except Exception as exc:
+                failures.append(f"{candidate}: {exc}")
+        raise RuntimeError("all TDX servers failed to answer xdxr: " + "; ".join(failures))
+
+    def _candidate_hosts(self) -> tuple[tuple[str, int], ...]:
+        return tuple(self.servers)
+
+    def fetch_xdxr_events(self, symbols: Sequence[str]) -> dict[str, pd.DataFrame]:
+        """Return TDX corporate-action (除权除息) events per symbol.
+
+        This is the independent source for the adjusted-price line: TDX is a
+        different vendor from the bars provider, so a factor recomputed from
+        these events is a genuine cross-check rather than a same-vendor
+        restatement.  A symbol whose events are unavailable is reported as an
+        empty frame by the caller, never as a fabricated event list.
+        """
+        if not symbols:
+            raise ValueError("at least one symbol is required")
+        client = self._xdxr_client()
+        out: dict[str, pd.DataFrame] = {}
+        try:
+            for symbol in symbols:
+                frame = client.xdxr(symbol=symbol)
+                out[str(symbol)] = pd.DataFrame() if frame is None or frame.empty else frame.copy()
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
+        return out
 
     @staticmethod
     def market_for(symbol: str) -> int:

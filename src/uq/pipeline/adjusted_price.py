@@ -31,6 +31,8 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.artifacts import QualityReportStore
+from ..pipeline.adjustment_events import AdjustmentEvent, symbol_of
+from typing import Sequence
 from ..contracts.canonical_v2 import CanonicalV2Store, file_sha256_bytes
 from ..contracts.schema import Schema, load_schema
 from ..errors import ContractError
@@ -159,6 +161,88 @@ def verify_cross_check(
     return {"name": "finite_values__restated_price_matches_independent_source", "tolerance": float(tolerance)}
 
 
+def verify_jump_cross_check(
+    restated: pd.DataFrame,
+    expected: pd.DataFrame,
+    previous_restated: pd.DataFrame,
+    previous_expected: pd.DataFrame | None,
+    *,
+    tolerance: float = _DEFAULT_TOLERANCE,
+) -> dict[str, Any]:
+    """Compare the *change* in restated prices between two adjacent partitions.
+
+    A cumulative factor is only meaningful relative to its own anchor, and the
+    event-based recomputation anchors later than the vendor's (the vendor's daily
+    history does not reach the earliest events of long-listed names).  Comparing
+    levels would reject every partition for a scale difference that carries no
+    information; comparing the jump isolates exactly what the two sources must
+    agree on, and measured on a real session the agreement is exact.
+
+    Each side is divided by *its own* previous partition.  Dividing both sides by
+    the same previous frame would cancel the very difference under test and make
+    the check a tautology.
+    """
+    if previous_restated is None or previous_restated.empty:
+        raise AdjustedPriceQualityRejection(
+            "event-based cross-check requires the previous session's restated partition "
+            "to compare the jump against"
+        )
+    frames = {
+        "produced": restated,
+        "independent": expected,
+        "previous produced": previous_restated,
+    }
+    if previous_expected is not None:
+        frames["previous independent"] = previous_expected
+    # The two partitions are different sessions by construction, so they are
+    # aligned on the instrument alone: keying on (instrument, session_date) would
+    # never match, and the row that matters is "this instrument in both sessions".
+    index = ["instrument"]
+    prepared = {}
+    for name, frame in frames.items():
+        required = set(_KEY_COLUMNS) | set(index) | set(_PRICE_COLUMNS)
+        missing = sorted(required - set(frame.columns))
+        if missing:
+            raise AdjustedPriceQualityRejection(f"{name} frame missing columns: {missing}")
+        aligned = frame.set_index(index).sort_index()
+        if aligned.index.duplicated().any():
+            raise AdjustedPriceQualityRejection(
+                f"{name} frame has duplicate instruments for the jump comparison"
+            )
+        prepared[name] = aligned
+    if previous_expected is None:
+        # Without an independently restated previous partition the event side has
+        # no jump of its own, and falling back to the vendor's previous frame would
+        # divide both sides by the same thing and cancel the difference under test.
+        raise AdjustedPriceQualityRejection(
+            "event-based cross-check requires the previous session's independent restatement"
+        )
+    reference = prepared["produced"].index
+    for name, frame in prepared.items():
+        if not frame.index.equals(reference):
+            raise AdjustedPriceQualityRejection(
+                f"jump cross-check row sets differ in the {name} frame"
+            )
+    for column in _PRICE_COLUMNS:
+        vendor_jump = pd.to_numeric(prepared["produced"][column]) / pd.to_numeric(
+            prepared["previous produced"][column]
+        )
+        event_jump = pd.to_numeric(prepared["independent"][column]) / pd.to_numeric(
+            prepared["previous independent"][column]
+        )
+        difference = (vendor_jump - event_jump).abs()
+        allowed = (event_jump.abs() * float(tolerance)).fillna(float(tolerance))
+        if bool((difference > allowed).fillna(True).any()):
+            bad = difference[difference > allowed].index[:5].tolist()
+            raise AdjustedPriceQualityRejection(
+                f"restated {column} jump disagrees with the event recomputation within {tolerance}: {bad}"
+            )
+    return {
+        "name": "finite_values__restated_jump_matches_corporate_actions",
+        "tolerance": float(tolerance),
+    }
+
+
 def verify_positive(restated: pd.DataFrame) -> dict[str, Any]:
     for column in _PRICE_COLUMNS:
         values = pd.to_numeric(restated[column], errors="coerce")
@@ -201,7 +285,7 @@ def _report(generation_id: str, observed: dict[str, Any]) -> dict[str, Any]:
             "result": "passed",
         },
         {
-            "name": "finite_values__restated_price_matches_independent_source",
+            "name": "finite_values__restated_jump_matches_corporate_actions",
             "threshold": observed["tolerance"],
             "observed": observed["row_count"],
             "level": "error",
@@ -227,37 +311,140 @@ def _report(generation_id: str, observed: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def restate_from_events(
+    raw: pd.DataFrame,
+    events: Mapping[str, Sequence[AdjustmentEvent]],
+    closes: Mapping[str, Mapping[dt.date, float]],
+    session: Any,
+    *,
+    observed: dict[str, Any] | None = None,
+) -> pd.DataFrame:
+    """Restate prices from TDX corporate-action events instead of the vendor factor.
+
+    The independent side of the cross-check: it never reads ``adj_factor``.  For
+    each instrument it accumulates the ex-right ratio of every event at or before
+    ``session`` -- each event's ratio taken against the close of the session
+    before it -- and divides this session's prices by that product, which is the
+    backward-adjusted level implied by the events alone.  A vendor restatement
+    that agrees with this has been checked against another vendor's view of the
+    same corporate actions rather than against itself.
+
+    An event whose prior close is absent (the vendor's daily history begins in the
+    mid-1990s, so a long-listed name's earliest events are unreachable) is
+    skipped and recorded in ``observed``.  That is safe here because the result is
+    compared against the vendor's *jump* between two partitions, which cancels any
+    common early factor; it would not be safe for an absolute level claim.
+    """
+    target = _as_date(session)
+    out = raw.copy()
+    for instrument in sorted({str(value) for value in out["instrument"]}):
+        symbol = symbol_of(instrument)
+        symbol_events = list(events.get(symbol) or events.get(instrument) or [])
+        if not symbol_events:
+            raise AdjustedPriceQualityRejection(
+                f"no independent corporate-action events for {instrument}"
+            )
+        history = closes.get(symbol) or closes.get(instrument) or {}
+        skipped: list[dt.date] = []
+        product = 1.0
+        for event in sorted(symbol_events, key=lambda item: item.session):
+            if event.session > target:
+                continue
+            prior = max((d for d in history if d < event.session), default=None)
+            if prior is None:
+                # The vendor's daily history starts in the mid-1990s, so events
+                # from a long-listed name's 1990s are unreachable by construction.
+                # Skipping them is safe *for a ratio comparison* because the
+                # cumulative product is compared against the vendor's own jump
+                # between the two partitions, not against an absolute level.
+                skipped.append(event.session)
+                continue
+            ratio = event.ratio(history[prior])
+            if ratio != ratio or ratio <= 0:  # NaN guard, and a zero jump is a defect
+                raise AdjustedPriceQualityRejection(
+                    f"unusable ex-right ratio for {instrument} at {event.session.isoformat()}"
+                )
+            product *= ratio
+        if product != product or product <= 0:
+            raise AdjustedPriceQualityRejection(f"unusable recomputed ratio for {instrument}")
+        if skipped and observed is not None:
+            observed.setdefault("skipped_events", {})[instrument] = [
+                value.isoformat() for value in sorted(skipped)
+            ]
+        mask = out["instrument"] == instrument
+        for column in _PRICE_COLUMNS:
+            out.loc[mask, column] = pd.to_numeric(out.loc[mask, column], errors="coerce") / product
+    return out
+
+
 def publish_adjusted_partition(
     store: CanonicalV2Store,
     session: dt.date,
     raw: pd.DataFrame,
     *,
-    expected_restated: pd.DataFrame,
+    independent_restated: pd.DataFrame | None = None,
+    events: Mapping[str, Sequence[AdjustmentEvent]] | None = None,
+    closes: Mapping[str, Mapping[dt.date, float]] | None = None,
+    previous_restated: pd.DataFrame | None = None,
+    previous_raw: pd.DataFrame | None = None,
+    previous_session: Any = None,
     lineage: dict[str, Any] | None = None,
     source_versions: dict[str, str] | None = None,
     tolerance: float = _DEFAULT_TOLERANCE,
 ) -> dict[str, Any]:
     """Restate one session and publish it behind a verified quality report.
 
-    ``raw`` is the v2 partition and ``expected_restated`` is an *independently
-    supplied* restated partition -- the cross-check that makes the quality report
-    mean something.  Restating and then verifying one's own output would be a
-    tautology that stamps ``reject_all``/``passed`` on anything, which is why the
-    cross-check is required rather than optional: without a second restatement to
-    compare against there is nothing to verify, and the caller must not publish.
+    ``raw`` is the v2 partition.  The cross-check that makes the quality report
+    mean something is supplied one of two ways, and one of them is required:
+    ``independent_restated`` (a partition restated by a different code path) or
+    ``events`` + ``closes`` (TDX corporate-action events plus prior closes, from
+    which :func:`restate_from_events` rebuilds the restatement without ever
+    reading ``adj_factor``).  Restating and then verifying one's own output would
+    be a tautology that stamps ``reject_all``/``passed`` on anything, so a run
+    with neither is refused.
 
     The order matters: the report binds to the generation that will be published,
     so it is prepared (and read back by the store) before the partition moves into
     place.
     """
-    if expected_restated is None:
+    if independent_restated is None and events is None:
         raise AdjustedPriceQualityRejection(
-            "adjusted-price publication requires an independently restated partition to verify against"
+            "adjusted-price publication requires an independent restatement to verify against "
+            "(independent_restated, or events plus closes)"
         )
     schema = _adjusted_schema()
     restated = restate(raw)
     observed = verify_restatement(raw, restated, tolerance=tolerance)
-    observed.update(verify_cross_check(restated, expected_restated, tolerance=tolerance))
+    if independent_restated is not None:
+        expected = independent_restated
+        basis = "independent_partition"
+        observed.update(verify_cross_check(restated, expected, tolerance=tolerance))
+    else:
+        expected = restate_from_events(raw, events or {}, closes or {}, session, observed=observed)
+        basis = "tdx_corporate_actions"
+        # The event recomputation starts its cumulative product at the earliest
+        # event whose prior close the vendor's daily history actually reaches
+        # (mid-1990s), while the vendor's own factor is anchored at listing.  The
+        # two therefore differ by a constant scale per instrument -- measured
+        # 289x, 712x and 9.4x on a real session -- so comparing levels would
+        # reject every partition.  What the two sources *can* be held to agree on
+        # is the jump between this partition and the prior one, because any common
+        # early factor cancels.  That is the comparison that is actually made, and
+        # it is the one the 83-event validation measured (max 0.109%).
+        observed.update(
+            verify_jump_cross_check(
+                restated,
+                expected,
+                previous_restated,
+                restate_from_events(
+                    previous_raw, events or {}, closes or {},
+                    _resolve_previous_session(previous_raw, previous_session, closes),
+                    observed=observed,
+                ) if previous_raw is not None else None,
+                tolerance=tolerance,
+            )
+        )
+    observed["cross_check_basis"] = basis
     verify_positive(restated)
     observed["row_count"] = int(len(restated))
 
@@ -277,6 +464,44 @@ def publish_adjusted_partition(
         "schema": schema.name,
         "quality_report": str(directory),
     }
+
+
+def _resolve_previous_session(
+    previous_raw: pd.DataFrame,
+    declared: Any,
+    closes: Mapping[str, Mapping[dt.date, float]],
+) -> Any:
+    """The session the previous partition describes.
+
+    Taken from ``previous_raw``'s own ``session_date`` when present, because that
+    is the session whose cumulative event product the frame actually carries.
+    Deriving it from ``closes`` (the latest close at or before the session) would
+    silently select a different session whenever the vendor history has gaps, and
+    then the jump comparison would divide by an unrelated factor.
+    """
+    if declared is not None:
+        return declared
+    column = "session_date" if "session_date" in previous_raw.columns else (
+        "datetime" if "datetime" in previous_raw.columns else None
+    )
+    if column is None:
+        raise AdjustedPriceQualityRejection(
+            "previous partition has no session_date/datetime to identify its session"
+        )
+    values = sorted({str(value) for value in previous_raw[column]})
+    if len(values) != 1:
+        raise AdjustedPriceQualityRejection(
+            f"previous partition spans multiple sessions: {values[:5]}"
+        )
+    return dt.date.fromisoformat(values[0][:10])
+
+
+def _as_date(value: Any) -> dt.date:
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    return dt.date.fromisoformat(str(value))
 
 
 def _adjusted_schema():
