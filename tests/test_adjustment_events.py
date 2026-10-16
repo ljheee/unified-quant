@@ -117,3 +117,18 @@ def test_instrument_is_reduced_to_the_bare_tdx_code():
     assert symbol_of("600000.XSHG") == "600000"
     assert symbol_of("000001.XSHE") == "000001"
     assert symbol_of("920961.XBSE") == "920961"
+
+
+def test_a_reverse_split_is_refused_rather_than_mis_signed():
+    # `suogu` is 缩股: it REDUCES the share count, so folding it into the
+    # `1 + shares` denominator (as 送股/转增 are) would move the ratio the wrong
+    # way, and no other ex-right treatment is defined here. The canonical deriver
+    # ignores the field, so a non-zero value must be refused, not interpreted.
+    frame = pd.DataFrame([_xdxr_row(suogu=3.0)])
+    with pytest.raises(ContractError, match="reverse split"):
+        events_from_xdxr(frame)
+
+
+def test_suogu_zero_or_absent_is_accepted():
+    assert events_from_xdxr(pd.DataFrame([_xdxr_row(suogu=0.0)]))[0].transfer == 0.0
+    assert events_from_xdxr(pd.DataFrame([_xdxr_row(suogu=None)]))[0].transfer == 0.0

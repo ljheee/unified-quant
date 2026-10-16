@@ -110,11 +110,11 @@ def test_duplicate_label_keys_are_refused(tmp_path):
         LabelSetWriter(tmp_path).publish(manifest, duplicated)
 
 
-def _report(status="passed"):
+def _report(generation_id, status="passed", binding_type="label_set_v1"):
     from uq.contracts.model_layer import sha256_json
     report = {
-        "report_version": 1, "binding_type": "label_set_v1",
-        "bound_generation_id": "0" * 64, "policy": "reject_all",
+        "report_version": 1, "binding_type": binding_type,
+        "bound_generation_id": generation_id, "policy": "reject_all",
         "status": status,
         "checks": [{"name": "coverage", "threshold": 0, "observed": 0,
                     "level": "error", "result": "passed"}],
@@ -129,18 +129,37 @@ def _report(status="passed"):
 
 def test_an_unreviewed_quality_report_is_refused(tmp_path):
     manifest, frame = _built()
+    # a provider: the caller cannot know the generation id before it is derived
+    provider = lambda generation_id: _report(generation_id, status="warning")
     with pytest.raises(ContractError, match="not reviewed-accepted"):
-        LabelSetWriter(tmp_path).publish(manifest, frame, quality_report=_report("warning"))
+        LabelSetWriter(tmp_path).publish(manifest, frame, quality_report=provider)
 
 
-def test_an_accepted_quality_report_is_echoed_not_bound(tmp_path):
+def test_an_accepted_quality_report_is_resolved_against_the_subject(tmp_path):
     # label_set.v1 is additionalProperties:false with no quality field, so a report
-    # cannot be bound into the manifest; its status is echoed into the identity.
+    # cannot be stored in the manifest; it is resolved against this generation and
+    # its status echoed into the identity.
     manifest, frame = _built()
-    identity = LabelSetWriter(tmp_path).publish(manifest, frame, quality_report=_report("passed"))
+    provider = lambda generation_id: _report(generation_id, status="passed")
+    identity = LabelSetWriter(tmp_path).publish(manifest, frame, quality_report=provider)
     assert identity["quality_report_status"] == "passed"
     document = json.loads((Path(identity["partition"]) / "manifest.json").read_text())
     assert "quality_report_checksum_sha256" not in document
+
+
+def test_a_report_bound_to_another_subject_is_refused(tmp_path):
+    manifest, frame = _built()
+    with pytest.raises(ContractError, match="bound to a different subject"):
+        LabelSetWriter(tmp_path).publish(
+            manifest, frame, quality_report=_report("f" * 64, status="passed")
+        )
+
+
+def test_a_report_of_another_family_is_refused(tmp_path):
+    manifest, frame = _built()
+    provider = lambda generation_id: _report(generation_id, binding_type="model_dataset_v1")
+    with pytest.raises(ContractError, match="is not label_set_v1"):
+        LabelSetWriter(tmp_path).publish(manifest, frame, quality_report=provider)
 
 
 def test_a_tampered_published_frame_is_detected_by_the_reader(tmp_path):
@@ -152,3 +171,37 @@ def test_a_tampered_published_frame_is_detected_by_the_reader(tmp_path):
     tampered.to_parquet(data, index=False)
     with pytest.raises(ContractError):
         LabelStore(tmp_path).read_frame(identity["generation_id"])
+
+
+def test_publishing_repeatedly_does_not_leak_file_descriptors(tmp_path):
+    # cr.md 8.34: `_fsync_tree` opened the store root and never closed it, so a
+    # process that published in a loop leaked one descriptor per call and died at
+    # EMFILE (~60 publishes). Publishing 20 sets must not grow the fd table.
+    import os
+
+    def open_fds() -> int:
+        return len(os.listdir("/dev/fd"))
+
+    before = open_fds()
+    for index in range(20):
+        manifest, frame = _built()
+        LabelSetWriter(tmp_path / f"run{index}").publish(manifest, frame)
+    assert open_fds() == before
+
+
+def test_a_manifest_that_misdescribes_dtypes_is_refused(tmp_path):
+    # cr.md 8.34: the read-back reconcile compared the restored frame against the
+    # *in-memory* frame instead of the manifest, so a manifest declaring a dtype the
+    # partition does not carry published cleanly -- and only failed later, at the
+    # governed reader. The writer now applies the reader's own normalization, so the
+    # two boundaries cannot disagree about the same artifact.
+    manifest, frame = _built()
+    lying = {**manifest, "dtypes": {**manifest["dtypes"], "label": "int64"}}
+    with pytest.raises(ContractError, match="read-back dtype mismatch"):
+        LabelSetWriter(tmp_path).publish(lying, frame)
+
+
+def test_a_frame_missing_a_key_column_is_a_contract_error(tmp_path):
+    manifest, frame = _built()
+    with pytest.raises(ContractError, match="missing columns"):
+        LabelSetWriter(tmp_path).publish(manifest, frame.drop(columns=["decision_date"]))

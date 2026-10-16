@@ -181,6 +181,20 @@ class TestLabelBuilder:
             round(value, 12) for value in expected["label"].tolist()[:6]
         ]
 
+    def test_formula_digest_commits_the_row_basis(self) -> None:
+        # cr.md latent B2 follow-up: "D counts per-instrument trading rows before
+        # eligibility filtering" is part of the label *formula*, not an
+        # implementation detail.  Two builders with different row bases but the same
+        # bare expression would otherwise publish different label vectors under one
+        # formula_sha256, so the label_set identity could not tell them apart.
+        import hashlib
+
+        from uq.models.labels import _formula_sha256
+
+        bare = hashlib.sha256(b"adjusted_close[D+5] / adjusted_close[D] - 1").hexdigest()
+        assert _formula_sha256(5) != bare
+        assert _formula_sha256(5) != _formula_sha256(6)
+
 
 class TestLabelValidator:
     def test_validate_passes_on_valid_manifest(self) -> None:

@@ -158,13 +158,17 @@ def test_published_partition_reads_back_with_the_bound_generation(tmp_path):
     assert report["policy"] == "reject_all"
     assert report["status"] == "passed"
     names = {check["name"] for check in report["checks"]}
+    # `_published` uses the independent_restated path, so the cross-check check
+    # that ran is the independent-source one. The report must name the check that
+    # actually ran, not a fixed corporate-action name (cr.md 8.34).
     assert {
         "coverage",
         "semantic_version",
         "finite_values__restated_price_recomputes",
-        "finite_values__restated_jump_matches_corporate_actions",
+        "finite_values__restated_price_matches_independent_source",
         "finite_values__restated_price_positive",
     } <= names
+    assert "finite_values__restated_jump_matches_corporate_actions" not in names
     # and the data itself is the restated frame
     restored = read_canonical_v2(
         tmp_path, load_schema(ADJUSTED_V2_SCHEMA), SESSION,
@@ -399,3 +403,44 @@ def test_jump_cross_check_refuses_a_previous_frame_spanning_two_sessions(tmp_pat
             previous_raw=previous_raw,
             source_versions={"tushare": "test"},
         )
+
+
+def test_the_report_names_only_the_cross_check_that_ran(tmp_path):
+    # cr.md 8.34: the report used to emit a fixed check name, so the
+    # independent_restated path claimed finite_values__restated_jump_matches_
+    # corporate_actions -- a check that never ran. A quality report that asserts
+    # an unperformed check is the failure this gate exists to prevent, so each
+    # path must name its own check and not the other's.
+    import datetime as dt
+
+    from uq.contracts.artifacts import QualityReportStore
+
+    # path A: independent_restated
+    root_a = tmp_path / "a"
+    raw = _bars()
+    payload_a = publish_adjusted_partition(
+        CanonicalV2Store(root_a), SESSION, raw,
+        independent_restated=_independent(raw), source_versions={"t": "t"},
+    )
+    names_a = {c["name"] for c in QualityReportStore().read(
+        root_a, payload_a["generation_id"], binding_type="canonical_v2")["checks"]}
+    assert "finite_values__restated_price_matches_independent_source" in names_a
+    assert "finite_values__restated_jump_matches_corporate_actions" not in names_a
+
+    # path B: TDX corporate actions
+    instruments = ["600000.XSHG", "000001.XSHE"]
+    frame = _bars(instruments, adj_factor=1.0)
+    closes = {"600000.XSHG": {date(2026, 8, 20): 10.0},
+              "000001.XSHE": {date(2026, 8, 20): 20.0}}
+    events = {s: [_events(session=date(2026, 8, 21), cash=0.0)] for s in instruments}
+    root_b = tmp_path / "b"
+    payload_b = publish_adjusted_partition(
+        CanonicalV2Store(root_b), SESSION, frame,
+        events=events, closes=closes,
+        previous_restated=restate(frame), previous_raw=frame.copy(),
+        source_versions={"t": "t"},
+    )
+    names_b = {c["name"] for c in QualityReportStore().read(
+        root_b, payload_b["generation_id"], binding_type="canonical_v2")["checks"]}
+    assert "finite_values__restated_jump_matches_corporate_actions" in names_b
+    assert "finite_values__restated_price_matches_independent_source" not in names_b

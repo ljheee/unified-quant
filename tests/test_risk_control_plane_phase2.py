@@ -170,12 +170,10 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
     # cr.md latent B5: a suspended instrument must not reach the pre-trade gate at
     # all, because its execution price is undefined -- so "suspended" can no longer
     # be the vehicle for a blocked order.  The fixture blocks an order the account
-    # cannot fund instead, on an instrument the engine could otherwise trade: a
-    # target weight above 1.0 asks for more shares than the cash can settle, so the
-    # gate refuses with ``order_insufficient_cash`` and the engine records the
-    # skipped delta without ever filling.  The slippage is what keeps the requested
-    # notional under ``order_notional_limit`` while the slipped cash outlay is not,
-    # so the insufficient-cash rule is the only one that fails.
+    # cannot fund instead, on an instrument the engine could otherwise trade.  The
+    # extreme slippage is the lever: the raw notional stays inside the notional cap
+    # while the slipped outlay exceeds the cash, so ``order_insufficient_cash`` is
+    # the only rule that fails and the block reason is pinned by the assertion below.
     policy, review = _order_policy()
     price_panel = pd.DataFrame(
         {
@@ -217,6 +215,12 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
     stored_run, payloads = gate.run_store.read(risk_run["generation_id"])
     assert len(payloads) == 1
     assert payloads["decision-0.json"]["decision"]["action"] == "block_order"
+    failed_rules = [
+        finding["rule_id"]
+        for finding in payloads["decision-0.json"]["decision"]["findings"]
+        if finding["result"] == "failed"
+    ]
+    assert failed_rules == ["order_insufficient_cash"]
     failed_findings = [
         finding["rule_id"]
         for finding in payloads["decision-0.json"]["decision"]["findings"]

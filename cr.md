@@ -962,3 +962,30 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **测试计数**：`test_label_set_writer.py` 新增 9 例、`test_build_tdx_adjustments.py` 新增 5 例 = 净 **+14** → **1076 passed / 23 skipped / exit 0**（父节点 1062）。
 
 **未夸大声明**：①② 的实现、真跑、三处缺陷定位为监工亲做；③ 的三方裁定基于实测（含 vendor 跳变反推、TDX 原始帧复核）。①② 中"由测试暴露"的缺陷均如实记录，未掩饰 fixture 曾长期伪造标签帧这一事实。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.34 自 CR §8.33 三项交付（2026-10-16，6 项真缺陷 + 2 项补锁）
+
+**触发**：用户"CR 一遍"。对 `a047370`（label_set 发布器 / TDX 生产入口 / 分歧裁定）做实现级走查。
+
+**六项均为真缺陷（先证是真，再修，再变异验证）**
+
+| # | 位置 | 缺陷 | 锁 |
+|---|---|---|---|
+| 1 | `models/label_store_writer.py::_fsync_tree` | 两次 `os.open(root)` 只关其一，**每次发布泄漏 1 个 fd**，循环发布约 60 次即 EMFILE | 连发 20 次后 `/dev/fd` 计数不变 |
+| 2 | 同上 `publish(quality_report=...)` | 报告只过 schema+status，**从不与本次 subject 对齐**：`bound_generation_id="0"*64`、别的 `binding_type` 一律接受；且传 callable provider 直接 `TypeError`。与 R1 在别处关掉的"报告可描述别的东西"同类 | 3 例（异 family / 异 subject / provider 路径 + 未 reviewed 拒绝） |
+| 3 | 同上 `_validate_frame` | 缺主键列时抛 `KeyError`（`duplicated([...])`），契约边界必须是 typed `ContractError` | 缺 `decision_date` → ContractError |
+| 4 | 同上 `_reconcile` | 回读 dtype 与**内存帧**比而非与 **manifest** 比：manifest 谎报 dtype 能发布成功，只在受治理读侧才炸（写读边界对同一分区口径不一致） | manifest 声明 `label: int64` → 写侧即拒 |
+| 5 | `pipeline/adjusted_price.py::_report` | 交叉核验检查名**写死**，故 `independent_restated` 路径的质量报告宣称做了 `..._jump_matches_corporate_actions`——**一份断言了未执行检查的报告**，正是这道门存在的意义所禁止的 | 两条路径各 1 例：A 只出现 independent 名、B 只出现 corporate-action 名；无交叉核验时直接拒绝出报告 |
+| 6 | `pipeline/adjustment_events.py::events_from_xdxr` | `suogu`（缩股）与送股/转增同号折进 `1 + shares` 分母——缩股**减少**股本，方向相反会算出倒数型比率。canonical 派生器从不读 `suogu` ⇒ 非零值**拒绝**而非臆造符号。拒绝是**定义性**的（本处无缩股除权式），不建立在"TDX 是否填过该列"的统计上——本机未装 `mootdx`，此类统计本轮无法复核，故不引用具体数字 |2 例（非零拒绝 / 0 与 None 接受） |
+
+**另补两条既有实现的锁**（变异验证）：`_formula_sha256` 必须把"行基准"写入身份（不等于裸表达式，且随 horizon 变）；finiteness 收紧**不得吞掉**声明的 null 策略——NaN 标签是不足未来行的既定排除，仍在检查前丢弃。
+
+**变异验证**：8 处逐项反转（fd 泄漏复原 / binding_type 判定删除 / subject≠generation 判定删除 / provider 解析旁路 / 主键列检查删除 / dtype 对照退回内存帧 / 交叉核验名写死复原 / suogu 拒绝改为放行），另加 trainer 的标签有限性检查提前到过滤之前 —— **全部被对应测试杀掉**，无"改了代码测试仍绿"。
+
+**顺带清理**
+- `_fsync_tree` 删除，改用 `contracts/canonical_v2.fsync_tree` 单一实现（同类 fd 泄漏不可能在副本里重生）。
+- 删除未跟踪的 `tests/test_external_review_20261014_latent.py`：其 5 类机制在 `10d2d0e` 已分别落在既有测试文件里（去重后其独有的 2 条已上表补入）。删除前逐条核对覆盖；该文件自身还带两处硬伤——B5 用例给停牌日 `close=NaN`，引擎在 `backtest/engine.py:136` 对缺失收盘价本就 fail-closed（用例前提不成立，实为红），且其 `execution_model` 里带一个被工具污染的乱码键。
+
+**本轮未动**：`backtest/engine.py` 首执行日 `prev_close` 退化为当日 open（`cr.md` Medium 条目，见一節）——它会改变已发布 PnL 与既有 golden 证据数值，属需裁决的口径变更，不在"CR 修缺陷"范围内。
+
+**测试计数**：本机 `python -m pytest tests/ -o addopts="" -p no:randomly -q` → **1085 passed / 24 skipped**（净 +10 例收集）。与上轮记录 1076/23 的 skip 差一来自 `tests/test_repro_staging.py:63`（工件校验和锁定 pyarrow 25.0.1，本机 26.0.0），与本轮变更无关。

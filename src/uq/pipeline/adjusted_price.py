@@ -261,7 +261,14 @@ def verify_positive(restated: pd.DataFrame) -> dict[str, Any]:
 
 
 def _report(generation_id: str, observed: dict[str, Any]) -> dict[str, Any]:
-    """A canonical-v2 report whose checks name what was actually verified."""
+    """A canonical-v2 report whose checks name what was actually verified.
+
+    The cross-check check is emitted under the name of the check that ran, taken
+    from ``observed``.  Emitting a fixed name here would let the report claim
+    ``..._jump_matches_corporate_actions`` on the ``independent_partition`` path,
+    where no corporate-action comparison happened at all -- a report that asserts
+    a check which never ran is the exact failure this gate exists to prevent.
+    """
     checks = [
         {
             "name": "coverage",
@@ -284,21 +291,30 @@ def _report(generation_id: str, observed: dict[str, Any]) -> dict[str, Any]:
             "level": "error",
             "result": "passed",
         },
+    ]
+    cross_check_name = observed.get("name")
+    if cross_check_name is None:
+        raise AdjustedPriceQualityRejection(
+            "no independent cross-check ran, so there is no verification to report"
+        )
+    checks.append(
         {
-            "name": "finite_values__restated_jump_matches_corporate_actions",
+            "name": cross_check_name,
             "threshold": observed["tolerance"],
             "observed": observed["row_count"],
             "level": "error",
             "result": "passed",
-        },
+        }
+    )
+    checks.append(
         {
             "name": "finite_values__restated_price_positive",
             "threshold": 0,
             "observed": observed["row_count"],
             "level": "error",
             "result": "passed",
-        },
-    ]
+        }
+    )
     return {
         "report_version": 1,
         "binding_type": "canonical_v2",

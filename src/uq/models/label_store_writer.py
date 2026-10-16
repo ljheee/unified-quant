@@ -7,9 +7,10 @@ dataset stage of a research run had no way to produce its own input.
 
 The writer keeps the two halves honest:
 
-* the manifest is validated against `label_set.v1.json` before and after the
-  identity fields are stamped, so a wrong field set fails locally rather than at
-  some downstream read;
+* the manifest is validated against `label_set.v1.json` after the identity
+  fields are stamped (a manifest that cannot carry a valid generation id is
+  refused first), so a wrong field set fails locally rather than at some
+  downstream read;
 * the frame is written, read back from disk, and compared column-for-column,
   dtype-for-dtype and row-for-row against what the manifest declares, so a
   partition that claims `N` rows while carrying `M` can never be published.
@@ -29,9 +30,11 @@ from typing import Any, Mapping
 
 import pandas as pd
 
+from ..contracts.canonical_v2 import fsync_tree
 from ..contracts.model_layer import (
     ModelContractLoader,
     model_manifest_identities,
+    resolve_subject_quality_decision,
     reviewed_allowed_statuses,
     sha256_json,
 )
@@ -39,22 +42,6 @@ from ..errors import ContractError
 from .labels import LabelBuilder
 
 _SERIALIZATION_PROFILE = "parquet-v1"
-
-
-def _fsync_tree(root: Path) -> None:
-    for path in sorted(root.rglob("*")):
-        if path.is_file():
-            handle = os.open(path, os.O_RDONLY)
-            try:
-                os.fsync(handle)
-            finally:
-                os.close(handle)
-    os.open(root, os.O_RDONLY)
-    fd = os.open(root, os.O_RDONLY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
 
 
 class LabelSetWriter:
@@ -82,28 +69,18 @@ class LabelSetWriter:
         describe that frame; passing a different one is refused rather than
         reconciled.
 
-        ``quality_report`` is optional.  ``label_set.v1`` is
+        ``quality_report`` is optional and may be a static decision or a provider
+        callable (the shape ``DatasetWriter`` accepts).  ``label_set.v1`` is
         ``additionalProperties: false`` and declares no quality-report field, so a
-        decision cannot be bound into the manifest the way the model families do;
-        one that is supplied is validated against ``model_quality_report`` and
-        checked against the reviewed statuses, and its status is echoed into the
-        returned identity.  A missing report is not a failure: the label manifest's
-        own formula and eligibility declarations are the reviewable content.
+        decision cannot be stored *in* the manifest the way the model families do;
+        it is resolved against this label set's own generation, checked for the
+        ``label_set_v1`` family and reviewed status, and its status is echoed into
+        the returned identity.  A missing report is not a failure: the label
+        manifest's own formula and eligibility declarations are the reviewable
+        content.
         """
         document = dict(manifest)
         _validate_frame(document, frame)
-
-        if quality_report is not None:
-            # `label_set.v1` is `additionalProperties: false` and has no
-            # quality-report field, so a decision cannot be bound into the
-            # manifest the way the model families do. Validate what is offered and
-            # record it in the run summary instead of inventing a schema field.
-            ModelContractLoader.validate("model_quality_report.v1", dict(quality_report))
-            if quality_report["status"] not in reviewed_allowed_statuses("label_set_v1"):
-                raise ContractError(
-                    f"label set quality report status {quality_report['status']} is not "
-                    f"reviewed-accepted for label_set_v1"
-                )
 
         # LabelBuilder already computed these over the frame it was handed, and the
         # upstream adjusted-price binding was checked against the same value, so
@@ -122,6 +99,37 @@ class LabelSetWriter:
         document["manifest_digest_sha256"] = manifest_digest
         ModelContractLoader.validate("label_set", document)
 
+        # `label_set.v1` is `additionalProperties: false` with no quality field, so
+        # a decision cannot be bound into the manifest the way the model families
+        # do. It is still resolved against *this* subject: a caller cannot pre-sign
+        # a report for a generation id it does not know yet, so a provider callable
+        # is resolved with the derived id (the shape DatasetWriter accepts), and a
+        # static report must already name that subject -- otherwise it is a review
+        # of something else.
+        if quality_report is not None:
+            report = resolve_subject_quality_decision(
+                quality_report, subject_generation_id=generation_id,
+                subject_content_sha256=manifest_digest,
+            )
+            ModelContractLoader.validate("model_quality_report.v1", dict(report))
+            if report["binding_type"] != "label_set_v1":
+                raise ContractError(
+                    f"label set quality report binding_type {report['binding_type']} "
+                    "is not label_set_v1"
+                )
+            if report["bound_generation_id"] != generation_id:
+                raise ContractError(
+                    "label set quality report is bound to a different subject: "
+                    f"{report['bound_generation_id']} != {generation_id}"
+                )
+            if report["status"] not in reviewed_allowed_statuses("label_set_v1"):
+                raise ContractError(
+                    f"label set quality report status {report['status']} is not "
+                    f"reviewed-accepted for label_set_v1"
+                )
+        else:
+            report = None
+
         directory = self.directory_for(generation_id)
         if directory.exists():
             raise ContractError(f"immutable label set already published: {directory}")
@@ -136,7 +144,7 @@ class LabelSetWriter:
                 json.dumps(document, sort_keys=True, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
-            _fsync_tree(staging)
+            fsync_tree(staging)
             os.replace(staging, directory)
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
@@ -147,13 +155,17 @@ class LabelSetWriter:
             "partition": str(directory),
             "rows": int(len(frame)),
             "columns": list(frame.columns),
-            "quality_report_status": None if quality_report is None else quality_report["status"],
+            "quality_report_status": None if report is None else report["status"],
         }
 
 
 def _validate_frame(manifest: Mapping[str, Any], frame: pd.DataFrame) -> None:
     if frame.empty:
         raise ContractError("cannot publish an empty label set")
+    required = {"instrument", "decision_date", "label"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ContractError(f"label frame is missing columns: {missing}")
     if bool(frame.duplicated(["instrument", "decision_date"]).any()):
         raise ContractError("label set has duplicate instrument/decision_date keys")
     declared_columns = list(manifest.get("columns") or [])
@@ -188,27 +200,22 @@ def _reconcile(manifest: Mapping[str, Any], original: pd.DataFrame, restored: pd
         raise ContractError("label read-back column mismatch")
     if len(restored) != len(original):
         raise ContractError("label read-back row count mismatch")
-    if {key: str(value) for key, value in restored.dtypes.items()} != {
-        key: str(value) for key, value in original.dtypes.items()
-    }:
-        raise ContractError("label read-back dtype mismatch")
+    # Compare against the manifest's declared dtypes with the same normalization
+    # the governed reader applies (`LabelStore.read_frame` maps any `datetime*`
+    # dtype to `datetime64[ns]`). Comparing the restored frame to the in-memory
+    # frame instead would let the writer publish a partition the reader refuses,
+    # because the parquet round-trip and the manifest need not agree on dtypes.
+    actual_dtypes = {key: str(value) for key, value in restored.dtypes.items()}
+    expected_dtypes = {
+        key: ("datetime64[ns]" if str(value).startswith("datetime") else str(value))
+        for key, value in manifest["dtypes"].items()
+    }
+    if actual_dtypes != expected_dtypes:
+        raise ContractError(
+            f"label read-back dtype mismatch against the manifest: "
+            f"restored {actual_dtypes}, manifest {expected_dtypes}"
+        )
     pd.testing.assert_frame_equal(restored, original, check_exact=False, rtol=1e-12, atol=1e-12)
-
-
-def _frame_fingerprint(frame: pd.DataFrame) -> str:
-    ordered = frame.sort_values(["instrument", "decision_date"], kind="mergesort").reset_index(drop=True)
-    return sha256_json({
-        "columns": list(ordered.columns),
-        "rows": [
-            [
-                str(row[0]),
-                pd.Timestamp(row[1]).isoformat(),
-                None if pd.isna(row[2]) else float(row[2]),
-            ]
-            for row in ordered.itertuples(index=False)
-        ],
-        "dtypes": {key: str(value) for key, value in ordered.dtypes.items()},
-    })
 
 
 def _validate_generation_id(value: str, family: str) -> None:

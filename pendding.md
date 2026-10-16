@@ -301,3 +301,8 @@ lineage 更正(2026-10-16,cr.md §8.32)
 - **新浪 3 处分歧裁定**(用 vendor `adj_factor` 跳变反推每股派息):中国平安 2018-06-07 应有≈1.206 → **TDX(1.2)对**;五粮液 1999-06-08 应有≈1.243 → **新浪(1.25)对、TDX(1.0)低估**;平安银行 2007-06-18 送股一致、现金差 0.009 可忽略。**结论:没有来源处处正确**(TDX/新浪/Tushare dividend 各有错)。TDX 那处错在 2015 前、不在 83 事件验证窗内,故该验证不可外推全历史。已入 `docs/user-guide.md` §5.3。
 - **仍未决**:新浪未接入(裁定口径已定:三源分歧以 vendor 跳变裁定);复权线未在 A500/全A 试跑窗批量发布;`adjusted_price_binding` 的 `expected_restated` 生产提供者仍未接线。
 
+自 CR 上一轮交付(2026-10-16,cr.md §8.34)
+- 对 `a047370` 三项交付做实现级走查,**6 项真缺陷**已修并逐条变异验证:①`LabelSetWriter` 每次发布**泄漏 1 个 fd**(双 `os.open` 只关其一,循环约 60 次即 EMFILE)——改用 `contracts/canonical_v2.fsync_tree` 单一实现;②质量报告只过 schema/status、**从不与本次 subject 对齐**(`bound_generation_id="0"*64`、异 `binding_type` 一律接受,provider callable 直接 `TypeError`)——改走 `resolve_subject_quality_decision` 并校验 family/subject/status;③缺主键列抛 `KeyError` 而非 `ContractError`;④回读 dtype 与**内存帧**比而非与 **manifest** 比(manifest 谎报 dtype 能发布、只在受治理读侧炸);⑤`adjusted_price._report` 交叉核验名**写死**,`independent_restated` 路径因此发布了一份**断言了未执行检查**的报告——改为按实际跑过的检查命名,无交叉核验即拒绝出报告;⑥`events_from_xdxr` 把 `suogu`(缩股)与送股/转增同号折进分母,方向相反会算出倒数型比率;canonical 派生器从不读 `suogu` ⇒ 非零值**拒绝**而非臆造符号(拒绝是定义性的,不依赖"TDX 是否填过该列"的统计——本机未装 mootdx,该类统计本轮无法复核)。
+- 另补 2 条既有实现的锁:`_formula_sha256` 必须把"行基准"计入身份;finiteness 收紧**不得吞掉**声明的 null 策略(NaN 标签仍在检查前丢弃)。
+- 删除未跟踪的 `tests/test_external_review_20261014_latent.py`(其机制在 `10d2d0e` 已分别锁入既有测试;去重前逐条核对,独有 2 条已补入)。
+- **仍未决(新增一条)**:`backtest/engine.py` 首执行日 `prev_close` 退化为当日 open ⇒ 首执行日涨跌停永不触发。会改变已发布 PnL 与既有 golden 证据数值,属需裁决的口径变更,未与本轮"修缺陷"混做。

@@ -173,6 +173,21 @@ class TestModelTrainer:
                 train_period=("2026-01-01", "2026-12-31"),
             )
 
+    def test_null_label_is_dropped_not_refused(self) -> None:
+        # The finiteness guard must not swallow the declared null policy: a label of
+        # NaN is the insufficient-future row of a horizon label, which the label_set
+        # contract says is *excluded*, not corrupt. Refusing it would make every
+        # honest label set untrainable, so the drop happens before the check.
+        frame = _dataset()
+        frame.loc[0, "label"] = float("nan")
+        manifest, artifact = ModelTrainer(Path("/tmp/model-store")).train(
+            definition=_definition(), dataset_frame=frame,
+            feature_columns=["volume_ratio_20d"], label_column="label",
+            train_period=("2026-01-01", "2026-12-31"),
+        )
+        assert manifest["runtime_name"] == "numpy_ridge"
+        assert len(artifact) > 0
+
 
 class TestArtifactStore:
     def test_publish_and_readback(self, tmp_path: Path) -> None:

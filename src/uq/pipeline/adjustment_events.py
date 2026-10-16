@@ -121,9 +121,22 @@ def events_from_xdxr(frame: pd.DataFrame) -> list[AdjustmentEvent]:
         # and the cash-only 2017-07-21 event confirms it (1.58 -> 0.158).
         cash = _number(row.get("fenhong")) / _PER_TEN_SHARES
         send = _number(row.get("songzhuangu")) / _PER_TEN_SHARES
-        transfer = _number(row.get("suogu")) / _PER_TEN_SHARES
         allot = _number(row.get("peigu")) / _PER_TEN_SHARES
         allot_price = _number(row.get("peigujia"))
+        # 缩股 (reverse split) would *reduce* the share count, so it cannot be
+        # folded into the `1 + shares` denominator the way 送股/转增 are, and no
+        # ex-right formula for it is defined here. The canonical deriver ignores
+        # the field (`src/uq/market/adjustment.py` never reads `suogu`), so a
+        # non-zero value is refused rather than given an invented sign. The refusal
+        # is definitional -- it does not depend on how often the provider
+        # populates the column.
+        reverse_split = _number(row.get("suogu"))
+        if reverse_split != 0:
+            raise ContractError(
+                f"xdxr event on {session.isoformat()} carries suogu={reverse_split} "
+                "(a reverse split), whose ex-right treatment is not defined here"
+            )
+        transfer = 0.0
         events.append(
             AdjustmentEvent(
                 session,
