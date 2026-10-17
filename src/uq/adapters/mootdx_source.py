@@ -128,8 +128,29 @@ class MootdxSourceAdapter:
         out: dict[str, pd.DataFrame] = {}
         try:
             for symbol in symbols:
-                frame = client.xdxr(symbol=symbol)
-                out[str(symbol)] = pd.DataFrame() if frame is None or frame.empty else frame.copy()
+                # Explicit market id, not mootdx's own prefix routing: a `9` prefix
+                # is routed to Shanghai there and TDX returns nothing for 北交所.
+                # An unrecognised prefix still goes through mootdx, which is what the
+                # caller asked for and whose behaviour this does not change.
+                try:
+                    market = self.market_for(str(symbol))
+                except ValueError:
+                    market = None
+                frame = (
+                    client.xdxr(symbol=symbol)
+                    if market is None
+                    else client.client.get_xdxr_info(market, str(symbol))
+                )
+                # `client.xdxr` returns a DataFrame; `get_xdxr_info` returns a raw
+                # list. Normalise so the two paths are indistinguishable downstream.
+                if frame is None or (hasattr(frame, "empty") and frame.empty) or (
+                    isinstance(frame, list) and not frame
+                ):
+                    out[str(symbol)] = pd.DataFrame()
+                elif isinstance(frame, list):
+                    out[str(symbol)] = pd.DataFrame(frame)
+                else:
+                    out[str(symbol)] = frame.copy()
         finally:
             try:
                 client.close()
@@ -139,6 +160,18 @@ class MootdxSourceAdapter:
 
     @staticmethod
     def market_for(symbol: str) -> int:
+        """TDX market id for a bare code (0=Shenzhen, 1=Shanghai, 2=Beijing).
+
+        ``920xxx`` (the modern 北交所 range) must map to market 2. mootdx's own
+        ``get_stock_market`` does not know this range: its prefix table catches a
+        leading ``9`` in the Shanghai branch *before* the Beijing one, so
+        ``920000`` is routed to market 1 and TDX silently returns no xdxr rows
+        (measured: market 2 has 51 rows for 920000, market 1 has 0). Older
+        NEEQ-era BSE codes (``43xxxx``/``83xxxx``/``87xxxx``) route correctly
+        there, which is why the gap survived.
+        """
+        if symbol.startswith(("43", "83", "87", "88", "92")):
+            return 2
         if symbol.startswith(("60", "68")):
             return 1
         if symbol.startswith(("00", "30")):
