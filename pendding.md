@@ -414,3 +414,13 @@ label set 合并落地(2026-10-17,cr.md §8.49)
 - **行为保持实测**:全 A 重跑 generation/行数/null 数与 §8.49 **逐字节相同**(`2a58ab07…`/80973/25335)。
 - **测试+变异**:新增 1 例(exit=1 + refusals 指名 + 发布集确无该标的);把 refusal 改 pass → 红。**如实登记**:另外两次变异(跳过 continue / 恢复原始拼帧)**都没红**,即第一版变异试验给过假安全感,已重新定向。
 - **仍未决**:合并集是 5067 只(全集),而 request 侧的 membership/factor 线是 4970 只子集 ⇒ 下次跑链必须重测 null 计数,或先用 `--instrument`/membership 把 universe 卡成一致。
+
+彻查 4970 universe 根因(2026-10-18,cr.md §8.51)
+- **两个 subagent 独立调查 + 本人逐条复核**。membership **没被裁**:`data/csi-all-store/.../2025-08-29/members.csv` 仍 5068;4970 是 `/tmp/keep-instruments.json` 手工 workaround,非契约要求。
+- **三个合法原因**造成 65 只空因子:①**47 只**仅 `close_location_1d` null = 一字涨跌停(`high==low`,`raw_price.py:34-36`),本人复核 **37 涨停/10 跌停/0 例外**;②**18 只** `amount_20d`+`volume_ratio_20d` = 20 日 warm-up,且 lead-in 19 日里各只有 9–18 bar ⇒ **前移窗口修不好**;③**32 只** partial(7 只停更后恢复、25 只缺口后返回,均与 suspend_d 对上,无管线不一致)。
+- **关键判断**:涨跌停日 `close_location_1d` 本来无定义,**剔除整只标的 = 用市场状态惩罚标的**,方向错;正确做法是**决策日层面排除**。
+- **`declared_fill` 是死路**(读码确认):schema 允许但 `adapters.py:355` 只查 fail_closed,无填值实现;下游 `adapters.py:1019-1022`/`qlib_export.py:113-117` 仍硬拒 null。
+- **上限实测**:9/9–9/30 → factor-clean **4993**,再扣 5 只 null label = **4988**;9/9–9/16 只有 6 会话,**不满足 purge5+embargo2 的 7 会话间隔**,不合法。
+- **顺带发现独立硬错误**:request 窗口 9/9–9/16 但 split validation 写到 9/24–10/15,stage 02 实测 failed。
+- **落地**:新增 `docs/universe-coverage.md`;生成 `/tmp/excluded-w30.json`(75 只逐只原因)。
+- **仍未决**:①是否采纳路线 A(发布 4988 的受治理 membership 制品);②47 只涨跌停的"决策日排除"需要在 dataset 阶段实现,目前**没有**这个能力;③本轮未改任何代码/未重发制品。
