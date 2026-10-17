@@ -1379,3 +1379,28 @@ subagent 建议"只有真证明 vendor 有洞时才用 in-repo override 文件"�
 经其自跑，本机复算了其中 list_date=20180116 与 delist_date=20260331 两项。**未做**：未查德邦
 吸收合并的对手方与比例；未验证 `603056` 是否需要从窗口剔除（它 2025-10 期间正常上市，
 按 PIT 口径应当保留，此事未做裁决）。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.46 补 `backtest_config` 写侧（2026-10-17，v5 execute 四类无入口制品的第一块）
+
+**触发**：用户选"2"——补生产入口，让 v5 execute 首次可跑。
+
+**为什么是这块**：`docs/user-guide.md` 明确写着"一条命令从零跑到回测做不到"，四类制品无生产入口。其中 `backtest_config` 最严重——`BacktestConfigStore` **只有 `read_manifest`，连 store 的写侧函数都不存在**（`runner.py`/`adapters.py` 只读它，测试里靠手写 `manifest.json`）。
+
+**实现**：`BacktestConfigStore.publish(manifest, quality_decision=)`，沿用 `TargetWeightStore.publish` 的两步身份：
+
+1. 用 `quality_report_checksum_sha256 = "0"*64` 算**临时 generation**；
+2. 把 reviewed quality decision 绑到该 generation；
+3. **带** checksum 重算最终 identity。
+
+这样"评审签的是将要发布的那份内容"，而不是签完再改。
+
+**两个需要记录的设计决定**
+
+- **拒绝入站 `generation_id`**。身份是内容的函数，若让调用方传 generation，就会出现"调用方自选 generation"的静默后门；非 `"0"*64` 一律拒。
+- **subject content digest 用 `provisional` 本身**。这族没有 data 分区，manifest 即产物。我第一版用 `sha256_json(payload)` 作 content digest，**实测失败**：`resolve_subject_quality_decision` 对**单参 provider**（本仓库 `backtest_config` 已在用的形式）会把 content digest 默认成 generation id，所以两者永远对不上。改成传 `provisional` 后通过——这不是将就，是与现有 provider 契约对齐。
+
+**原子性**：staging 目录 + `replace`，review 文件落 `external_quality_reviews/<checksum>.json`（与其他族一致），异常时清理 staging。
+
+**测试**：`TestBacktestConfigWriteSide` 3 例（发布-读回-评审文件落地 / 入站 generation 拒 / 重复发布不可变）。变异（删入站守卫）必红。全量 **1149 passed / 23 skipped / exit 0**（父 `de42021` 实测 1146/23，净 **+3**）。
+
+**未夸大声明**：写侧已完成并有测试+变异；但**尚未接入 v5 execute 真实跑通**——`feature_preprocessing` 仍无生产入口，`universe_snapshot` 未发布，request 的六族 generation id 也未填。`docstring` 里"a v5 execute had no way to produce the binding"是陈述既有事实，不是声称已跑通。`code-review-unified-quant.md` 保持未跟踪。

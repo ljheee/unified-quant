@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -34,6 +35,10 @@ from uq.research_chain.owning_contracts import AdjustedPriceDatasetStore, Backte
 from uq.research_chain.resolver import ResolvedStageBinding
 
 DIGEST = "0" * 64
+GEN_A = "a" * 64
+GEN_B = "b" * 64
+GEN_C = "c" * 64
+GEN_D = "d" * 64
 RUNNER = {"code_fingerprint": DIGEST, "environment_profile": "locked-test", "lock_digest_sha256": DIGEST}
 DATES = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]
 INSTRUMENTS = ["INST0", "INST1", "INST2"]
@@ -933,3 +938,65 @@ def test_backtest_rejects_tampered_price_data(tmp_path: Path) -> None:
             quality_decision=_result_decision(),
             config_quality_decision=_config_decision(), runner_identity=RUNNER,
         )
+
+
+class TestBacktestConfigWriteSide:
+    """The write side of the backtest_config family (cr.md: no producer existed).
+
+    The backtest stage only ever read this family, so a v5 execute could not
+    produce the ``backtest_config_binding`` its request declares at all.
+    """
+
+    def _config(self) -> dict:
+        return {
+            "contract_version": 1, "schema_version": "1.0.0",
+            "backtest_name": "research-baseline",
+            "start_date": DATES[0], "end_date": DATES[-1],
+            "execution_model": {
+                "type": "daily_t1_open", "board_lot": 100,
+                "sellable_quantity_rule": "prior_day_holding_only",
+                "volume_participation_cap": 0.5,
+            },
+            "cost_model": {"commission_bps": 2.5, "stamp_duty_bps": 5.0, "slippage_bps": 1.0},
+            "limit_rules": {
+                "limit_ratio": 0.1, "prev_close_source": "raw_prev_close",
+                "adjustment_basis": "raw",
+            },
+            "calendar_binding": {"generation_id": GEN_A, "checksum_sha256": GEN_B},
+            "price_source_binding": {"dataset_generation_id": GEN_A, "data_checksum_sha256": GEN_B},
+            "universe_binding": {"snapshot_generation_id": GEN_C},
+            "corporate_action_binding": {"dataset_generation_id": GEN_D, "data_checksum_sha256": GEN_C},
+            "suspension_binding": {"dataset_generation_id": GEN_C, "data_checksum_sha256": GEN_A},
+            "initial_capital": 1_000_000.0, "run_id": RUN_ID,
+            "created_at": "2026-01-30T07:00:00+00:00",
+        }
+
+    def test_publish_derives_an_identity_the_reader_accepts(self, tmp_path):
+        store = BacktestConfigStore(tmp_path)
+        published = store.publish(self._config(), quality_decision=_config_decision())
+        generation = published["generation_id"]
+        assert re.fullmatch(r"[0-9a-f]{64}", generation)
+        manifest = store.read_manifest(generation)
+        assert manifest == published
+        # the review is durable, not just carried inline
+        review = tmp_path / "external_quality_reviews" / f"{published['quality_report_checksum_sha256']}.json"
+        assert review.is_file()
+
+    def test_an_inbound_generation_id_is_refused(self, tmp_path):
+        # The identity is a function of the content, so an inbound value would
+        # silently select a generation the caller chose.
+        store = BacktestConfigStore(tmp_path)
+        config = self._config()
+        config["generation_id"] = GEN_A
+        with pytest.raises(ContractError, match="must not carry a generation_id"):
+            store.publish(config, quality_decision=_config_decision())
+
+    def test_republishing_the_same_content_is_immutable(self, tmp_path):
+        store = BacktestConfigStore(tmp_path)
+        first = store.publish(self._config(), quality_decision=_config_decision())
+        # Identical content derives the same identity, and the immutable write refuses
+        # to overwrite it -- so a second publish is an error, not a silent replace.
+        with pytest.raises(ContractError, match="already published"):
+            store.publish(self._config(), quality_decision=_config_decision())
+        # and the first manifest is still the one on disk, unmodified
+        assert store.read_manifest(first["generation_id"]) == first

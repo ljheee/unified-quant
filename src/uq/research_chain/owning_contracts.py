@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,13 @@ import pandas as pd
 from ..contracts.artifacts import QualityReportStore
 from ..contracts.canonical_v2 import file_sha256_bytes
 from ..contracts.manifest import validate_canonical_v2_manifest
-from ..contracts.model_layer import ModelContractLoader, sha256_json
+from ..contracts.model_layer import (
+    ModelContractLoader,
+    bind_reviewed_quality_decision,
+    model_manifest_identities,
+    resolve_subject_quality_decision,
+    sha256_json,
+)
 from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
@@ -215,10 +222,92 @@ class FeaturePreprocessingStore:
 
 
 class BacktestConfigStore:
-    """Read a governed backtest-config manifest without accepting runtime input."""
+    """Publish and read immutable governed backtest-config manifests.
+
+    The backtest stage only ever read this family, so a v5 execute had no way to
+    produce the ``backtest_config_binding`` its request declares -- the family had
+    no write side at all. Publishing follows the two-step identity the other
+    owning stores use (``TargetWeightStore.publish``): derive a provisional
+    generation without the review checksum, bind the reviewed quality decision to
+    it, then re-derive the final identity *with* the checksum participating, so the
+    review attests the exact content that gets published.
+    """
 
     def __init__(self, root: Path | str) -> None:
         self.root = Path(root)
+
+    def publish(
+        self,
+        manifest: dict[str, Any],
+        *,
+        quality_decision: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Publish one backtest-config manifest and return it with its identity.
+
+        ``manifest`` supplies every field except ``generation_id`` /
+        ``manifest_digest_sha256`` / ``quality_report_checksum_sha256``, which are
+        derived here. A manifest that already carries a non-placeholder
+        ``generation_id`` is refused: the identity is a function of the content,
+        so an inbound value would silently select a generation the caller chose.
+        """
+        for field in ("generation_id", "manifest_digest_sha256"):
+            value = manifest.get(field)
+            if value not in (None, "0" * 64):
+                raise ContractError(
+                    f"backtest config manifest must not carry a {field}; it is derived on publish"
+                )
+        payload = {key: value for key, value in manifest.items()
+                   if key not in {"generation_id", "manifest_digest_sha256"}}
+
+        provisional, _ = model_manifest_identities(
+            {**payload, "quality_report_checksum_sha256": "0" * 64,
+             "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
+            schema_name="backtest_config",
+        )
+        # The subject content digest is the provisional generation id itself: this
+        # family has no data partition, so the manifest *is* the artifact, and the
+        # one-argument provider form (which this repo already uses for
+        # backtest_config) commits to exactly that default.
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision,
+            subject_generation_id=provisional,
+            subject_content_sha256=provisional,
+        )
+        bound_report, report_checksum = bind_reviewed_quality_decision(
+            quality_decision,
+            binding_type="backtest_config_v1",
+            subject_generation_id=provisional,
+            subject_content_sha256=provisional,
+        )
+        payload["quality_report_checksum_sha256"] = report_checksum
+        final, digest = model_manifest_identities(
+            {**payload, "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
+            schema_name="backtest_config",
+        )
+        payload["generation_id"] = final
+        payload["manifest_digest_sha256"] = digest
+        ModelContractLoader.validate("backtest_config", payload)
+
+        directory = self.root / "backtest_configs" / f"generation={final}"
+        if directory.exists():
+            raise ContractError(f"immutable backtest config already published: {directory}")
+        staging = self.root / "backtest_configs" / f".staging_{uuid.uuid4().hex}"
+        staging.mkdir(parents=True)
+        try:
+            (staging / "manifest.json").write_text(
+                json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            (self.root / "external_quality_reviews").mkdir(parents=True, exist_ok=True)
+            (self.root / "external_quality_reviews" / f"{report_checksum}.json").write_text(
+                json.dumps(bound_report, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            staging.replace(directory)
+        except Exception:
+            for path in staging.glob("*"):
+                path.unlink()
+            staging.rmdir()
+            raise
+        return payload
 
     def read_manifest(self, generation_id: str) -> dict[str, Any]:
         _validate_generation_id(generation_id, "backtest config")

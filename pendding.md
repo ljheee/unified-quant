@@ -376,3 +376,10 @@ label_set 入口修好 + 603056 定性(2026-10-17,cr.md §8.45)
 - **测试**:全量 **1146 passed / 23 skipped**(父 `bc76e66` 1144/23,净 +2);变异(退回单 status)必红。
 - **下一步(训练还差)**:①`bars_adjusted` 21 会话未补齐(现仅 1 个);②readiness gate;③小窗 v5 EXECUTE 冒烟(此前从未实测)。`factors` 21 分区与 `label_set` 5067 份已就绪。
 - **仍未决**:`603056` 按 PIT 在 2025-10 期间正常上市,是否应从窗口剔除未裁决。
+
+补 backtest_config 写侧(2026-10-17,cr.md §8.46)
+- **为什么最急**:`BacktestConfigStore` 原来**只有 read_manifest，写侧函数不存在**(runner/adapters 只读、测试靠手写 manifest.json)。这是 v5 execute 四类无入口制品里最硬的一块。
+- **实现**:`publish(manifest, quality_decision=)`,沿用 `TargetWeightStore` 两步身份(用 `"0"*64` checksum 算临时 generation → 绑评审 → 带 checksum 重算最终 identity),保证"评审签的是将要发布的那份内容"。
+- **两个设计决定**:①**拒绝入站 generation_id**(身份是内容的函数,否则留"调用方自选 generation"的后门);②**subject content digest 用 provisional 本身**——我第一版用 `sha256_json(payload)` 实测失败,因为 `resolve_subject_quality_decision` 对**单参 provider**(本仓库该族已在用的形式)会把 content digest 默认成 generation id。这是与现有 provider 契约对齐,不是将就。
+- **测试**:3 例 + 变异(删入站守卫)必红。全量 **1149 passed / 23 skipped**(父 `de42021` 1146/23,净 +3)。
+- **仍未决(距 v5 execute 全链跑通)**:①`feature_preprocessing` 仍无生产入口;②`universe_snapshot` 未发布;③request 六族 generation id 未填;④calendar 快照只到 2025-09-30,用满 21 会话需补。
