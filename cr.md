@@ -1424,3 +1424,40 @@ subagent 建议"只有真证明 vendor 有洞时才用 in-repo override 文件"�
 **测试**：`TestFeaturePreprocessingWriteSide` 3 例（发布-读回-评审落地 / 无派生 generation 拒 / 重复发布不可变）+ 变异必红。全量 **1152 passed / 23 skipped / exit 0**（父 `af48e17` 实测 1149/23，净 **+3**）。
 
 **未夸大声明**：写侧完成且有测试+变异；**仍未接入 v5 execute 真实跑通**——`universe_snapshot` 未发布、request 六族 generation id 未填、calendar 快照只到 2025-09-30。本轮没有产出任何真实 feature_preprocessing 制品（测试用的是 fixture 帧）。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.48 v5 冒烟的数据面备齐（2026-10-17，四条线对齐到同一窗口）
+
+**触发**：用户"继续跑"。
+
+**① universe snapshot 发布**（此前只有测试 helper 会写）
+`publish_universe_snapshots.py --from 2025-07-31 --to 2025-09-30` 产出 2 个快照：
+- `2025-08-08 → 2025-09-07`（5073 只，gen `413528d2…`）
+- `2025-09-08 → 2025-10-15`（5068 只，gen `46edd368…`）
+
+**PIT 细节**：`2025-08-29` 的 membership 快照要到 **09-08** 才可见（`publish_lag_days=5`），
+`2025-09-30` 的到 **10-16** 才可见。所以窗口起点受"最早可见快照"约束，不能用 08-29。
+
+**② calendar 补齐**
+原快照只覆盖 08-29→09-30（23 会话），窗口后半段会被 fail-closed。重新发布为
+**08-29→10-15（28 会话）**。
+
+**两个环境问题（如实记录）**
+- 该脚本要求 `TUSHARE_2K_TOKEN`，CLI **不会**自动加载 `.env`——必须
+  `env $(grep -E '^TUSHARE' .env | xargs)`。
+- EastMoney 独立日历源**连不上**（`Remote end closed connection without response`），
+  改用 `--skip-independent-calendar`。代价：该快照的 `independent_source` 记为
+  `not_checked`、`cross_check_result` 记为 `skipped`，**不是伪报 agreement**（脚本如实标注）。
+  这是一处**质量降级**，不是无代价的通过。
+
+**③ 四条线对齐确认（2025-09-09 → 2025-10-15，21 会话）**
+
+| 线 | 覆盖 |
+|---|---|
+| bars | 21/21 |
+| adjusted | 21/21 |
+| calendar | 21/21（快照 28 会话，窗口内 21） |
+| factors | 21/21 |
+| label | 5067 份，各 21 行；**末 5 日为 null**（horizon 尾段）⇒ 可用决策日 16 个 |
+| universe | 09-08→10-15 快照覆盖 |
+
+**未夸大声明**：数据面齐备，但**尚未组装 request、尚未 execute**。calendar 的独立源校验本轮被跳过（记录在快照 manifest 里）。label 尾段 null 是契约内行为，不是缺陷，但意味着可训练决策日只有 16 个。`code-review-unified-quant.md` 保持未跟踪。

@@ -390,3 +390,10 @@ label_set 入口修好 + 603056 定性(2026-10-17,cr.md §8.45)
 - **沿用 §8.46 结论**:subject content digest 用 generation id(单参 provider 的默认),不是 `output_frame_sha256`。
 - **测试**:3 例 + 变异(跳过 digest 重算)必红。全量 **1152 passed / 23 skipped**(父 `af48e17` 1149/23,净 +3)。
 - **仍未决**:①`universe_snapshot` 未发布;②request 六族 generation id 未填;③calendar 快照只到 2025-09-30;④**未产出真实 feature_preprocessing 制品**(测试用 fixture 帧)。
+
+v5 冒烟数据面备齐(2026-10-17,cr.md §8.48)
+- **universe snapshot 发布**:2 个快照(08-08→09-07 共 5073 只、09-08→10-15 共 5068 只)。**PIT 约束**:08-29 的 membership 要到 09-08 才可见、09-30 的到 10-16,所以窗口起点不能用 08-29。
+- **calendar 补齐**:原只到 09-30(23 会话),重发为 08-29→10-15(28 会话)。
+- **两个环境问题**:①脚本要 `TUSHARE_2K_TOKEN`,CLI 不自动读 `.env`;②**EastMoney 独立日历连不上**,改用 `--skip-independent-calendar` ⇒ 该快照 `independent_source=not_checked`、`cross_check_result=skipped`(**质量降级,非伪报通过**)。
+- **四条线对齐**:bars/adjusted/calendar/factors 各 21/21;label 5067 份各 21 行、末 5 日 null ⇒ **可用决策日 16 个**。
+- **仍未决**:①request 未组装;②execute 未跑;③calendar 独立源校验本轮跳过。
