@@ -253,3 +253,38 @@ def test_the_jump_denominator_comes_from_the_published_partition_when_it_exists(
         bases[day.date().isoformat()] == "published_partition"
         for day in DATES[2:]
     )
+
+
+def test_instruments_tdx_does_not_cover_fall_back_to_the_dividend_store(tmp_path, monkeypatch):
+    # TDX serves no 北交所 xdxr data at all, so a TDX-only event map makes a BSE
+    # name look eventless and its real dividend then fails the jump check. The
+    # governed dividend store fills those in, and the report says which source each
+    # instrument was actually checked against.
+    from uq.contracts.dividend_events import DividendEventStore
+
+    start, end = DATES[1].date().isoformat(), DATES[-1].date().isoformat()
+    _publish_bars(tmp_path / "bars", instruments=("920000.XBSE",))
+    # one BSE instrument, no TDX events for it
+    store_root = tmp_path / "dividend"
+    store = DividendEventStore(store_root)
+    store.publish(
+        ann_date=DATES[0].date(), source="tushare:dividend",
+        source_fetched_at=pd.Timestamp(DATES[0]).tz_localize("Asia/Shanghai").to_pydatetime(),
+        frame=pd.DataFrame([{
+            "ts_code": "920000.BJ", "end_date": "20250630", "ann_date": DATES[0].strftime("%Y%m%d"),
+            "div_proc": "实施", "stk_div": 0.0, "stk_bo_rate": None, "stk_co_rate": None,
+            "cash_div": 0.07, "cash_div_tax": 0.07, "record_date": None,
+            "ex_date": DATES[3].strftime("%Y%m%d"), "pay_date": None,
+            "div_listdate": None, "imp_ann_date": None,
+        }]),
+    )
+    monkeypatch.setattr(module, "MootdxSourceAdapter", lambda: _fake_adapter({}))
+    out = tmp_path / "report.json"
+    module.main([
+        "--bars-root", str(tmp_path / "bars"), "--adjusted-root", str(tmp_path / "adj"),
+        "--start", start, "--end", end, "--dividend-root", str(store_root),
+        "--out", str(out),
+    ])
+    report = json.loads(out.read_text())
+    by_source = report["sources"]["cross_check_events_by_instrument"]
+    assert "920000.XBSE" in by_source.get("tushare:dividend", [])

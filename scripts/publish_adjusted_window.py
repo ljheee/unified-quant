@@ -74,6 +74,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--end", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--tolerance", type=float, default=1e-3)
+    parser.add_argument(
+        "--dividend-root",
+        type=Path,
+        default=None,
+        help="governed dividend store; fills events for instruments TDX does not "
+             "cover (all of 北交所). Without it a BSE name looks eventless and its "
+             "real dividend fails the jump check.",
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
@@ -109,6 +117,44 @@ def main(argv: list[str] | None = None) -> int:
         name: events_from_xdxr(raw_events.get(name.split(".")[0], pd.DataFrame()))
         for name in instruments
     }
+    # TDX standard servers serve no 北交所 xdxr data at all (measured: 0 rows for
+    # every BSE symbol versus 88 for 600000.SH), so a TDX-only event map makes every
+    # BSE name look like it has no corporate action and its real dividend then fails
+    # the jump check. Fill those in from the governed dividend store, which does
+    # carry BSE events, and record which source each instrument came from so the
+    # report does not imply a single uniform cross-check basis.
+    event_source = {name: "tdx:xdxr" if events.get(name) else "none" for name in instruments}
+    if args.dividend_root is not None:
+        from uq.contracts.dividend_events import DividendEventStore
+        from uq.market.adjustment_chain import implemented_events
+
+        store_events = DividendEventStore(args.dividend_root).as_of(args.end)
+        for name in instruments:
+            if events.get(name):
+                continue
+            try:
+                mapped, _dropped = implemented_events(
+                    store_events, instrument=name,
+                    window_start=min(frames), window_end=args.end,
+                )
+            except ContractError:
+                continue
+            if mapped.empty:
+                continue
+            from uq.pipeline.adjustment_events import AdjustmentEvent
+
+            events[name] = [
+                AdjustmentEvent(
+                    dt.date(int(row["year"]), int(row["month"]), int(row["day"])),
+                    cash=float(row["fenhong"]) / 10.0,
+                    send=float(row["songzhuangu"]) / 10.0,
+                    transfer=0.0,
+                    allot=float(row["peigu"]) / 10.0,
+                    allot_price=float(row["peigujia"]),
+                )
+                for row in mapped.to_dict(orient="records")
+            ]
+            event_source[name] = "tushare:dividend"
 
     # Each event's ratio needs the close of the session before its ex-date, so the
     # history spans every session in the window (plus one earlier where available).
@@ -161,6 +207,16 @@ def main(argv: list[str] | None = None) -> int:
         "sources": {
             "prices": "tushare (bars_daily/v2)",
             "cross_check_events": "tdx:xdxr",
+            "cross_check_events_by_instrument": {
+                source: sorted(name for name, value in event_source.items() if value == source)
+                for source in sorted(set(event_source.values()))
+                if source != "none"
+            },
+            "cross_check_note": (
+                "TDX serves no 北交所 xdxr data, so BSE instruments fall back to the "
+                "governed dividend store; the per-instrument map above says which "
+                "source each name was actually checked against"
+            ),
             "server": adapter.connected_server,
         },
         "tolerance": args.tolerance,

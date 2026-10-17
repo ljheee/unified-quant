@@ -1270,3 +1270,28 @@ effective-date 表）。`FactorEngine.execute` 本来就收 `adjustment_snapshot
 覆盖 29 只标的），**未在全 A 窗口上批量跑过**；弱检查的"不误杀"结论基于 21 会话窗口的统计，
 非全历史。事件 store 的分区覆盖缺口（2025-09 缺失）**仍未补**——那才是"误判为无事件"的根因，
 本轮未动。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.43 补 store 覆盖缺口 + 北交所事件回退（2026-10-17，4 个被拒会话全部发布）
+
+**触发**：用户"好"（承接上轮：补 dividend store 覆盖缺口）。**顺带发现并修掉真正的根因。**
+
+**先厘清一桩混淆（用户质疑"不是已有事件表了吗"——质疑是对的）**：我上轮把**两个不同的 store** 混为一谈。
+①`dividend_events`（公告原文，按 `ann_date` 分区）——我说"覆盖缺口"指的是它；②`adjustment-store/adjustments/snapshots`（派生快照，自带事件表）——我说"已有事件表"指的是它。**② 由 ① 派生，① 缺的事件 ② 也不会有，所以 ② 不能补 ① 的缺口。** 我上轮表述含混，已澄清。
+
+**① 补覆盖缺口（必要但不充分）**
+- 精确缺口只有一个日期：`data/dividend-store` 的 2025-08 只有 08-29 起，缺 **08-26**。而 `920405.BJ` 的 2025-09-26 分红公告日正是 2025-08-26。
+- `fetch_dividend_events.py --start 2025-08-26 --end 2025-08-28` 补齐，分区 28→31。5 只北交所标的至此全部有实施记录。
+
+**② 真正的根因：校验源是 TDX，而 TDX 结构性无北交所事件**
+
+补完 store 后重跑，**4 个会话仍被拒**。原因：`publish_adjusted_window.py` 只用 TDX `xdxr`，TDX 对北交所返回 0 行 ⇒ 每只北交所标的都"看起来没有任何公司行为" ⇒ 它真实的分红反而让跳变校验失败。**事件在 store 里，但到不了这个校验器。**
+
+**修复**：新增 `--dividend-root`，TDX 取不到事件的标的**按标的回退**到受治理 dividend store；报告新增 `cross_check_events_by_instrument` 逐标的名标注实际使用的源（避免"整轮同一口径"的误读）。未整体替换 TDX——A 股仍以 TDX 为主源（`derived_v1` 血缘），整体替换会改变已发布分区的校验血缘；按标的回退只影响 TDX 本就覆盖不到的那一撮。
+
+**为什么没选整体换源**：`data/adjustment-store` 里 29 份快照是 `snapshot_version=2` **老格式**，无 `provenance`/`window_start` 等 v5 字段；且覆盖 29 只标的、0 只北交所。它证明事件表可读回，但不能当 v5 样例。
+
+**测试**：`test_instruments_tdx_does_not_cover_fall_back_to_the_dividend_store`（BSE 标的 + TDX 空 → 回退生效）；变异（`if False and ...` 禁用回退）必红。**如实登记一处 fixture 返工**：首版该测试仍用默认的 600000/000001 标的，断言永远为空数组也"通过"，是真·假绿；改成 `920000.XBSE` 后才真正锁住。
+
+**测试计数**：全量 **1139 passed / 23 skipped / exit 0**（父 `da6be4c` 实测 1138/23，净 **+1**）。
+
+**未做/边界**：事件重放仍未在全 A 窗口批量验证（本轮验证的是**复权线发布**，不是因子层重放）；`build_dividend_adjustments` 重建的 331 份快照中 3 只 refused（002322 分歧超容差 / 301591 缺记录日 / 688109 事件在交易日历外），未逐一定性；东财作为北交所第二校验源仍未接。`code-review-unified-quant.md` 保持未跟踪。
