@@ -1516,3 +1516,40 @@ resolver.py 让 `test_evidence_indexes_are_fresh_and_never_index_themselves` 与
 `2cea3ea6…`，与新生产的 `2a58ab07…` 不同源，两者行数也不同：手搓版裁到 4970 只，
 生产版是全 5067）。下一轮用生产版重跑链路时才真正闭环。
 `AGENTS.md` 与 `code-review-unified-quant.md` 保持未跟踪；`AGENTS.md` 仅有 claude-mem 时间戳变动。
+
+### 8.50 自 CR §8.49 抓到自己引入的 fail-open（2026-10-17，同轮复查）
+
+**触发**：用户"提交&推送后自己 CR 一遍"。
+
+**我上一轮犯的错（真实缺陷，不是措辞问题）**
+§8.49 的 `--combined` 是 `pd.concat([frame for _, frame in grouped if not frame.empty])`——
+把**输入帧**直接拼起来。但 `LabelBuilder` 的 eligibility 过滤发生在算出 grid **之后**：
+一只全窗口停牌/上市不足 60 日的标的，per-instrument 模式下会被
+`LabelSetWriter` 以 "cannot publish an empty label set" 拒掉并**记进报告**；
+拼帧后它**无声消失**，整轮仍然 `exit 0`。实测复现（2 只合成的窗，B 全程 suspended）：
+
+| 模式 | exit | published | refused | refusals |
+|---|---|---|---|---|
+| per_instrument | 1 | 1 | 1 | `000001.XSHE: cannot publish an empty label set` |
+| §8.49 的 combined | **0** | 1 | **0** | `[]` |
+
+即：**combined 模式把"少了一只标的"这件事从报告里抹掉了**。这是我自己引入的 fail-open，
+不是既有缺陷。full-A 真实窗口 27 只标的存在部分日期被 eligibility 剔除（各有 6–15 天），
+只是没有一只被剔干净，所以真跑数字没变——**巧合没报警，不等于没缺陷**。
+
+**修法**（`scripts/build_label_sets.py`）
+逐标的先 build，`output.empty` 的单独记一条 refusal
+（`no eligible label rows after eligibility filtering`），再只把**活下来的**拼起来发布，
+并对拼接帧**重新走一次 build+binding**（不然 checksum 描述的是别的行序）。
+per-instrument 路径抽成 `_build()` 共用，行为不变。
+
+**实测**：全 A 09-09..09-30 重跑 generation、行数、null 数与 §8.49 **逐字节相同**
+（`2a58ab07…` / 80973 / 25335）——修法在真实数据上是行为保持的。
+
+**测试**：新增 `test_combined_mode_names_an_instrument_whose_eligibility_removes_every_row`
+（断定 exit=1、refusals 指名该标的、且发布集里确无该标的）。
+**变异**：把 `if output.empty:` 的 refusal 改成 pass → 该例红（必红）。
+**另外两次变异**（跳过 continue / 恢复原始拼帧式）**两次都没红**——说明那一版测试锁得不够，
+已重新定向到真正能区分的那处。如实记录：第一版变异试验曾给出假的安全感。
+
+**全量**：**1157 passed / 23 skipped / exit 0**（父 `a7e6060` 1156/23，净 **+1**）。

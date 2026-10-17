@@ -265,3 +265,65 @@ def test_an_unknown_instrument_filter_is_a_configuration_failure(tmp_path, monke
 def test_a_window_with_no_bars_is_refused(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="no bars partitions"):
         _run(tmp_path, monkeypatch, start="2030-01-05", end="2030-01-20")
+
+
+def _publish_bars_with_status(bars_root, statuses):
+    """Canonical bars for `INSTRUMENTS` where `statuses` can vary per instrument."""
+    schema = load_schema("config/schemas/bars_daily.v2.yaml")
+    rows = []
+    for index, instrument in enumerate(INSTRUMENTS):
+        for position, day in enumerate(DATES):
+            close = 10.0 + position * 0.1 + index
+            rows.append({
+                "instrument": instrument, "session_date": day,
+                "open": close - 0.1, "high": close + 0.2, "low": close - 0.2,
+                "close": close, "volume": 10000.0, "amount": 100000.0,
+                "status": statuses[instrument], "limit_up": close * 1.1,
+                "limit_down": close * 0.9, "adj_factor": 1.0,
+            })
+    frame = pd.DataFrame(rows)
+    store = CanonicalV2Store(bars_root)
+    for day in DATES:
+        part = frame[frame["session_date"] == day]
+        generation = store.prepare_generation(schema, day.date(), part, {}, {})
+        report = {
+            "report_version": 1, "binding_type": "canonical_v2",
+            "bound_generation_id": generation, "policy": "reject_all", "status": "passed",
+            "checks": [{"name": "coverage", "threshold": 0, "observed": 0,
+                        "level": "error", "result": "passed"}],
+            "errors": [], "warnings": [],
+        }
+        directory = QualityReportStore().save(bars_root, report)
+        store.publish(schema, day.date(), part, {}, {},
+                      quality_checksum=file_sha256_bytes((directory / "report.json").read_bytes()))
+    return schema
+
+
+def test_combined_mode_names_an_instrument_whose_eligibility_removes_every_row(tmp_path, monkeypatch):
+    # `LabelBuilder` filters rows by eligibility *after* it computes the grid, so an
+    # instrument that is ineligible on every date yields a zero-row label set. In
+    # per-instrument mode that is a named refusal (the writer refuses an empty set);
+    # concatenating the input frames first would drop the instrument silently while
+    # the run still exits 0 -- a published universe quietly smaller than requested.
+    bars_root = tmp_path / "bars"
+    _publish_bars_with_status(bars_root, {
+        "600000.XSHG": "trading", "000001.XSHE": "suspended",
+    })
+    _patch_listing_dates(monkeypatch)
+    out = tmp_path / "report.json"
+    code = module.main([
+        "--bars-root", str(bars_root), "--label-root", str(tmp_path / "labels"),
+        "--start", "2026-01-05", "--end", "2026-01-20", "--combined", "--out", str(out),
+    ])
+    report = json.loads(out.read_text())
+    assert code == 1
+    assert report["published"] == 1
+    assert report["refused"] == 1
+    assert report["refusals"] == [{
+        "instrument": "000001.XSHE",
+        "reason": "no eligible label rows after eligibility filtering",
+    }]
+    # and the published set really does not contain that instrument
+    store = LabelStore(tmp_path / "labels")
+    _manifest, frame = store.read_frame(report["records"][0]["label_generation_id"])
+    assert frame["instrument"].unique().tolist() == ["600000.XSHG"]

@@ -406,3 +406,11 @@ label set 合并落地(2026-10-17,cr.md §8.49)
 - **测试**:`tests/test_build_label_sets.py` 13 passed(新增 4 例);变异(删 combined 分支 / 删 mode 字段)各红;清 `__pycache__` 后复测。
 - **连带修复**:`evidence/paper-execution-research-integration/phase-0/evidence-index.json` 的 resolver.py 钉是**旧字节**,工作区未提交的 resolver.py 让两个 evidence-freshness 测试飘红 → 按 §6.2 惯例重钉(pin 更新,不是消音)。
 - **仍未决**:①`request-final.json` 仍指向 `/tmp` 手搓版 generation,与生产版不同源(手搓版裁到 4970 只,生产版全 5067),下次跑链必须换绑;②生产版 5067 只里含晚入场的标的,可能重新引入 null factor → 下一轮跑链前要重测 null 计数;③`--combined` 目前只有 CLI 开关,没有 `readiness gate` 侧的对应概念(不需要,但值得在 user-guide §7 记一句)。
+
+自 CR §8.49 抓到 fail-open 已修(2026-10-17,cr.md §8.50)
+- **我上一轮真错**:`--combined` 直接 concat **输入帧**,而 `LabelBuilder` 的 eligibility 过滤在 grid **之后**;全窗口被剔干净的标的方式一会记 refusal、combined 下**无声消失且 exit 0**。合成 2 只窗实测:per_instrument exit=1/refused=1,combined exit=0/refused=0。
+- **为什么真跑没暴露**:全 A 27 只存在部分日期被剔除(各 6–15 天),但**没有一只被剔干净**——巧合没报警,不等于没缺陷。
+- **修法**:逐标的先 build,`output.empty` 单独记一条 refusal,只拼活下来的,并**对拼接帧重新走 build+binding**(否则 checksum 描述的别行序);per-instrument 路径抽 `_build()` 共用。
+- **行为保持实测**:全 A 重跑 generation/行数/null 数与 §8.49 **逐字节相同**(`2a58ab07…`/80973/25335)。
+- **测试+变异**:新增 1 例(exit=1 + refusals 指名 + 发布集确无该标的);把 refusal 改 pass → 红。**如实登记**:另外两次变异(跳过 continue / 恢复原始拼帧)**都没红**,即第一版变异试验给过假安全感,已重新定向。
+- **仍未决**:合并集是 5067 只(全集),而 request 侧的 membership/factor 线是 4970 只子集 ⇒ 下次跑链必须重测 null 计数,或先用 `--instrument`/membership 把 universe 卡成一致。

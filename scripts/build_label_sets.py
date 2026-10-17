@@ -207,37 +207,80 @@ def main(argv: list[str] | None = None) -> int:
     builder = LabelBuilder(name=args.name, semantic_version=args.semantic_version)
     published: list[dict[str, Any]] = []
     refused: list[dict[str, Any]] = []
-    grouped = [(instrument, eligibility[eligibility["instrument"] == instrument]) for instrument in instruments]
-    if args.combined:
-        # A research request binds exactly one label set for its whole universe, so
-        # the per-instrument sets this script used to publish could never be bound:
-        # `LabelStore` is keyed on one generation id, and `upstream bindings` is a
-        # list of adjusted-price bindings, not of label sets. Concatenating the
-        # frames keeps one binding (the window's adjusted-price partition) and one
-        # identity, which is what the request schema describes.
-        grouped = [("<combined>", pd.concat([frame for _, frame in grouped if not frame.empty],
-                                            ignore_index=True))]
-    for instrument, frame in grouped:
-        if frame.empty:
-            refused.append({"instrument": instrument, "reason": "no bars in window"})
-            continue
+
+    def _build(instrument: str, frame: pd.DataFrame) -> tuple[dict[str, Any], pd.DataFrame] | None:
+        """Run one group through the builder, recording a refusal when it fails.
+
+        The upstream binding must describe ``frame`` itself: the builder recomputes
+        the checksum over whatever frame it is handed and refuses a mismatch, so
+        this checksum is not decorative.
+        """
         try:
-            # The adjusted-price binding must describe `frame` itself: the builder
-            # recomputes the same checksum and refuses a publish when the two
-            # disagree, so the checksum below is not decorative.
-            manifest, output = builder.build_with_frame(
+            return builder.build_with_frame(
                 frame, upstream_bindings=[_binding(frame, instrument, schema.name)]
             )
-            identity = writer.publish(manifest, output)
         except ContractError as exc:
             refused.append({"instrument": instrument, "reason": str(exc)})
+            return None
+
+    # A research request binds exactly one label set for its whole universe, so the
+    # per-instrument sets this script publishes by default can never be bound by a
+    # v5 execute: `LabelStore` is keyed on one generation id and
+    # `upstream_adjusted_price_bindings` is a list of adjusted-price bindings, not of
+    # label sets. `--combined` therefore builds per instrument first and publishes the
+    # concatenation of the survivors as a single set.
+    #
+    # Building per instrument is not wasteful ceremony. `LabelBuilder` filters rows
+    # by eligibility (suspension, 60-day listing age, limit, delisting) *after* it
+    # computes the grid, so an instrument ineligible on every date yields a zero-row
+    # set. Per-instrument mode reports that as a named refusal; concatenating the
+    # *input* frames first would drop it silently and still exit 0, so the refusal
+    # would never reach the report. The combined set is the concatenation of the
+    # frames that actually produced labels, and every dropped instrument stays named.
+    folded: list[pd.DataFrame] = []
+    for instrument in instruments:
+        frame = eligibility[eligibility["instrument"] == instrument]
+        if frame.empty:
+            # Unreachable while `instruments` is derived from the bars frame; kept
+            # so the guard survives that assumption changing.
+            refused.append({"instrument": instrument, "reason": "no bars in window"})
             continue
-        null_labels = int(output["label"].isna().sum())
+        built = _build(instrument, frame)
+        if built is None:
+            continue
+        _manifest, output = built
+        if output.empty:
+            refused.append({
+                "instrument": instrument,
+                "reason": "no eligible label rows after eligibility filtering",
+            })
+            continue
+        if args.combined:
+            folded.append(frame)
+        else:
+            identity = writer.publish(_manifest, output)
+            published.append({
+                "instrument": instrument,
+                "label_generation_id": identity["generation_id"],
+                "rows": identity["rows"],
+                "null_labels": int(output["label"].isna().sum()),
+            })
+
+    if args.combined:
+        if not folded:
+            raise SystemExit("no instrument in the window produced an eligible label row")
+        # One build over the concatenation is what makes the binding honest: the
+        # checksum covers the same rows the manifest's `row_count` describes, and
+        # the identity is the identity of this frame rather than of some instrument.
+        combined = pd.concat(folded, ignore_index=True)
+        manifest, output = _build("<combined>", combined)
+        assert manifest is not None  # a refused concatenation was already recorded
+        identity = writer.publish(manifest, output)
         published.append({
-            "instrument": instrument,
+            "instrument": "<combined>",
             "label_generation_id": identity["generation_id"],
             "rows": identity["rows"],
-            "null_labels": null_labels,
+            "null_labels": int(output["label"].isna().sum()),
         })
 
     report = {
