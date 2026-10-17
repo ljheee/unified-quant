@@ -113,3 +113,33 @@ def test_quality_conflicts_return_structured_report():
     assert report.conflicts
     assert not report.accepted
     assert report.checksum
+
+
+def _write_schema(tmp_path, invariants):
+    import yaml
+    document = {
+        "dataset": "x", "version": "v1", "primary_key": ["a"], "sort_key": ["a"],
+        "fields": {"a": {"dtype": "string", "nullable": False},
+                   "b": {"dtype": "float", "nullable": True}},
+        "invariants": invariants,
+    }
+    path = tmp_path / "schema.yaml"
+    path.write_text(yaml.safe_dump(document))
+    return path
+
+
+def test_an_invariant_referencing_an_unknown_field_is_rejected(tmp_path):
+    # The reference check used to iterate `schema.fields` and ask whether that same
+    # field was absent from `set(schema.fields)` -- always False, so an invariant
+    # naming a field that does not exist loaded silently (cr.md FC-M1).
+    with pytest.raises(ContractError, match="unknown fields"):
+        load_schema(_write_schema(tmp_path, {"bad": "nonexistent_field > 0"}))
+
+
+def test_an_invariant_over_real_fields_still_loads(tmp_path):
+    # The guard must not reject legitimate invariants, and a quoted literal that
+    # happens to spell a non-field name is not a field reference.
+    schema = load_schema(_write_schema(
+        tmp_path, {"ok": "b >= 0 and a != None", "quoted": "a != 'nonexistent_field'"}
+    ))
+    assert schema.name == "x.v1"

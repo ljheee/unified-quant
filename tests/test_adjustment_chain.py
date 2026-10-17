@@ -349,7 +349,7 @@ def test_script_refuses_a_window_without_bars(tmp_path):
         )
 
 
-def _run_script(tmp_path, monkeypatch, bars):
+def _run_script(tmp_path, monkeypatch, bars, *, extra_args=()):
     bars_root = tmp_path / "bars"
     canonical = bars_root / "canonical" / "bars_daily" / "v2" / f"date={DATES[0].isoformat()}"
     canonical.mkdir(parents=True)
@@ -394,6 +394,7 @@ def _run_script(tmp_path, monkeypatch, bars):
             "--adjustment-root", str(tmp_path / "adj"),
             "--start", DATES[0].isoformat(),
             "--end", DATES[-1].isoformat(),
+            *extra_args,
             "--out", str(tmp_path / "report.json"),
         ]
     )
@@ -428,6 +429,28 @@ def test_script_report_surfaces_skipped_provider_checks_separately(tmp_path, mon
     assert reconciliation["max_abs_diff"] is None
     assert reconciliation["worst_instrument"] is None
     assert reconciliation["all_within_public_resolution"] is None
+
+
+def test_require_verified_turns_an_unreconciled_snapshot_into_a_gate_failure(tmp_path, monkeypatch):
+    # 'skipped' is an absent verdict, not a pass: the snapshot was published without
+    # ever being reconciled against the vendor adj_factor. The default keeps a wide
+    # window from being blocked by one unverifiable name, but --require-verified
+    # must make it fail (cr.md FC-M2).
+    exit_code, report = _run_script(
+        tmp_path, monkeypatch, _bars(factors=(None, None, None)),
+        extra_args=("--require-verified",),
+    )
+    assert exit_code == 1
+    assert report["published"] == 1
+    assert report["provider_reconciliation"]["skipped"] == 1
+
+
+def test_a_verified_snapshot_passes_require_verified(tmp_path, monkeypatch):
+    exit_code, report = _run_script(
+        tmp_path, monkeypatch, _bars(), extra_args=("--require-verified",)
+    )
+    assert exit_code == 0
+    assert report["provider_reconciliation"]["skipped"] == 0
 
 
 # --- TDX xdxr as the event source (lineage adj_factor.derived_v1) ------------

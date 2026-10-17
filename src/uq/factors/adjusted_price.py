@@ -77,5 +77,14 @@ def calculate_adjusted_factors(
 
 
 def assert_not_raw_close(frame: pd.DataFrame, result: pd.DataFrame) -> None:
+    """Test helper: fail when ``result`` reproduces raw-close returns.
+
+    Deliberately **not** called from production. A blanket "adj_factor is 1.0
+    everywhere" guard would be wrong: 62 of 5059 real instruments legitimately carry
+    a flat 1.0 factor because they have never had a corporate action, so the check
+    can only distinguish a substitution when it is given a frame whose factor is
+    known to differ. It stays exported for the regression test that pins the
+    substitution scenario (cr.md FC-M3).
+    """
     if np.allclose(result["return_1d"].dropna(), frame.sort_values(["instrument","datetime"])["close"].pct_change(fill_method=None).dropna(), atol=1e-15, equal_nan=True):
         raise ContractError("raw close substituted for adjusted close")

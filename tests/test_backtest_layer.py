@@ -75,6 +75,57 @@ DATES = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"]
 INSTRUMENTS = ["A", "B"]
 
 
+def _fills_of(artifacts):
+    return artifacts["fills"]
+
+
+def test_the_first_execution_day_uses_the_decision_close_for_limits():
+    # The decision date's close is the reference price for the next session's limit
+    # check. When the first rebalance is the first session of the panel, the
+    # reference map used to be empty, so the limit test fell back to the execution
+    # day's own open -- a band that can never bind (cr.md FC-M7).
+    engine = BacktestEngine(tempfile.mkdtemp())
+    dates = ["2026-01-05", "2026-01-06"]
+    panel = _make_price_panel(dates, ["A"])
+    # Force an execution-day open far outside the +/-10% band implied by the
+    # decision close, so a real prev_close reference must block the fill.
+    close_d0 = float(panel.loc[("2026-01-05", "A"), "close"])
+    panel.loc[("2026-01-06", "A"), "open"] = close_d0 * 1.5
+    panel.loc[("2026-01-06", "A"), "close"] = close_d0 * 1.5
+    manifest, artifacts = engine.run(
+        config=_make_config(),
+        portfolio_definition={"generation_id": GEN_B},
+        weight_partitions={"2026-01-05": _make_weights("2026-01-05", ["A"])},
+        price_panel=panel,
+    )
+    fills = _fills_of(artifacts)
+    assert not fills.empty
+    # The buy must be blocked by the limit band, not silently filled at 1.5x.
+    assert set(fills["status"]) <= {"skipped_limit_up", "skipped_limit_down", "skipped_suspended"}
+    assert (fills["filled_shares"] == 0).all()
+
+
+def test_a_suspended_buy_intent_is_not_recorded_as_a_sell():
+    # The fill log must report the side the weights asked for. A suspended name
+    # with a buy intent used to be logged with side="sell" (cr.md FC-M7).
+    # The suspension is declared through `suspension_dates` so the price stays
+    # valid and a fill row is actually emitted -- an all-NaN panel would skip the
+    # instrument before the suspension branch and prove nothing.
+    engine = BacktestEngine(tempfile.mkdtemp())
+    panel = _make_price_panel(DATES, ["A"])
+    manifest, artifacts = engine.run(
+        config=_make_config(),
+        portfolio_definition={"generation_id": GEN_B},
+        weight_partitions={"2026-01-05": _make_weights("2026-01-05", ["A"])},
+        price_panel=panel,
+        suspension_dates={("2026-01-06", "A")},
+    )
+    fills = _fills_of(artifacts)
+    suspended = fills[fills["status"] == "skipped_suspended"]
+    assert not suspended.empty, "the suspension must produce a fill row"
+    assert set(suspended["side"]) == {"buy"}
+
+
 class TestBacktestEngine:
     def test_deterministic_pnl(self):
         engine = BacktestEngine(tempfile.mkdtemp())

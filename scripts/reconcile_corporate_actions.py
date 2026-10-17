@@ -19,6 +19,11 @@ the one-sided case (disclosure carries events, TDX has none) and the fully
 disjoint one (both sides non-empty but sharing no ex-date), since a date only one
 source knows about is exactly the missing event that silently under-adjusts.
 
+An instrument whose disclosure side is empty is **not** skipped for that reason:
+it is handed to the comparison like any other, so "disclosure empty while TDX
+carries a category-1 event" is reported as ``no_overlap`` and fails the gate
+rather than disappearing from the summary.
+
 The report never names a winner: which side is right is settled by the vendor
 factor jump, which the adjustment chain checks separately.
 
@@ -144,7 +149,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         refusals.extend(note for note in notes if note["kind"] == "refused")
         uncovered.extend(note for note in notes if note["kind"] == "uncovered")
-        if disclosure.empty:
+        # A refusal already names this instrument and fails the gate, so it is not
+        # also fed to the comparison: that would report the same name twice, once as
+        # "unmappable" and once as "no overlap". An *empty* disclosure without a
+        # refusal is different -- it is a one-sided source pair, which must reach the
+        # comparison so the divergence is visible instead of silently exiting 0.
+        if disclosure.empty and any(
+            note["kind"] == "refused" and note["instrument"] == instrument for note in notes
+        ):
             continue
         raw = frames.get(instrument.split(".")[0], pd.DataFrame())
         # Only `category == 1` (除权除息) rows carry ex-right meaning: TDX also emits

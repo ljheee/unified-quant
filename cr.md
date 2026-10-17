@@ -1154,3 +1154,71 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **真跑**：复权线在 `/tmp/uq-adj-v5` 重跑，generation id `5b1528220dbd…` 与 §8.36/8.37 的记录**逐字节一致**——OBS-C 只改分母来源的可追溯性、不改发布字节。事件互校门未重跑（真跑需网络，本轮只改 gate 逻辑与文档）。
 
 **未夸大声明**：CR38-1/2 由执行实证，其余读码确认；全部 7 条变异均实做并经 `git status` 核净（无残留）。OBS-E 的"死代码"判定基于 `unresolved` 与 `in_window` 定义相同这一读码结论，无运行时探针。§8.38 的 6 CR / 9 OBS 我逐条复验均属实，但 §8.38 不是我写的，本轮只承接其结论。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.40 完整 CR（2026-10-16/17，HEAD `d4953ca`，全仓逐行）
+
+**触发**：用户"完整CR"→"记入"。范围：src/ 103 文件、scripts/ 19 文件、tests/ 101 文件、config/ 138 文件。口径：全部 src/scripts **逐行亲读、无 subagent**；全量套件亲跑；关键门变异抽查；cr.md/pendding.md 台账对账；tests/ 以套件+变异覆盖、未逐行重读。
+
+**套件**：HEAD 亲跑 `1124 passed / 23 skipped / exit 0`（52.13s），与 §8.39 声明逐字一致；父提交链 9a905d4=1115/23（前轮亲验）→ +9 一致。环境：pyarrow 25.0.1（与 `test_repro_staging.py:63` 锁一致）、pandas 2.3.3（与 pendding 声明一致）。
+
+**变异抽查**（亲做亲恢复、`git status` 核净，树终态仅余用户侧 `M AGENTS.md` 与未跟踪外部评审件）：
+
+| 变异 | 结果 |
+|---|---|
+| `no_overlap` 移出 gate（`reconcile_corporate_actions.py:227`） | 2 例红（one_sided + fully_disjoint），与 §8.39 "2 例红"一致 ✓ |
+| 删 `adjusted_price.py` 的 `Mapping` import | 注解锁 `test_every_public_annotation_resolves` 红（NameError）✓ |
+| 删 `publish_adjusted_window.py` 中断包装 | `test_an_interrupted_window_still_writes_its_audit_record` 红 ✓ |
+
+**发现（无 BLOCKER/MAJOR 新发现；8 FC 全 MINOR，两条 borderline-MAJOR 待裁决）**：
+
+- **FC-M1** contracts/schema.py：`_validate_references` 死代码→裸 UndefinedVariableError；死 `_COMPATIBLE_DTYPES`；date32+NaT 隐患（前轮执行实证）。
+- **FC-M2** adjustment_chain.py：`_provider_check` "skipped" 判定带 exit 0 发布、docstring 超卖（**borderline-MAJOR，待裁决**；`build_dividend_adjustments.py` 继承）。
+- **FC-M3** factors/adjusted_price.py：`assert_not_raw_close` 生产侧失效；多标的输入抛 ValueError 而非 ContractError（前轮执行实证）。
+- **FC-M4** CR38-2 类未全仓收口：`research_chain/adapters.py` QlibRuntimeTrainer（无 import）、`factors/engine.py:108` Path 两处同类潜伏；§8.39 注解锁只覆盖单模块（其"本模块"作用域声明诚实、未夸大）。
+- **FC-M5** runner.py `_read_receipt` 磁盘回退读 `external_quality_reviews/` 而实际落 `research_exports/` 且为占位内容，跨进程续跑断（被 last_result 快路掩盖）。
+- **FC-M6** 多日期 `runner.execute()` 在 portfolio 绑定校验处必断（latest vs earliest 日期错配），cli 可达、fail-closed。
+- **FC-M7（本轮新增）** backtest/engine.py：非日频调仓时执行日涨跌停带引用 D-1 收盘（陈旧一日）+ 首执行日 `prev_close` 退化为当日 open（首日限制器失效）+ risk-gate `previous_close` 同享两缺陷；停牌分支对 BUY 意图记 side="sell" 占位审计行；`t1_locked` 死状态。**与 pendding.md 已登记的"首执行日退化"待决项部分重叠，"非日频陈旧一日"一面未登记过**。
+- **FC-M8（本轮新增，borderline-MAJOR，请裁决）** `reconcile_corporate_actions.py:147-148`：披露侧零实施记录 → `if disclosure.empty: continue` 绕过 TDX category 检查与 `reconcile_instrument`，"披露空 + TDX 有 category-1 事件"的单边分歧静默 exit 0，docstring :16-20 总起句（"完全无可比事件也是失败"）对该路径不成立。细化：纯送股名走 refused 分支已受门控；双空情形的 docstring 口径本身可议（门禁会吵）。
+
+**OBS 按族归并**（~45 条）：异常文本嗅探族 6 处（daily.py、fetch_dividend_events、fetch_index_membership、publish_universe_snapshots、publish_market_datasets、publish_factor_partitions，后两者有既定理由登记仍属同族）；私有成员访问族（`_partition` ×3、`_to_instrument` ×3）；fsync 缺失族（market_dataset_publisher、risk/stores、backtest 评审件、cli run-report、各脚本 summary）；helper 复刻族（`sha256_json` ≥4 份、`canonical_json` ×2、label 输入绑定 checksum 双份逐字一致、risk `_candidate_binding` 双份）；死代码族（`_resize_value`、`_expected_dates`、`t1_locked`、`risk_release` 枚举、resolver 两项、model_layer:636 死析取、state.py 重复 holdings 检查、factor_governance `resolve_dependencies`、context.py ranged read_bars 等）；裸异常族（router 三点、state.py:201、build_dividend_adjustments:38、两个 `_partitions` 裸 ValueError；**不一致**：publish_factor_partitions 静默跳过坏目录 vs build_store_evidence 硬拒绝）；声明-only/名实不符族（`ordered_cash_residual_sequence`、`event_count`、dataset `covered_dates`、`snapshot_id` write-only、`decision_session` 注解谎）。**本轮新单点**：①label manifest 声明 `limit_events: exclude` 而生产入口无法识别涨跌停（canonical 为价格列）——局限已入 pendding 与 run report 但不随 manifest 走（规则确实施加于全 False 标志，故 OBS 而非 FC）；②label 上游绑定 `generation_id="0"*64` 占位（checksum 钉、generation 不钉）；③publish_market_datasets suspension 路径读 canonical parquet 不校验 checksum（bars 路径逐字节校验，深度不对称）；④publish_adjusted_window `_published` 仅存在性检查；⑤该文件 `_write_report` dict 缩进漂移（化妆）；⑥172 条测试告警（主为 schema.py:86 在切片 frame 上的 SettingWithCopyWarning）——两组受控复现**未触发**，判 pandas 已知误报类良性噪音，无调用方数据变异（复现确认 slice/parent 列均不变），机理未定位如实声明。
+
+**验证安全清单（本轮新验）**：`factor_generation(quality_report_checksum="")` 与 publish 内部带真值重算的 generation **相等**——`gate_contracts.py:94-104` 把 quality checksum 排除出 generation 配方（docstring 明写），publish_factor_partitions 的鸡生蛋由排除项解开 ✓；stage_adapter 双重 config identity 一致（risk_decision_binding 属生成排除项）✓；planner initial 模式 None holdings 契约 ✓；target_weights 身份链（exclude_fields=set() 互洽）✓；质量报告签名验证在 model_layer.py:736 传递生效、六条读路径全覆盖 ✓；universe 平铺 MAJOR-2 门（snapshot_date 随 visible_from 严格递增）✓；build_store_evidence 字节重推导+受治理读回+禁自录 ✓；publish_adjusted_window baseline 只用不发、分母优先读已发布分区 ✓；label 读写侧 checksum 单源 ✓。
+
+**台账对账**：§8.39 的 1124/23、父链、7 条变异声明（独立重做 3 条全中）、环境版本、P1–P6 关闭抽验均一致。**两处化妆性失真（保守方向，非夸大）**：①§8.39 标题与 pendding 对应节写"6 CR + **5** OBS 全修"，正文实修 OBS **8** 条（A–H），标题少计；②§8.39 OBS-A 与 `adjusted_price.py:105` 注释引用的旧式 `set(raw) - set(restated) - set(restated)` 系**误引**——真实旧式为 `set(_KEY_COLUMNS) - set(raw.columns) - set(restated.columns)`（§8.38 原文为准），注释描述的语义与真实旧式相符、与误引式不符。
+
+**未夸大声明**：全部 src/scripts 逐行亲读、无 subagent；套件与 3 条变异亲跑亲恢复；FC-M1/M3 为前轮执行实证、FC-M8 经当前代码（恢复后原貌）重确认。未做：真跑窗口未复跑（网络依赖，三方裁定数值为台账转述）；OBS 为读码结论未逐条变异；SettingWithCopyWarning 机理复现未遂（良性判定基于否定性实验 + 验证器只读性质）；tests/ 未逐行重读；FC-M7 的 PnL 影响面未数值量化。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.41 §8.40 八条 FC 收口（2026-10-16/17，FC-M1..M8 + 两处台账失真）
+
+**触发**：用户"看看 §8.40 的问题"→"按你的评估建议，全部修复"。先逐条复验 §8.40，**结论：8 条 FC 中 4 条经我独立复现为真，2 条属实但措辞需修正，2 条（FC-M1/M3）本轮未动（见下"未做"）**。
+
+**复验结论（先证后修）**
+
+| 条目 | 复验方式 | 结论 |
+|---|---|---|
+| **FC-M8** | 直接执行：披露侧只有 `预案`（映射为 0 事件）+ TDX 有 category-1 → 旧码 `instruments_compared=0`、`refusals=[]`、**exit 0** | **真**，且是我 §8.39 自己引入的洞 |
+| **FC-M4** | `get_type_hints` 扫全仓（含类方法）→ **3** 处，非 §8.40 说的 2 处 | **真但少计**；`execution/stores.py` 是**正当**的 `TYPE_CHECKING` 守卫，另 2 处是真潜伏缺陷 |
+| **FC-M2** | `_provider_check` 只在 `failed` 抛；`build_dividend_adjustments.py` 报 `skipped_instruments` 但 exit 0 | **真**，但"静默 exit 0"措辞过重——报告是可见的，缺的是**阻断** |
+| **FC-M7** | 读码 + 执行：`prev_close_prices` 初值空、`t1_locked` 写入后同一执行块内无条件 `clear()` | **真**（4 个面全部成立） |
+| **FC-M1** | 执行：`_validate_references` 遍历 `schema.fields` 再问它是否不在 `frame_columns(schema)`（= `set(schema.fields)`）⇒ 恒 False；构造引用 `nonexistent_field` 的 schema **能加载** | **真**（死检查） |
+| **FC-M3** | `assert_not_raw_close` 全仓零生产调用 | **真**（生产侧失效） |
+| 台账两处失真 | 逐字核对 | **均属实**：§8.39 标题"5 OBS"实修 8 条；`adjusted_price.py` 注释误引旧式 |
+
+**修复**
+
+- **FC-M8（最重要）**：删掉 `if disclosure.empty: continue` 的无条件跳过，让披露空但 TDX 有事件的单边情形进入 `reconcile_instrument` ⇒ 落 `no_overlap` ⇒ gate 失败。**但**不能简单删：那会让"整只不可映射（已 refusal）"的标的**同时**被记为 refusal 和 no_overlap，重复计数。最终形态是**仅当已记 refusal 时才跳过**，否则进入比较。docstring 补明这条路径。锁 `test_an_empty_disclosure_side_with_tdx_events_still_fails_the_gate`；变异（恢复无条件 continue）→ 必红，且既有两个 refusal 测试**同时**变红，说明两个分支都被锁住。
+- **FC-M4**：`factors/engine.py` 补 `from pathlib import Path`；`research_chain/adapters.py` 的 `QlibRuntimeTrainer` 改 `TYPE_CHECKING` 守卫——**不能**直接 import，`qlib_runtime` 在模块加载时 `import qlib`，而 qlib 是可选依赖（主 venv 无 qlib，直接 import 会让整个包不可用）。新增全仓锁 `tests/test_annotation_resolution.py`：遍历所有模块的**类方法**（不是只扫模块级函数——我第一版探针正因为只扫模块级而误报 0 处）、`get_type_hints` 求值、`TYPE_CHECKING` 守卫下的名字**放行**、并断言扫描函数数 >200 防空洞。变异：删 `Path` import / 删 `TYPE_CHECKING` 守卫 → 各自必红；`stores.py` 的正当守卫保持绿。
+- **FC-M2**：`_provider_check` 补 docstring，明确 `skipped` 是**没有裁决**而非通过；`build_dividend_adjustments.py` 新增 `--require-verified`（默认关闭，避免一个不可核验的标的阻断宽窗），开启时 `skipped` 即 exit 1；脚本 docstring 同步改为如实描述。锁 2 例（开启时 skipped→1；已核验→0）。**未改默认行为**——默认仍是 exit 0，因为把默认改成阻断会让现有宽窗运行全部失败，属需另行裁决的口径变更。
+- **FC-M7（4 个面）**：①首个执行日 `prev_close` 退化——在 rebalance 分支开头用**决策日收盘**播种 `prev_close_prices`；②非日频时陈旧——非 rebalance 分支**每个会话**都更新参考价（原来只在执行日更新）；③停牌分支 `side` 硬编码 `"sell"` → 改用既有的 `_side_at_open(inst)`，买入意图不再记成卖出；④删死状态 `t1_locked`（写入后同一执行块内无条件 `clear()`，在读取点恒为空；**T+1 由"卖先于买"的结算顺序保证**，10 个既有 t1 测试全绿佐证）。锁 2 例，均变异验证必红。
+- **FC-M1**：`_validate_references` 改为**解析表达式里真正出现的标识符**（先剔字符串字面量、跳过 `and/or/not/in/is/True/False/None`）再与声明字段求差；新增 `_identifiers()` 取代只会被误用的 `_uses_identifier()`。锁 2 例：引用未知字段必拒、合法表达式（含引号字面量 `'nonexistent_field'`）仍放行；变异（恢复死循环）必红。三个真实 schema 全部仍可加载。
+- **FC-M3**：**这一条我改变了处理方式，如实登记**。原计划照 FC-M3 描述"把 `assert_not_raw_close` 接进生产"，我先试了最直接的接法——在 `_validate_binding` 里拒绝"全部 `adj_factor == 1.0`"。**实测该接法是错的**：全 A 一个真实会话里有 **62/5059** 只标的的因子本来就恒为 1.0（从未发生公司行为），这个守卫会把真实数据全部拒掉，套件里 4 个 fixture（默认 `factor=1.0`）也同时变红。已回退。最终处理：给该 helper 补 docstring 明确它是**测试专用**、并写清"为什么不能做成生产侧的 blanket 守卫"（同一批 62 只标的就是反例）。**因此 FC-M3 的"生产侧失效"在本轮是"如实定性"而非"修好"**——真正的修法是让生产链路带上"预期应有除权事件"的独立预期，那需要新的数据输入，不在本轮范围。
+
+**FC-M7 的连带发现（重要，非 §8.40 所列）**：①的修复让 `test_risk_control_plane_phase2.py::test_risk_rejected_candidate_is_not_added_to_frozen_fills` 变红——该 fixture 的决策收盘 10.0、执行开盘 11.0 **恰好落在 limit_up=11.0 边界上**，它此前"只失败 cash 规则"是因为**首日 limit 检查失效**这个 bug。修正 fixture 到 10.5（严格在带内）以保留其原意。这反过来证明 FC-M7① 是真缺陷，且**已发布的 PnL 口径会变**——本轮未量化影响面（见未夸大）。
+
+**台账修正**：`adjusted_price.py` 的注释改回真实旧式 `set(_KEY_COLUMNS) - set(raw.columns) - set(restated.columns)`；§8.39 标题的"5 OBS"不动（历史条目，以本节为准记录实为 8 条）。
+
+**测试**：本机 `.venv` → **1133 passed / 23 skipped / exit 0**（父 `d4953ca` 实测 1124/23，净 **+9**：annotation 2 + reconcile 1 + adjustment_chain 2 + backtest 2 + contract_validation 2）。`.venv-qlib` 下四个受影响文件 **70 passed**。
+
+**变异验证（每条先清 `__pycache__`、亲恢复、`git status` 核净）**：FC-M8 无条件 continue / FC-M4 删 `Path` import / FC-M4 删 TYPE_CHECKING 守卫 / FC-M7 删决策收盘播种 / FC-M7 停牌 side 改回 `"sell"` —— **5 条全部被杀**。**如实登记一处返工**：FC-M7 停牌 side 的**首版测试是假绿**（用全 NaN 面板，标的在停牌分支之前就被跳过，根本没产生 fill 行，变异不被杀）；改用 `suspension_dates` 声明停牌、价格保持有效后才真正锁住，复做变异必红。
+
+**未夸大声明**：6 条 FC 由我先独立复现再修，非照单执行；FC-M4 的"少计"与 FC-M2 的"措辞过重"是我对 §8.40 的**反向修正**，已写入。**FC-M3 只定性未修好**（见上，blanket 守卫经实测会拒掉 62 只真实标的，已回退）；FC-M1 的 `_COMPATIBLE_DTYPES` 死常量与 date32+NaT 隐患**未动**（本轮只修了同条目里的 `_validate_references` 死检查）；FC-M2 **未改默认阻断行为**（新增 opt-in 开关，默认仍 exit 0，改默认会让现有宽窗全红，属需另行裁决的口径变更）；FC-M7 对已发布 PnL 的**数值影响面未量化**（只证明口径会变、既有 golden 未复跑）；OBS 族未动。`code-review-unified-quant.md` 保持未跟踪。

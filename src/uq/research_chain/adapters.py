@@ -3,9 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    # `qlib_runtime` imports qlib at module load, and qlib is an optional
+    # dependency, so the trainer type must never be imported at runtime -- only
+    # named here for the annotation.
+    from ..models.qlib_runtime import QlibRuntimeTrainer
 
 from ..backtest.engine import BacktestEngine, BacktestResultStore
 from ..contracts.canonical_v2 import file_sha256_bytes

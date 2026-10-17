@@ -235,6 +235,16 @@ def _pre_close_series(bars: pd.DataFrame, *, instrument: str, events: pd.DataFra
 
 
 def _provider_check(derived: pd.DataFrame, bars: pd.DataFrame, *, tolerance: float) -> dict[str, Any]:
+    """Reconcile a derivation against the vendor's own cumulative ``adj_factor``.
+
+    Returns ``passed`` / ``failed`` / ``skipped``.  ``skipped`` means the
+    comparison could not be *performed* -- fewer than two official observations,
+    an unusable anchor, or no overlapping sessions -- so it carries no verdict
+    either way.  It is emphatically not a pass: a snapshot published without this
+    reconciliation has never been checked against the vendor, which is the whole
+    point of the chain.  Callers must treat ``skipped`` as unverified and say so
+    rather than reporting a clean run (cr.md FC-M2).
+    """
     official = bars[["session_date", "adj_factor"]].dropna()
     derived = derived.copy()
     derived["session_date"] = pd.to_datetime(derived["session_date"]).dt.date

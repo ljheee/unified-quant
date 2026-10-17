@@ -7,6 +7,11 @@ disclosure in the window, publishes the snapshots and writes a reviewable
 report. Exits 1 if any instrument is refused, so the report is a gate rather
 than a log.
 
+A published snapshot whose ``provider_check`` is ``skipped`` was never reconciled
+against the vendor ``adj_factor`` -- that is not a pass, it is an absent verdict.
+Such snapshots are always reported under ``provider_reconciliation``; pass
+``--require-verified`` to make them fail the run as well.
+
 Usage:
   scripts/build_dividend_adjustments.py --bars-root data/bars-a500-store \
       --dividend-root data/dividend-store --adjustment-root data/adjustment-store \
@@ -52,6 +57,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--schema", type=Path, default=Path("config/schemas/bars_daily.v2.yaml"))
     parser.add_argument("--tolerance", type=float, default=PROVIDER_TOLERANCE)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--require-verified",
+        action="store_true",
+        help="exit 1 when a published snapshot's provider_check is 'skipped' (never "
+             "reconciled against the vendor adj_factor). Without it such snapshots are "
+             "reported under provider_reconciliation.skipped_instruments and the run "
+             "still exits 0, so a wide window is not blocked by one unverifiable name.",
+    )
     args = parser.parse_args(argv)
 
     sessions = _window_sessions(args.bars_root, args.start, args.end)
@@ -155,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: report[k] for k in ("published", "refused", "provider_reconciliation")}, ensure_ascii=False))
-    return 1 if refused else 0
+    return 1 if (refused or (args.require_verified and unverified)) else 0
 
 
 if __name__ == "__main__":

@@ -333,3 +333,13 @@ lineage 更正(2026-10-16,cr.md §8.32)
 - **测试**:全量 **1124 passed / 23 skipped / exit 0**(父提交 `9a905d4` 实测 1115/23,净 +9);7 条变异全部实做并经 `git status` 核净。
 - **仍未决**:①`adjusted_price_binding` 的 `expected_restated` 生产提供者未接线;②复权线未在**更宽的**全 A 窗(42 会话)批量发布;③新浪仍未接入(裁定口径已定)。
 
+
+§8.40 八条 FC 收口(2026-10-16/17,cr.md §8.41)
+- **FC-M8(最重要,我 §8.39 自己引入的洞)**:披露侧空 + TDX 有 category-1 事件时,`if disclosure.empty: continue` 绕过 TDX 检查与 `reconcile_instrument` ⇒ 静默 exit 0。修正:仅当**已记 refusal** 才跳过,否则进入比较落 `no_overlap` ⇒ gate 失败。变异双向验证(恢复无条件 continue ⇒ 新锁 + 两个既有 refusal 测试同时红)。
+- **FC-M4**:全仓 `get_type_hints` 扫出 **3** 处(§8.40 少计为 2),其中 `execution/stores.py` 是**正当**的 `TYPE_CHECKING` 守卫。修 `factors/engine.py`(补 `Path` import)与 `research_chain/adapters.py`(`QlibRuntimeTrainer` 改 TYPE_CHECKING 守卫——不能直接 import,qlib 是可选依赖)。新增全仓锁 `tests/test_annotation_resolution.py`(扫类方法、放行 TYPE_CHECKING、断言扫描 >200 函数防空洞)。
+- **FC-M2**:`_provider_check` 补 docstring 明确 `skipped` = **无裁决**;`build_dividend_adjustments.py` 增 `--require-verified`(默认关,开启时 skipped 即 exit 1)。**未改默认阻断**——改默认会让现有宽窗全红,属需裁决口径。
+- **FC-M7(4 个面)**:①首执行日 `prev_close` 退化 ⇒ 用决策日收盘播种;②非日频陈旧 ⇒ 非 rebalance 会话也更新参考价;③停牌分支 `side` 硬编码 `"sell"` ⇒ 用 `_side_at_open`;④删死状态 `t1_locked`(T+1 由"卖先于买"保证)。**连带发现**:①的修复让 `test_risk_control_plane_phase2` 一个 fixture 变红——其决策收盘 10.0/执行开盘 11.0 **恰在 limit_up 边界**,此前靠首日 limit 失效才通过;修正 fixture 到 10.5。**已发布 PnL 口径会变,影响面未量化**。
+- **FC-M1**:`_validate_references` 的死检查(遍历 `schema.fields` 再问是否不在 `set(schema.fields)`,恒 False)⇒ 改为解析表达式标识符与声明字段求差;锁 2 例。同条目的 `_COMPATIBLE_DTYPES` 死常量与 date32+NaT **未动**。
+- **FC-M3**:**只定性未修好**。试过最直接接法(拒绝全 1.0 因子)⇒ **实测会拒掉 62/5059 只真实标的**(从未有公司行为的标的因子恒为 1.0),已回退;改为给 helper 补 docstring 说明它是测试专用及为何不能做 blanket 守卫。真正的修法需"预期应有除权事件"的新数据输入。
+- **台账两处失真**均属实并已修正注释:§8.39 标题"5 OBS"实为 8 条;`adjusted_price.py` 注释误引旧式。
+- **测试**:全量 **1133 passed / 23 skipped / exit 0**(父 `d4953ca` 1124/23,净 +9);5 条变异全部被杀。**一处返工如实登记**:FC-M7 停牌 side 首版测试是**假绿**(全 NaN 面板使标的在停牌分支前就被跳过),改用 `suspension_dates` 后才真正锁住。

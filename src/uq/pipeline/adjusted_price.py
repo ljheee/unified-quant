@@ -102,9 +102,10 @@ def verify_restatement(
     :func:`restate` and is what ``publish_adjusted_partition`` uses to reject a
     restatement that drifts from ``price * adj_factor``.
     """
-    # Per side, not as one intersection: `set(raw) - set(restated) - set(restated)`
-    # only catches a column absent from *both* frames, so a key present in raw but
-    # missing in restated slips past this check and dies as a bare KeyError inside
+    # Per side, not as one intersection: the former
+    # `set(_KEY_COLUMNS) - set(raw.columns) - set(restated.columns)` only caught a
+    # column absent from *both* frames, so a key present in raw but missing in
+    # restated slipped past the check and died as a bare KeyError inside
     # `set_index` below. A typed rejection names the side that is wrong.
     for side, frame in (("raw", raw), ("restated", restated)):
         missing = sorted(set(_KEY_COLUMNS) - set(frame.columns))

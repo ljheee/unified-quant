@@ -117,7 +117,6 @@ class BacktestEngine:
 
         cash = initial_capital
         holdings: dict[str, int] = {}  # instrument -> total shares held
-        t1_locked: dict[str, int] = {}  # instrument -> shares bought today (not yet sellable)
         prev_close_prices: dict[str, float] = {}
         fills_rows: list[dict[str, Any]] = []
         equity_rows: list[dict[str, Any]] = []
@@ -161,6 +160,11 @@ class BacktestEngine:
 
             # --- Rebalance: check if this decision date has targets ---
             if date not in weight_partitions:
+                # Keep the reference price current on every session, not only on
+                # rebalance dates. With a non-daily decision model the gap between
+                # two execution days spans many sessions, and updating only on
+                # execution days would make the limit test on the next execution day
+                # compare against a close that is several sessions stale (cr.md FC-M7).
                 for inst in day_data.index:
                     cp = day_data.loc[inst, "close"]
                     if not pd.isna(cp) and cp > 0:
@@ -170,6 +174,18 @@ class BacktestEngine:
             weights_df = weight_partitions[date]
             target_weights = dict(zip(weights_df["instrument"], weights_df["weight"])) if len(weights_df) > 0 else {}
             
+            # The decision date's close is the reference price for the limit checks on
+            # the following execution day. Seeding it here matters when the *first*
+            # rebalance falls on the first session of the panel: the loop above never
+            # ran, so `prev_close_prices` is still empty and the limit test below
+            # would fall back to the execution day's own open -- a limit that can
+            # never trigger, since open*0.9 <= open <= open*1.1 always holds
+            # (cr.md FC-M7).
+            for inst in day_data.index:
+                cp = day_data.loc[inst, "close"]
+                if not pd.isna(cp) and cp > 0:
+                    prev_close_prices[inst] = float(cp)
+
             exec_date_idx = i + 1
             if exec_date_idx >= len(trading_dates):
                 break
@@ -212,7 +228,12 @@ class BacktestEngine:
             ]
             for inst in ordered_instruments:
                 current_total = holdings.get(inst, 0)
-                current_sellable = current_total - t1_locked.get(inst, 0)
+                # Sells are settled before buys within one execution day, so a
+                # same-session purchase can never be sold again by this loop. That
+                # ordering *is* the T+1 rule here; the former `t1_locked` counter was
+                # written and cleared inside the same execution block, so it was
+                # always empty at this point (cr.md FC-M7).
+                current_sellable = current_total
                 target_shares = target_shares_map.get(inst, 0)
                 
                 open_price = exec_day_data.loc[inst, "open"] if inst in exec_day_data.index else None
@@ -280,8 +301,12 @@ class BacktestEngine:
                         risk_allowed_shares = min(allowed_values)
                 
                 if is_suspended:
+                    # The side is the *intent* at the open, not a placeholder: a name
+                    # that is suspended while we wanted to buy must not be recorded as
+                    # a sell, or the fill log reports the opposite trade from the one
+                    # the weights asked for (cr.md FC-M7).
                     fills_rows.append(self._fill_row(
-                        date=exec_date, instrument=inst, side="sell",
+                        date=exec_date, instrument=inst, side=_side_at_open(inst),
                         target_shares=0, filled_shares=0,
                         gross_execution_price=float(open_price) if open_price is not None and not pd.isna(open_price) else 0.0,
                         net_execution_price=float(open_price) if open_price is not None and not pd.isna(open_price) else 0.0,
@@ -392,7 +417,6 @@ class BacktestEngine:
                     
                     cash -= total_cost
                     holdings[inst] = current_total + actual_shares
-                    t1_locked[inst] = t1_locked.get(inst, 0) + actual_shares
                     fills_rows.append(self._fill_row(
                         date=exec_date, instrument=inst, side="buy",
                         target_shares=actual_shares, filled_shares=actual_shares,
@@ -400,12 +424,6 @@ class BacktestEngine:
                         commission_fee=commission, stamp_duty_fee=0, status="filled",
                     ))
             
-            # T+1 unlock: all previously locked shares become sellable tomorrow.
-            # This runs on every rebalance execution day. In the daily decision model,
-            # each exec date clears the previous day's lock, which is correct because
-            # shares bought on exec day are locked and become sellable the next day.
-            t1_locked.clear()
-
             # Update prev_close from execution day
             for inst in exec_day_data.index:
                 cp = exec_day_data.loc[inst, "close"]

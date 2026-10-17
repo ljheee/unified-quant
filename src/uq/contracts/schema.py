@@ -120,15 +120,38 @@ def _validate_references(schema: Schema) -> None:
     if unknown_keys:
         raise ContractError(f"keys reference unknown fields: {sorted(unknown_keys)}")
     for name, expression in schema.invariants.items():
-        for field in schema.fields:
-            if _uses_identifier(expression, field) and field not in frame_columns(schema):
-                raise ContractError(f"invariant {name} references unknown field {field}")
+        # The former loop iterated `schema.fields` and asked whether that same field
+        # was absent from `frame_columns(schema)`, which is just `set(schema.fields)`
+        # -- always False, so an invariant naming a field that does not exist was
+        # never rejected (cr.md FC-M1). Check the identifiers the expression actually
+        # uses against the declared fields instead.
+        referenced = {
+            identifier for identifier in _identifiers(expression)
+            if identifier not in _EXPRESSION_BUILTINS
+        }
+        unknown = sorted(referenced - frame_columns(schema))
+        if unknown:
+            raise ContractError(f"invariant {name} references unknown fields: {unknown}")
 
 
 def frame_columns(schema: Schema) -> set[str]:
     return set(schema.fields)
 
 
-def _uses_identifier(expression: str, identifier: str) -> bool:
+_EXPRESSION_BUILTINS = frozenset({"and", "or", "not", "in", "is", "True", "False", "None"})
+
+
+def _identifiers(expression: str) -> set[str]:
+    """Bare identifiers used by an invariant expression.
+
+    Attribute access (``a.b``), numbers and quoted strings are not field
+    references, so only the leading name of each dotted chain is collected.
+    """
     import re
-    return re.search(rf"\b{re.escape(identifier)}\b", expression) is not None
+
+    names: set[str] = set()
+    # Drop quoted literals first, so a string such as "close" is not read as a field.
+    without_strings = re.sub(r"'[^']*'|\"[^\"]*\"", " ", expression)
+    for match in re.finditer(r"(?<![\w.])([A-Za-z_][A-Za-z0-9_]*)", without_strings):
+        names.add(match.group(1))
+    return names

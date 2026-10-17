@@ -246,3 +246,25 @@ def test_a_fully_disjoint_source_pair_fails_the_gate(tmp_path, monkeypatch):
     assert record["disclosure_only_dates"] == ["2025-09-16"]
     assert record["tdx_only_dates"] == ["2010-01-05"]
     assert report["no_overlap"] == 1
+
+
+def test_an_empty_disclosure_side_with_tdx_events_still_fails_the_gate(tmp_path, monkeypatch):
+    # The disclosure side carries only a unimplemented plan, so it maps to zero
+    # events -- but TDX has a real category-1 event. Skipping the instrument there
+    # would let a one-sided divergence leave the summary entirely and exit 0, which
+    # is the escape the no_overlap gate exists to close (cr.md FC-M8).
+    code, report = _run(
+        tmp_path, monkeypatch,
+        instruments=["600000.XSHG"],
+        disclosures=[_disclosure_row(div_proc="预案", ex_date=None, imp_ann_date=None)],
+        tdx_frames={"600000": _tdx((2025, 9, 16, 1, 4.1, 0.0, 0.0, 0.0))},
+    )
+    assert code == 1
+    assert report["instruments_compared"] == 1
+    assert report["no_overlap"] == 1
+    assert report["no_overlap_instruments"] == ["600000.XSHG"]
+    (record,) = report["records"]
+    assert record["status"] == "no_overlap"
+    assert record["compared"] == 0
+    assert record["tdx_only_dates"] == ["2025-09-16"]
+    assert record["disclosure_only_dates"] == []

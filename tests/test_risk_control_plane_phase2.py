@@ -175,12 +175,17 @@ def test_risk_rejected_candidate_is_not_added_to_frozen_fills(tmp_path):
     # while the slipped outlay exceeds the cash, so ``order_insufficient_cash`` is
     # the only rule that fails and the block reason is pinned by the assertion below.
     policy, review = _order_policy()
+    # The execution-day open must stay strictly inside the +/-10% band implied by
+    # the decision close (10.0 -> 11.0 sits exactly ON the limit-up boundary, which
+    # the engine blocks). Use 10.5 so ``order_insufficient_cash`` really is the only
+    # rule that fails, which is what this test pins (cr.md FC-M7 made the boundary
+    # binding, exposing that the old fixture was incidental).
     price_panel = pd.DataFrame(
         {
             "date": ["2026-01-05", "2026-01-06"],
             "instrument": ["A", "A"],
-            "open": [10.0, 11.0],
-            "close": [10.0, 11.0],
+            "open": [10.0, 10.5],
+            "close": [10.0, 10.5],
             "volume": [100000.0, 100000.0],
         }
     )
