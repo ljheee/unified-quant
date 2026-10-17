@@ -141,10 +141,46 @@ def test_an_instrument_without_a_listing_date_is_a_configuration_failure(tmp_pat
     # silent point-in-time assumption about label eligibility.
     bars_root = tmp_path / "bars"
     _publish_bars(bars_root, instruments=("600000.XSHG",))
-    frame = pd.DataFrame({"ts_code": ["600000.SH"], "list_date": ["20100104"]})
-    monkeypatch.setattr(module.Tushare2kAdapter, "stock_basic", lambda self: frame)
+    live = pd.DataFrame({"ts_code": ["600000.SH"], "list_date": ["20100104"]})
+    delisted = pd.DataFrame({"ts_code": [], "list_date": []})
+    # Both statuses are fetched (a delisted name still needs its listing date), and
+    # neither of them covers the instrument under test.
+    monkeypatch.setattr(
+        module.Tushare2kAdapter, "stock_basic",
+        lambda self, *, list_status="L": live if list_status == "L" else delisted,
+    )
     with pytest.raises(SystemExit, match="no listing date"):
         module._listing_dates(["600000.XSHG", "000001.XSHE"])
+
+
+def test_a_delisted_instrument_still_gets_its_listing_date(monkeypatch):
+    # A delisted name dropped by the default `L` filter would make a whole window
+    # unlabellable for no reason: it still traded through the window, so its
+    # decision dates are labelable. Measured case: 601989 (中国重工), absent under
+    # L, present under D with list_date=20091216.
+    live = pd.DataFrame({"ts_code": ["600000.SH"], "list_date": ["20100104"]})
+    delisted = pd.DataFrame({"ts_code": ["601989.SH"], "list_date": ["20091216"]})
+    monkeypatch.setattr(
+        module.Tushare2kAdapter, "stock_basic",
+        lambda self, *, list_status="L": live if list_status == "L" else delisted,
+    )
+    resolved = module._listing_dates(["600000.XSHG", "601989.XSHG"])
+    assert resolved == {
+        "600000.XSHG": date(2010, 1, 4),
+        "601989.XSHG": date(2009, 12, 16),
+    }
+
+
+def test_a_live_row_wins_over_a_delisted_row_for_the_same_code(monkeypatch):
+    # A code can appear in both sets if the provider is laggard; the listing date is
+    # identical either way, so keep the live one deterministically.
+    live = pd.DataFrame({"ts_code": ["600000.SH"], "list_date": ["19991110"]})
+    delisted = pd.DataFrame({"ts_code": ["600000.SH"], "list_date": ["19991110"]})
+    monkeypatch.setattr(
+        module.Tushare2kAdapter, "stock_basic",
+        lambda self, *, list_status="L": live if list_status == "L" else delisted,
+    )
+    assert module._listing_dates(["600000.XSHG"]) == {"600000.XSHG": date(1999, 11, 10)}
 
 
 def test_an_unknown_instrument_filter_is_a_configuration_failure(tmp_path, monkeypatch):

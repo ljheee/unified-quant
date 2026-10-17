@@ -1327,3 +1327,55 @@ effective-date 表）。`FactorEngine.execute` 本来就收 `adjustment_snapshot
 **测试**：新增 `tests/test_mootdx_source.py`（5 例：920xxx→2、老 NEEQ 号段→2、沪深不变、未知前导拒绝、并记录 mootdx 现状）。全量 **1144 passed / 23 skipped / exit 0**（父 `45489c6` 实测 1139/23，净 **+5**）。
 
 **未夸大声明**：三条 refused 的定性均由实测（suspend_d / adj_factor 序列 / dividend 字段比对）得出；TDX 的 51 行、market 互斥扫描、5023/200 分布均为本机亲测；mootdx 路由规则的源码行由 subagent 引用、本机复现 `get_stock_market('920000')==1` 佐证。**未做**：未在全 A 21 会话窗上完整重跑（只验证了此前失败的 4 个会话中的一个）；subagent 提到的"某些 consts 主机超时"未复现确认；Python 包 `mootdx` 未被打补丁或 vendoring（用自有 `market_for` 覆盖），上游若修复需回头删本地覆盖。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.45 label_set 生产入口修好（2026-10-17，list_status 缺陷 → 5067 个标的全部发布）
+
+**触发**：用户"从第 1 项开始；603056 派 subagent 去"。
+
+**A. 修好的缺陷：`stock_basic()` 默认 `list_status="L"` 把退市股整个丢掉**
+
+`scripts/build_label_sets.py::_listing_dates` 原先只抓 `L`，于是**任何退市标的都取不到上市日**，
+进而 `SystemExit` 拒绝整轮。已改为合并 `L` + `D`（同码出现时保留首个非空值，确定性且稳定——
+listing date 两处本来一致）。
+
+**修好后的真跑**：全 A 21 会话窗（2025-09-09→10-15）发布 **5067 个 label set、0 refused**，
+各 21 行含 5 个 null（horizon 尾段，符合 `null_policy.insufficient_future=null`）；
+并经 `LabelStore.read_frame` 读回校验通过。
+
+**B. 603056：我和 subagent 各自推翻了自己的旧判断**
+
+第二处自我更正——**我此前说"603056 是德冠新材、是 vendor 主表缺失的活跃标的"，两处都错**：
+
+- `603056.SH` 是**德邦股份**，不是德冠新材（德冠新材是深交所 `001378.SZ`，list_date=20231030）。
+  我把代码和公司名对错了。
+- 它不是"活跃但主表缺失"：它 `list_status=D`、`delist_date=20260331`，`suspend_d` 显示 2026-01-21 起
+  连续停牌至 03-30，是**换股吸收合并前停牌+退市**的标准形态。在 2025-10 窗口期内它确实正常上市、
+  正常交易，所以出现在 store 里不矛盾。
+- subagent 独立验证：`stock_basic(list_status="D")` 有完整记录 `list_date=20180116`；
+  `namechange` 仅一条 `start_date=20180116`；`stock_company` 佐证 1996 年成立、2018 年上交所挂牌；
+  东财 `push2 secid=1.603056` 的 `f189` 亦为 `20180116`；**上交所官方在市列表 `ssesuggestdata.js`
+  里已经没有它**（而 603050/603055/603057/603065 都在）。
+- **所以修完 list_status 后它自动就解决了，无需任何 override / 排除清单。**
+
+**C. subagent 补充的两条有用事实（二手，Tushare issue tracker）**
+
+- `tushare/tushare#1936`（open，2026-10-11）与 `#1923`（open，2026-09-10）都在问
+  "`stock_basic` 的历史代码覆盖、`L|D|P|G|UN` 是否覆盖所有曾上市证券"，**厂商均未答复**。
+  这是与我们这条最接近的未决问题。
+- `#1370`（closed，2020）是另一类：新上市股票当日不在 `stock_basic`，厂商答"每天 14 点后有当日"——
+  属**发布滞后**，不是覆盖缺口。
+
+**D. 一个对后续有用的结论**
+
+subagent 建议"只有真证明 vendor 有洞时才用 in-repo override 文件"，与本仓库既有实践
+（`evidence/.../excluded-instruments.json` 是**逐 run 的 evidence**，不是 curated 输入）一致。
+本轮按这个口径办：**不加任何 override**。
+
+**测试**：`test_build_label_sets.py` +2（退市股仍取到上市日 / 同码 L&D 时 live 行胜出；
+原"未覆盖即拒"测试改用双 status mock 保持有效）。变异（`("L",)` 退回单 status）必红。
+全量 **1146 passed / 23 skipped / exit 0**（父 `bc76e66` 实测 1144/23，净 **+2**）。
+
+**未夸大声明**：A 与 B 均由本机实测；subagent 的 4 个独立信源（namechange/stock_company/东财/上交所）
+经其自跑，本机复算了其中 list_date=20180116 与 delist_date=20260331 两项。**未做**：未查德邦
+吸收合并的对手方与比例；未验证 `603056` 是否需要从窗口剔除（它 2025-10 期间正常上市，
+按 PIT 口径应当保留，此事未做裁决）。`code-review-unified-quant.md` 保持未跟踪。

@@ -72,10 +72,23 @@ def _listing_dates(instruments: list[str]) -> dict[str, dt.date]:
     from uq.errors import ContractError
 
     adapter = Tushare2kAdapter()
-    master = adapter.stock_basic()
-    if "ts_code" not in master.columns or "list_date" not in master.columns:
-        raise SystemExit("security master lacks ts_code/list_date; cannot establish listing ages")
-    by_code = dict(zip(master["ts_code"].astype(str), master["list_date"].astype(str)))
+    # Both statuses, merged. The default filter is ``L`` (listed), which silently
+    # drops delisted names -- but a delisted instrument still needs a listing date
+    # to decide label eligibility for the decision dates it *did* trade through.
+    # Measured: 601989 (中国重工) is absent under ``L`` yet present under ``D`` with
+    # ``list_date=20091216``, so the default filter alone makes a whole window
+    # unlabellable for no reason.
+    by_code: dict[str, str] = {}
+    for status in ("L", "D"):
+        master = adapter.stock_basic(list_status=status)
+        if "ts_code" not in master.columns or "list_date" not in master.columns:
+            raise SystemExit("security master lacks ts_code/list_date; cannot establish listing ages")
+        # A live row wins over a delisted one: a code can appear in both sets if the
+        # provider is laggard, and the listing date is the same anyway, so keeping
+        # the first non-empty value is both deterministic and stable.
+        for code, value in zip(master["ts_code"].astype(str), master["list_date"].astype(str)):
+            if value and value != "nan":
+                by_code.setdefault(code, value)
     out: dict[str, dt.date] = {}
     uncovered = []
     for instrument in instruments:
@@ -218,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         "instruments_considered": len(instruments),
         "eligibility": {
             "listing_date_source": "tushare:stock_basic(list_date)",
+            "listing_date_statuses": ["L", "D"],
             "limit_events": "not recognised; limit_up/limit_down are prices in the "
                             "canonical field list, so no limit day is excluded",
             "reproducibility_note": (
