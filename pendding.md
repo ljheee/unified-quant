@@ -343,3 +343,11 @@ lineage 更正(2026-10-16,cr.md §8.32)
 - **FC-M3**:**只定性未修好**。试过最直接接法(拒绝全 1.0 因子)⇒ **实测会拒掉 62/5059 只真实标的**(从未有公司行为的标的因子恒为 1.0),已回退;改为给 helper 补 docstring 说明它是测试专用及为何不能做 blanket 守卫。真正的修法需"预期应有除权事件"的新数据输入。
 - **台账两处失真**均属实并已修正注释:§8.39 标题"5 OBS"实为 8 条;`adjusted_price.py` 注释误引旧式。
 - **测试**:全量 **1133 passed / 23 skipped / exit 0**(父 `d4953ca` 1124/23,净 +9);5 条变异全部被杀。**一处返工如实登记**:FC-M7 停牌 side 首版测试是**假绿**(全 NaN 面板使标的在停牌分支前就被跳过),改用 `suspension_dates` 后才真正锁住。
+
+事件表重放 + 弱检查落地(2026-10-17,cr.md §8.42,FC-M3 收口)
+- **关键发现**:事件表**已经在库里**——`AdjustmentSnapshotReader.read_events()`/`read_effective_dates()` 可从已发布快照直接读回(实测 `data/adjustment-store` 29 份快照可读)。不需要新数据源;`FactorEngine.execute` 本就收 `adjustment_snapshot_ids`,只是没用它读事件。
+- **否决上一轮方案**:§8.41 建议的"给因子层加 `pre_close` 参数"已否决——与"自包含帧+lineage"契约不一致、绕过 `required_columns`、canonical v2 无该字段(需开新 schema 版本);且"完全忘 join"本就被拦住(缺列即抛 `adjusted dependency absent`),真正漏的只是"列在但值全 1.0"。
+- **①事件表重放** `verify_against_events`:比跳变不比水平(`F_D/F_D-1` vs `pre_close/(pre_close-cash)` 或 `1/(1+shares)`);窗口外事件记 skipped 非失败。接线 `FactorEngine.execute(adjustment_events=)`。真跑 600352.XSHG 快照:1 事件 checked、通过。
+- **②弱检查**:拒绝"因子全 1.0 **且** 收盘全相等",刻意不拒绝单独平坦因子。**口径经校准**:最初按单会话分区统计得 62/5059"两平",像会误杀;但那量错了对象——因子层拿的是多会话窗。真实 21 会话窗重测:5058 只完整历史标的中 62 只因子平坦、**0 只**同时收盘不变。
+- **测试**:全量 **1138 passed / 23 skipped**(父 `f9b4f5c` 1133/23,净 +5);2 条变异(禁用重放/改成错误守卫)均被杀。修正 fixture:原 22 天恒定 close 恰是退化形状,改为 0.1% 日漂移。
+- **仍未决**:①事件 store 分区覆盖缺口(2025-09 缺失)**未补**——这才是"误判为无事件"的根因;②事件重放仅在 29 份快照(29 只标的)上验证,**未在全 A 窗口批量跑**;③弱检查"不误杀"结论基于 21 会话窗统计,非全历史。

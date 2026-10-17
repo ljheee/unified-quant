@@ -189,10 +189,50 @@ close_{D-1} x F_{D-1}  ==  pre_close_D x F_D
 
 1. **补齐事件 store 的分区覆盖**（尤其是交易窗口内缺失的月份）。
    这是最便宜的修复，且能直接消除"误判为无事件"。
-2. **给因子层增加 `pre_close` 输入**，实现 `复权收益 == pct_chg` 守卫（§4.1）。
-   不需要事件表，能直接抓住"漏复权"，是 FC-M3 最贴合现状的修法。
+2. ~~给因子层增加 `pre_close` 输入~~ —— **已否决**。见 §6.1。
 3. **北交所换事件源**：TDX → Tushare `dividend`（主）+ 东财（校验）。
-4. 长期：以事件表重放作为发布门禁的主判据（§3.1），替代当前的跨源比对。
+4. ~~长期：以事件表重放作为发布门禁的主判据~~ —— **已落地**，见 §6.2。
+
+### 6.1 为什么否决了"给因子层加 `pre_close` 参数"
+
+原始想法是加一个 `pre_close=` 参数，用它校验 `复权收益 == pct_chg`。否决理由：
+
+1. **与现有契约不一致。** `calculate_adjusted_factors` 的入参是"一个自包含帧 +
+   lineage 身份"。`pre_close` 是同一行的另一个价格列，做成并列参数等于把一列拆成
+   两处传，调用方要自己保证行对齐——最容易出 bug 的形状。
+2. **绕过 `required_columns` 契约。** 因子定义用 `required_columns` 声明输入列
+   （`src/uq/factors/inputs.py` 据此强制），加参数等于有一条输入不走这套校验。
+3. **需要 schema 版本变更。** canonical `bars_daily/v2` 没有 `pre_close`
+   （12 个字段里没有），要落地得开新版本，代价远超收益。
+
+更根本的是：**"完全忘记 join"已经被拦住了**。`_validate_binding` 第一行检查列是否
+存在，实测缺 `adj_factor` 直接抛 `adjusted dependency absent`。真正漏掉的只是更窄的
+一种——列在、但值全是 1.0。
+
+### 6.2 已落地：事件表重放 + 弱检查
+
+**主判据（事件表重放）**：`src/uq/factors/adjusted_price.py::verify_against_events`。
+关键发现是**事件表已经在库里了**——`AdjustmentSnapshotReader.read_events()` 能直接读回
+已发布快照的事件（实测 `data/adjustment-store` 里 29 份快照均可读），
+`effective_dates` 表也在。所以不需要新数据源，`FactorEngine.execute` 新增
+`adjustment_events=` 参数即可接线。
+
+比较的是**跳变而非水平**（不同派生锚点不同，水平天然有常数差）：
+
+```text
+observed = adj_factor_D / adj_factor_{D-1}
+expected = pre_close / (pre_close - cash)        # 有现金
+         = 1 / (1 + shares)                       # 纯送转
+```
+
+窗口外的除权日**记为 skipped 而非失败**——窗口起点晚于事件是合法的。
+
+**弱检查（§6 选项 C）**：`calculate_adjusted_factors` 现在拒绝"`adj_factor` 全 1.0
+**且** `close` 全相等"的输入。刻意做得窄：它**不**拒绝单独的全 1.0 因子，因为
+62/5059 只真实标的本来就平坦。
+
+实测确认这个窄口径不会误杀：在真实 21 会话窗口上，5058 只有完整历史的标的中，
+62 只因子平坦，但**没有一只**同时满足"因子平坦且收盘不变"（真实标的收盘总会动）。
 
 ## 7. 参考
 

@@ -1222,3 +1222,51 @@ pendding R2：`CanonicalV2Store` 写 `manifest_version: 2`，而 `ManifestFirstR
 **变异验证（每条先清 `__pycache__`、亲恢复、`git status` 核净）**：FC-M8 无条件 continue / FC-M4 删 `Path` import / FC-M4 删 TYPE_CHECKING 守卫 / FC-M7 删决策收盘播种 / FC-M7 停牌 side 改回 `"sell"` —— **5 条全部被杀**。**如实登记一处返工**：FC-M7 停牌 side 的**首版测试是假绿**（用全 NaN 面板，标的在停牌分支之前就被跳过，根本没产生 fill 行，变异不被杀）；改用 `suspension_dates` 声明停牌、价格保持有效后才真正锁住，复做变异必红。
 
 **未夸大声明**：6 条 FC 由我先独立复现再修，非照单执行；FC-M4 的"少计"与 FC-M2 的"措辞过重"是我对 §8.40 的**反向修正**，已写入。**FC-M3 只定性未修好**（见上，blanket 守卫经实测会拒掉 62 只真实标的，已回退）；FC-M1 的 `_COMPATIBLE_DTYPES` 死常量与 date32+NaT 隐患**未动**（本轮只修了同条目里的 `_validate_references` 死检查）；FC-M2 **未改默认阻断行为**（新增 opt-in 开关，默认仍 exit 0，改默认会让现有宽窗全红，属需另行裁决的口径变更）；FC-M7 对已发布 PnL 的**数值影响面未量化**（只证明口径会变、既有 golden 未复跑）；OBS 族未动。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.42 事件表重放落地 + 弱检查（2026-10-17，FC-M3 收口）
+
+**触发**：用户"及时落地了事件表重放，C 的弱检查也可以做？"。两项都做。
+
+**关键发现（改变了成本估算）**：**事件表已经在库里了**，不需要新数据源。
+`AdjustmentSnapshotReader.read_events()` / `read_effective_dates()` 能从已发布快照直接读回
+（实测 `data/adjustment-store` 下 29 份快照可读，`600352.XSHG` 读出 1 条事件 + 23 行
+effective-date 表）。`FactorEngine.execute` 本来就收 `adjustment_snapshot_ids`，只是没用它去读事件——
+接线点是现成的。
+
+**已否决的上一轮方案（如实登记）**：§8.41 我建议"给因子层加 `pre_close` 输入"。复核后**否决**：
+①与"自包含帧 + lineage 身份"的契约不一致，`pre_close` 是同行另一列，做成并列参数要调用方
+自己保证行对齐；②绕过 `required_columns` 契约（`inputs.py` 据此强制）；③canonical
+`bars_daily/v2` 没有该字段（12 字段里没有），落地需开新 schema 版本。**且"完全忘记 join"
+本就被拦住**——实测缺 `adj_factor` 直接抛 `adjusted dependency absent`，真正漏的只是
+"列在但值全 1.0"这一窄情形。
+
+**① 事件表重放（主判据）** `factors/adjusted_price.py::verify_against_events`
+- 比**跳变**不比水平：`observed = F_D/F_{D-1}`，`expected = pre_close/(pre_close-cash)`（有现金）
+  或 `1/(1+shares)`（纯送转）。理由见 `docs/corporate-action-validation.md` §2/§3.1：
+  不同派生锚点不同，水平天然差常数，只有跳变可比。
+- 窗口外除权日记 **skipped 而非失败**（窗口起点晚于事件是合法的）。
+- 接线：`FactorEngine.execute(..., adjustment_events=)` → `calculate_adjusted_factors(events=)`。
+- 真跑：用 `data/adjustment-store` 的 `600352.XSHG` 快照（事件 2025-09-24、fenhong=2.0/10股）
+  读回并重放，**1 个事件 checked、0 skipped、通过**。
+
+**② 弱检查（§6 选项 C）**
+- 拒绝"`adj_factor` 全 1.0 **且** `close` 全相等"。刻意窄：**不**拒绝单独的全 1.0 因子。
+- **口径经实测校准**：最初我按"单会话分区"统计，得到 62/5059 只"因子平坦且收盘不变"，
+  看着像会误杀。**但那是量错了对象**——因子层拿的是多会话历史窗，不是单会话分区。
+  在真实 21 会话窗口上重测：5058 只有完整历史的标的中 62 只因子平坦，**0 只**同时满足
+  "因子平坦且收盘不变"（真实标的收盘总会动）。所以窄口径不会误杀。
+
+**测试**：`test_adjusted_price_engine.py` +5（退化帧被拒 / 合法平坦放行 / 事件跳变匹配通过 /
+缺跳变被拒 / 窗口外事件跳过）。**变异**：①禁用事件重放 → 缺跳变测试红；②把弱检查改成
+"仅因子平坦"（即我一开始想写的错误守卫）→ 合法平坦测试红。两条均亲恢复。
+
+**顺带修正一处 fixture**：`test_adjusted_price_engine.frame()` 原本 22 天 `close` 恒为 10.0，
+恰好是我这个守卫要拒的退化形状；改为按 0.1% 逐日漂移，模型化"因子平坦但正常交易"的真实情形
+（即那 62 只）。
+
+**测试计数**：全量 **1138 passed / 23 skipped / exit 0**（父 `f9b4f5c` 实测 1133/23，净 **+5**）。
+
+**未夸大声明**：两项均落地并真跑；但**事件重放只在 1 份真实快照上验证过**（该 store 仅 29 份快照、
+覆盖 29 只标的），**未在全 A 窗口上批量跑过**；弱检查的"不误杀"结论基于 21 会话窗口的统计，
+非全历史。事件 store 的分区覆盖缺口（2025-09 缺失）**仍未补**——那才是"误判为无事件"的根因，
+本轮未动。`code-review-unified-quant.md` 保持未跟踪。

@@ -287,6 +287,7 @@ class FactorEngine:
         *,
         adjustment_snapshot_ids: list[str] | None = None,
         effective_date_table_checksums: list[str] | None = None,
+        adjustment_events: pd.DataFrame | None = None,
     ) -> FactorResult:
         self.plan(request)
         if request.definition.factor_set == "adjusted":
@@ -296,6 +297,7 @@ class FactorEngine:
                 frame,
                 adjustment_snapshot_ids=adjustment_snapshot_ids,
                 effective_date_table_checksums=effective_date_table_checksums,
+                events=adjustment_events,
             )
         elif request.definition.factor_set == "basic":
             if frame.empty:
