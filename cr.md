@@ -1404,3 +1404,23 @@ subagent 建议"只有真证明 vendor 有洞时才用 in-repo override 文件"�
 **测试**：`TestBacktestConfigWriteSide` 3 例（发布-读回-评审文件落地 / 入站 generation 拒 / 重复发布不可变）。变异（删入站守卫）必红。全量 **1149 passed / 23 skipped / exit 0**（父 `de42021` 实测 1146/23，净 **+3**）。
 
 **未夸大声明**：写侧已完成并有测试+变异；但**尚未接入 v5 execute 真实跑通**——`feature_preprocessing` 仍无生产入口，`universe_snapshot` 未发布，request 的六族 generation id 也未填。`docstring` 里"a v5 execute had no way to produce the binding"是陈述既有事实，不是声称已跑通。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.47 补 `feature_preprocessing` 写侧（2026-10-17，四类无入口制品的第二块）
+
+**触发**：用户"继续补"。
+
+**缺口性质**：与 `backtest_config` 不同——`FeaturePreprocessorBuilder.build()` **已经能产出完整 manifest**（含派生 identity），缺的只是 `FeaturePreprocessingStore.publish`。所以这次只需补写侧，不碰 builder。
+
+**实现**：`FeaturePreprocessingStore.publish(manifest, quality_decision=)`，绑评审后重校验。
+
+**三处踩坑（都是真实契约细节，不是随意调整）**
+
+1. **output feature schema 必须 `transform_status="standardized"`**。我第一次用 `_input_schema(output)`，被 builder 拒：`output feature schema transform status mismatch`。测试里有现成的 `_output_schema()` helper 处理这个。
+2. **该族的 policy 不是 `reject_all`，而是 `cross_sectional_stateless_v1`**。`ModelContractLoader` 按 `_QUALITY_BOUND_FIELDS` 注册的 policy 校验，用错直接 `policy reject_all does not match registered policy`。
+3. **manifest digest 必须重算**（关键）。这个族的 **generation 排除** `quality_report_checksum_sha256`，但 **manifest digest 包含**它。builder 在评审存在之前就算好了 digest，绑上评审后 digest 就**过期**了。修法：绑评审后重算，并**断言 generation 不动**（动了就说明我把 identity 搞错了），只更新 digest。变异（跳过 digest 重算）→ 2 例红。
+
+**另一处沿用 §8.46 的结论**：subject content digest 用 **generation id**，因为单参 provider 会把 content digest 默认成 generation id。第一次我用 `output_frame_sha256`，签名对不上。
+
+**测试**：`TestFeaturePreprocessingWriteSide` 3 例（发布-读回-评审落地 / 无派生 generation 拒 / 重复发布不可变）+ 变异必红。全量 **1152 passed / 23 skipped / exit 0**（父 `af48e17` 实测 1149/23，净 **+3**）。
+
+**未夸大声明**：写侧完成且有测试+变异；**仍未接入 v5 execute 真实跑通**——`universe_snapshot` 未发布、request 六族 generation id 未填、calendar 快照只到 2025-09-30。本轮没有产出任何真实 feature_preprocessing 制品（测试用的是 fixture 帧）。`code-review-unified-quant.md` 保持未跟踪。

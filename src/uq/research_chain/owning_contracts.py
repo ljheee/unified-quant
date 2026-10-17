@@ -209,7 +209,16 @@ class LabelStore:
 
 
 class FeaturePreprocessingStore:
-    """Manifest-first read boundary for durable feature-preprocessing contracts."""
+    """Publish and read durable feature-preprocessing contracts.
+
+    ``FeaturePreprocessorBuilder.build`` produces the manifest but nothing wrote it,
+    so a v5 execute could not produce the ``feature_preprocessing_binding`` its
+    request declares. The builder already derives the identity with
+    ``input_feature_schema_manifest_digest_sha256`` and
+    ``quality_report_checksum_sha256`` excluded -- the digest of a schema that is
+    itself published under a review cannot be known before the review exists --
+    so publishing only has to bind the review and re-derive with it participating.
+    """
 
     def __init__(self, root: Path | str) -> None:
         self.root = Path(root)
@@ -219,6 +228,82 @@ class FeaturePreprocessingStore:
         if manifest.get("quality_report_checksum_sha256") in (None, "0" * 64):
             raise ContractError("feature preprocessing is missing a quality report binding")
         return manifest
+
+    def publish(
+        self,
+        manifest: dict[str, Any],
+        *,
+        quality_decision: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Publish one preprocessing manifest and return it with its identity.
+
+        ``manifest`` comes from ``FeaturePreprocessorBuilder.build``, which already
+        carries a derived ``generation_id`` for the review to attest. The review is
+        bound to that generation and the manifest is re-validated afterwards: unlike
+        the backtest-config family, the identity here *excludes* the two fields that
+        cannot exist before publishing, so the generation the reviewer signs is the
+        final one and must not change.
+        """
+        generation = manifest.get("generation_id")
+        if not isinstance(generation, str) or not re.fullmatch(r"[0-9a-f]{64}", generation):
+            raise ContractError(
+                "feature preprocessing manifest must carry the generation derived by the builder"
+            )
+        if manifest.get("generation_id") == "0" * 64:
+            raise ContractError("feature preprocessing manifest has an unresolved generation_id")
+
+        # The one-argument provider form (the shape this repo already uses) commits
+        # the content digest to the generation id, so pass the generation id as the
+        # content digest rather than the frame hash -- otherwise the signature can
+        # never match. The frame hash still participates in the generation itself.
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision,
+            subject_generation_id=generation,
+            subject_content_sha256=generation,
+        )
+        bound_report, report_checksum = bind_reviewed_quality_decision(
+            quality_decision,
+            binding_type="feature_preprocessing_v1",
+            subject_generation_id=generation,
+            subject_content_sha256=generation,
+        )
+        published = dict(manifest)
+        published["quality_report_checksum_sha256"] = report_checksum
+        # The generation excludes the review checksum but the *manifest digest*
+        # includes it, so the digest the builder derived (before the review existed)
+        # is stale once we bind one. Re-derive: generation must not move, digest must.
+        exclude = {"input_feature_schema_manifest_digest_sha256",
+                   "quality_report_checksum_sha256"}
+        regenerated, digest = model_manifest_identities(
+            published, schema_name="feature_preprocessing", exclude_fields=exclude
+        )
+        if regenerated != generation:
+            raise ContractError(
+                "feature preprocessing generation moved when the review was bound"
+            )
+        published["manifest_digest_sha256"] = digest
+        ModelContractLoader.validate("feature_preprocessing", published)
+
+        directory = self.root / "feature_preprocessing" / f"generation={generation}"
+        if directory.exists():
+            raise ContractError(f"immutable feature preprocessing already published: {directory}")
+        staging = self.root / "feature_preprocessing" / f".staging_{uuid.uuid4().hex}"
+        staging.mkdir(parents=True)
+        try:
+            (staging / "manifest.json").write_text(
+                json.dumps(published, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            (self.root / "external_quality_reviews").mkdir(parents=True, exist_ok=True)
+            (self.root / "external_quality_reviews" / f"{report_checksum}.json").write_text(
+                json.dumps(bound_report, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            staging.replace(directory)
+        except Exception:
+            for path in staging.glob("*"):
+                path.unlink()
+            staging.rmdir()
+            raise
+        return published
 
 
 class BacktestConfigStore:

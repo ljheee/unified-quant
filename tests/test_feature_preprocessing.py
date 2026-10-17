@@ -559,3 +559,83 @@ def test_quality_report_checksum_changes_manifest_digest_but_not_generation() ->
     assert second["generation_id"] == first["generation_id"]
     assert second["manifest_digest_sha256"] != first["manifest_digest_sha256"]
     ModelContractLoader.validate("feature_preprocessing", second)
+
+
+class TestFeaturePreprocessingWriteSide:
+    """The write side of the feature_preprocessing family.
+
+    ``FeaturePreprocessorBuilder.build`` produced the manifest but nothing published
+    it, so a v5 execute could not produce the ``feature_preprocessing_binding`` its
+    request declares.
+    """
+
+    def _build(self):
+        frame = _frame()
+        builder = FeaturePreprocessorBuilder(
+            preprocess_name="basic-standardized-v1",
+            semantic_version="1.0.0",
+            transform="standardize_cross_section",
+        )
+        output = _standardized(frame)
+        return builder.build(
+            frame, output,
+            input_factor_set="basic",
+            input_factor_version="1.0.0",
+            input_factor_generation_ids=["0" * 64],
+            ordered_features=["volume_ratio_20d"],
+            input_feature_schema=_input_schema(frame),
+            output_feature_schema=_output_schema(output),
+        )
+
+    def _decision(self):
+        def provider(subject_generation_id: str) -> dict:
+            return create_reviewed_quality_decision(
+                binding_type="feature_preprocessing_v1",
+                policy="cross_sectional_stateless_v1",
+                status="passed",
+                checks=CHECKS["feature_preprocessing_v1"],
+                errors=[],
+                warnings=[],
+                producer_code_fingerprint="0" * 64,
+                private_key_pem=REVIEWER_PRIVATE_KEY,
+                subject_generation_id=subject_generation_id,
+            )
+        return provider
+
+    def test_publish_binds_the_review_and_reads_back(self, tmp_path):
+        from uq.research_chain.owning_contracts import FeaturePreprocessingStore
+
+        store = FeaturePreprocessingStore(tmp_path)
+        built = self._build()
+        generation = built["generation_id"]
+        published = store.publish(built, quality_decision=self._decision())
+        # the identity the builder derived is the identity that is published: the
+        # schema digests are excluded from it, so re-deriving must not move it.
+        assert published["generation_id"] == generation
+        assert published["quality_report_checksum_sha256"] != "0" * 64
+        assert store.read_manifest(generation) == published
+        review = tmp_path / "external_quality_reviews" / (
+            f"{published['quality_report_checksum_sha256']}.json"
+        )
+        assert review.is_file()
+
+    def test_a_manifest_without_a_derived_generation_is_refused(self, tmp_path):
+        # The builder derives the identity; a hand-written manifest that skips that
+        # step has no subject for the review to attest.
+        from uq.research_chain.owning_contracts import FeaturePreprocessingStore
+
+        store = FeaturePreprocessingStore(tmp_path)
+        built = self._build()
+        built["generation_id"] = "0" * 64
+        with pytest.raises(ContractError, match="unresolved generation_id"):
+            store.publish(built, quality_decision=self._decision())
+
+    def test_republishing_the_same_manifest_is_immutable(self, tmp_path):
+        from uq.research_chain.owning_contracts import FeaturePreprocessingStore
+
+        store = FeaturePreprocessingStore(tmp_path)
+        built = self._build()
+        store.publish(built, quality_decision=self._decision())
+        with pytest.raises(ContractError, match="already published"):
+            store.publish(built, quality_decision=self._decision())
+        assert store.read_manifest(built["generation_id"])["generation_id"] == built["generation_id"]

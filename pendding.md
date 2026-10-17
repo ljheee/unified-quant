@@ -383,3 +383,10 @@ label_set 入口修好 + 603056 定性(2026-10-17,cr.md §8.45)
 - **两个设计决定**:①**拒绝入站 generation_id**(身份是内容的函数,否则留"调用方自选 generation"的后门);②**subject content digest 用 provisional 本身**——我第一版用 `sha256_json(payload)` 实测失败,因为 `resolve_subject_quality_decision` 对**单参 provider**(本仓库该族已在用的形式)会把 content digest 默认成 generation id。这是与现有 provider 契约对齐,不是将就。
 - **测试**:3 例 + 变异(删入站守卫)必红。全量 **1149 passed / 23 skipped**(父 `de42021` 1146/23,净 +3)。
 - **仍未决(距 v5 execute 全链跑通)**:①`feature_preprocessing` 仍无生产入口;②`universe_snapshot` 未发布;③request 六族 generation id 未填;④calendar 快照只到 2025-09-30,用满 21 会话需补。
+
+补 feature_preprocessing 写侧(2026-10-17,cr.md §8.47)
+- **与 backtest_config 不同**:`FeaturePreprocessorBuilder.build()` **已能产出完整 manifest**(含派生 identity),缺的只是 store 的 `publish`。
+- **三处真实契约细节**:①output feature schema 必须 `transform_status="standardized"`(用测试里的 `_output_schema` helper);②该族 policy 是 `cross_sectional_stateless_v1` 而非 `reject_all`;③**manifest digest 必须重算**——generation 排除 review checksum 但 digest 包含它,builder 在评审存在前算的 digest 会过期;绑评审后重算并**断言 generation 不动**。
+- **沿用 §8.46 结论**:subject content digest 用 generation id(单参 provider 的默认),不是 `output_frame_sha256`。
+- **测试**:3 例 + 变异(跳过 digest 重算)必红。全量 **1152 passed / 23 skipped**(父 `af48e17` 1149/23,净 +3)。
+- **仍未决**:①`universe_snapshot` 未发布;②request 六族 generation id 未填;③calendar 快照只到 2025-09-30;④**未产出真实 feature_preprocessing 制品**(测试用 fixture 帧)。
