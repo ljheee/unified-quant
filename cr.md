@@ -1461,3 +1461,58 @@ subagent 建议"只有真证明 vendor 有洞时才用 in-repo override 文件"�
 | universe | 09-08→10-15 快照覆盖 |
 
 **未夸大声明**：数据面齐备，但**尚未组装 request、尚未 execute**。calendar 的独立源校验本轮被跳过（记录在快照 manifest 里）。label 尾段 null 是契约内行为，不是缺陷，但意味着可训练决策日只有 16 个。`code-review-unified-quant.md` 保持未跟踪。
+
+### 8.49 label set 合并：让 `build_label_sets.py` 能产出研究链真正绑定的那一份（2026-10-17）
+
+**触发**：用户"继续 label set 合并的落地"。
+
+**缺口性质（不是新功能，是把已跑通的做法收回生产入口）**
+上一轮的组合 label set 是 `/tmp/make_combined_labels.py` 手搓的：它绕过 `scripts/build_label_sets.py`，
+直接调 `LabelBuilder` + `LabelSetWriter`。手搓版三省掉了生产脚本已有的东西——
+listing date 的 `L`+`D` 合并、refusal 记账、可复核报告——所以它是不可复现的证据，
+不是一个可发布的制品。研究链 `research_run_request_*.json` 的 `label_binding` 是
+**闭形状单绑定** `{family, generation_id, manifest_digest_sha256}`，一个 universe 只能绑
+一份 label set；而生产脚本此前只会**逐标的**发布（5067 份），Scope 对不上，永远绑不进去。
+
+**实现**：`scripts/build_label_sets.py --combined`
+- 分组对象从 `for instrument in ...` 改为 `grouped` 列表，`--combined` 时把非空帧
+  `pd.concat` 成**一组**，走同一条 publish/refusal/report 路径（没有第二条写侧）。
+- 空帧仍按 refusal 记账（`pd.concat` 绝不能吃空列表）。
+- 报告加 `"mode": "combined"|"per_instrument"`。
+
+**实测（全 A 窗口 2025-09-09..09-30，非样本股）**
+`env $(grep -E '^TUSHARE' .env | xargs) .venv/bin/python scripts/build_label_sets.py --bars-root /tmp/uq-csiall --label-root /tmp/uq-labels-comb --start 2025-09-09 --end 2025-09-30 --combined --out /tmp/labels-comb-real.json`
+→ `{"published": 1, "refused": 0, "instruments_considered": 5067}`，单份 80973 行、
+25335 个 null（末 5 日 × 5067，即 horizon 尾段），generation `2a58ab07…`。
+
+**一处必须说清的语义选择（不是我发明的，是照抄 `LabelBuilder` 的行为）**
+`build_label_sets.py::_binding` 把上游绑成 `dataset=bars_daily / schema_version=bars_daily.v2 / partition_date=<窗口末日>`，
+而 `/tmp` 手搓版写的是 `bars_adjusted / adjusted-v2 / date=<窗口首日>`。两者都能过校验——
+因为 `LabelBuilder._compute` **只校验 `binding.data_checksum_sha256` 与自己重算的帧一致**，
+`dataset`/`schema_version` 是自由字符串。生产脚本这里描述的是"这份标签是从 canonical bars
+窗口算出来的"（真实血缘：它读的就是 `bars_daily/v2`），手搓版描述的是 adjusted 线，但它**并没有读
+adjusted 分区**，只是借了首个分区的 generation id。生产脚本的口径更诚实，本次未改它。
+**但这个字段目前无下游消费方**（`resolver.py` 对 `label_set` 只读 manifest 的
+`data_checksum_sha256`），所以这不影响 execute，只影响阅读——登记而非静默。
+
+**测试**：`tests/test_build_label_sets.py` 新增 3 例
+（combined 单份发布 / 读回后 Grid 完整无重复键 / 空选择在 concat 前即被 gate 拒）；
+`mode` 字段 1 例；`listing_dates` 缺失不留半成品 1 例。共 **13 passed**。
+变异：删 `if args.combined:` 分支 → 2 例红；删 `mode` 字段 → 1 例红。`__pycache__` 已清后复测。
+
+**连带修复（不是我的改动引起的，但挡在绿路上）**
+`evidence/paper-execution-research-integration/phase-0/evidence-index.json` 里
+`src/uq/research_chain/resolver.py` 的 sha256 钉的是**改动前**的字节，工作区未提交的
+resolver.py 让 `test_evidence_indexes_are_fresh_and_never_index_themselves` 与
+`test_phase_0_evidence_index_hashes_are_complete` 双双飘红。按仓库既有惯例（§6.2，见 e4d7e45/56d9750）
+**重钉**该条 digest。这是 pin 更新，不是消音：索引仍在逐字节校验 resolver.py。
+
+**全量**：**1156 passed / 23 skipped / exit 0**（父 `d6dbb92` 实测 1149/23；+2 来自本轮新测试，
+净变化 +7 中 5 例是先前未提交的 resolver/owning_contracts 写侧测试在 HEAD 上不存在——
+即本轮把上一轮遗留的未提交工作一并纳入）。
+
+**未夸大声明**：合并 label set 已在**全 A 真实窗口**发布一份并读回通过，但**尚未绑进 v5 request
+跑 execute**（`/tmp/request-final.json` 里仍指向 `/tmp` 手搓版 generation
+`2cea3ea6…`，与新生产的 `2a58ab07…` 不同源，两者行数也不同：手搓版裁到 4970 只，
+生产版是全 5067）。下一轮用生产版重跑链路时才真正闭环。
+`AGENTS.md` 与 `code-review-unified-quant.md` 保持未跟踪；`AGENTS.md` 仅有 claude-mem 时间戳变动。

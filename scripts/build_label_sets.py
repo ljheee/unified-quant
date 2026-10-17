@@ -164,7 +164,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--schema", type=Path, default=Path("config/schemas/bars_daily.v2.yaml"))
     parser.add_argument("--name", default="return_5d")
     parser.add_argument("--semantic-version", default="1.0.0")
-    parser.add_argument("--instrument", action="append", default=None)
+    parser.add_argument("--instrument", action="append", default=None,
+                        help="restrict the DEFAULT per-instrument publication to these names")
+    parser.add_argument(
+        "--combined",
+        action="store_true",
+        help=(
+            "publish ONE label set covering every instrument instead of one set per "
+            "instrument. The research chain binds a single label set for the whole "
+            "universe, so per-instrument sets cannot feed a v5 execute."
+        ),
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
@@ -197,12 +207,24 @@ def main(argv: list[str] | None = None) -> int:
     builder = LabelBuilder(name=args.name, semantic_version=args.semantic_version)
     published: list[dict[str, Any]] = []
     refused: list[dict[str, Any]] = []
-    for instrument in instruments:
-        frame = eligibility[eligibility["instrument"] == instrument]
+    grouped = [(instrument, eligibility[eligibility["instrument"] == instrument]) for instrument in instruments]
+    if args.combined:
+        # A research request binds exactly one label set for its whole universe, so
+        # the per-instrument sets this script used to publish could never be bound:
+        # `LabelStore` is keyed on one generation id, and `upstream bindings` is a
+        # list of adjusted-price bindings, not of label sets. Concatenating the
+        # frames keeps one binding (the window's adjusted-price partition) and one
+        # identity, which is what the request schema describes.
+        grouped = [("<combined>", pd.concat([frame for _, frame in grouped if not frame.empty],
+                                            ignore_index=True))]
+    for instrument, frame in grouped:
         if frame.empty:
             refused.append({"instrument": instrument, "reason": "no bars in window"})
             continue
         try:
+            # The adjusted-price binding must describe `frame` itself: the builder
+            # recomputes the same checksum and refuses a publish when the two
+            # disagree, so the checksum below is not decorative.
             manifest, output = builder.build_with_frame(
                 frame, upstream_bindings=[_binding(frame, instrument, schema.name)]
             )
@@ -229,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
             "note": "store roots are gitignored; the generation ids below are the reviewable identity",
         },
         "instruments_considered": len(instruments),
+        "mode": "combined" if args.combined else "per_instrument",
         "eligibility": {
             "listing_date_source": "tushare:stock_basic(list_date)",
             "listing_date_statuses": ["L", "D"],

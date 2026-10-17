@@ -25,7 +25,14 @@ from ..models.labels import label_row_checksum
 
 
 class FeatureSchemaStore:
-    """Manifest-first read boundary for durable feature-schema contracts."""
+    """Publish and read durable feature-schema contracts.
+
+    The dataset stage reads the input/output schemas a preprocessing manifest points
+    at, but nothing wrote them: a v5 execute could not resolve
+    ``input_feature_schema_generation_id`` because the family had no write side.
+    A feature schema carries no review, so its identity is its own -- the builder
+    derives it and this only persists it immutably.
+    """
 
     def __init__(self, root: Path | str) -> None:
         self.root = Path(root)
@@ -35,6 +42,48 @@ class FeatureSchemaStore:
 
     def read_schema(self, generation_id: str) -> dict[str, Any]:
         return self.read_manifest(generation_id)
+
+    def publish(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        """Publish one feature-schema manifest and return it with its identity.
+
+        ``FeatureSchemaBuilder.build`` derives ``generation_id`` and hands the
+        schema to its consumer with that id already in place, so the caller cannot
+        strip it. The identity is re-derived here and the inbound value is only
+        checked to agree: a mismatch is a caller bug, not something to overwrite.
+        """
+        payload = {key: value for key, value in manifest.items()
+                   if key not in {"generation_id", "manifest_digest_sha256"}}
+        # model_manifest_identities needs the identity keys present (it strips them
+        # itself), so it is called with placeholders, exactly as the other families do.
+        payload["generation_id"] = "0" * 64
+        payload["manifest_digest_sha256"] = "0" * 64
+        generation, digest = model_manifest_identities(payload, schema_name="feature_schema")
+        inbound = manifest.get("generation_id")
+        if inbound not in (None, "0" * 64) and inbound != generation:
+            raise ContractError(
+                "feature schema generation_id does not match the derived identity; "
+                "the builder must derive it, not the caller"
+            )
+        payload["generation_id"] = generation
+        payload["manifest_digest_sha256"] = digest
+        ModelContractLoader.validate("feature_schema", payload)
+
+        directory = self.root / "feature_schemas" / f"generation={generation}"
+        if directory.exists():
+            raise ContractError(f"immutable feature schema already published: {directory}")
+        staging = self.root / "feature_schemas" / f".staging_{uuid.uuid4().hex}"
+        staging.mkdir(parents=True)
+        try:
+            (staging / "manifest.json").write_text(
+                json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            staging.replace(directory)
+        except Exception:
+            for path in staging.glob("*"):
+                path.unlink()
+            staging.rmdir()
+            raise
+        return payload
 
 
 class AdjustedPriceDatasetStore:

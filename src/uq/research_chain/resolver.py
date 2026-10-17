@@ -233,12 +233,24 @@ class ResearchChainRequestResolver:
                     "store_read_failed", f"owning store read failed: {exc}"
                 ) from exc
 
+            # Not every owning family publishes a manifest digest. ``universe_snapshot.v1``
+            # carries none -- its identity IS the content hash (re-derived from the
+            # document by the store on read) -- yet every research request schema
+            # requires a 64-hex ``manifest_digest_sha256`` on the binding. Comparing
+            # strictly would make a universe binding impossible to satisfy: only
+            # ``None`` would pass, and the schema forbids null. Compare only when the
+            # manifest actually publishes a digest, and otherwise treat the
+            # generation id as the identity, which is what the store already
+            # verifies.
             requested_digest = binding.get("manifest_digest_sha256")
-            if requested_digest is not None and manifest.get("manifest_digest_sha256") != requested_digest:
-                raise ResearchResolutionError(
-                    "input_tampered",
-                    f"manifest digest mismatch for {output_family} generation {generation_id}",
-                )
+            published_digest = manifest.get("manifest_digest_sha256")
+            if requested_digest is not None:
+                expected_digest = published_digest if published_digest is not None else generation_id
+                if expected_digest != requested_digest:
+                    raise ResearchResolutionError(
+                        "input_tampered",
+                        f"manifest digest mismatch for {output_family} generation {generation_id}",
+                    )
             data_checksum = _data_checksum_for(output_family, manifest)
             if data_checksum is None:
                 raise ResearchResolutionError(
@@ -251,8 +263,14 @@ class ResearchChainRequestResolver:
                     provider_config_ref=provider_config_ref,
                     binding_type=quality_binding_type,
                     subject_generation_id=generation_id,
+                    # The content digest a review commits to is the *generation id*,
+                    # not the manifest digest. Generation ids are content hashes by
+                    # construction, and this is what every stage re-verifies against
+                    # (adapters.py passes generation_id). Forwarding the manifest
+                    # digest here made the two unverifiable against each other for any
+                    # family where digest != generation.
                     subject_manifest_digest_sha256=(
-                        None if quality_binding_type == "factor_v1" else requested_digest
+                        None if quality_binding_type == "factor_v1" else generation_id
                     ),
                     output_family=output_family,
                 )
@@ -260,7 +278,7 @@ class ResearchChainRequestResolver:
                 stage=stage,
                 output_family=output_family,
                 generation_id=generation_id,
-                manifest_digest_sha256=manifest["manifest_digest_sha256"],
+                manifest_digest_sha256=manifest.get("manifest_digest_sha256", generation_id),
                 data_checksum_sha256=data_checksum,
             ))
 

@@ -180,7 +180,7 @@
     },
     {
       "path": "src/uq/research_chain/resolver.py",
-      "sha256": "3025ec15882c84888486c03f49049a25b5d8ac45b6b9f28f2c105d358dc1773b"
+      "sha256": "24a9e7bf496528d88b4c352912cd820f6393f8813ffadb42ad070661afeb5255"
     },
     {
       "path": "src/uq/research_chain/runner.py",

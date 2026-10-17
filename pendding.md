@@ -397,3 +397,12 @@ v5 冒烟数据面备齐(2026-10-17,cr.md §8.48)
 - **两个环境问题**:①脚本要 `TUSHARE_2K_TOKEN`,CLI 不自动读 `.env`;②**EastMoney 独立日历连不上**,改用 `--skip-independent-calendar` ⇒ 该快照 `independent_source=not_checked`、`cross_check_result=skipped`(**质量降级,非伪报通过**)。
 - **四条线对齐**:bars/adjusted/calendar/factors 各 21/21;label 5067 份各 21 行、末 5 日 null ⇒ **可用决策日 16 个**。
 - **仍未决**:①request 未组装;②execute 未跑;③calendar 独立源校验本轮跳过。
+
+label set 合并落地(2026-10-17,cr.md §8.49)
+- **为什么不只是加个脚本参数**:研究链 `label_binding` 是**单绑定闭形状**,一个 universe 只绑一份 label set;而 `build_label_sets.py` 此前只会逐标的发布(全 A 5067 份),Scope 永远对不上。上一轮的组合版是 `/tmp/make_combined_labels.py` 手搓的,绕过了 listing `L`+`D` 合并/refusal 记账/可复核报告,**不可复现**,所以必须收回到生产入口。
+- **实现**:`scripts/build_label_sets.py --combined`,把分组对象提成 `grouped`,combined 时 `pd.concat` 成一组,走同一条 publish/refusal/report 路径(无第二条写侧);空帧仍记账;报告加 `mode` 字段。
+- **真跑**:全 A 09-09..09-30 → `{"published":1,"refused":0,"instruments_considered":5067}`,80973 行 / 25335 null(末 5 日,horizon 尾段), generation `2a58ab07…`。
+- **一个登记过的语义差别**:生产脚本的 upstream binding 写 `dataset=bars_daily/schema_version=bars_daily.v2`(它真实读的就是 canonical bars),`/tmp` 手搓版写 `bars_adjusted/adjusted-v2` 但**并没读** adjusted 分区,只借了首分区 generation id。`LabelBuilder` 只校验 checksum,这两个字段是自由字符串且**无下游消费方**,所以不影响 execute;生产版口径更诚实,未改。
+- **测试**:`tests/test_build_label_sets.py` 13 passed(新增 4 例);变异(删 combined 分支 / 删 mode 字段)各红;清 `__pycache__` 后复测。
+- **连带修复**:`evidence/paper-execution-research-integration/phase-0/evidence-index.json` 的 resolver.py 钉是**旧字节**,工作区未提交的 resolver.py 让两个 evidence-freshness 测试飘红 → 按 §6.2 惯例重钉(pin 更新,不是消音)。
+- **仍未决**:①`request-final.json` 仍指向 `/tmp` 手搓版 generation,与生产版不同源(手搓版裁到 4970 只,生产版全 5067),下次跑链必须换绑;②生产版 5067 只里含晚入场的标的,可能重新引入 null factor → 下一轮跑链前要重测 null 计数;③`--combined` 目前只有 CLI 开关,没有 `readiness gate` 侧的对应概念(不需要,但值得在 user-guide §7 记一句)。
