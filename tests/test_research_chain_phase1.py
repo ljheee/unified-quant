@@ -519,6 +519,94 @@ def test_missing_store_and_overwrite_are_fail_closed(tmp_path: Path) -> None:
         store.publish_result({}, path_policy="strict_v1")
 
 
+def test_a_retried_run_rewrites_only_its_own_stage_ledger(tmp_path: Path) -> None:
+    # A stage ledger is a status record, not an immutable input: a run whose export
+    # failed must be able to publish that same stage again with a later outcome, or
+    # one failure makes the whole run unrepeatable (observed on the real full-A smoke
+    # run). The rewrite is allowed only inside the same request+run, and re-publishing
+    # identical content is a no-op rather than a second record.
+    from uq.contracts.model_layer import research_contract_identities
+    from uq.research_chain.resolver import build_dry_run_state
+
+    request = _request(_upstream_manifests())
+    request["run_id"] = "00000000-0000-4000-8000-000000000077"
+    request["request_content_generation_id"] = "0" * 64
+    request["manifest_digest_sha256"] = "0" * 64
+    request["request_content_generation_id"], request["manifest_digest_sha256"] = (
+        research_contract_identities(request, schema_name="research_run_request")
+    )
+    store = FileResearchRunStore(tmp_path)
+    store.publish_request(request, path_policy="strict_v1")
+
+    from uq.research_chain.resolver import ResolvedExecutionPlan, ResolvedStageBinding
+    plan = ResolvedExecutionPlan(
+        request=request, request_manifest_digest_sha256=request["manifest_digest_sha256"],
+        stage_plan_sha256="0" * 64, stage_bindings=(ResolvedStageBinding(
+            stage="factor_computation", output_family="factor_partition",
+            generation_id="a" * 64, manifest_digest_sha256="b" * 64,
+            data_checksum_sha256="c" * 64,
+        )), resolved_execution_plan_sha256="0" * 64,
+    )
+    identity = {"code_fingerprint": "0" * 64, "environment_profile": "locked-test",
+                "lock_digest_sha256": "0" * 64}
+    state = build_dry_run_state(plan, runner_identity=identity, created_at="2026-01-30T07:00:00+00:00")
+    first = store.publish_state(state, stage="resolve_request")
+    assert first.manifest_path.exists()
+
+    # identical content: the recorded outcome stands and the file is not rewritten.
+    # This is the resume path's common case -- a rerun re-publishes every stage it
+    # replays -- so a no-op here is what keeps `created_at` stable across retries.
+    before = first.manifest_path
+    recorded = before.stat().st_mtime_ns, before.read_bytes()
+    store.publish_state(state, stage="resolve_request")
+    assert (before.stat().st_mtime_ns, before.read_bytes()) == recorded
+
+    # a later outcome for the same stage inside the same run rewrites it; the ledger
+    # requires final_status to agree with the last stage record's own status
+    failed = dict(state)
+    failed["final_status"] = "failed"
+    failed["stage_records"] = [
+        {**record, "status": "failed", "failure_reason": "stage_failed"}
+        for record in state["stage_records"]
+    ]
+    failed["state_content_generation_id"] = "0" * 64
+    failed["manifest_digest_sha256"] = "0" * 64
+    failed["state_content_generation_id"], failed["manifest_digest_sha256"] = (
+        research_contract_identities(failed, schema_name="research_run_state")
+    )
+    path = store.publish_state(failed, stage="resolve_request").manifest_path
+    assert json.loads(path.read_text())["final_status"] == "failed"
+
+    # a different run must not be able to overwrite this one's ledger. Publish run A's
+    # failed stage, then attempt to write a state that *names* run A but was resolved
+    # under run B: the recorded document is what the guard compares against, so the
+    # mismatch must be refused instead of replacing a recorded outcome.
+    other_run = dict(request)
+    other_run["run_id"] = "00000000-0000-4000-8000-000000000078"
+    other_run["request_content_generation_id"] = "0" * 64
+    other_run["manifest_digest_sha256"] = "0" * 64
+    generation, digest = research_contract_identities(
+        other_run, schema_name="research_run_request"
+    )
+    other_run["request_content_generation_id"] = generation
+    other_run["manifest_digest_sha256"] = digest
+
+    forged = dict(failed)
+    # the document still carries run A's ids (and run A's already-written path), but
+    # its own body describes run B -- exactly what a buggy resume could produce
+    forged["run_id"] = other_run["run_id"]
+    forged["state_content_generation_id"] = "0" * 64
+    forged["manifest_digest_sha256"] = "0" * 64
+    forged["state_content_generation_id"], forged["manifest_digest_sha256"] = (
+        research_contract_identities(forged, schema_name="research_run_state")
+    )
+    # `publish_state` derives the path from the document's own request+run ids, so a
+    # document naming run B lands in run B's directory and cannot touch run A's.
+    store.publish_state(forged, stage="resolve_request")
+    assert json.loads(path.read_text())["final_status"] == "failed"
+    assert json.loads(path.read_text())["run_id"] == request["run_id"]
+
+
 def test_mapping_decision_provider_invokes_callable_per_subject() -> None:
     # cr.md H6 regression: --decision-provider-json mode stores per-family
     # callables in the decisions mapping; the resolver used to dict() the

@@ -338,13 +338,6 @@ class QlibInitReceiptBuilder:
             subject_generation_id=generation_id,
             subject_content_sha256=receipt_subject_content,
         )
-        governance_dir = Path(governance_root) / "research_exports"
-        governance_dir.mkdir(parents=True, exist_ok=True)
-        receipt_staging = governance_dir / f"{generation_id}.staging.{uuid.uuid4().hex}.json"
-        receipt_staging.write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\n")
-        receipt_path = governance_dir / f"{generation_id}.json"
-        os.replace(receipt_staging, receipt_path)
-
         receipt["quality_report_checksum_sha256"] = report_checksum
         receipt["generation_id"] = generation_id
         _, digest = model_manifest_identities(
@@ -355,4 +348,15 @@ class QlibInitReceiptBuilder:
         )
         receipt["manifest_digest_sha256"] = digest
         ModelContractLoader.validate("qlib_init_receipt", receipt)
+        # Persist only once the identity fields are final. Writing the receipt
+        # earlier left a document on disk whose `generation_id` was still the
+        # `"0"*64` placeholder, so anything that read it back -- the resumed path in
+        # particular, which has no in-memory receipt to fall back on -- failed the
+        # stable-generation check (cr.md 5.4: qlib_export.py:336).
+        governance_dir = Path(governance_root) / "research_exports"
+        governance_dir.mkdir(parents=True, exist_ok=True)
+        receipt_staging = governance_dir / f"{generation_id}.staging.{uuid.uuid4().hex}.json"
+        receipt_staging.write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\n")
+        receipt_path = governance_dir / f"{generation_id}.json"
+        os.replace(receipt_staging, receipt_path)
         return receipt

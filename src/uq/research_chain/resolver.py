@@ -488,7 +488,33 @@ class FileResearchRunStore:
             raise ContractError("state stage does not match publication stage")
         stage_number = stage_plan_for_request(state).index(stage)
         relative_path = Path("research_runs") / "states" / f"request={state['request_content_generation_id']}" / f"run={state['run_id']}" / f"stage={stage_number:02d}" / "manifest.json"
-        path = self._atomic_write(relative_path, state)
+        existing = self.root / relative_path
+        if existing.exists() and not existing.is_symlink():
+            # A retried run rewrites its own stage ledger. Unlike the request or the
+            # governed artifacts, this document is a *status* record rather than an
+            # immutable input, and a run whose stage failed is expected to publish
+            # that stage again with a later outcome. Only two outcomes are possible
+            # here, because `relative_path` is derived from this document's own
+            # request and run ids: a document can never address another run's ledger,
+            # so comparing ids would be an unreachable branch. Either the content is
+            # byte-identical, in which case the recorded outcome already stands and
+            # the file is left untouched, or it is a fresh outcome for the same stage
+            # and replaces it.
+            previous = _read_json(existing)
+            if previous.get("manifest_digest_sha256") != state["manifest_digest_sha256"]:
+                staging = existing.parent / f".{existing.name}.staging.{uuid.uuid4().hex}"
+                staging.write_text(
+                    json.dumps(state, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+                )
+                os.replace(staging, existing)
+                descriptor = os.open(existing.parent, os.O_RDONLY)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+            path = existing
+        else:
+            path = self._atomic_write(relative_path, state)
         return PublishedState(
             manifest_path=path,
             manifest_digest_sha256=state["manifest_digest_sha256"],

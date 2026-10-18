@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, replace
+import copy
+from dataclasses import asdict, dataclass, is_dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -142,51 +143,77 @@ class ResearchChainRunner:
             self._ensure_request(plan.request)
             self._publish_resolution_state(plan, runner_identity=runner_identity, created_at=created_at)
 
-            factor_result = self._run_factor(
-                plan, runner_identity=runner_identity,
-                quality_decisions=quality_decisions, created_at=created_at,
-            )
-            plan = self._plan_with_stage_outputs(plan, factor_result.published_state.manifest_path)
-            dataset_result = self._run_dataset(
-                plan, runner_identity=runner_identity,
-                quality_decisions=quality_decisions, created_at=created_at,
-            )
-            plan = self._plan_with_stage_outputs(plan, dataset_result.published_state.manifest_path)
-            export_result = self._run_export(
-                plan, runner_identity=runner_identity,
-                quality_decisions=quality_decisions, created_at=created_at,
-                provider_uri=provider_uri, qlib_import_path=qlib_import_path,
-                qlib_version=qlib_version, cache_root=cache_root,
-                export_layout_root=export_layout_root,
-            )
-            plan = self._plan_with_stage_outputs(plan, export_result.published_state.manifest_path)
-            model_result = self._run_model(
-                plan, runner_identity=runner_identity,
-                quality_decisions=quality_decisions, created_at=created_at,
-                artifact_decision_provider=artifact_decision_provider,
-            )
-            plan = self._plan_with_stage_outputs(plan, model_result.published_state.manifest_path)
-            prediction_results = self._run_predictions(
-                plan, runner_identity=runner_identity,
-                quality_decisions=quality_decisions, created_at=created_at,
-                decision_dates=decision_dates,
-                scores_by_decision_date=scores_by_decision_date,
-            )
-            for prediction_result in prediction_results:
-                plan = self._plan_with_stage_outputs(plan, prediction_result.published_state.manifest_path)
+            # Every writer is immutable, so re-running a completed stage raises
+            # "already exists". Fold the stages this run already passed into the plan
+            # and skip them, or a failure anywhere makes the run unrepeatable.
+            plan, completed = self._resume_from_passed_stages(plan)
+
+            if "factor_computation" in completed:
+                factor_result = None
+            else:
+                factor_result = self._run_factor(
+                    plan, runner_identity=runner_identity,
+                    quality_decisions=quality_decisions, created_at=created_at,
+                )
+                plan = self._plan_with_stage_outputs(plan, factor_result.published_state.manifest_path)
+            if "dataset_preparation" in completed:
+                dataset_result = None
+            else:
+                dataset_result = self._run_dataset(
+                    plan, runner_identity=runner_identity,
+                    quality_decisions=quality_decisions, created_at=created_at,
+                )
+                plan = self._plan_with_stage_outputs(plan, dataset_result.published_state.manifest_path)
+            if "qlib_export" in completed:
+                export_result = None
+            else:
+                export_result = self._run_export(
+                    plan, runner_identity=runner_identity,
+                    quality_decisions=quality_decisions, created_at=created_at,
+                    provider_uri=provider_uri, qlib_import_path=qlib_import_path,
+                    qlib_version=qlib_version, cache_root=cache_root,
+                    export_layout_root=export_layout_root,
+                )
+                plan = self._plan_with_stage_outputs(plan, export_result.published_state.manifest_path)
+            if "model_training" in completed:
+                model_result = None
+            else:
+                model_result = self._run_model(
+                    plan, runner_identity=runner_identity,
+                    quality_decisions=quality_decisions, created_at=created_at,
+                    artifact_decision_provider=artifact_decision_provider,
+                )
+                plan = self._plan_with_stage_outputs(plan, model_result.published_state.manifest_path)
+            if "prediction_publication" in completed:
+                prediction_results = []
+            else:
+                prediction_results = self._run_predictions(
+                    plan, runner_identity=runner_identity,
+                    quality_decisions=quality_decisions, created_at=created_at,
+                    decision_dates=decision_dates,
+                    scores_by_decision_date=scores_by_decision_date,
+                )
+                for prediction_result in prediction_results:
+                    plan = self._plan_with_stage_outputs(plan, prediction_result.published_state.manifest_path)
             self._enforce_risk_gate(plan, risk_documents=risk_documents)
-            portfolio_result = self._run_portfolio(
-                plan, runner_identity=runner_identity,
-                quality_decisions=quality_decisions, created_at=created_at,
-                definition_decision_provider=definition_decision_provider,
-            )
-            plan = self._plan_with_stage_outputs(plan, portfolio_result.published_state.manifest_path)
-            backtest_result = self._run_backtest(
-                plan, runner_identity=runner_identity,
-                quality_decisions=quality_decisions, created_at=created_at,
-            )
-            plan = self._plan_with_stage_outputs(plan, backtest_result.published_state.manifest_path)
-            if stage_plan_for_request(plan.request)[-2] == "paper_execution":
+            if "portfolio_construction" in completed:
+                portfolio_result = None
+            else:
+                portfolio_result = self._run_portfolio(
+                    plan, runner_identity=runner_identity,
+                    quality_decisions=quality_decisions, created_at=created_at,
+                    definition_decision_provider=definition_decision_provider,
+                )
+                plan = self._plan_with_stage_outputs(plan, portfolio_result.published_state.manifest_path)
+            if "backtest_execution" in completed:
+                backtest_result = None
+            else:
+                backtest_result = self._run_backtest(
+                    plan, runner_identity=runner_identity,
+                    quality_decisions=quality_decisions, created_at=created_at,
+                )
+                plan = self._plan_with_stage_outputs(plan, backtest_result.published_state.manifest_path)
+            if stage_plan_for_request(plan.request)[-2] == "paper_execution" and "paper_execution" not in completed:
                 paper_result = self._run_paper(
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
@@ -961,6 +988,74 @@ class ResearchChainRunner:
         ]
         return ResearchRunOutcome(result, published.manifest_path, summaries)
 
+    def _resume_from_passed_stages(
+        self, plan: ResolvedExecutionPlan
+    ) -> tuple[ResolvedExecutionPlan, set[str]]:
+        """Replay the stages this run already completed, so a failure is retryable.
+
+        Every writer in this repo is immutable, so re-running a completed stage raises
+        "already exists" instead of producing the same artifact again. Without this,
+        any failure -- even in the last stage -- makes the whole run unrepeatable and
+        the operator has to move directories aside by hand.
+
+        The states are already durable (`_publish_failed_state` writes them on the way
+        out), so resuming is a matter of reading back what passed and folding each
+        stage's output bindings into the plan, which is exactly what the inline
+        `_plan_with_stage_outputs` calls do on the success path.
+
+        A stage is replayed only when its recorded state is `passed`. Anything else
+        (failed, blocked, running) is left for the normal path to redo, so this cannot
+        mask a half-finished stage.
+        """
+        request_generation_id = plan.request["request_content_generation_id"]
+        run_id = plan.request["run_id"]
+        completed: set[str] = set()
+        resumed = plan
+        for summary in self.run_store.list_state_snapshots(request_generation_id, run_id):
+            if summary.status != "passed":
+                continue
+            state = self.run_store.read_state(
+                request_generation_id, run_id, summary.stage, summary.manifest_digest_sha256,
+            )
+            stage_record = state["stage_records"][-1]
+            if not stage_record["output_bindings"]:
+                # `resolve_request` has no output family; the later stages all do.
+                continue
+            resumed = self._apply_stage_bindings(resumed, stage_record)
+            completed.add(summary.stage)
+        return resumed, completed
+
+    def _apply_stage_bindings(
+        self, plan: ResolvedExecutionPlan, stage_record: Mapping[str, Any]
+    ) -> ResolvedExecutionPlan:
+        """Fold one recorded stage's output bindings into the plan."""
+        stage = stage_record["stage"]
+        output_bindings = stage_record["output_bindings"]
+        existing_families = {binding["output_family"] for binding in output_bindings}
+        retained = [
+            binding for binding in plan.stage_bindings
+            if not (binding.stage == stage and binding.output_family in existing_families)
+        ]
+        bindings = tuple([
+            *retained,
+            *(ResolvedStageBinding(
+                stage=stage,
+                output_family=binding["output_family"],
+                generation_id=binding["generation_id"],
+                manifest_digest_sha256=binding["manifest_digest_sha256"],
+                data_checksum_sha256=binding["data_checksum_sha256"],
+                physical_path=binding.get("physical_path"),
+                quality_decision_checksum_sha256=binding.get("quality_decision_checksum_sha256"),
+            ) for binding in output_bindings),
+        ])
+        # Tests drive this runner with a lightweight stand-in plan, so fall back to a
+        # shallow copy rather than assuming `dataclasses.replace` applies.
+        if is_dataclass(plan) and not isinstance(plan, type):
+            return replace(plan, stage_bindings=bindings)
+        resumed = copy.copy(plan)
+        resumed.stage_bindings = bindings
+        return resumed
+
     def _publish_failed_state(
         self,
         plan: ResolvedExecutionPlan,
@@ -1092,7 +1187,12 @@ class ResearchChainRunner:
         last_result = getattr(self.export_adapter, "last_result", None)
         if last_result is not None and last_result.manifest["generation_id"] == binding.generation_id:
             return dict(last_result.manifest)
-        path = self.run_store.root / "external_quality_reviews" / f"{binding.generation_id}.json"
+        # The published receipt lives under `research_exports/`; the
+        # `external_quality_reviews` directory holds the review report, not the
+        # receipt. Only the resumed path reaches this branch, because a fresh run
+        # is served by the adapter's in-memory result -- which is why the wrong
+        # directory had never been read.
+        path = self.run_store.root / "research_exports" / f"{binding.generation_id}.json"
         if not path.is_file():
             raise ContractError("unpublished Qlib init receipt")
         # Same scoping as the state readback: the receipt is written under this

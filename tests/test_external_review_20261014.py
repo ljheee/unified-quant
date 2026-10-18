@@ -213,7 +213,11 @@ def test_qlib_receipt_readback_scopes_the_loader_to_the_run_store(tmp_path: Path
     """B9-B: the second production caller of the unscoped loader was a trap too."""
     root = _symlinked_store_root(tmp_path)
     receipt = _receipt_document()
-    receipt_dir = root / "external_quality_reviews"
+    # The publisher writes the receipt under `research_exports/`; the sibling
+    # `external_quality_reviews/` directory holds the review report, not the receipt.
+    # This test is about the loader's scope (the symlinked root below), so the fixture
+    # has to place the document where the publisher actually puts it.
+    receipt_dir = root / "research_exports"
     receipt_dir.mkdir()
     receipt_path = receipt_dir / f"{receipt['generation_id']}.json"
     receipt_path.write_text(json.dumps(receipt), encoding="utf-8")

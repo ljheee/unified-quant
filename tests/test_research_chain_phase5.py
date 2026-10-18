@@ -451,6 +451,45 @@ def test_every_stage_failure_stops_later_stages(tmp_path: Path, stage: str, monk
 
 
 @requires_qlib
+def test_completed_stages_are_replayed_from_state_not_reexecuted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Every writer in this repo is immutable, so re-executing a completed stage hits
+    # "already exists". The runner must instead fold the recorded passed stages into
+    # the plan and skip them. The plan under test is captured from the failing run
+    # itself, because rebuilding the fixture would republish its immutable stores.
+    from uq.research_chain.runner import ResearchChainRunner
+
+    captured: dict[str, object] = {}
+    real_execute = ResearchChainRunner.execute
+
+    def capturing_execute(self, plan, *args, **kwargs):
+        captured["plan"] = plan
+        captured["runner"] = self
+        return real_execute(self, plan, *args, **kwargs)
+
+    def fail(*args, **kwargs):
+        raise ContractError("forced export failure")
+
+    monkeypatch.setattr(ResearchChainRunner, "execute", capturing_execute)
+    with monkeypatch.context() as patched:
+        patched.setattr(ResearchChainRunner, STAGE_METHODS["qlib_export"], fail)
+        with pytest.raises(ContractError, match="forced export failure"):
+            _run_full_chain(tmp_path)
+
+    plan = captured["plan"]
+    runner = captured["runner"]
+    resumed, completed = runner._resume_from_passed_stages(plan)
+
+    # the stages before the forced failure are marked complete and their bindings are
+    # carried into the plan, which is what lets execute skip them on a retry
+    assert "factor_computation" in completed
+    assert "dataset_preparation" in completed
+    assert "qlib_export" not in completed
+    assert "model_dataset" in {binding.output_family for binding in resumed.stage_bindings}
+
+
+@requires_qlib
 def test_locked_environment_rebuild_is_reproducible(tmp_path: Path) -> None:
     first, first_store, _ = _run_full_chain(tmp_path / "first")
     second, second_store, _ = _run_full_chain(tmp_path / "second")

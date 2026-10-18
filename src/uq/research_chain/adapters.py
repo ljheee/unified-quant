@@ -28,7 +28,7 @@ from ..models.feature_preprocessing import FeaturePreprocessorBuilder, complete_
 from ..models.features import FeatureSchemaBuilder, FeatureSchemaValidator
 from ..portfolio.builder import PortfolioBuilder, PortfolioDefinitionBinding, TargetWeightStore
 from .contracts import PublishedState
-from .membership_input import filtered_factor_frame
+from .membership_input import filtered_factor_frame, verify_request_input_sets
 from .owning_contracts import (
     AdjustedPriceDatasetStore,
     BacktestConfigStore,
@@ -277,6 +277,30 @@ class DatasetStageAdapter:
         _, factor_frame = self.factor_store.read_partition(factor_binding.generation_id)
         return factor_frame
 
+    def _factor_partition_set(self, plan: ResolvedExecutionPlan) -> dict[str, Any]:
+        """Rebuild the request's factor partition set from its owning store.
+
+        The request carries only the set's digest, so the partitions have to be
+        re-derived. v4/v5 already do this inside `filtered_factor_frame`; the
+        preprocessing binding check needs the same list, and re-deriving it is what
+        keeps that check anchored to the store rather than to the request's claim.
+        """
+        if plan.request.get("contract_version") not in {4, 5}:
+            raise ContractError(
+                "factor partition set resolution requires a v4/v5 request; earlier "
+                "contracts bind a single factor partition and carry no set"
+            )
+        if self.membership_store is None or self.trading_calendar is None:
+            raise ContractError(
+                "v4/v5 dataset stage requires a governed membership store and trading calendar"
+            )
+        return verify_request_input_sets(
+            plan.request,
+            membership_store=self.membership_store,
+            factor_store=self.factor_store,
+            trading_days=self.trading_calendar,
+        ).factor_partition_set
+
     def run(
         self,
         plan: ResolvedExecutionPlan,
@@ -357,8 +381,28 @@ class DatasetStageAdapter:
             raise ContractError("preprocessing input factor set mismatch")
         if preprocessing["input_factor_version"] != factor_manifest["factor_version"]:
             raise ContractError("preprocessing input factor version mismatch")
-        if preprocessing["input_factor_generation_ids"] != [factor_binding.generation_id]:
-            raise ContractError("preprocessing input factor generation mismatch")
+        # The preprocessing artifact attests the exact factor partitions its
+        # cross-sectional statistics were computed over. Comparing it to the single
+        # `factor_binding` was wrong for any window longer than one session: a
+        # per-date transform needs the whole window's partitions, and the contract
+        # has always declared this field as an array (`minItems: 1`). Compare against
+        # the resolved partition set instead, which is stricter than the old
+        # equality -- a set built for a different window or ordering is refused.
+        if plan.request.get("contract_version") in {4, 5}:
+            expected_factor_generations = [
+                entry["generation_id"]
+                for entry in self._factor_partition_set(plan)["partitions"]
+            ]
+        else:
+            # v1-v3 bind exactly one factor partition and carry no set, so the
+            # historical single-generation equality is the correct check there.
+            expected_factor_generations = [factor_binding.generation_id]
+        if preprocessing["input_factor_generation_ids"] != expected_factor_generations:
+            raise ContractError(
+                "preprocessing input factor generation mismatch: the artifact was "
+                f"built over {len(preprocessing['input_factor_generation_ids'])} "
+                f"partition(s) but this request resolves {len(expected_factor_generations)}"
+            )
         input_schema = self.feature_schema_store.read_schema(preprocessing["input_feature_schema_generation_id"])
         output_schema = self.feature_schema_store.read_schema(preprocessing["output_feature_schema_generation_id"])
 
@@ -486,7 +530,10 @@ class DatasetStageAdapter:
             ordered_features=list(preprocessing["ordered_features"]),
             factor_set=factor_manifest["factor_set"],
             factor_version=factor_manifest["factor_version"],
-            factor_generation_ids=[factor_binding.generation_id],
+            # The dataset must declare the same factor partitions its preprocessing
+            # was computed over. A per-date transform spans the whole window, so this
+            # is the resolved set rather than the single `factor_binding`.
+            factor_generation_ids=expected_factor_generations,
             label_set_name=label_manifest["name"],
             label_generation_id=label_binding.generation_id,
             universe_snapshot_generation_id=universe_binding.generation_id,
@@ -1271,11 +1318,21 @@ class ModelStageAdapter:
             data_checksum_sha256=label_binding.data_checksum_sha256,
         )
         universe_manifest = self.universe_store.read_manifest(universe_generation_id)
-        factor_manifest = self.run_store.read_published_document(
-            "factor_partition", factor_generation_id,
-            manifest_digest_sha256=factor_binding.manifest_digest_sha256,
-            data_checksum_sha256=factor_binding.data_checksum_sha256,
-        )
+        # The dataset declares every factor partition its preprocessing covered, so
+        # the model stage has to read all of them. Reading only the single bound
+        # partition was correct when the dataset carried one; a per-date transform
+        # spans the whole window and the run manifest now lists each partition.
+        factor_manifests = {}
+        for generation_id in dataset_manifest["factor_generation_ids"]:
+            if generation_id == factor_generation_id:
+                factor_manifest = self.run_store.read_published_document(
+                    "factor_partition", generation_id,
+                    manifest_digest_sha256=factor_binding.manifest_digest_sha256,
+                    data_checksum_sha256=factor_binding.data_checksum_sha256,
+                )
+            else:
+                factor_manifest = self.factor_store.read_manifest(generation_id)
+            factor_manifests[generation_id] = factor_manifest
         run_manifest, bound_definition = ModelRunBuilder.build(
             definition=definition,
             dataset_manifest=dataset_manifest,
@@ -1285,7 +1342,7 @@ class ModelStageAdapter:
             determinism_controls=dict(determinism_controls),
             label_manifest=label_manifest,
             universe_snapshot=universe_manifest,
-            factor_manifests={factor_generation_id: factor_manifest},
+            factor_manifests=factor_manifests,
             quality_decision=_decision_payload(model_quality_decision),
             store_root=self.run_store.root,
         )

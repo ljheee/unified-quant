@@ -451,3 +451,11 @@ drop_unlabeled_rows 落地(2026-10-18,cr.md §8.54)
 - **测试**:新建 `tests/test_drop_unlabeled_rows.py` 4 例;变异(isna 反转 3 红 / 把 0.0 当缺失 2 红)。
 - **如实登记**:①原想在 phase2 fixture 加 null label,**结构不可行**(factor 20 会话 vs label 25 会话,unlabelled 全落在 factor 不存在的 tail 日期),白试约 10 次后改走"直接测规则 + 真实数据验证";②`test_keys_are_a_copy...` **无鉴别力**(无 `.copy` 时 pandas 自身也保护原帧),已替换;③"去 `.copy`"变异**未杀**,已登记。
 - **仍未决**:①整条 v5 execute 仍未跑通(request 未组装);②universe 用的是现成 `csi-all` 5068,不是 complete-case 制品(但 `drop_incomplete_rows` 已让它不需要);③`/tmp/request-final.json` 的 split 越界 window 仍是 9/9–9/16,需重组成 9/9–9/30。
+
+收尾提交(2026-10-18,cr.md §8.55)
+- **A1** `publish_state` 允许同 run+stage 覆盖(digest 同则不动)。**只改状态台账,不动内容寻址制品**——制品发布时是唯一能校验内容一致性的时机。自我更正:第一版的"比对 id 守卫"变异试验证明**不可达**(路径由 document 自身 id 推导),已删死代码。
+- **A2** model stage 只传单个 factor manifest → 改为遍历 dataset 声明的全部分区(A3 修好后的连带)。
+- **A3** Qlib receipt 落盘早于 identity 定稿(cr.md:208 正式关闭)。内存调用方用自己的返回值,**只有续跑读盘才失败**——这是它长期存活的原因。测试+变异必红。连带 `_read_receipt` 读错目录。
+- **B 结构性阻塞(新发现,未修)**:内容寻址制品不幂等 ⇒ 重跑必然撞同 identity。我做了 **7 轮无效尝试**后停止,不再改 6 个 writer。三个未验证优劣的选项已写入 cr.md。
+- **C 判断错误记录**:A方案→撤回;C1"只删1目录"→漏依赖+高估规模;只修台账→制品侧仍撞;手工搬制品→又以同 identity 回来。**教训:系统性问题上"每层修一点"是错的,第二轮就该停下定位结构问题。**
+- **D 验证**:`.venv` 1180/24;`.venv-qlib` 1204/0。变异 A1×2、A3×1 均红。全 A 冒烟 stage 00/01/02 passed,dataset `b2ba0096…`(80571/5058)与 preprocessing `f3f7cece…` 均已发布读回。

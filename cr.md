@@ -1832,3 +1832,60 @@ frame 上丢行，必须从 preprocessing **输入侧**剔行并重跑 transform
    第一次的"去 `.copy`"变异**未杀**，已如实登记。
 
 **全量**：**1178 passed / 23 skipped / exit 0**（父 `cabd335` 1173/23，净 **+5**）。
+
+### 8.55 三个真缺陷 + 一个结构性阻塞的诚实定位（2026-10-18）
+
+**触发**：用户"继续"（跑通 v5 execute）→"1"（修幂等）→"再 review 下这个方案"→"C1"→"1"→"收尾"。
+
+#### A. 修好的三个缺陷（都有测试/变异）
+
+**A1. `publish_state` 使重试不可能**（`resolver.py`）
+每个 writer 都不可变，所以已完成的 stage 无法重发。在 `publish_state` 里允许**同 run + 同 stage** 覆盖：
+digest 相同则不动（保持 `created_at` 稳定），否则替换。
+**关键取舍**：只改**状态台账**，不动任何内容寻址制品——制品发布时是唯一能校验内容一致性的时机，不能跳过。
+**自我更正**：我第一版写了"比对 request/run id 否则拒"的守卫，变异试验证明它**不可达**
+（`relative_path` 由 document 自身 id 推导，跨 run 覆盖在结构上不可能），已删除该死代码并注释说明。
+
+**A2. model stage 只读单个 factor manifest**（`adapters.py:1334`）
+`factor_manifests={factor_generation_id: factor_manifest}`，而 dataset 现记录 16 个分区
+（A3 修好 `input_factor_generation_ids` 后的直接后果）→ trainer 报 16 个
+`missing factor manifest`。改为遍历 dataset 声明的全部分区。
+
+**A3. Qlib receipt 落盘早于 identity 定稿**（`qlib_export.py`，cr.md:208 的正式关闭）
+`os.replace` 发生在填 `generation_id`/`manifest_digest_sha256` **之前**，
+盘上凭证永久是 `"0"*64`。内存调用方一直用它自己的返回值，**只有续跑读盘才会失败**——
+这就是该 bug 长期存活的原因。落盘已移到 identity 定稿后。
+**测试**：`test_persisted_receipt_carries_its_final_identity`；变异（把落盘移回定稿前）必红。
+**连带**：`_read_receipt` 的读盘路径写错目录（`external_quality_reviews` → `research_exports`），
+同属从未被走过的读路径；`tests/test_external_review_20261014.py` 的 fixture 按实现修正目录。
+
+#### B. 结构性阻塞：内容寻址制品不幂等（新发现，未修）
+
+全 A 冒烟在 stage 03+ 反复撞同一类冲突，根因：
+**`export_generation_id` 等内容哈希由输入决定，重跑必然同 identity，而 publisher 一律"存在于即拒"。**
+
+我为此做了 7 轮无效尝试（手工搬 export 制品、改 state 台账、复用旧 request…），
+每轮都揭示下一层同类问题。**已停止，不再改 6 个 writer 的发布语义。**
+
+留待专门一轮处理，选项（我未验证哪个最优，如实标注）：
+1. 发布前先算 identity 并校验已存在制品内容一致 → 跳过（需改所有 writer）；
+2. 让 `execute` 支持"跳过已发布制品并复用其 identity"的续跑模式（改动集中在 runner）；
+3. 明确"一次 run 一个干净 data-root"的运维约定（零代码改动，但不可复现）。
+
+#### C. 我的判断错误记录（重要）
+
+- 提出 A 方案（改 6 个 writer）→ 用"30+ 处一律 raise"的证据撤回，改为 C1；
+- C1 说"只删 1 个目录"→ review 时发现漏了 `universes`/`index_membership` 两个跨 root 依赖，且 78M 里大量废弃产物；
+- 只修 state 台账 → 发现制品侧仍在撞；
+- 手工搬 export 制品绕过 → 它又以同 identity 回来。
+
+**教训**：在"重跑撞已存在制品"这类系统性问题上，我连续 4 次判断错误。根因是一开始没识别出
+"content-addressed 不幂等"是固有性质而非 bug。这次靠"每层修一点"推进是错误的，
+应该在第二轮就停下来定位结构性问题。
+
+#### D. 验证
+
+- 全量：`.venv` **1180 passed / 24 skipped**；`.venv-qlib` **1204 passed / 0 skipped**（父 `d904936` 1178/23）。
+- 变异：A1（禁 rewrite / 忽略 digest）各红；A3（落盘移回定稿前）红。
+- 全 A 冒烟：stage 00/01/02 passed，dataset 制品 `b2ba0096…`（80571 行 / 5058 只）已发布并读回；
+  `drop_unlabeled_rows` 制品 `f3f7cece…` 发布并读回。stage 03 曾通过（在 B 的阻塞前）。

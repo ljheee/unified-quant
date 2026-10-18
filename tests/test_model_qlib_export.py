@@ -170,6 +170,35 @@ class TestQlibDatasetExporter:
         assert receipt["no_ungoverned_source_assertion"] is True
 
 
+    def test_persisted_receipt_carries_its_final_identity(self, tmp_path: Path) -> None:
+        # The receipt used to be written to disk *before* `generation_id` and
+        # `manifest_digest_sha256` were stamped (cr.md 5.4: qlib_export.py:336), so the
+        # persisted document held the `"0"*64` placeholder forever. In-memory callers
+        # never noticed because they use the returned dict; only a resumed run, which
+        # must read the file, failed -- on the stable-generation check.
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        manifest = exporter.export(
+            dataset_name="x", generation_id="d" * 64,
+            frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+            calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+            provider_uri="file:///data", quality_decision=export_decision(),
+        )
+        receipt = QlibInitReceiptBuilder().build(
+            export_manifest=manifest, resolved_provider_uri="file:///data",
+            qlib_import_path="qlib", qlib_version="0.9.6",
+            cache_root=str(tmp_path / ".cache"), cache_files_before=set(),
+            cache_files_after={str(tmp_path / ".cache/qlib/calendar.pkl")},
+            verified_export=exporter.read("x", manifest["generation_id"]),
+            governance_root=tmp_path, quality_decision=receipt_decision(),
+        )
+        persisted = tmp_path / "research_exports" / f"{receipt['generation_id']}.json"
+        assert persisted.is_file(), "the receipt must be persisted with its final identity"
+        document = json.loads(persisted.read_text())
+        assert document["generation_id"] == receipt["generation_id"]
+        assert document["generation_id"] != "0" * 64
+        assert document["manifest_digest_sha256"] == receipt["manifest_digest_sha256"]
+
     def test_calendar_tamper_rejected_on_read(self, tmp_path: Path) -> None:
         exporter = QlibDatasetExporter(tmp_path / "exports")
         manifest = exporter.export(

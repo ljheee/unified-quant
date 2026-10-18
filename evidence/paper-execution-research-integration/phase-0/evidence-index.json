@@ -180,11 +180,11 @@
     },
     {
       "path": "src/uq/research_chain/resolver.py",
-      "sha256": "24a9e7bf496528d88b4c352912cd820f6393f8813ffadb42ad070661afeb5255"
+      "sha256": "2661ba39ca4160fb40002f0b74e5122cfbd3d25db6ff864e4765f018efb7075d"
     },
     {
       "path": "src/uq/research_chain/runner.py",
-      "sha256": "b11eda206e10e98f85715cc7e43f63219663628cad138e880ab3c453d1158b95"
+      "sha256": "5d7ee49a5942a4593bae12be41d6b5cef5d55ff65974b72e8cba939decc2379e"
     },
     {
       "path": "tests/test_paper_execution_research_integration_phase0.py",
