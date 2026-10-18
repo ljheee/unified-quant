@@ -43,7 +43,8 @@
     "missing_policy": {
       "enum": [
         "fail_closed",
-        "declared_fill"
+        "declared_fill",
+        "drop_incomplete_rows"
       ]
     },
     "split_policy": {

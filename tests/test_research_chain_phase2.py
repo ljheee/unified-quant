@@ -16,7 +16,7 @@ from uq.contracts.schema import load_schema
 from uq.contracts.gate_contracts import sha256_json, sha256_bytes
 from uq.contracts.model_layer import bind_reviewed_quality_decision, canonical_json, create_reviewed_quality_decision, model_manifest_identities
 from uq.models.dataset_writer import DatasetWriter
-from uq.models.feature_preprocessing import FeaturePreprocessorBuilder
+from uq.models.feature_preprocessing import FeaturePreprocessorBuilder, complete_rows
 from uq.models.features import FeatureSchemaBuilder
 from uq.research_chain import DatasetStageAdapter
 from uq.research_chain.owning_contracts import AdjustedPriceDatasetStore, FeaturePreprocessingStore, FeatureSchemaStore, LabelStore
@@ -306,9 +306,53 @@ def _execute_decisions(plan: ResolvedExecutionPlan) -> dict:
     }
 
 
-def _prepare_dataset_store(tmp_path: Path) -> tuple[DatasetStageAdapter, ResolvedExecutionPlan, FactorStore]:
+def _prepare_dataset_store(
+    tmp_path: Path,
+    *,
+    null_factor_cell: tuple[str, int] | None = None,
+    drop_incomplete: bool = True,
+) -> tuple[DatasetStageAdapter, ResolvedExecutionPlan, FactorStore]:
     from tests.test_model_end_to_end import _publish_factor as publish_global_factor
     publish_global_factor(tmp_path)
+    if null_factor_cell is not None:
+        # Re-publish the factor partition with one null feature cell, so the
+        # `drop_incomplete_rows` path has something real to drop. This mirrors the
+        # production case where `close_location_1d` is undefined on a limit-locked
+        # session: a legitimate null, not corrupt data.
+        instrument, row_index = null_factor_cell
+        from uq.factors.store import factor_generation, _validate_factor_frame
+        from uq.contracts.artifacts import QualityReportStore
+        manifest_path = next((tmp_path / "factors").rglob("manifest.json"))
+        original = json.loads(manifest_path.read_text())
+        _, frame = FactorStore(tmp_path, FactorRegistry(ROOT)).read_partition(original["generation_id"])
+        frame = frame.copy()
+        frame.loc[(frame["instrument"] == instrument) & (frame.index == row_index), "volume_ratio_20d"] = float("nan")
+        import shutil
+        shutil.rmtree(tmp_path / "factors")
+        shutil.rmtree(tmp_path / "reports", ignore_errors=True)
+        # The global helper's quality report lives under the same root; drop it so
+        # the re-published generation can write its own.
+        shutil.rmtree(tmp_path / "governed", ignore_errors=True)
+        registry = FactorRegistry(ROOT)
+        arguments = {
+            "frame": frame, "partition_date": date(2026, 1, 5),
+            "input_dataset": "bars_daily", "input_schema_version": "research-v1",
+            "upstream_generation_id": "a" * 64, "upstream_data_checksum": "b" * 64,
+            "quality_report_checksum": "",
+            "upstream_created_at": datetime.fromisoformat("2026-01-04T15:00:00+08:00"),
+        }
+        generation = factor_generation(**arguments)
+        report_path = tmp_path / "reports" / "factor_v1" / generation / "report.json"
+        QualityReportStore().save(tmp_path, {
+            "report_version": 1, "binding_type": "factor_v1",
+            "bound_generation_id": generation, "policy": "reject_all", "status": "passed",
+            "checks": _validate_factor_frame(frame, registry.get("basic", "1.0.0"))["checks"],
+            "errors": [], "warnings": [],
+        })
+        arguments["quality_report_checksum"] = file_sha256_bytes(report_path.read_bytes())
+        FactorStore(tmp_path, registry).publish(
+            **{k: v for k, v in arguments.items() if k != "frame"}, frame=frame
+        )
     factor_store = FactorStore(tmp_path, FactorRegistry(ROOT))
     factor_manifest_path = next((tmp_path / "factors").rglob("manifest.json"))
     factor_manifest = factor_store.read_manifest(json.loads(factor_manifest_path.read_text())["generation_id"])
@@ -323,6 +367,13 @@ def _prepare_dataset_store(tmp_path: Path) -> tuple[DatasetStageAdapter, Resolve
         preprocess_name="research-standardized-v1", semantic_version="1.0.0",
         transform="standardize_cross_section", min_group_observations=2,
     )
+    # A preprocessing artifact pins `input_frame_sha256`, so it describes one exact
+    # frame. Under `drop_incomplete_rows` that frame is the post-drop one -- which is
+    # the production semantics: the reviewed statistics must come from the rows that
+    # actually train. The stage applies the identical filter before checking the
+    # fingerprint, so an artifact built over the unfiltered frame would be refused.
+    if drop_incomplete:
+        factor_frame = complete_rows(factor_frame, ["volume_ratio_20d"])
     preprocessed = builder.transform(factor_frame)
     input_schema = FeatureSchemaBuilder().build(factor_frame, source_factor_set="basic", source_factor_version="1.0.0")
     output_schema = FeatureSchemaBuilder().build(preprocessed, source_factor_set="basic", source_factor_version="1.0.0")
@@ -677,4 +728,121 @@ def test_dataset_stage_rejects_preprocessing_input_mismatch(tmp_path: Path) -> N
             plan,
             runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
             **_execute_decisions(plan),
+        )
+
+
+def _plan_with_missing_policy(plan: ResolvedExecutionPlan, policy: str) -> ResolvedExecutionPlan:
+    request = json.loads(json.dumps(plan.request))
+    request["dataset_policy_template"]["missing_policy"] = policy
+    return dataclasses.replace(plan, request=request)
+
+
+def test_drop_incomplete_rows_reports_what_it_dropped(tmp_path: Path) -> None:
+    # `drop_incomplete_rows` exists because a factor can be legitimately undefined
+    # on a decision date (close_location_1d is undefined when high == low, i.e. a
+    # limit-locked session). Dropping the *instrument* for that would punish it for
+    # a market state; dropping the *row* is PIT-safe. The stage must therefore say
+    # exactly how many rows it discarded, or the run silently trains on less data
+    # than the universe implies.
+    adapter, plan, factor_store = _prepare_dataset_store(tmp_path)
+    clean = adapter.run(
+        plan,
+        runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+        **_execute_decisions(plan),
+        created_at="2026-01-30T07:00:00+00:00",
+    )
+    # the fixture has no null features, so nothing is dropped and the audit is empty
+    assert clean.dropped_rows == {}
+
+
+
+
+def _dataset_plan_for_policy(
+    plan: ResolvedExecutionPlan, missing_policy: str
+) -> ResolvedExecutionPlan:
+    """Re-derive a plan whose reviewed dataset policy uses a different missing policy."""
+    request = json.loads(json.dumps(plan.request))
+    template = request["dataset_policy_template"]
+    template["missing_policy"] = missing_policy
+    from uq.contracts.model_layer import research_contract_identities
+    template["template_generation_id"] = "0" * 64
+    template["template_manifest_digest_sha256"] = "0" * 64
+    generation, digest = research_contract_identities(
+        template, schema_name="dataset_policy_template"
+    )
+    template["template_generation_id"] = generation
+    template["template_manifest_digest_sha256"] = digest
+    request["dataset_policy_template"] = template
+    return dataclasses.replace(plan, request=request)
+
+
+def test_drop_incomplete_rows_is_a_declared_policy_value(tmp_path: Path) -> None:
+    # The policy is part of the reviewed template, so it has to survive schema
+    # validation and identity derivation -- otherwise a request using it could not
+    # be reviewed or bound at all.
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    replaced = _dataset_plan_for_policy(plan, "drop_incomplete_rows")
+    template = replaced.request["dataset_policy_template"]
+    assert template["missing_policy"] == "drop_incomplete_rows"
+    assert len(template["template_generation_id"]) == 64
+    from uq.contracts.model_layer import ModelContractLoader
+    ModelContractLoader.validate("dataset_policy_template", template)
+
+
+def test_fail_closed_still_rejects_a_null_feature(tmp_path: Path) -> None:
+    # The new policy must not weaken the existing one. The fixture is complete, so
+    # this asserts the *default* path is unchanged rather than re-testing nulls;
+    # the null case is covered by the drop-policy test below.
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    result = adapter.run(
+        plan,
+        runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+        **_execute_decisions(plan),
+        created_at="2026-01-30T07:00:00+00:00",
+    )
+    assert result.manifest["missing_policy"] == "fail_closed"
+    assert result.dropped_rows == {}
+
+
+def test_drop_incomplete_rows_drops_only_the_null_feature_row(tmp_path: Path) -> None:
+    # The whole point of the policy: a factor that is undefined on one decision date
+    # removes that row, not the instrument. Verify both halves -- the run succeeds,
+    # the audit names exactly one row, and the surviving instrument count is
+    # unchanged.
+    adapter, plan, factor_store = _prepare_dataset_store(
+        tmp_path, null_factor_cell=("INST0", 1)
+    )
+    replaced = _dataset_plan_for_policy(plan, "drop_incomplete_rows")
+    result = adapter.run(
+        replaced,
+        runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+        **_execute_decisions(replaced),
+        created_at="2026-01-30T07:00:00+00:00",
+    )
+    assert result.manifest["missing_policy"] == "drop_incomplete_rows"
+    assert result.dropped_rows["rows"] == 1
+    assert result.dropped_rows["per_feature"] == {"volume_ratio_20d": 1}
+    assert result.dropped_rows["instruments_fully_dropped"] == 0
+    # every instrument still present, one row shorter
+    assert result.frame["instrument"].nunique() == 3
+    assert len(result.frame) == 20 * 3 - 1
+    assert not result.frame["volume_ratio_20d"].isna().any()
+
+
+def test_fail_closed_refuses_the_same_null_row(tmp_path: Path) -> None:
+    # The new policy must not become the only behaviour: the default stays
+    # fail-closed, so the same input is still rejected under it.
+    # The preprocessing artifact must describe the *unfiltered* frame here, because
+    # `fail_closed` does not drop anything: the frame it hands the transform is the
+    # whole factor frame. Building the artifact over the same frame is what makes
+    # this a test of the null check rather than of a fingerprint mismatch.
+    adapter, plan, _ = _prepare_dataset_store(
+        tmp_path, null_factor_cell=("INST0", 1), drop_incomplete=False
+    )
+    with pytest.raises(ContractError, match="fail_closed dataset contains null values"):
+        adapter.run(
+            plan,
+            runner_identity={"code_fingerprint": "0" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "0" * 64},
+            **_execute_decisions(plan),
+            created_at="2026-01-30T07:00:00+00:00",
         )

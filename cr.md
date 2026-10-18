@@ -1652,3 +1652,77 @@ per-instrument 路径抽成 `_build()` 共用，行为不变。
 没有改动 `/tmp/request-final.json`。4988 这个上限是**当前数据**的上限，不是理论最优——
 补数据或改因子语义（需新版本）可以更高，但那不是本轮范围。
 `code-review-unified-quant.md` 与 `AGENTS.md` 保持未跟踪。
+
+### 8.52 `drop_incomplete_rows`：行级排除落地（2026-10-18）
+
+**触发**：用户"1"（选直接落地，接受丢 356 行 / 9 只）。
+
+**背景与两次自我更正（重要）**
+- §8.51 我说"业界通常不在预处理里做样本筛选，而在样本构建阶段做"——**错的**。
+  Qlib 默认训练流水线就是 `DropnaLabel` → `CSZScoreNorm`，两者都是 processor
+  （`qlib/contrib/data/handler.py:37-40`，`qlib/data/dataset/processor.py:94-111`）；
+  vnpy Alpha 的 `learn_processors` 里也有 `process_drop_na`。**丢行本来就属于预处理流水线。**
+- 我说这是 "survivorship bias"——**不精确**。Carhart et al. 区分 survivor bias（数据集只含期末
+  仍存在的实体）与 look-ahead bias（方法要求实体存活某段未来期间）。我们的 10 只**没退市、之后
+  还恢复**，所以准确说法是 **future-conditioned complete-case selection → look-ahead/selection bias**。
+- 我说"必须先补 learn/infer 区分再建发布器"——**理由被削弱**。Qlib 不是靠"制品标注阶段"，而是靠
+  processor 的运行时属性 `is_for_infer()`（`DropnaLabel` 覆写为 `False`），在
+  `_run_proc_l(check_for_infer=True)` 处强制。那是实现方式，不是"制品标注"这一普遍最佳实践。
+
+**实现**
+1. `config/schemas/contracts/{dataset_policy_template,model_dataset}.v1.json`：
+   `missing_policy` 枚举新增 `drop_incomplete_rows`（与 `fail_closed`/`declared_fill` 同维度互斥）。
+2. `src/uq/models/feature_preprocessing.py::complete_rows(frame, ordered_features)`：
+   **单一定义**"哪些行可训练"（`ordered_features` 任一为空即丢）。放在这里而不是内联，
+   因为**发布侧与消费侧必须用同一条规则**，否则 `input_frame_sha256` 必然对不上。
+3. `DatasetStageAdapter.run`：在该策略下**先丢行、再 preprocessing**（对齐 Qlib 顺序）。
+   `dropped_rows` 审计（行数/被整只剔除的标的数/逐特征空值数）随 `DatasetStageResult` 返回；
+   **不写进 manifest 或 run state**，因为两者都是 `additionalProperties: false` 的闭契约。
+4. **label 缺失仍 fail-closed**：label 是目标不是特征，不能按"特征缺失"处理，必须由 universe 侧排除。
+
+**为什么必须在 preprocessing 之前丢**
+`DatasetWriter` 有两条硬不变量：`len(preprocessing_frame) == len(frame)`
+（`dataset_writer.py:381-393`），且读取侧会用 dataset 帧重算 `output_frame_sha256`
+（`:296-300`）。丢行若发生在 preprocessing 之后，两侧都会失败。更根本的是
+`standardize_cross_section` 是**逐日截面**统计量：实测丢掉 C 后，同日 A、B 的值从
+`-0.8276/-0.5793` 变为 `-1.0/+1.0`——**标准化必须只在最终训练行上算**。
+
+**全 A 真实数据实测（2025-09-09..09-30，16 会话）**
+
+| 项目 | 数值 |
+|---|---:|
+| universe（2025-08-29 快照） | 5068 |
+| 有因子行的标的 | 5067 |
+| 原始行数 | 80973 |
+| 有 ≥1 空因子的行 | **356（0.4397%）** |
+| 丢行后行数 | **80617** |
+| 丢行后标的 | **5058** |
+| 每日丢行量 | 19–25（0.38%–0.49%），无异常日 |
+
+空值来源：`range_ratio_1d` 0；`close_location_1d` 68；`amount_20d` 313；`volume_ratio_20d` 313
+（后两者数量相同，共用同一个 20 行窗口）。
+
+**9 只被整只剔除的原因（已查清，不是数据缺失）**：`rolling(20, min_periods=20)` 按**行**计数，
+停牌造成的缺口让"20 行"跨越远超 20 个交易日。实测 `002516.XSHE` 首个可算 `amount_20d` 是
+**09-12**；`605255.XSHG` 在窗口内**始终凑不满 20 行**（37 个会话只有 19 个 bar）。
+这 9 只都有 bar、状态全是 `trading`。
+
+**标准化影响**：每日截面 5032–5044 只，`amount_20d` 每日均值相对偏移 **0.125%**。
+小但非零——这正是"先丢行再标准化"的理由。
+
+**测试**
+- `tests/test_feature_preprocessing.py::TestCompleteRows` 4 例（只丢 ordered_features 的 null /
+  返回新索引 / 缺列拒绝 / 全完整时 no-op）。
+- `tests/test_research_chain_phase2.py` 4 例（策略值可通过 schema 与 identity 推导 /
+  drop 后审计精确 / 只丢行不丢标的 / fail_closed 仍拒绝同一 null）。
+- **变异验证（直接、必红）**：`any→all` → 红；忽略 `ordered_features` 只看所有列 → 红。
+  **如实记录**：另有两次在 adapter 层做的变异（"从不丢行" / "假丢行"）虽然也红，
+  但**是被 `input_frame_sha256` 指纹拦下的**，不是被断言拦下的——那种红**不构成**
+  "测试锁住了丢行语义"的证据，所以另加了 `TestCompleteRows` 直接锁规则本身。
+
+**全量**：**1166 passed / 23 skipped / exit 0**（父 `5cfe3bd` 1157/23，净 **+9**）。
+连带重钉 `evidence/.../phase-0/evidence-index.json` 的 `runner.py`（`_run_dataset` 返回类型变更）。
+
+**未夸大声明**：本轮只落地**策略与阶段逻辑**。**仍未建 preprocessing 生产发布器**——
+所以真实链路要跑通，仍需要先有对"丢行后帧"评审的 preprocessing 制品（测试里是 fixture）。
+`--combined` label set、universe 口径、adjusted 线的生产发布器同样仍未接。

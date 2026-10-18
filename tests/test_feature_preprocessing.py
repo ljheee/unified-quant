@@ -21,7 +21,7 @@ from uq.contracts.model_layer import (
 from uq.errors import ContractError
 from uq.models.dataset import DatasetBuilder
 from uq.models.dataset_writer import DatasetWriter
-from uq.models.feature_preprocessing import FeaturePreprocessorBuilder
+from uq.models.feature_preprocessing import FeaturePreprocessorBuilder, complete_rows
 from uq.models.features import FeatureSchemaBuilder
 from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.factors.raw_price import logical_fingerprint as frame_logical_fingerprint
@@ -639,3 +639,52 @@ class TestFeaturePreprocessingWriteSide:
         with pytest.raises(ContractError, match="already published"):
             store.publish(built, quality_decision=self._decision())
         assert store.read_manifest(built["generation_id"])["generation_id"] == built["generation_id"]
+
+
+class TestCompleteRows:
+    """`complete_rows` is the one definition of a trainable row.
+
+    It is shared by the publisher that builds a preprocessing artifact and the
+    research stage that consumes it, so a drift between the two would surface as a
+    fingerprint mismatch rather than as a wrong number. These lock the rule itself.
+    """
+
+    def test_drops_only_rows_with_a_null_in_an_ordered_feature(self):
+        frame = pd.DataFrame({
+            "instrument": ["A", "B", "C"],
+            "datetime": pd.to_datetime(["2026-01-05"] * 3),
+            "f1": [1.0, float("nan"), 3.0],
+            "f2": [1.0, 2.0, float("nan")],
+            "unused": [float("nan")] * 3,
+        })
+        kept = complete_rows(frame, ["f1", "f2"])
+        assert kept["instrument"].tolist() == ["A"]
+        # a null in a column that is not an ordered feature must not drop the row
+        assert len(complete_rows(frame, ["f1"])) == 2
+
+    def test_returns_a_fresh_index_so_fingerprints_are_stable(self):
+        frame = pd.DataFrame({
+            "instrument": ["A", "B", "C"],
+            "datetime": pd.to_datetime(["2026-01-05"] * 3),
+            "f1": [1.0, float("nan"), 3.0],
+        })
+        kept = complete_rows(frame, ["f1"])
+        # rows A and C survive, re-indexed 0..n-1 rather than keeping 0 and 2
+        assert kept["instrument"].tolist() == ["A", "C"]
+        assert kept.index.tolist() == [0, 1]
+
+    def test_refuses_an_absent_feature_column(self):
+        frame = pd.DataFrame({
+            "instrument": ["A"], "datetime": pd.to_datetime(["2026-01-05"]),
+            "f1": [1.0],
+        })
+        with pytest.raises(ContractError, match="feature columns are absent"):
+            complete_rows(frame, ["f1", "nope"])
+
+    def test_all_rows_complete_is_a_no_op(self):
+        frame = pd.DataFrame({
+            "instrument": ["A", "B"],
+            "datetime": pd.to_datetime(["2026-01-05"] * 2),
+            "f1": [1.0, 2.0],
+        })
+        assert len(complete_rows(frame, ["f1"])) == 2

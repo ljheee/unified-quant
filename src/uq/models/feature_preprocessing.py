@@ -218,3 +218,29 @@ class FeaturePreprocessorBuilder:
         count = float(len(finite))
         result = result.combine(values.isna(), lambda rank, missing: float("nan") if missing else (rank - 1.0) / (count - 1.0))
         return result
+
+
+def complete_rows(frame: pd.DataFrame, ordered_features: list[str]) -> pd.DataFrame:
+    """The single definition of "a row this transform can be trained on".
+
+    ``cross_sectional_stateless_v1`` declares ``null_result: preserve_null``, so a
+    NaN feature survives the transform. That is the right behaviour for inference,
+    where nothing may be dropped, but it is the wrong behaviour for learning: a row
+    with an undefined feature contributes a NaN to the model. The fix is to drop
+    such rows *before* the transform, so the cross-sectional statistics are computed
+    over exactly the rows that will be trained on.
+
+    This is the same order Microsoft Qlib uses for its default learning pipeline:
+    ``DropnaLabel`` runs before ``CSZScoreNorm`` in ``learn_processors``
+    (``qlib/contrib/data/handler.py:37-40``), and ``DropnaProcessor`` is itself a
+    ``Processor`` (``qlib/data/dataset/processor.py:94-111``).
+
+    Keeping the rule here rather than inline at the call site matters: the publisher
+    that *builds* a preprocessing artifact and the stage that *consumes* it must
+    apply the identical filter, or the artifact's ``input_frame_sha256`` will not
+    describe the frame it is handed.
+    """
+    missing = [name for name in ordered_features if name not in frame.columns]
+    if missing:
+        raise ContractError(f"feature columns are absent from the frame: {missing}")
+    return frame.loc[~frame[ordered_features].isna().any(axis=1)].reset_index(drop=True)

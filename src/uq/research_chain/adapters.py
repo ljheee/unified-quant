@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
@@ -24,7 +24,7 @@ from ..models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
 from ..models.predictions import PredictionBuilder
 from ..models.trainer import ModelRunBuilder
 from ..models.dataset_writer import DatasetWriter
-from ..models.feature_preprocessing import FeaturePreprocessorBuilder
+from ..models.feature_preprocessing import FeaturePreprocessorBuilder, complete_rows
 from ..models.features import FeatureSchemaBuilder, FeatureSchemaValidator
 from ..portfolio.builder import PortfolioBuilder, PortfolioDefinitionBinding, TargetWeightStore
 from .contracts import PublishedState
@@ -133,6 +133,12 @@ class DatasetStageResult:
     manifest: dict[str, Any]
     frame: pd.DataFrame
     published_state: PublishedState
+    # Audit trail for `missing_policy: drop_incomplete_rows`. Empty for the other
+    # policies. It is carried on the result rather than inside the manifest or the
+    # run state because both are closed contracts (`model_dataset.v1` and
+    # `research_run_state.v1` are `additionalProperties: false`), and widening
+    # either for a diagnostic would change what those artifacts mean.
+    dropped_rows: dict[str, Any] = field(default_factory=dict)
 
 
 def _merge_labels(
@@ -340,6 +346,41 @@ class DatasetStageAdapter:
             raise ContractError("preprocessing input factor generation mismatch")
         input_schema = self.feature_schema_store.read_schema(preprocessing["input_feature_schema_generation_id"])
         output_schema = self.feature_schema_store.read_schema(preprocessing["output_feature_schema_generation_id"])
+
+        # `drop_incomplete_rows` has to act *here*, before preprocessing, not after
+        # the label merge. `DatasetWriter` requires the published frame and the
+        # preprocessing output to have the same rows, and re-derives
+        # `output_frame_sha256` from the dataset frame on both publish and read
+        # (`dataset_writer.py:381-393`, `:296-300`). Dropping rows after
+        # preprocessing would break both, and would also standardize over rows that
+        # never enter training.
+        #
+        # Only *feature* incompleteness is dropped. A missing label is a different
+        # question -- it is the target, not a feature -- so a null label stays
+        # fail-closed and the universe has to exclude that instrument instead.
+        dropped_rows: dict[str, Any] = {}
+        if template["missing_policy"] == "drop_incomplete_rows":
+            feature_columns = list(preprocessing["ordered_features"])
+            incomplete = factor_frame[feature_columns].isna().any(axis=1)
+            if incomplete.any():
+                kept = complete_rows(factor_frame, feature_columns)
+                dropped_rows = {
+                    "rows": int(len(factor_frame) - len(kept)),
+                    "instruments_fully_dropped": int(
+                        len(set(factor_frame["instrument"]) - set(kept["instrument"]))
+                    ),
+                    "per_feature": {
+                        name: int(count)
+                        for name, count in factor_frame[feature_columns].isna().sum().items()
+                        if count
+                    },
+                }
+                factor_frame = kept
+                if factor_frame.empty:
+                    raise ContractError(
+                        "drop_incomplete_rows left no usable factor rows: "
+                        f"{dropped_rows}"
+                    )
         _, preprocessed_frame = _prepare_preprocessed_frame(
             factor_frame,
             preprocessing,
@@ -357,6 +398,22 @@ class DatasetStageAdapter:
             null_counts = dataset_frame[null_columns].isna().sum()
             if (null_counts > 0).any():
                 raise ContractError(f"fail_closed dataset contains null values: {null_counts[null_counts > 0].to_dict()}")
+        elif template["missing_policy"] == "drop_incomplete_rows":
+            # Features were filtered above; a surviving null can only be a label.
+            # That is a target-definition gap, not feature noise, so it stays
+            # fail-closed rather than being silently dropped.
+            label_nulls = int(dataset_frame["label"].isna().sum())
+            if label_nulls:
+                missing_instruments = sorted(
+                    dataset_frame.loc[dataset_frame["label"].isna(), "instrument"]
+                    .astype(str).unique()
+                )
+                raise ContractError(
+                    "drop_incomplete_rows cannot drop null labels: the label is the "
+                    f"target, so {label_nulls} rows across {len(missing_instruments)} "
+                    f"instruments need a universe-level exclusion instead "
+                    f"(first: {missing_instruments[:5]})"
+                )
 
         manifest = DatasetBuilder(
             dataset_name=template["dataset_name"],
@@ -425,6 +482,7 @@ class DatasetStageAdapter:
             published_state=self.run_store.publish_state(
                 state, stage="dataset_preparation"
             ),
+            dropped_rows=dropped_rows,
         )
 
 

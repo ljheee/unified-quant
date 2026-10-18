@@ -424,3 +424,12 @@ label set 合并落地(2026-10-17,cr.md §8.49)
 - **顺带发现独立硬错误**:request 窗口 9/9–9/16 但 split validation 写到 9/24–10/15,stage 02 实测 failed。
 - **落地**:新增 `docs/universe-coverage.md`;生成 `/tmp/excluded-w30.json`(75 只逐只原因)。
 - **仍未决**:①是否采纳路线 A(发布 4988 的受治理 membership 制品);②47 只涨跌停的"决策日排除"需要在 dataset 阶段实现,目前**没有**这个能力;③本轮未改任何代码/未重发制品。
+
+drop_incomplete_rows 落地(2026-10-18,cr.md §8.52)
+- **两次自我更正**:①"业界不在预处理做样本筛选"**错**——Qlib 默认 `DropnaLabel`→`CSZScoreNorm` 都在 learn_processors;②"survivorship bias"**不精确**——准确是 future-conditioned complete-case selection(look-ahead/selection bias),那 10 只没退市、之后还恢复。
+- **实现**:schema 枚举加 `drop_incomplete_rows`;`complete_rows()` 作单一定义(发布侧/消费侧共用);adapter 里**先丢行再 preprocessing**(对齐 Qlib);审计随 `DatasetStageResult` 返回(manifest/run_state 都是闭契约,不能加字段);**label 缺失仍 fail-closed**。
+- **为什么必须在 preprocessing 前**:`DatasetWriter` 要求 `len(preprocessing_frame)==len(frame)` 且读侧重算 `output_frame_sha256`;更根本的是截面标准化实测**丢一行会改变同日其他行**(−0.8276→−1.0)。
+- **全 A 实测**:80973 行 → 丢 356(0.44%) → 80617 行 / 5058 只;每日 19–25 行;标准化均值偏移 0.125%。
+- **9 只整只剔除的机制**:`rolling(20, min_periods=20)` 按**行**计数,停牌缺口让 20 行跨越远超 20 交易日(002516 首个可算日 09-12;605255 始终凑不满)。**不是数据缺失**。
+- **测试**:TestCompleteRows 4 例 + phase2 4 例;**直接变异(any→all / 忽略 ordered_features)必红**;如实记录另两次 adapter 层变异虽红但是被指纹拦下,不算锁住语义。全量 **1166 passed / 23 skipped**。
+- **仍未决**:①**preprocessing 生产发布器仍未建**(真实链路需先有对丢行后帧评审的制品);②universe 口径未发布;③adjusted 生产发布器未接。

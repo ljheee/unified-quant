@@ -55,6 +55,7 @@ def _result_output_binding(binding: ResolvedStageBinding) -> dict[str, Any]:
 from .adapters import (
     BacktestStageAdapter,
     DatasetStageAdapter,
+    DatasetStageResult,
     FactorStageAdapter,
     ModelStageAdapter,
     PortfolioStageAdapter,
@@ -444,7 +445,7 @@ class ResearchChainRunner:
         runner_identity: Mapping[str, str],
         quality_decisions: Mapping[str, Any],
         created_at: str,
-    ) -> None:
+    ) -> DatasetStageResult:
         # cr.md H5: label_set/backtest_config decisions are fetched by resolved
         # subject at execute time so provider mode attests per subject and the
         # stage adapters verify them (aligned with the factor stage).
