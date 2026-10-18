@@ -433,3 +433,12 @@ drop_incomplete_rows 落地(2026-10-18,cr.md §8.52)
 - **9 只整只剔除的机制**:`rolling(20, min_periods=20)` 按**行**计数,停牌缺口让 20 行跨越远超 20 交易日(002516 首个可算日 09-12;605255 始终凑不满)。**不是数据缺失**。
 - **测试**:TestCompleteRows 4 例 + phase2 4 例;**直接变异(any→all / 忽略 ordered_features)必红**;如实记录另两次 adapter 层变异虽红但是被指纹拦下,不算锁住语义。全量 **1166 passed / 23 skipped**。
 - **仍未决**:①**preprocessing 生产发布器仍未建**(真实链路需先有对丢行后帧评审的制品);②universe 口径未发布;③adjusted 生产发布器未接。
+
+preprocessing 生产发布器(2026-10-18,cr.md §8.53)
+- **脚本**:`scripts/publish_feature_preprocessing.py`。读 factor 分区→按 `--drop-incomplete-rows` 先丢行→截面标准化→发布 input/output schema→build→store.publish。
+- **绝不自己签评审**:`--quality-decisions-json` 必填,读外部签发;报告 `review.signed_by_script=false`;生产模式测试密钥本就被 `runtime.py:34` 拒。
+- **无 flag 且含 null 直接返回 2**:变换会保留 null,dataset 阶段必然拒收,发出去也无人能消费。
+- **全 A 实跑**:`{"generation_id":"465a3b4a...","rows":80617,"instruments":5058,"dropped":356}`,generation 与独立预算逐位相同,`read_manifest` 读回通过。丢弃明细 356 行/9 只整剔/close_location 68·amount 313·volume 313。
+- **测试 7 例 + 变异必红**(忽略 drop flag / 报告丢弃但发完整帧——后者被"评审签名绑定 subject"拦下)。
+- **踩坑记录**:①自写 quality checks 被 `FactorStore` 拒,必须走 `FactorEngine.create_result`;②`factor_generation` 不传 `registry` 会回落 `basic/1.0.0` 导致读回指纹不一致;③`logical_fingerprint` 行序敏感,发布前必须排序。
+- **仍未决**:①整条 v5 execute 未跑通;②universe 口径仍是 `/tmp` 列表;③`adjusted_price` 生产发布器未接;④request 未组装。

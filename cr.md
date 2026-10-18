@@ -1726,3 +1726,47 @@ per-instrument 路径抽成 `_build()` 共用，行为不变。
 **未夸大声明**：本轮只落地**策略与阶段逻辑**。**仍未建 preprocessing 生产发布器**——
 所以真实链路要跑通，仍需要先有对"丢行后帧"评审的 preprocessing 制品（测试里是 fixture）。
 `--combined` label set、universe 口径、adjusted 线的生产发布器同样仍未接。
+
+### 8.53 preprocessing 生产发布器（2026-10-18）
+
+**触发**：用户"建"。
+
+**缺口**：`FeaturePreprocessorBuilder` 会算、`FeaturePreprocessingStore` 会写，但**没有生产入口把两者接上**，
+所以 v5 execute 的 `feature_preprocessing_binding` 无法在生产上产生。此前只有测试 fixture。
+
+**`scripts/publish_feature_preprocessing.py`**
+- 读 factor 分区（`--partition-set` 或重复 `--partition-date`）→ 拼窗口帧 → **按 `--drop-incomplete-rows` 先丢行** →
+  截面标准化 → 发布 input/output feature schema → `builder.build` → `store.publish`。
+- **绝不自己签评审**：`--quality-decisions-json` 必填，读外部签发的 decision；报告里
+  `review.signed_by_script: false`。生产模式下测试密钥本来就会被 `runtime.py:34` 拒绝。
+- 无 `--drop-incomplete-rows` 且帧含 null 时**直接拒绝**（返回 2）：变换会保留 null，
+  而 dataset 阶段在 `fail_closed` 下必然拒收，发布出去只会得到无人能消费的制品。
+
+**顺序为什么是硬约束**：preprocessing manifest 钉 `input_frame_sha256`，而 dataset 阶段会
+用**丢行后**的帧重算并比对。发布器若在完整帧上标准化，execute 期必然指纹不匹配。
+这也和 §8.52 的 Qlib 证据一致（`DropnaLabel` 在 `CSZScoreNorm` 之前）。
+
+**全 A 真实数据实跑（2025-09-09..09-30）**
+```
+{"generation_id": "465a3b4a...", "rows": 80617, "instruments": 5058, "dropped": 356}
+```
+- generation 与**独立预先计算**的结果逐位相同（`465a3b4a7a3a6ad0…`）；
+- `FeaturePreprocessingStore.read_manifest` 读回通过，`output_frame_row_count=80617`；
+- 丢弃明细：`{"rows":356,"instruments_fully_dropped":9,"per_feature":{"close_location_1d":68,"amount_20d":313,"volume_ratio_20d":313}}`；
+- `quality_report_checksum` 非零，`review.signed_by_script=false`。
+- **注意**：评审用的是**仓库测试密钥**，所以该制品是**链路验证产物，不是研究结论**。
+
+**测试**：`tests/test_publish_feature_preprocessing.py` 7 例
+（发布-读回 / 不自签评审 / drop 后帧与丢弃统计 / 无 flag 遇 null 拒绝 /
+缺分区返回 2 / 缺 partition 选择返回 2 / decisions 文档缺该族返回 2）。
+**变异必红**：①忽略 `--drop-incomplete-rows` → 红；②**报告丢弃但实际发布完整帧** → 红，
+且是被"评审签名绑定到不同 subject generation"拦下的——说明"评审签的是哪份内容"这条防线真实有效。
+**如实记录**：测试首次构造用自写 quality checks，被 `FactorStore` 以
+`factor quality report rejects publication` 拒绝；改为走 `FactorEngine.create_result` 生成与引擎一致的
+report 才通过。另发现 `factor_generation` 不传 `registry` 会回落到 `basic/1.0.0`，导致读回指纹不一致。
+
+**全量**：**1173 passed / 23 skipped / exit 0**（父 `9f5c994` 1166/23，净 **+7**）。
+
+**未夸大声明**：发布器已能在真实全 A 数据上产出可读回的制品，但**整条 v5 execute 仍未跑通**：
+universe 口径（`/tmp` 列表）、`adjusted_price` 生产发布器、request 组装都还缺。
+`code-review-unified-quant.md` 与 `AGENTS.md` 保持未跟踪。
