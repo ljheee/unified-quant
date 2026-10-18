@@ -1770,3 +1770,65 @@ report 才通过。另发现 `factor_generation` 不传 `registry` 会回落到 
 **未夸大声明**：发布器已能在真实全 A 数据上产出可读回的制品，但**整条 v5 execute 仍未跑通**：
 universe 口径（`/tmp` 列表）、`adjusted_price` 生产发布器、request 组装都还缺。
 `code-review-unified-quant.md` 与 `AGENTS.md` 保持未跟踪。
+
+### 8.54 `drop_unlabeled_rows`：null 标签与 null 特征分成两个策略（2026-10-18）
+
+**触发**：用户先问"业界怎么做"，再定"先执行 3 看看"（用真实全 A 数据验证）。
+
+**两个 subagent 调研 + 本地实测核实**
+
+框架侧（McClintock，本地已核实两条）：
+- **Qlib**：`DropnaLabel` 与 `DropnaProcessor` 是**两个 processor**（`processor.py:94-111`），
+  官方文档分别写作 "drops N/A features" / "drops N/A labels"；
+  实测 `DropnaProcessor(fields_group="feature").is_for_infer() == True` 而
+  `DropnaLabel().is_for_infer() == False`。
+- **sklearn**：`check_X_y` 里 `ensure_all_finite` 只管 X，docstring 明说
+  "does not influence whether y can have np.inf, np.nan, pd.NA values"（本地核实）。
+- vnpy Alpha：`add_processor("learn", process_drop_na(names=["label"]))`，infer 侧反而 fill。
+- XGBoost：NaN feature 是一等公民，NaN label 直接 fatal（"Label contains NaN"）。
+- **没有**权威文献写"未标注样本必须排除于训练但不得排除于推理"——Qlib 只有一行理由。
+
+A 股侧（Nash）：
+- **丢行是业界常态**：华泰/中信 AI 选股口径即"剔除每个截面期下一交易日停牌、涨停的股票"；
+  米筐 RQFactor 对停牌日写 NaN。
+- **停牌日按零收益是反模式**（"没有交易不等于零收益"）。
+- 停牌与重组事件相关 ⇒ MNAR，listwise deletion 在 MNAR 下有偏；但 51/80973=0.063%
+  **低于任何可辩护的显著性阈值**。
+- 真正量级差异在 **356 个 null 特征行（0.44%，是 label 的 7 倍）**。
+
+**实现**：`missing_policy` 新增 `drop_unlabeled_rows`（两个契约同步）。
+新增 `unlabeled_keys(label_frame)` 作为单一定义，避免 fixture/发布侧/阶段三处漂移。
+
+**一个实现约束（本轮踩到并修正）**：null label 只能在 merge 之后知道，而
+`DatasetWriter` 强制 `len(preprocessing_frame) == len(frame)`。所以**不能**从 merged
+frame 上丢行，必须从 preprocessing **输入侧**剔行并重跑 transform——否则 writer 报
+"dataset and preprocessing frame row counts disagree"。
+
+**全 A 真实数据验证（这是用户指定的路线 3）**
+
+| 步骤 | 行数 |
+|---|---:|
+| factor 帧（5068 成员） | 80973 |
+| feature-null 丢弃 | −356 |
+| label-null 丢弃（帧内） | −46 |
+| **最终训练帧** | **80571 / 5058 只** |
+
+三条关键不变量全部满足（用已发布的 generation `f3f7cece…` 验证）：
+- `builder.frame_fingerprint(final) == input_frame_sha256` ✅
+- `FeaturePreprocessorBuilder.frame_fingerprint(out) == output_frame_sha256` ✅
+- `output_frame_row_count == 80571` ✅
+并经 `FeaturePreprocessingStore.publish` 真实发布成功、`read_manifest` 读回通过。
+
+**测试**：新建 `tests/test_drop_unlabeled_rows.py`（4 例）。
+**如实记录的失败与放弃**：
+1. 我原想在 `tests/test_research_chain_phase2.py` 的 fixture 上加 null label 场景，
+   **结构上不可行**：该 fixture 的 factor 分区只有 20 个会话，而 label set 跨 25 个
+   （多出的 5 个是 horizon tail），unlabelled 行全部落在 factor 帧不存在的日期上，
+   策略无行可丢。我为此做了约 10 次无效试错，最终承认并改走直接测规则 + 真实数据验证。
+2. `test_keys_are_a_copy_not_a_view_of_the_input` **无鉴别力**——实测无 `.copy` 时
+   pandas 自身就会保护原帧（不传播赋值），所以该断言测的是 pandas 行为而非本仓库代码。
+   已替换为有鉴别力的版本。
+3. 变异验证：反转 `isna()` → 3 例红；把 `label == 0.0` 也当缺失 → 2 例红。
+   第一次的"去 `.copy`"变异**未杀**，已如实登记。
+
+**全量**：**1178 passed / 23 skipped / exit 0**（父 `cabd335` 1173/23，净 **+5**）。

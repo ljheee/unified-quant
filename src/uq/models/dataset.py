@@ -126,7 +126,9 @@ class DatasetBuilder:
         input_feature_schema: dict[str, Any] | None = None,
         row_count: int,
     ) -> dict[str, Any]:
-        if missing_policy not in ("fail_closed", "declared_fill", "drop_incomplete_rows"):
+        if missing_policy not in (
+            "fail_closed", "declared_fill", "drop_incomplete_rows", "drop_unlabeled_rows"
+        ):
             raise ContractError(f"unsupported missing policy: {missing_policy}")
         if not ordered_features:
             raise ContractError("dataset requires at least one feature")

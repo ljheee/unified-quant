@@ -126,7 +126,8 @@
       "enum": [
         "fail_closed",
         "declared_fill",
-        "drop_incomplete_rows"
+        "drop_incomplete_rows",
+        "drop_unlabeled_rows"
       ]
     },
     "row_count": {

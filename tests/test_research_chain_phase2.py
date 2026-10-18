@@ -368,14 +368,16 @@ def _prepare_dataset_store(
         transform="standardize_cross_section", min_group_observations=2,
     )
     # A preprocessing artifact pins `input_frame_sha256`, so it describes one exact
-    # frame. Under `drop_incomplete_rows` that frame is the post-drop one -- which is
-    # the production semantics: the reviewed statistics must come from the rows that
-    # actually train. The stage applies the identical filter before checking the
-    # fingerprint, so an artifact built over the unfiltered frame would be refused.
+    # frame, and both drop policies act on the preprocessing *input*: the artifact has
+    # to describe the frame that survives them. Rebuilding it from whatever the
+    # policies keep is what a production publisher does
+    # (`scripts/publish_feature_preprocessing.py`), and it is why the stage's
+    # fingerprint check passes instead of refusing.
+    surviving = factor_frame
     if drop_incomplete:
-        factor_frame = complete_rows(factor_frame, ["volume_ratio_20d"])
-    preprocessed = builder.transform(factor_frame)
-    input_schema = FeatureSchemaBuilder().build(factor_frame, source_factor_set="basic", source_factor_version="1.0.0")
+        surviving = complete_rows(surviving, ["volume_ratio_20d"])
+    preprocessed = builder.transform(surviving)
+    input_schema = FeatureSchemaBuilder().build(surviving, source_factor_set="basic", source_factor_version="1.0.0")
     output_schema = FeatureSchemaBuilder().build(preprocessed, source_factor_set="basic", source_factor_version="1.0.0")
     for column in output_schema["columns"]:
         column["transform_status"] = "standardized"
@@ -385,7 +387,7 @@ def _prepare_dataset_store(
         output_schema, schema_name="feature_schema"
     )
     preprocessing = builder.build(
-        factor_frame, preprocessed,
+        surviving, preprocessed,
         input_factor_set=factor_manifest["factor_set"],
         input_factor_version=factor_manifest["factor_version"],
         input_factor_generation_ids=[factor_manifest["generation_id"]],
@@ -435,6 +437,7 @@ def _prepare_dataset_store(
     label_frame["close"] = 10.0
     label_frame["adj_factor"] = 1.0
     label_frame["suspended"] = False
+
     label_frame["listing_date"] = pd.Timestamp("2020-01-01", tz="UTC")
     label_frame["limit_up"] = False
     label_frame["limit_down"] = False
@@ -846,3 +849,15 @@ def test_fail_closed_refuses_the_same_null_row(tmp_path: Path) -> None:
             **_execute_decisions(plan),
             created_at="2026-01-30T07:00:00+00:00",
         )
+
+def test_drop_unlabeled_rows_is_a_declared_policy_value(tmp_path: Path) -> None:
+    # The policy is part of the reviewed template, so it has to survive schema
+    # validation and identity derivation -- otherwise a request using it could not
+    # be reviewed or bound at all.
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    replaced = _dataset_plan_for_policy(plan, "drop_unlabeled_rows")
+    template = replaced.request["dataset_policy_template"]
+    assert template["missing_policy"] == "drop_unlabeled_rows"
+    assert len(template["template_generation_id"]) == 64
+    from uq.contracts.model_layer import ModelContractLoader
+    ModelContractLoader.validate("dataset_policy_template", template)

@@ -133,12 +133,14 @@ class DatasetStageResult:
     manifest: dict[str, Any]
     frame: pd.DataFrame
     published_state: PublishedState
-    # Audit trail for `missing_policy: drop_incomplete_rows`. Empty for the other
-    # policies. It is carried on the result rather than inside the manifest or the
-    # run state because both are closed contracts (`model_dataset.v1` and
-    # `research_run_state.v1` are `additionalProperties: false`), and widening
-    # either for a diagnostic would change what those artifacts mean.
+    # Audit trail for `missing_policy: drop_incomplete_rows` (feature nulls) and
+    # `missing_policy: drop_unlabeled_rows` (label nulls). Empty for the other
+    # policies. Both are carried on the result rather than inside the manifest or the
+    # run state because those are closed contracts (`model_dataset.v1` and
+    # `research_run_state.v1` are `additionalProperties: false`), and widening either
+    # for a diagnostic would change what those artifacts mean.
     dropped_rows: dict[str, Any] = field(default_factory=dict)
+    dropped_labels: dict[str, Any] = field(default_factory=dict)
 
 
 def _merge_labels(
@@ -210,6 +212,19 @@ def _prepare_preprocessed_frame(
     if output_frame.empty:
         raise ContractError(f"preprocessed dataset has no rows for label generation {label_generation_id}")
     return input_frame, output_frame
+
+
+def unlabeled_keys(label_frame: pd.DataFrame) -> pd.DataFrame:
+    """The `(instrument, decision_date)` pairs whose label is null.
+
+    Extracted so the publisher and the stage cannot disagree about which rows are
+    unlabelled -- the publisher must review the preprocessing artifact over the
+    frame that survives this filter, and the stage must drop exactly those rows.
+    Two copies of the rule would drift the way `label_row_checksum` once did
+    (cr.md OBS-F).
+    """
+    keys = label_frame[["instrument", "decision_date"]].copy()
+    return keys[label_frame["label"].isna()]
 
 
 class DatasetStageAdapter:
@@ -355,11 +370,12 @@ class DatasetStageAdapter:
         # preprocessing would break both, and would also standardize over rows that
         # never enter training.
         #
-        # Only *feature* incompleteness is dropped. A missing label is a different
-        # question -- it is the target, not a feature -- so a null label stays
-        # fail-closed and the universe has to exclude that instrument instead.
+        # Both policies drop feature-null rows here. A null *label* is handled
+        # separately below, because it is a different defect with a different remedy.
+        # Only *feature* incompleteness means "this row cannot be computed".
         dropped_rows: dict[str, Any] = {}
-        if template["missing_policy"] == "drop_incomplete_rows":
+        dropped_labels: dict[str, Any] = {}
+        if template["missing_policy"] in ("drop_incomplete_rows", "drop_unlabeled_rows"):
             feature_columns = list(preprocessing["ordered_features"])
             incomplete = factor_frame[feature_columns].isna().any(axis=1)
             if incomplete.any():
@@ -381,6 +397,53 @@ class DatasetStageAdapter:
                         "drop_incomplete_rows left no usable factor rows: "
                         f"{dropped_rows}"
                     )
+        if template["missing_policy"] == "drop_unlabeled_rows":
+            # A null label is a different defect from a null feature, so it gets its
+            # own policy rather than being folded into `drop_incomplete_rows`.
+            # Qlib makes the same split: `DropnaLabel` is a separate processor from
+            # `DropnaProcessor`, and `is_for_infer()` is False for labels and True
+            # for features -- a row can be unscoreable *and* untrainable at once and
+            # still be perfectly scoreable at inference. sklearn draws the same line
+            # inside one call: `ensure_all_finite` governs X and its docstring says
+            # it "does not influence whether y can have np.inf, np.nan, pd.NA values".
+            #
+            # This is deliberately a *learning-time* row exclusion. Dropping the
+            # whole instrument instead would reintroduce the hindsight bias that
+            # `drop_incomplete_rows` exists to avoid.
+            #
+            # A null label must also drop the row, but unlike a null feature it is
+            # only knowable *after* the label merge -- which is downstream of
+            # preprocessing. `DatasetWriter` requires the published frame and the
+            # preprocessing output to have the same rows, so this cannot simply
+            # drop from the merged frame: the row has to be removed from the
+            # preprocessing *input* too, or the writer refuses with "dataset and
+            # preprocessing frame row counts disagree".
+            dropped_keys = unlabeled_keys(label_frame)
+            if not dropped_keys.empty:
+                factor_frame = factor_frame.reset_index(drop=True)
+                factor_frame["__decision_date"] = pd.to_datetime(
+                    factor_frame["datetime"]
+                ).dt.tz_localize(None)
+                merged = factor_frame.merge(
+                    dropped_keys.drop_duplicates(),
+                    how="left", left_on=["instrument", "__decision_date"],
+                    right_on=["instrument", "decision_date"], indicator=True,
+                )
+                keep_mask = (merged["_merge"] == "left_only").to_numpy()
+                dropped_labels = {
+                    "rows": int((~keep_mask).sum()),
+                    "instruments": int(dropped_keys["instrument"].nunique()),
+                    "note": (
+                        "label is the target: these rows cannot be trained on but may "
+                        "still be scored at inference; see missing_policy "
+                        "drop_unlabeled_rows"
+                    ),
+                }
+                factor_frame = factor_frame.loc[keep_mask].drop(
+                    columns=["__decision_date"]
+                ).reset_index(drop=True)
+                if factor_frame.empty:
+                    raise ContractError("drop_unlabeled_rows left no labeled rows")
         _, preprocessed_frame = _prepare_preprocessed_frame(
             factor_frame,
             preprocessing,
@@ -398,7 +461,7 @@ class DatasetStageAdapter:
             null_counts = dataset_frame[null_columns].isna().sum()
             if (null_counts > 0).any():
                 raise ContractError(f"fail_closed dataset contains null values: {null_counts[null_counts > 0].to_dict()}")
-        elif template["missing_policy"] == "drop_incomplete_rows":
+        if template["missing_policy"] == "drop_incomplete_rows":
             # Features were filtered above; a surviving null can only be a label.
             # That is a target-definition gap, not feature noise, so it stays
             # fail-closed rather than being silently dropped.
@@ -483,6 +546,7 @@ class DatasetStageAdapter:
                 state, stage="dataset_preparation"
             ),
             dropped_rows=dropped_rows,
+            dropped_labels=dropped_labels,
         )
 
 

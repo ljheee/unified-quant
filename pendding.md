@@ -442,3 +442,12 @@ preprocessing 生产发布器(2026-10-18,cr.md §8.53)
 - **测试 7 例 + 变异必红**(忽略 drop flag / 报告丢弃但发完整帧——后者被"评审签名绑定 subject"拦下)。
 - **踩坑记录**:①自写 quality checks 被 `FactorStore` 拒,必须走 `FactorEngine.create_result`;②`factor_generation` 不传 `registry` 会回落 `basic/1.0.0` 导致读回指纹不一致;③`logical_fingerprint` 行序敏感,发布前必须排序。
 - **仍未决**:①整条 v5 execute 未跑通;②universe 口径仍是 `/tmp` 列表;③`adjusted_price` 生产发布器未接;④request 未组装。
+
+drop_unlabeled_rows 落地(2026-10-18,cr.md §8.54)
+- **调研结论(两 subagent + 本地实测)**:Qlib 的 `DropnaLabel` 与 `DropnaProcessor` 是**两个 processor**,实测 `is_for_infer()` 前者 False 后者 True;sklearn `ensure_all_finite` 只管 X,docstring 明说不影响 y;vnpy learn 侧 drop label、infer 侧 fill;XGBoost NaN label 直接 fatal。**没有**权威文献写"未标注样本必须排除于训练但不得排除于推理"。
+- **A 股**:华泰/中信口径即"剔除每个截面期下一交易日停牌、涨停的股票";RQFactor 停牌日写 NaN;停牌日按零收益是**反模式**;停牌与重组相关⇒MNAR,但 51/80973=0.063% 低于任何可辩护阈值。**真正量级是 356 个 null 特征行(0.44%,7 倍)**。
+- **实现约束(踩到并修)**:null label 只能 merge 后知道,但 `DatasetWriter` 强制 preprocessing 与 dataset 行数一致 ⇒ 必须从 preprocessing **输入侧**剔行并重跑 transform,否则报 "dataset and preprocessing frame row counts disagree"。
+- **全 A 实测**:80973 → 丢 feature-null 356 → 丢 label-null 46 → **80571 行 / 5058 只**;三条不变量(input fingerprint / output fingerprint / row_count)全过,并经 `FeaturePreprocessingStore.publish` 真发成功、读回通过(generation `f3f7cece…`)。
+- **测试**:新建 `tests/test_drop_unlabeled_rows.py` 4 例;变异(isna 反转 3 红 / 把 0.0 当缺失 2 红)。
+- **如实登记**:①原想在 phase2 fixture 加 null label,**结构不可行**(factor 20 会话 vs label 25 会话,unlabelled 全落在 factor 不存在的 tail 日期),白试约 10 次后改走"直接测规则 + 真实数据验证";②`test_keys_are_a_copy...` **无鉴别力**(无 `.copy` 时 pandas 自身也保护原帧),已替换;③"去 `.copy`"变异**未杀**,已登记。
+- **仍未决**:①整条 v5 execute 仍未跑通(request 未组装);②universe 用的是现成 `csi-all` 5068,不是 complete-case 制品(但 `drop_incomplete_rows` 已让它不需要);③`/tmp/request-final.json` 的 split 越界 window 仍是 9/9–9/16,需重组成 9/9–9/30。

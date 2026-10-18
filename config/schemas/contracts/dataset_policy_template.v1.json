@@ -44,7 +44,8 @@
       "enum": [
         "fail_closed",
         "declared_fill",
-        "drop_incomplete_rows"
+        "drop_incomplete_rows",
+        "drop_unlabeled_rows"
       ]
     },
     "split_policy": {
