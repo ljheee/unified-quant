@@ -26,7 +26,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from uq.research_chain.adapters import unlabeled_keys
+from uq.errors import ContractError
+from uq.research_chain.adapters import drop_unlabelled_factor_rows, unlabeled_keys
 
 
 def _labels() -> pd.DataFrame:
@@ -37,6 +38,89 @@ def _labels() -> pd.DataFrame:
         ),
         "label": [0.01, None, 0.02, 0.03, None],
     })
+
+
+WINDOW = ["2026-01-05", "2026-01-06", "2026-01-07",
+         "2026-01-08", "2026-01-09", "2026-01-12"]
+
+
+def _frame_for() -> pd.DataFrame:
+    return pd.DataFrame({
+        "instrument": ["A"] * len(WINDOW) + ["B"] * len(WINDOW),
+        "datetime": pd.to_datetime(WINDOW * 2),
+        "volume_ratio_20d": [1.0] * (2 * len(WINDOW)),
+    })
+
+
+def _labels_for(nulls: dict[str, list[str]]) -> pd.DataFrame:
+    rows = []
+    for instrument in ("A", "B"):
+        for day in WINDOW:
+            rows.append({
+                "instrument": instrument,
+                "decision_date": pd.Timestamp(day),
+                "label": None if day in nulls.get(instrument, []) else 0.01,
+            })
+    return pd.DataFrame(rows)
+
+
+class TestDropUnlabelledFactorRows:
+    """The row-filtering half of `missing_policy: drop_unlabeled_rows`.
+
+    `unlabeled_keys` decides *which* rows are unlabelled; this decides what happens
+    to the factor frame. It is applied to the preprocessing *input* rather than the
+    merged frame, because `DatasetWriter` requires the published frame and the
+    preprocessing output to carry the same rows.
+    """
+
+    def test_removes_exactly_the_unlabelled_rows(self):
+        frame = _frame_for()
+        labels = _labels_for({"A": ["2026-01-08", "2026-01-09"]})
+        kept, audit = drop_unlabelled_factor_rows(frame, labels)
+        assert len(kept) == 10
+        # A keeps its four labelled sessions, B keeps all six
+        assert sorted(
+            kept.loc[kept["instrument"] == "A", "datetime"].dt.strftime("%Y-%m-%d")
+        ) == ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-12"]
+        assert sorted(
+            kept.loc[kept["instrument"] == "B", "datetime"].dt.strftime("%Y-%m-%d")
+        ) == WINDOW
+        assert audit["rows"] == 2
+        assert audit["instruments"] == 1
+
+    def test_an_instrument_that_loses_some_rows_keeps_the_rest(self):
+        # The point of the policy: a halt removes the rows that cannot be trained on,
+        # not the instrument. Dropping the whole name would reinstate the hindsight
+        # bias a complete-case universe carries.
+        kept, _ = drop_unlabelled_factor_rows(
+            _frame_for(), _labels_for({"A": ["2026-01-09", "2026-01-12"]})
+        )
+        assert set(kept["instrument"]) == {"A", "B"}
+        assert "A" in set(kept["instrument"])
+        assert len(kept[kept["instrument"] == "A"]) == 4
+
+    def test_a_fully_unlabelled_frame_is_refused(self):
+        # Publishing a set with no trainable rows is worse than refusing: the dataset
+        # would be empty and the caller would have to notice downstream.
+        labels = _labels_for({})
+        labels["label"] = None
+        with pytest.raises(ContractError, match="no labeled rows"):
+            drop_unlabelled_factor_rows(_frame_for(), labels)
+
+    def test_nothing_to_drop_returns_the_frame_untouched(self):
+        frame = _frame_for()
+        kept, audit = drop_unlabelled_factor_rows(frame, _labels_for({}))
+        assert audit == {}
+        pd.testing.assert_frame_equal(kept, frame)
+
+    def test_the_result_carries_a_reset_index(self):
+        # The frame is handed to the preprocessing transform, whose fingerprint is
+        # order- and index-sensitive, so a dropped-row frame must not keep stale
+        # indices.
+        kept, _ = drop_unlabelled_factor_rows(
+            _frame_for(), _labels_for({"A": ["2026-01-05"]})
+        )
+        assert kept.index.tolist() == list(range(len(kept)))
 
 
 def test_names_exactly_the_rows_whose_label_is_null():

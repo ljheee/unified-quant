@@ -227,6 +227,39 @@ def unlabeled_keys(label_frame: pd.DataFrame) -> pd.DataFrame:
     return keys[label_frame["label"].isna()]
 
 
+def drop_unlabelled_factor_rows(
+    factor_frame: pd.DataFrame, label_frame: pd.DataFrame
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Remove the factor rows whose label is null, before the transform.
+
+    A null label is only knowable after the label merge, which is downstream of
+    preprocessing, so this cannot filter the merged frame: `DatasetWriter` requires
+    the published frame and the preprocessing output to carry the same rows. The
+    filter is applied to the preprocessing *input* instead and the transform re-run.
+    """
+    dropped_keys = unlabeled_keys(label_frame)
+    if dropped_keys.empty:
+        return factor_frame, {}
+    merged = factor_frame.merge(
+        dropped_keys.drop_duplicates(),
+        how="left", left_on=["instrument", "datetime"],
+        right_on=["instrument", "decision_date"], indicator=True,
+    )
+    keep_mask = (merged["_merge"] == "left_only").to_numpy()
+    kept = factor_frame.loc[keep_mask].reset_index(drop=True)
+    if kept.empty:
+        raise ContractError("drop_unlabeled_rows left no labeled rows")
+    audit = {
+        "rows": int((~keep_mask).sum()),
+        "instruments": int(dropped_keys["instrument"].nunique()),
+        "note": (
+            "label is the target: these rows cannot be trained on but may still be "
+            "scored at inference; see missing_policy drop_unlabeled_rows"
+        ),
+    }
+    return kept, audit
+
+
 class DatasetStageAdapter:
     """Prepare a dataset from resolved owning artifacts and reviewed policy."""
 
@@ -462,32 +495,9 @@ class DatasetStageAdapter:
             # drop from the merged frame: the row has to be removed from the
             # preprocessing *input* too, or the writer refuses with "dataset and
             # preprocessing frame row counts disagree".
-            dropped_keys = unlabeled_keys(label_frame)
-            if not dropped_keys.empty:
-                factor_frame = factor_frame.reset_index(drop=True)
-                factor_frame["__decision_date"] = pd.to_datetime(
-                    factor_frame["datetime"]
-                ).dt.tz_localize(None)
-                merged = factor_frame.merge(
-                    dropped_keys.drop_duplicates(),
-                    how="left", left_on=["instrument", "__decision_date"],
-                    right_on=["instrument", "decision_date"], indicator=True,
-                )
-                keep_mask = (merged["_merge"] == "left_only").to_numpy()
-                dropped_labels = {
-                    "rows": int((~keep_mask).sum()),
-                    "instruments": int(dropped_keys["instrument"].nunique()),
-                    "note": (
-                        "label is the target: these rows cannot be trained on but may "
-                        "still be scored at inference; see missing_policy "
-                        "drop_unlabeled_rows"
-                    ),
-                }
-                factor_frame = factor_frame.loc[keep_mask].drop(
-                    columns=["__decision_date"]
-                ).reset_index(drop=True)
-                if factor_frame.empty:
-                    raise ContractError("drop_unlabeled_rows left no labeled rows")
+            factor_frame, dropped_labels = drop_unlabelled_factor_rows(
+                factor_frame, label_frame
+            )
         _, preprocessed_frame = _prepare_preprocessed_frame(
             factor_frame,
             preprocessing,
@@ -684,11 +694,18 @@ class ReceiptStageResult:
 
 @dataclass(frozen=True)
 class ModelStageResult:
+    """Hand-off between the model stage and its consumers.
+
+    ``definition``, ``artifact_bytes`` and ``published_state`` describe work done in
+    this process. A resumed run rebuilds the hand-off from the published artifacts,
+    where those three do not exist, so they are optional: everything downstream
+    actually reads is the two manifests.
+    """
     run_manifest: dict[str, Any]
-    definition: dict[str, Any]
     artifact_manifest: dict[str, Any]
-    artifact_bytes: bytes
-    published_state: PublishedState
+    definition: dict[str, Any] | None = None
+    artifact_bytes: bytes = b""
+    published_state: PublishedState | None = None
 
 
 @dataclass(frozen=True)
@@ -760,6 +777,11 @@ class PortfolioStageAdapter:
         self.target_weight_store = target_weight_store
         self.run_store = run_store
         self.prediction_builder = prediction_builder
+        # A resumed run skips this stage, so nothing assigns this attribute
+        # in-process. Declaring it here turns a silent AttributeError into an
+        # explicit "unavailable" that the runner can recover from by reading the
+        # published artifact back.
+        self.last_result: Any = None
 
     def run(
         self,
@@ -915,6 +937,11 @@ class BacktestStageAdapter:
         self.backtest_result_store = backtest_result_store
         self.backtest_config_store = backtest_config_store
         self.run_store = run_store
+        # A resumed run skips this stage, so nothing assigns this attribute
+        # in-process. Declaring it here turns a silent AttributeError into an
+        # explicit "unavailable" that the runner can recover from by reading the
+        # published artifact back.
+        self.last_result: Any = None
 
     def run(
         self,
@@ -1272,6 +1299,11 @@ class ModelStageAdapter:
         self.dataset_writer = dataset_writer
         self.universe_store = universe_store
         self.run_store = run_store
+        # A resumed run skips this stage, so nothing assigns this attribute
+        # in-process. Declaring it here turns a silent AttributeError into an
+        # explicit "unavailable" that the runner can recover from by reading the
+        # published artifact back.
+        self.last_result: Any = None
 
     def run(
         self,
@@ -1422,6 +1454,11 @@ class PredictionStageAdapter:
     def __init__(self, prediction_builder: PredictionBuilder, run_store: FileResearchRunStore) -> None:
         self.prediction_builder = prediction_builder
         self.run_store = run_store
+        # A resumed run skips this stage, so nothing assigns this attribute
+        # in-process. Declaring it here turns a silent AttributeError into an
+        # explicit "unavailable" that the runner can recover from by reading the
+        # published artifact back.
+        self.last_result: Any = None
 
     def run(
         self,

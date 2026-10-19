@@ -184,7 +184,7 @@
     },
     {
       "path": "src/uq/research_chain/runner.py",
-      "sha256": "5d7ee49a5942a4593bae12be41d6b5cef5d55ff65974b72e8cba939decc2379e"
+      "sha256": "ad6f32e6e2b1ad178eaa41f7fd7b3a81bec4f1093935858cb46dfb61fd175863"
     },
     {
       "path": "tests/test_paper_execution_research_integration_phase0.py",

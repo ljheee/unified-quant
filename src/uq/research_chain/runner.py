@@ -59,6 +59,7 @@ from .adapters import (
     DatasetStageResult,
     FactorStageAdapter,
     ModelStageAdapter,
+    ModelStageResult,
     PortfolioStageAdapter,
     PredictionStageAdapter,
     QlibExportStageAdapter,
@@ -1023,7 +1024,64 @@ class ResearchChainRunner:
                 continue
             resumed = self._apply_stage_bindings(resumed, stage_record)
             completed.add(summary.stage)
+        # A resumed run never executes the stages it skipped, so the in-process
+        # hand-off between stages (`adapter.last_result`) is empty for them. The next
+        # stage that runs therefore has to get its predecessor's result from the
+        # published artifacts rather than from memory -- otherwise the first stage
+        # after the resume point dies on an attribute that nothing ever set.
+        # `resumed`, not `plan`: the bindings for the replayed stages only exist on
+        # the folded plan, and the hand-off needs them to find the published ids.
+        self._restore_cross_stage_state(resumed, completed)
         return resumed, completed
+
+    def _restore_cross_stage_state(self, plan: ResolvedExecutionPlan, completed: set[str]) -> None:
+        """Re-hydrate the stage-to-stage hand-offs a resume skips.
+
+        Only `model_training` needs restoring for now: it is the sole hand-off with no
+        read-back path (`_read_published_document` refuses `model_artifact` rather than
+        reconstructing it). Every other pair is either served by a store read inside the
+        consuming stage, or by `_read_receipt`. Restoring from the published manifests
+        keeps the invariant that a resumed run consumes the same bytes it published.
+        """
+        if "model_training" not in completed:
+            return
+        try:
+            binding = next(
+                binding for binding in plan.stage_bindings
+                if binding.stage == "model_training"
+                and binding.output_family in {"model_run", "model_artifact"}
+            )
+        except StopIteration:
+            return
+        # The model stage's in-process result is the only hand-off with no read-back
+        # path (`_read_published_document` refuses `model_artifact`), so it is rebuilt
+        # from the two published artifacts through the same store read the stage
+        # itself performs after training.
+        # Same read-back the runner's own per-family path uses for `model_run`: the
+        # manifest is a top-level document, not an owning-store partition.
+        run_binding = self._binding(plan, "model_run")
+        artifact_binding = self._binding(plan, "model_artifact")
+        run_path = (
+            self.run_store.root / "model_runs" / f"{run_binding.generation_id}.json"
+        )
+        if not run_path.is_file():
+            raise ContractError("published model run is unavailable for readback")
+        try:
+            run_manifest = json.loads(run_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ContractError("malformed model run manifest") from exc
+        ModelContractLoader.validate("model_run", run_manifest)
+        if run_manifest["run_content_generation_id"] != run_binding.generation_id:
+            raise ContractError("model run readback identity mismatch")
+        artifact_manifest, _ = self.model_adapter.artifact_store.read(
+            run_manifest["run_content_generation_id"], artifact_binding.generation_id,
+        )
+        if artifact_manifest["generation_id"] != artifact_binding.generation_id:
+            raise ContractError("model artifact readback identity mismatch")
+        self.model_adapter.last_result = ModelStageResult(
+            run_manifest=run_manifest,
+            artifact_manifest=artifact_manifest,
+        )
 
     def _apply_stage_bindings(
         self, plan: ResolvedExecutionPlan, stage_record: Mapping[str, Any]

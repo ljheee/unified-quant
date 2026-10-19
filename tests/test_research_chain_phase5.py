@@ -490,7 +490,80 @@ def test_completed_stages_are_replayed_from_state_not_reexecuted(
 
 
 @requires_qlib
+def test_a_resumed_run_rehydrates_the_model_hand_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A resumed run skips the model stage, so nothing assigns
+    # `model_adapter.last_result` in this process, and the prediction stage -- the
+    # first consumer of that hand-off -- dies on an attribute no code ever set unless
+    # the runner re-hydrates it from the published artifacts. Failing past the model
+    # stage is what makes the hand-off exist while the process is fresh.
+    from uq.research_chain.runner import ResearchChainRunner
+
+    captured: dict[str, object] = {}
+    real_execute = ResearchChainRunner.execute
+
+    def capturing_execute(self, plan, *args, **kwargs):
+        captured["plan"] = plan
+        captured["runner"] = self
+        return real_execute(self, plan, *args, **kwargs)
+
+    def fail(*args, **kwargs):
+        raise ContractError("forced post-model failure")
+
+    monkeypatch.setattr(ResearchChainRunner, "execute", capturing_execute)
+    with monkeypatch.context() as patched:
+        patched.setattr(ResearchChainRunner, STAGE_METHODS["prediction_publication"], fail)
+        with pytest.raises(ContractError, match="forced post-model failure"):
+            _run_full_chain(tmp_path)
+
+    plan = captured["plan"]
+    runner = captured["runner"]
+    # a brand-new process starts with the hand-off unset: that is the condition the
+    # resume has to repair
+    runner.model_adapter.last_result = None
+    assert runner.model_adapter.last_result is None
+
+    resumed, completed = runner._resume_from_passed_stages(plan)
+    assert "model_training" in completed
+    assert "prediction_publication" not in completed
+
+    hand_off = runner.model_adapter.last_result
+    assert hand_off is not None, "a resumed run must re-hydrate the model hand-off"
+    artifact_binding = next(
+        b for b in resumed.stage_bindings if b.output_family == "model_artifact"
+    )
+    assert hand_off.artifact_manifest["generation_id"] == artifact_binding.generation_id
+    # the fields only a fresh run has are absent rather than fabricated
+    assert hand_off.definition is None
+    assert hand_off.artifact_bytes == b""
+    assert hand_off.published_state is None
+
+
+@requires_qlib
+def test_cli_execute_provider_wiring_is_complete(tmp_path: Path) -> None:
+    # Registered in the phase-5 record, so dropping it breaks the release evidence
+    # index. Restored verbatim from the commit that introduced the CLI wiring.
+    from uq.research_chain.cli import _build_runner
+
+    runner = _build_runner(
+        project_root=ROOT,
+        data_root=tmp_path,
+        run_store=FileResearchRunStore(tmp_path),
+    )
+    assert isinstance(runner.factor_adapter, FactorStageAdapter)
+    assert isinstance(runner.dataset_adapter, DatasetStageAdapter)
+    assert isinstance(runner.export_adapter, QlibExportStageAdapter)
+    assert isinstance(runner.model_adapter, ModelStageAdapter)
+    assert isinstance(runner.prediction_adapter, PredictionStageAdapter)
+    assert isinstance(runner.portfolio_adapter, PortfolioStageAdapter)
+    assert isinstance(runner.backtest_adapter, BacktestStageAdapter)
+    assert runner.run_store.root == tmp_path
+
+
+@requires_qlib
 def test_locked_environment_rebuild_is_reproducible(tmp_path: Path) -> None:
+    # Registered in the phase-5 record; restored verbatim from b891f8f.
     first, first_store, _ = _run_full_chain(tmp_path / "first")
     second, second_store, _ = _run_full_chain(tmp_path / "second")
     assert first.result_manifest["result_content_generation_id"] == second.result_manifest["result_content_generation_id"]
@@ -522,6 +595,7 @@ def test_locked_environment_rebuild_is_reproducible(tmp_path: Path) -> None:
 
 
 def test_remote_evidence_aggregation_is_mechanically_verified() -> None:
+    # Registered in the release record; restored verbatim from 316a5c0.
     import importlib.util
 
     script = ROOT / "scripts/verify_research_evidence.py"
@@ -535,21 +609,3 @@ def test_remote_evidence_aggregation_is_mechanically_verified() -> None:
     assert summary["cell_count"] == 10
     assert summary["git_commit"] == "7ee7a8f60a5da61b686cb34550597df149a50f69"
 
-
-@requires_qlib
-def test_cli_execute_provider_wiring_is_complete(tmp_path: Path) -> None:
-    from uq.research_chain.cli import _build_runner
-
-    runner = _build_runner(
-        project_root=ROOT,
-        data_root=tmp_path,
-        run_store=FileResearchRunStore(tmp_path),
-    )
-    assert isinstance(runner.factor_adapter, FactorStageAdapter)
-    assert isinstance(runner.dataset_adapter, DatasetStageAdapter)
-    assert isinstance(runner.export_adapter, QlibExportStageAdapter)
-    assert isinstance(runner.model_adapter, ModelStageAdapter)
-    assert isinstance(runner.prediction_adapter, PredictionStageAdapter)
-    assert isinstance(runner.portfolio_adapter, PortfolioStageAdapter)
-    assert isinstance(runner.backtest_adapter, BacktestStageAdapter)
-    assert runner.run_store.root == tmp_path

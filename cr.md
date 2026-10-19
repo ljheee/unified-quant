@@ -1962,3 +1962,173 @@ manifest 格式 / generation_id 匹配 / report 可用 / 文件清单一致 / �
   preprocessing `f3f7cece…` 均已发布并读回，stage 00/01/02 passed。
 - "跑通整条 execute"未达成，卡点已定位并写清，**不再继续投入**。
 - 本节无代码改动；全量维持 `.venv` 1180/24、`.venv-qlib` 1204/0。
+
+### 8.57 `d4953ca..7fd426c` 区间（17 提交）独立复审轮（2026-10-18/19，核查 + 变异抽查）
+
+**触发**：用户"CR最近的变更，核查后记入cr.md"。逐提交读 diff+message，亲跑套件，独立做变异抽查
+（不复用各提交自报的变异结论）。工作区全程只动被变异文件，逐文件 `git checkout --` 恢复并核净。
+
+#### A. 计数链核验（亲跑）
+
+1124/23（`d4953ca`，上轮亲跑）→ 1133（dd37756）→ 1138（da6be4c）→ 1139（45489c6）→ 1144（bc76e66）
+→ 1149（d6dbb92）→ 1152（0510b01）→ 1156（a7e6060）→ 1157（a055ab6）→ 1166（9f5c994）
+→ 1173（cabd335）→ 1178（d904936）→ **1180/24（4d3d4b8=HEAD `7fd426c`）**。
+HEAD 亲跑：**1180 passed / 24 skipped / exit 0**，与台账一致。第 24 个 skip 定位为
+`test_research_chain_phase5.py::test_completed_stages_are_replayed_from_state_not_reexecuted`
+（`@requires_qlib`，`.venv` 跳过、`.venv-qlib` 执行）——跳数增长有正当归属，不是静默劣化。
+过程记录：首跑我在 `addopts=-q` 之上又加了 `-q`，`-qq` 吞掉了汇总行，重跑才拿到真实计数
+（教训：报数前先确认汇总行真的存在）。
+
+#### B. 逐提交核验：声明的收口均属实
+
+- **dd37756**（§8.40 八条）：FC-M1（`_validate_references` 重写为标识符差集）/M2（docstring 诚实化 +
+  opt-in `--require-verified`，默认未动）/M4（三处注解锁 + 反真空断言）/M7（决策收盘播种、非调仓日
+  参考价、停牌 side、删 t1_locked）/M8（empty-disclosure 仅在有 refusal 时跳过）**均真闭合**；
+  FC-M3 如实标"只定性未修"。
+- **da6be4c**（FC-M3 收口）：事件表重放比跳变不比水平、窗口外记 skipped，窄守卫只拒
+  "因子全 1.0 **且** 收盘全平"（62/5059 合法平坦标的经 21 会话窗实测不误杀）。口径校准过程如实登记。
+- **45489c6 → bc76e66**：前者按标的回退 dividend store；后者**推翻前者前提**（mootdx 把 920xxx
+  路由到沪市的参数错误才是真因），并保留回退作主机不可达时的兜底。两处台账（§8.43/§8.44）对
+  自我更正记录完整，代码与记录一致。
+- **de42021**：`stock_basic` 合并 L+D 两态取上市日，`setdefault` 保首个非空，确定性无坑。
+- **a7e6060 + a055ab6**：`--combined` 合并发布 + 自 CR 抓回的 fail-open（eligibility 剔净的标的
+  从报告中消失）已修——逐标的先 build 记 refusal、活下来的才拼帧、拼接帧重走 build。
+- **9f5c994 / cabd335 / d904936**：`drop_incomplete_rows` → 生产发布器 → `drop_unlabeled_rows`，
+  顺序约束（先丢行后标准化，`input_frame_sha256` 钉丢行后帧）成立；`complete_rows`/`unlabeled_keys`
+  单一定义抽取正确，发布侧与阶段侧同源。
+- **4d3d4b8**：A1（同 run/stage 状态台账可重写，digest 相同不动）/A2（model stage 读 dataset 声明的
+  全部分区 manifest）/A3（receipt 落盘移到 identity 定稿后 + 读路径目录纠正，正式关闭 FC-M5）
+  **均真闭合**；A1 删掉的"跨 run 守卫"确不可达（路径由文档自身 id 推导），变异结论复核成立。
+- **docs 四件**（f9b4f5c/d6dbb92/5cfe3bd/7fd426c）与 §8.52–§8.56 台账：与所涉代码一致，
+  未夸大声明齐备（29 份快照局限、fixture 结构性限制、测试密钥制品非研究结论等均有明示）。
+
+#### C. 本轮新发现（2 条 FC 级）
+
+**FC-N1 `drop_unlabeled_rows` 的丢行执行段零测试覆盖（实测，两条变异全量存活）**
+`adapters.py` 里把 `keep_mask` 应用为丢行的那一段（merge + `left_only` 过滤 + `loc`）没有任何
+执行中的测试锁住：`test_drop_unlabeled_rows.py` 锁的是 `unlabeled_keys`（键提取）与**测试体内
+重写的** merge 逻辑；phase2 fixture 结构上产生不了窗内 null label（§8.54 已披露此限制，但未
+抽出本结论）。实测：①反转 mask（`==`→`!=`）②no-op mask（永不丢行）——**两条变异在完整
+1180 套件下全绿**。fail-open 方向（该丢不丢）尤其危险：标签静默留存 null，报表还记了已丢。
+当前该段只被全 A 真实数据跑验证过（§8.54 的 46 行）。修法方向：给 adapter 段补一个
+factor/label 窗对齐的窄 fixture，直接断言丢的是哪几行。
+
+**FC-N2 resume 机制的 `last_result` 断链（fresh-process resume 在 model 之后各边界必崩）**
+4d3d4b8 的续跑只把已通过 stage 的 bindings 折回 plan；但各 stage 之间靠**进程内存**的
+`adapter.last_result` 手递手（model→prediction `runner.py:635`、prediction→portfolio `:673`、
+portfolio→backtest `:719`、backtest/paper `:745`/`:790`），且 adapter 从不初始化该属性。
+新进程续跑时，被跳过的 stage 没设过 `last_result`，第一个未跳过的后继 stage 直接
+AttributeError——唯一例外是 export→model（`_read_receipt` 有落盘读回路径，正是 A3 修的那条）。
+现有 resume 测试从**失败 run 的同一 runner 实例**取 plan，进程内 `last_result` 还在，结构上
+测不到此洞。当前无实损（v5 execute 尚未跑通过 stage 03；且崩法响亮非静默），但
+"任意处失败可重跑"的声明目前只在**断点 ≤ model_training** 或**同进程重试**时成立。
+
+**FC-M6 处置**：区间内无提交触及（synthesized definition 仍绑 `first_prediction`，
+`last_result = results[-1]` 依旧）；dd37756 标题称"close the eight findings"但 FC-M5/M6 在
+该提交正文与 §8.41 均缺席（§8.41 引言行"2 条（FC-M1/M3）本轮未动"与正文修了 FC-M1 自相矛盾——
+台账失真，已确认）。FC-M5 后由 4d3d4b8 关闭；**FC-M6 仍开**。
+
+#### D. OBS 族（记录，未要求修）
+
+- `verify_against_events` 对帧内**每个** instrument 组重放**整张**事件表，不按 instrument 过滤——
+  若调用方传多标的混合事件表，A 的事件日会去校验 B 的跳变（误杀方向）。当前无生产调用方传
+  `adjustment_events`（`execute` 的 events 路径只有测试走，`publish_factor_partitions` 走 raw-price
+  路径），休眠中；但 API 形状在邀请误用。
+- `verify_against_events` 的 `checked/skipped` 审计返回值被唯一调用点丢弃（算了没人看）。
+- `drop_unlabeled_rows` 下，因子行若**缺席**于 label 帧（而非 present-null），合并后以 NaN label
+  存活进 dataset——该策略无合并后 surviving-null 检查（`fail_closed` 与 `drop_incomplete_rows`
+  都有，唯独它没有）。同一逻辑条件（无可用标签）因 label 构建器的表示方式不同而两种结果。
+  真实 run 的 46 行是 present-null；缺席形态未覆盖。
+- `publish_feature_preprocessing.py` 调 `FactorStore._partition` 私有方法（脚本调私有成员，
+  继 `_to_instrument` 三处之后又一处）；"already published" 文本嗅探（家族第 4 处）。
+
+#### E. 变异抽查记分（本轮独立做，非复用提交自报）
+
+| # | 变异 | 结果 |
+|---|---|---|
+| M1 | FC-M8 退回无条件 `continue`（reconcile_corporate_actions.py） | **被杀**（1 红） |
+| M2 | combined 模式删掉 eligibility 剔净 refusal（build_label_sets.py，`if False:`） | **被杀**（1 红） |
+| M3 | 禁用事件表重放（factors/adjusted_price.py） | **被杀**（1 红） |
+| M4a | 反转 label-null `keep_mask`（adapters.py） | **存活**（目标 25 例全绿）→ FC-N1 |
+| M4b | no-op mask（永不丢行） | **存活**（**全量 1180 绿**）→ FC-N1 |
+| M5 | 禁 `publish_state` rewrite（resolver.py） | **被杀**（1 红） |
+
+全部变异后逐文件 `git checkout --` 恢复、`git status` 核净；工作区自始至终只有用户自己的
+`M AGENTS.md` 与未跟踪的 `code-review-unified-quant.md`。
+
+#### F. 未夸大声明
+
+本轮我亲自：读完 17 个提交的 message+diff（其中 4 件纯 docs 只核台账一致性）、亲跑 HEAD 全量
+（1180/24 exit 0）、独立做 6 次变异（4 杀 2 存活）、定位第 24 个 skip 的归属。未做：未重跑
+`.venv-qlib` 侧（1204/0 声明未亲验）；未对真实数据侧的任何数字（80571/5067/51 行等）做独立复测
+（信任台账自报，代码侧一致性已核）；FC-N2 未实测触发（由代码路径推断，崩法为 AttributeError，
+响亮非静默）。`code-review-unified-quant.md` 保持未跟踪；本节由我（监工）写入，提交与否由用户裁决。
+
+### 8.57 修复（2026-10-19）：FC-N1 / FC-N2 关闭 + 4 个被误删的登记测试恢复
+
+**触发**：用户"看看CR出的问题 cr.md §8.57" → "都修复"。范围只含 §8.57 的 FC-N1 / FC-N2。
+
+#### A. FC-N1 关闭：丢行执行段从"零覆盖"到"变异必杀"
+
+§8.57 实测：反转 `keep_mask` 与"永不丢行"两条变异在 1180 全量下**全绿**。
+
+根因不只是"没测"——同一段丢行逻辑此前有**三份拷贝**（stage、我的测试、我未落地的 fixture），
+任何一份漂移都看不出来。所以修法分两步：
+
+1. 抽 `drop_unlabelled_factor_rows(factor_frame, label_frame) -> (frame, audit)` 成模块级单一定义
+   （`adapters.py`），stage 只调用它。
+2. `tests/test_drop_unlabeled_rows.py::TestDropUnlabelledFactorRows` 5 例直接锁它：
+   精确丢掉哪些行 / 丢部分行的标的仍在 / 全空则拒 / 无 null 则原样返回（`assert_frame_equal`）/
+   返回帧索引重置（transform 的 fingerprint 对 index 敏感）。
+
+**变异复核（本轮亲做）**：
+- 反转 mask → **6 failed**（含 `test_removes_exactly_the_unlabelled_rows`）
+- 永不丢行（fail-open）→ **6 failed**
+- `is_for_infer` 前的"跨 run 守卫"已在 8.55 删除（不可达），本节不复存在
+
+#### B. FC-N2 关闭：resume 把 model hand-off 从内存恢复改为从盘上恢复
+
+§8.57 定位：runner 与 stage 之间靠进程内存 `adapter.last_result` 手递手，而 adapter 从不初始化该属性；
+新进程续跑时被跳过的 stage 没设过它，第一个未跳过的后继 stage 直接 AttributeError。
+`:790` 有 `getattr` 防御、`:635/673/719/745/1274` 裸奔——一处防御五处裸奔，恰好证明作者知道该风险。
+
+修复：
+1. 四个 adapter 的 `__init__` 显式声明 `self.last_result = None`，把 AttributeError 变成显式"不可用"。
+2. `_restore_cross_stage_state(resumed, completed)`：resume 时从**已发布制品**重建 model hand-off
+   （`model_runs/<id>.json` + `artifact_store.read(run_gen, artifact_gen)`），
+   与 model stage 自己 train 后做的读回是同一条路径。
+3. **`ModelStageResult` 的 `definition` / `artifact_bytes` / `published_state` 改为可选**——
+   这三项只描述"本进程做过的工作"，续跑重建时不存在；下游实际只读两个 manifest
+   （`adapters.py:1508-1511`、`runner.py:1324`）。之前我传过 `definition={}` / `b""` 假值，已删。
+4. 顺序 bug：恢复调用起初传**折叠前**的 plan，bindings 取不到 → 改为传 `resumed`。
+   这个 bug 是测试先暴露的（断言 hand_off is None），不是读码读出来的。
+
+**变异复核**：禁掉 `_restore_cross_stage_state` 调用 → `test_a_resumed_run_rehydrates_the_model_hand_off` 红。
+
+#### C. 意外发现：4 个已登记的 release 测试被我自己删了
+
+`test_research_chain_release_evidence.py` 报 `test_cli_execute_provider_wiring_is_complete` 不存在。
+顺藤查出**共 4 个**登记在 `evidence/research-chain/release/release-record.json` 的测试在代码中缺失：
+
+`test_cli_execute_provider_wiring_is_complete`（133fa83）、
+`test_locked_environment_rebuild_is_reproducible`（b891f8f）、
+`test_remote_evidence_aggregation_is_mechanically_verified`（316a5c0）
+均为我在 `tests/test_research_chain_phase5.py` 上做"清理死代码"/重写时误删。
+**全部从原始提交逐字恢复并注明出处**，`@requires_qlib` 修饰符按现状补齐。
+
+这是本轮最值得记的教训：我为省事"清理"测试文件，删掉的不是死代码而是**被 evidence 索引引用的活契约**，
+而 release gate 直到重跑才报出来。以后重写测试文件前，必须先用
+`re.search(rf"^def {name}\(", source)` 核对 release-record 的 `exit_criteria[].test_ids`。
+
+#### D. 全量
+
+`.venv` **1185 passed / 25 skipped / exit 0**（父 `7fd426c` 1180/24）；
+`.venv-qlib` **1210 passed / 0 skipped**（父 1204/0）。净 +5（4 恢复 +1 新增类内 5 例中 4 例新收集）。
+`evidence/.../phase-0/evidence-index.json` 的 `runner.py` 钉按 §6.2 惯例重钉。
+
+#### E. 未做
+
+- §8.57 的 OBS 族（`verify_against_events` 不按 instrument 过滤、其返回值被丢弃、
+  `publish_feature_preprocessing.py` 调私有 `_partition`）**未处理**，按"只修 FC"的范围约定留待下轮。
+- `drop_unlabeled_rows` 的"缺席形态"（因子行不在 label 帧中而非 present-null）仍无合并后
+  surviving-null 检查——与 `fail_closed` / `drop_incomplete_rows` 的不对称仍在，已登记未修。
