@@ -1,0 +1,15 @@
+name: Lesson promotion gate
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-promotions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Validate persisted Lesson promotion evidence
+        run: python3 scripts/validate_lesson_promotions.py

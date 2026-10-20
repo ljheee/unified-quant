@@ -1,0 +1,55 @@
+# Bootstrap complete
+
+Completion date: 2026-10-20
+Reviewed HEAD: 54676a0a3b377d1b88da09309d96d6a7c6535419
+
+## Files initialized
+
+- `docs/project-profile.md` — project-facts region filled from source, config, CI, and tests; the two framework markers and the framework region are byte-unchanged.
+- `docs/code-standards.md` — every `BOOTSTRAP REQUIRED` in section B replaced with project-specific facts or an explicit `UNKNOWN`; section A baseline left intact; `PROMOTED_RULES` block left empty (no rule has a verified promoted history).
+- `docs/contributors.md` — project-specific policy fields filled from `.github/PULL_REQUEST_TEMPLATE.md`, `.github/workflows/*.yml`, and verified absences (`CONTRIBUTING.md`, `CODEOWNERS`, `SECURITY.md`, branch-protection config).
+- `docs/subsystems/README.md` — real responsibility-boundary index replacing the template placeholder row.
+- `docs/subsystems/ingest-and-canonical-store.md` — new.
+- `docs/subsystems/adjustment-and-corporate-actions.md` — new.
+- `docs/subsystems/factor-layer-and-qlib-adapter.md` — new.
+- `docs/subsystems/model-layer.md` — new.
+- `docs/subsystems/portfolio-backtest-risk-execution.md` — new.
+- `docs/subsystems/research-chain.md` — new.
+- `docs/subsystems/data-sources-and-readiness.md` — new.
+- `LESSONS.md` — five evidence-backed active lessons (`L-0001`..`L-0005`). Watermark deliberately left `UNKNOWN`.
+- `CLAUDE.md` — now imports the same canonical rule files as `AGENTS.md` rather than duplicating policy.
+- `AGENTS.md` — four project-specific routing bullets added **outside** the managed-routing markers; the managed block is byte-unchanged.
+
+## Validation actually run
+
+All commands run in this worktree at HEAD `54676a0a3b377d1b88da09309d96d6a7c6535419`, from the repository root:
+
+- `.venv/bin/python -m pytest` → `1185 passed, 25 skipped, 238 warnings in ~46s` (Python 3.12.13, pandas 2.3.3). Re-run after the documentation edits; unchanged from the pre-edit baseline.
+- `.venv-qlib/bin/python -m pytest` → `1210 passed, 0 skipped` (same interpreter version with the `qlib` extra). The 25 `.venv` skips are all `could not import 'qlib'` / `Qlib extra is not installed`.
+- `python3 scripts/freeze-review-range.py --validate-policy docs/automation/range-exclusions.json` → exit 0.
+- `python3 scripts/validate_lesson_promotions.py` → `Lesson promotion validation passed`.
+- `LESSONS.md` watermark parses (value `UNKNOWN`); `scripts/write-frozen-review.py` marker/section extraction accepts the file, and global Lesson-ID uniqueness holds across active and promoted sections.
+- Framework ownership: all eleven entries in `.agent-maintenance/framework-version.json` verified by SHA-256 over the managed blocks; `AGENTS.md` and `docs/project-profile.md` match, confirming the framework regions were not altered.
+- Anchor audit: every `path.py:N` citation added by this bootstrap resolved to an in-range line, and every `Class.method` citation's class or method matched at or near that line. One pre-existing drifted anchor was found and **not** corrected: `docs/user-guide.md:289` cites `src/uq/research_chain/owning_contracts.py:31` `AdjustedPriceDatasetStore`, which is now at `:89`. That line was tracked before this bootstrap and is outside its scope.
+- No live vendor, network, or credential path was exercised. No real-data publisher script was run.
+
+## Unresolved UNKNOWN items
+
+Documented rather than guessed, in `docs/project-profile.md`:
+
+- No formatter, linter, type checker, or pre-commit configuration exists; none was added, and no style gate is claimed.
+- Merge/release/deploy authority and branch protection are unconfirmed for this session.
+- Daily-review runner, run time, and last review date are unknown; `reviewed-through` therefore stays `UNKNOWN`, which means `scripts/freeze-review-range.py` cannot be run until a maintainer chooses the first commit to include.
+- Live TDX/Tushare/EastMoney reachability and any real ingest were not exercised (no credentials consumed).
+- `akshare` is not installed in either local virtualenv, so AkShare paths are unexercised locally.
+- `bars_daily.v2` full-market publication evidence and a complete v5 research-chain `execute` from a clean data root were not located or performed.
+
+## Decisions requiring an owner
+
+- Choose the first target-branch commit (and its target-branch parent) to establish the `reviewed-through` boundary.
+- Authorize and configure the daily-review runner (model, schedule, time zone, write scope).
+- Confirm branch protection / required checks and whether an agent may push, merge, or release.
+- Decide whether to introduce any formatter/linter, and whether `code-review-unified-quant.md` should be tracked or remain untracked.
+- Review the drifted line anchor in `docs/user-guide.md:289` before it spreads into other pages.
+
+Reviewed HEAD: 54676a0a3b377d1b88da09309d96d6a7c6535419

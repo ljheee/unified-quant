@@ -1,0 +1,18 @@
+{
+  "content_digest": "aaf8ef5c9c5e81b31a869ecfb78bb29ecbbb3c53c01861f1105f043116af6136",
+  "framework_hashes": {
+    ".agent-maintenance/flywheel-install.sh": "170de5e35ca2827ae46b359cc68e4cce894f45871cbd6f3e5d4cc68c0ea922ac",
+    ".agent-maintenance/framework-ownership.py": "06a25ceca45756af275762512ea8290cc3101d0d8d3c8e76a39a59adacc11bf5",
+    ".agent-maintenance/installer-transaction.py": "a3c5d1d8d9ef309be9be371c638b41c45abf09626e14bc774772a5c94a40afdf",
+    ".agent-maintenance/session-start.sh": "966041755bbf0dda9587003791d69653fa5e52df20215a616f958ce8c7205c92",
+    ".github/workflows/lesson-promotion-gate.yml": "d4683ec0a747698c65c7e7d8631c3a5bc054d9fe8a9ac5ce243b7e8184590cec",
+    "AGENTS.md": "703eab87a18362b948c227d47bc15ed129bb34524559ffc0f827c1b916a09cc7",
+    "docs/project-profile.md": "3491b4c9ef0c77d1182b9a66a3bc5e83b66afa826a489e385b58a198f8754b29",
+    "scripts/freeze-review-range.py": "353f843f86a06a878f461dbf052de446f7d027156849e2b3b9255df4de892e5d",
+    "scripts/validate_lesson_promotions.py": "495d3ce2f853f24725f92a0370f40cf85c2b8bdad13338b3078b4bf6bbe76613",
+    "scripts/watermark.py": "8926c42fb3690776586b1bd271143aecbc677adfc44f26c28ee633b075589380",
+    "scripts/write-frozen-review.py": "1b4bc470342ffa4cd24e05f0a1320d81198dfab786a3cf1c86940c737bd083b2"
+  },
+  "schema": 1,
+  "source_revision": "4705e10449e90f96cdd516fb5a98d6a1194028db"
+}

@@ -1,0 +1,34 @@
+{
+  "policy_version": 3,
+  "rules": [
+    {
+      "id": "generated-output",
+      "kind": "path-glob",
+      "patterns": [
+        "**/.cache/**",
+        "**/build/**",
+        "**/coverage/**",
+        "**/dist/**",
+        "**/generated/**",
+        "**/node_modules/**"
+      ],
+      "reason": "Exclude conventional cache, build, coverage, distribution, generated-source, and installed-dependency trees from retrospective path review; the exact matched paths are recorded in the manifest."
+    },
+    {
+      "id": "generated-data-paths",
+      "kind": "path-prefix",
+      "paths": [],
+      "reason": "Exclude generated data content only beneath repository-relative file or directory paths explicitly listed by a maintainer, with a concrete producer process and exclusion rationale when populated; producers may be training, intermediate-stage, ETL, script, runtime, or other generation processes. An empty list adds no project-specific generated-data exclusions."
+    },
+    {
+      "id": "binary-nul-content",
+      "kind": "binary-nul-byte",
+      "reason": "Exclude a changed file from text review when either extant blob side of its parent comparison contains a NUL byte; the exact path and comparison are recorded in the manifest."
+    },
+    {
+      "id": "gitlink-submodule",
+      "kind": "gitlink",
+      "reason": "Exclude nested repository contents because the outer repository stores only a gitlink object ID; the exact path and old/new gitlink IDs are recorded in the manifest."
+    }
+  ]
+}
