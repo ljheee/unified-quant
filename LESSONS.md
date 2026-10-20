@@ -1,4 +1,4 @@
-<!-- reviewed-through: 9e7a086cdbfb973d39db2db72beceee85f2eeddf -->
+<!-- reviewed-through: 673f3244a7d459aa22b194956e6725b3638bc7c5 -->
 # Project Lessons and Retrospectives (Lessons)
 
 This is the target project's living incident and learning log, not a collection of generic examples. Except for the maintenance protocol defined in this file, every entry must come from commits, issues/PRs, CI output, reproduction records, or verifiable maintainer feedback inspected for this project; do not copy specific technical rules from templates or other projects.
@@ -206,6 +206,17 @@ When recording a specific event, evidence may support checking whether it can be
 - **Status:** active
 - **Distinct review dates observed:** 1 (2026-10-20)
 <!-- /frozen-review-lessons: sha256:8db5779f2b04ae9ece78f57e62028682f122b0b99fdcee7031b1c30f51dad1c2 -->
+
+<!-- frozen-review-lessons: sha256:ceb49c7f5124076eec5b489c66b4628bdefa57561a78d5f4a7456f6062a781b5 -->
+### L-0020 — List a conclusion's unverified premises and falsify them before acting; one supporting point is not a conclusion
+- **Why:** §8.56 replays seven rounds of ineffective attempts at the qlib-export reuse problem. Round 2 mis-framed the goal as "make export re-publish" — the export had already published successfully and later stages were supposed to *read* it — and every later round patched that wrong premise: a valid published artifact was destroyed while being called "cleaning up pollution" (round 2), and a passed stage ledger was tampered to `failed` to force a re-run (round 6). Three real signals were misread because each round collected only evidence supporting its current hypothesis: the idempotency argument, not the 30+ raise sites; "the fix is complete, one branch + 2 tests" checked what export dependents need, not what `read()` fails to verify — until one user challenge ("确定完整吗") uncovered that `read()` never checks `provider_uri_sha256`, the layout root, or the exporter fingerprint, so a cross-URI reuse would mint a self-contradicting receipt. The symptom signature was "一轮一个样": the conclusion changed every round because none of them stood on verified premises. This is the same class as L-0017's probe misread, and its "patch the unverified premise for six rounds" shape is the canonical instance of the amplification pattern noted there.
+- **Review evidence:**
+  - `2026-10-20` — [cr.md:1893–1965 §8.56: the seven-round replay table (:1900–1908), the wrong-premise diagnosis (:1912), the three misread signals (:1915–1919), the "fix is complete" overclaim corrected under challenge (:1921–1939), and the meta-root stated verbatim with its remedy (:1941–1948)](cr.md#L1893)
+- **Fix or follow-up:** The record's own remedy, adopted as the rule: before acting on a conclusion, write down the unverified premises it depends on and verify each; for every hypothesis spend at least one check looking for evidence that would *falsify* it, not only evidence that supports it. When a conclusion has changed twice in a row ("一轮一个样"), stop patching and re-derive the premise from the primary artifacts. When the answer would justify destroying or rewriting existing state (an artifact, a ledger), double the burden: state what observation would prove the premise wrong, and obtain it first.
+- **Done right:** §8.56 itself models the discipline — a record-only section that replays its own seven rounds verbatim, names the two flatly wrong rounds including the state-tampering one, corrects its own previous section's overclaim, and ends with the concrete re-validation checklist a reuse branch would have to satisfy.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+<!-- /frozen-review-lessons: sha256:ceb49c7f5124076eec5b489c66b4628bdefa57561a78d5f4a7456f6062a781b5 -->
 <!-- ACTIVE_LESSONS:END -->
 
 ## Promotion history
