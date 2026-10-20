@@ -1,4 +1,4 @@
-<!-- reviewed-through: e33603830f7b06df07613b260e00b7d3b6d1cb51 -->
+<!-- reviewed-through: 9e7a086cdbfb973d39db2db72beceee85f2eeddf -->
 # Project Lessons and Retrospectives (Lessons)
 
 This is the target project's living incident and learning log, not a collection of generic examples. Except for the maintenance protocol defined in this file, every entry must come from commits, issues/PRs, CI output, reproduction records, or verifiable maintainer feedback inspected for this project; do not copy specific technical rules from templates or other projects.
@@ -175,6 +175,37 @@ When recording a specific event, evidence may support checking whether it can be
 - **Status:** active
 - **Distinct review dates observed:** 1 (2026-10-20)
 <!-- /frozen-review-lessons: sha256:20ebdcb00d8fb5c12b677ab0e5798cd1e0b51e9748204bb1555ca55c55ed6531 -->
+
+<!-- frozen-review-lessons: sha256:8db5779f2b04ae9ece78f57e62028682f122b0b99fdcee7031b1c30f51dad1c2 -->
+### L-0017 — An empty probe says nothing about the source until the request construction is verified with a positive control
+- **Why:** §8.43 observed TDX `xdxr` returning 0 rows for BSE instruments, concluded "TDX does not provide BSE events", and designed, built and documented a per-instrument dividend-store fallback on that premise. §8.44 overturned the premise: mootdx's `get_stock_market` routes leading-`9` codes via `('5','6','9','7') → 'sh'` (market=1) *before* the `('4','8') → 'bj'` branch, so `920xxx` was queried against the wrong market — `get_xdxr_info(2, "920000")` returns 51 rows. The misdiagnosis survived because no positive control was consulted: old NEEQ segments (`43xxxx`/`83xxxx`) routed correctly and returned data, so "the source has these events for some codes" was already observable. The cost of the unverified premise was amplified by building architecture (a flag, a fallback path, tests, four doc sections) on top of it before re-checking it. This is the same class as the §8.30 probe discipline ("probe with the real command you will send"), one layer deeper: the command family was right, the derived parameters were not.
+- **Review evidence:**
+  - `2026-10-20` — [cr.md:1299–1329 §8.44: the §8.43 fallback built on the wrong premise and its overturn, the routing bug at :1313, the positive measurement at :1315, the self-correction at :1323](cr.md#L1299)
+  - `2026-10-20` — [cr.md:1325, the record's own lesson sentence, explicitly linked to the §8.30 probe discipline as the same class](cr.md#L1325)
+- **Fix or follow-up:** Landed in §8.44 — `MootdxSourceAdapter.market_for()` parses prefixes explicitly (`92`/`43`/`83`/`87`/`88` → market 2, unknown prefixes refuse instead of defaulting), `fetch_xdxr_events` uses `get_xdxr_info(market, symbol)`, and `tests/test_mootdx_source.py` locks the routing. Rule: before attributing an empty result to the vendor, re-run the probe against an object known to exist (positive control) and verify every derived request parameter against the vendor's own routing code. A "source has no data" finding that would justify new architecture must have its premise confirmed twice before anything is built on it.
+- **Done right:** The maintainer's challenge "没用错参数吧" was exactly the falsifying question the round had skipped; §8.44 recorded the self-correction explicitly, kept `--dividend-root` only with its corrected justification, and rewrote the four doc sections instead of leaving the old rationale in place.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0018 — A test whose fixture never drives execution through the target branch is fake-green; prove teeth with one disabling mutation
+- **Why:** Twice in the same week a first-version test passed while locking nothing, and both were exposed only by mutation: FC-M7's suspension-side test used an all-NaN panel, so the instrument was skipped before the suspension branch and no fill row ever existed (the side-flip mutation survived); the BSE fallback test used the default `600000`/`000001` instruments, so the assertion held vacuously over an always-empty array (the fallback-disabling mutation survived). Both were self-registered as 返工 and rewritten so the fixture forces control flow through the branch under test.
+- **Review evidence:**
+  - `2026-10-20` — [cr.md:1222, FC-M7 suspension-side first test fake-green on an all-NaN panel, self-registered rework, fixed by declaring the suspension with valid prices](cr.md#L1222)
+  - `2026-10-20` — [cr.md:1293, BSE fallback fixture asserting on an always-empty array with default instruments, self-registered fixture rework, fixed with `920000.XBSE`](cr.md#L1293)
+- **Fix or follow-up:** Landed — FC-M7 declares the suspension via `suspension_dates` with valid prices so a fill row is actually produced, and the BSE test uses `920000.XBSE` so the asserted array is non-empty. Rule: a branch-targeting test must assert on an artifact only that branch can produce (a fill row, a non-empty collection), and the cheapest teeth-proof is one mutation that disables the branch — if the mutation survives, the fixture, not the code, is wrong.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0019 — A threshold or guard that can reject real data must be validated against the real data distribution before it ships
+- **Why:** §8.36 wrote the adjusted-price jump tolerance as a pure relative 1e-3; the exchange rounds ex-rights reference prices to the tick, so the legitimate residual is ≈ `tick / previous_close` — a 3-yuan instrument exceeds budget and would have its whole session refused, and the real all-A window already had 600858's residual at 89% of budget. The defect was pushed in `9c811ac` and caught by the §8.37 self-review, which reworked the gate with the physical floor. Same shape in FC-M3: wiring `assert_not_raw_close` into production as a blanket guard would have rejected 62/5059 instruments in one real session whose factors are legitimately constant 1.0 (never had a corporate action) — a fixture invariant mistaken for a data invariant, reverted after the empirical check.
+- **Review evidence:**
+  - `2026-10-20` — [cr.md:1052–1064 §8.37 CR37-1: the pure-relative tolerance introduced in §8.36, pushed, caught by self-review, reworked with the `tick / previous_close` floor](cr.md#L1052)
+  - `2026-10-20` — [cr.md:1214 FC-M3: the blanket `assert_not_raw_close` production guard reverted after the 62/5059 real-session check, recorded as characterized-not-fixed](cr.md#L1214)
+- **Fix or follow-up:** Landed — the jump gate floors tolerance at `tick / previous_close` and the helper is docstring-scoped to tests with the 62-instrument counterexample recorded. Rule: before shipping a refusal threshold or guard, run it over a real window and inspect the worst-case legitimate subjects (lowest-priced names, no-corporate-action names); derive numeric bounds from the domain's physics (tick size, grid resolution), not from what "looks tight" or from fixture semantics.
+- **Done right:** CR37-1's fix was verified by re-running the full all-A window and showing both partition generation ids byte-identical — the fix widens the gate without rewriting published bytes; FC-M3's outcome was recorded as "如实定性而非修好", a reverted fix downgraded honestly instead of being claimed closed.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+<!-- /frozen-review-lessons: sha256:8db5779f2b04ae9ece78f57e62028682f122b0b99fdcee7031b1c30f51dad1c2 -->
 <!-- ACTIVE_LESSONS:END -->
 
 ## Promotion history
