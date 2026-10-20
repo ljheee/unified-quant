@@ -286,7 +286,7 @@ execute 的命令形状如下，仅作结构说明：
 | --- | --- | --- |
 | `factor_binding` / `factor_partition_set_binding` | `uq.factors.store.FactorStore` | 是:`scripts/publish_factor_partitions.py`(读 canonical bars → 投影 → 算 → 发布,并输出 `factor_partition_set` 绑定) |
 | `universe_snapshot_binding` | `uq.contracts.artifacts.UniverseSnapshotStore` | 是:`scripts/publish_universe_snapshots.py`(把 `scripts/fetch_index_membership.py` 的 PIT 成分快照铺成 `[visible_from, 下一 visible_from)` 区间) |
-| `adjusted_price_binding` | `src/uq/research_chain/owning_contracts.py:31` `AdjustedPriceDatasetStore` | 否:只读 |
+| `adjusted_price_binding` | `src/uq/research_chain/owning_contracts.py:89` `AdjustedPriceDatasetStore` | 否:只读 |
 | `feature_preprocessing_binding` | 同文件 `FeatureSchemaStore` + `FeaturePreprocessingStore` | 是:`scripts/publish_feature_preprocessing.py`(读 factor 分区 → 按 `--drop-incomplete-rows` 丢行 → 截面标准化 → 绑定**外部签发**的评审 → 发布) |
 | `label_binding` | 同文件 `LabelStore` | 是:`scripts/build_label_sets.py`(默认逐标的发布;`--combined` 发布**一份覆盖全部标的**的集合——研究请求只绑一份,所以跑 execute 要用这个开关) |
 | `backtest_config_binding` | 同文件 `BacktestConfigStore` | 否:只读 |
