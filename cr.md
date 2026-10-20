@@ -2620,3 +2620,56 @@ for now"，但我的冒烟脚本每失败一次就重跑同一个 run，于是 *
 - 变异：`_latest_prediction_binding` 返回 `[0]` → 4 红；`session_column` 硬编码 → 1 红；
   `_binding_key` 退回家族键 → 新锁红。
 - phase-0 证据索引的 `runner.py` 摘要按原形状刷新。
+
+### 8.62 续三（未完成，卡点已定位）：窗口级 adjusted price 制品缺失（2026-10-21）
+
+接 §8.62 续二。本轮把冒烟脚本的数据面配齐到 backtest 阶段，暴露出**最后一个卡点**，
+它是**数据面缺口，不是代码缺陷**，如实记下来不再投入盲改。
+
+#### 事实链（都可复现）
+
+1. `canonical/bars_adjusted/adjusted-v2/` 下有 **21 个按日分区**，其中正好覆盖研究窗口
+   2025-09-09..09-30 的 16 个会话全在。
+2. 但请求绑定的 `adjusted_price_binding` = `4ef95864…`，它的 manifest
+   `partition_date = 2025-09-09`、`row_count = 5063`，即**单日**制品。
+3. dataset stage 对 adjusted price 只校验 manifest digest / data checksum
+   （`adapters.py:436-441`），**不校验它是否覆盖整个窗口**，所以单日制品一路通过。
+4. 到 backtest stage，`BacktestStageAdapter` 从该帧派生日历并与 `calendar_binding`
+   对账：`set(price_dates) != set(calendar_dates)` /
+   `portfolio decision dates are not in the governed calendar` ⇒ fail-closed 拒绝。
+
+⇒ **前松后紧**：同一个输入，早期 stage 不校验窗口覆盖，最后一个 stage 才拒。
+这不是"最后一关更严"的合理设计，早期 stage 放行了一个注定失败的输入。
+
+#### 判断：该不该改代码？
+
+**不该在这一轮改。** 理由：
+- 正确的修复是在 dataset stage 增加"adjusted price 帧必须覆盖请求窗口内每个决策日"的
+  fail-closed 校验。但这需要请求侧语义确认——`adjusted_price_binding` 到底该绑
+  **单日分区**还是**窗口级合并制品**？仓库里没有窗口级 adjusted price 的发布器
+  （`scripts/publish_adjusted_window.py` 发的是按日 `bars_adjusted/adjusted-v2`），
+  也没有任何测试锁定"adjusted price 必须跨窗口"。
+- 在没有确认该语义前加校验，会把"缺一个发布器"误判成"数据错了"，
+  与 §8.56/§8.60 那类"为不存在的前提写代码"是同一类错误。
+
+#### 交付状态（诚实口径）
+
+- 代码侧：**9 个真实缺陷已修并提交**（§8.62 A/B2/C、续二 D/E/F），
+  全量 `.venv-qlib` **1219 passed**、`.venv` **1195 passed / 26 skipped**，已推送。
+- 链路侧：v5 execute 已推进到 **backtest 阶段的第一个对账不变量**，
+  stages 00–07 中 00–06 全 passed（含 dataset / export / model / prediction / portfolio）。
+  **backtest 未通过**，原因是上文的窗口级 adjusted price 制品缺失。
+- 冒烟数据说明：全程使用仓库测试评审密钥，制品只证明链路行为，**不构成研究结论**。
+
+#### 下一轮要做的事（按依赖顺序）
+
+1. **确认语义**：`adjusted_price_binding` 绑单日分区还是窗口级制品？
+   （看 `pendding.md` 4c 与 `docs/subsystems/research-chain.md` 的既有约定。）
+2. 若应是窗口级：写发布器（把窗口内按日分区合并为一个 `bars_adjusted/adjusted-v2`
+   制品并发布），测试锁定"帧覆盖请求窗口每个决策日"。
+3. 若绑单日即可：把窗口覆盖校验从 backtest 上移到 dataset stage，
+   让失败发生在正确的阶段，并补"单日绑定 + 多日窗口 ⇒ 拒"的测试。
+4. `backtest_market_data`（calendar / suspension / corporate_action 三个
+   `dataset=<generation>` 目录）在本轮是**手工拼的**，
+   与 `scripts/publish_market_datasets.py` 发布的 `market-datasets/` 布局不同，
+   需要确认哪一个才是生产路径、另一个是否有发布入口。
