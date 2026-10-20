@@ -321,3 +321,74 @@ def test_tampered_artifact_rejects_read(tmp_path: Path):
     (partition / "artifact.bin").write_bytes(b"tampered")
     with pytest.raises(ContractError):
         store.read("0" * 64, "a" * 64)
+
+
+def _export_stage(tmp_path: Path):
+    """A dataset plus a wired export stage, ready to run twice."""
+    pytest.importorskip("qlib")
+    from uq.models.dataset_writer import DatasetWriter
+    from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
+    from uq.research_chain.adapters import QlibExportStageAdapter
+    from uq.research_chain.resolver import FileResearchRunStore
+
+    plan, dataset_result, dataset_generation_id, _frame, _adapter = _prepare_model_stage(tmp_path)
+    writer = DatasetWriter(tmp_path)
+    exporter = QlibDatasetExporter(tmp_path / "qlib_exports")
+    run_store = FileResearchRunStore(tmp_path)
+    stage = QlibExportStageAdapter(
+        exporter=exporter, receipt_builder=QlibInitReceiptBuilder(),
+        dataset_writer=writer, run_store=run_store,
+    )
+    kwargs = dict(
+        dataset_generation_id=dataset_generation_id,
+        dataset_manifest_digest_sha256=dataset_result.manifest["manifest_digest_sha256"],
+        feature_columns=list(dataset_result.manifest["ordered_features"]),
+        label_column="label",
+        provider_uri="file:///research-exports",
+        qlib_import_path="qlib", qlib_version="0.9.7",
+        cache_root=str(tmp_path / ".cache"),
+        cache_files_before=set(), cache_files_after=set(),
+        export_quality_decision=export_decision(),
+        receipt_quality_decision=receipt_decision(),
+        runner_identity={"code_fingerprint": "a" * 64, "environment_profile": "locked-test",
+                         "lock_digest_sha256": "a" * 64},
+    )
+    return stage, plan, kwargs
+
+
+def test_a_repeated_export_stage_reuses_the_published_snapshot(tmp_path: Path, monkeypatch):
+    # Every publisher is immutable, so a retry used to die on "already exists"
+    # against the identity its own inputs produce -- which is what made a run
+    # unrepeatable after a failure part-way through. Idempotence belongs at the call
+    # site (the pattern `scripts/publish_market_datasets.py` already uses), not in the
+    # writer, so the immutability guarantee is not weakened.
+    stage, plan, kwargs = _export_stage(tmp_path)
+    first = stage.run(plan, **kwargs)
+    assert first.export_manifest["generation_id"]
+
+    # Count calls instead of raising: the real refusal must reach the recovery branch
+    # for the snapshot to be reused, and a stubbed exporter that always fails would
+    # hide that.
+    calls = []
+    real_export = stage.exporter.export
+
+    def counting_export(**kwargs):
+        calls.append(kwargs)
+        return real_export(**kwargs)
+
+    monkeypatch.setattr(stage.exporter, "export", counting_export)
+    second = stage.run(plan, **kwargs)
+    assert len(calls) == 1, "the second run must still try to publish (its refusal drives recovery)"
+    assert second.export_manifest["generation_id"] == first.export_manifest["generation_id"]
+    assert second.manifest["export_generation_id"] == first.export_manifest["generation_id"]
+
+
+def test_a_snapshot_published_for_another_uri_is_not_adopted(tmp_path: Path):
+    # Recovery must not trust "already exists" alone: the artifact is re-verified
+    # through `read()`, and a snapshot whose provider URI is not this run's is
+    # refused instead of silently adopted.
+    stage, plan, kwargs = _export_stage(tmp_path)
+    stage.run(plan, **kwargs)
+    other = dict(kwargs, provider_uri="file:///somewhere-else")
+    with pytest.raises(ContractError, match="different provider URI"):
+        stage.run(plan, **other)

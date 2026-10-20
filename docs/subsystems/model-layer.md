@@ -72,10 +72,13 @@ Two facts about `QlibDatasetExporter` that are not visible from a call site:
 ``exporter_fingerprint`` is *inside* the identity, so a mismatch is already refused as
 a generation mismatch — do not add a second check for it.
 
-**Known limitation:** a re-run of the export stage still dies on the immutability
-guard, because the identity is not knowable before publishing. A reuse branch would
-first need the derivation extracted so a caller can probe before writing
-(`cr.md` §8.56, §8.59).
+**Idempotence lives at the call site, not in the writer.** The publisher refuses an
+overwrite by design -- that is what keeps a published artifact from being replaced -- so a
+stage retry recovers instead: `QlibExportStageAdapter` catches the refusal, takes the
+generation id from the snapshot path it names, and re-verifies the artifact through
+`read()` (including the provider URI). Same pattern `scripts/publish_market_datasets.py`
+uses for its immutable partitions. Nothing has to expose the identity derivation for this:
+the refused snapshot's directory name *is* the export's content-derived id.
 
 ## Constraints, Failures, and Compatibility
 

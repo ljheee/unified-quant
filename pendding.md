@@ -486,3 +486,12 @@ export 读时校验 + 复用分支回退(2026-10-20,cr.md §8.59)
 - **复用分支写完又回退**:实测查错 key——export 的 identity 是内部派生的 `export_generation_id`,stage 手里只有 `dataset_generation_id`,read 必 unpublished → fallback → 撞 already exists,**报错链更长**。正解需先抽 `derive_generation_id()`(约 100 行 staging+manifest 起草抽取)。我在此产出过废码,已全部回退。**宁可留下已知问题,不混入没把握的重构。**
 - **仍未解决**:重跑 stage 03 仍撞 already exists(§8.56 后续,非本轮范围)。
 - **全量**:`.venv` 1191/25、`.venv-qlib` 1216/0(父 1188/25、1213/0)。
+
+框架纠正:幂等属于调用方(2026-10-20,cr.md §8.60,**推翻 §8.58/§8.59 的框架**)
+- **反证就在仓库里**:`scripts/publish_market_datasets.py:54-67` 的 `_attempt()` docstring 明写 "tolerating an already-published one ... recorded as skipped instead of aborting";`ingest_window.py:13`、`publish_adjusted_window.py` 同模式。⇒ **不用改 writer、不用抽 identity 派生、不用 read() 复用分支**。我为这些不存在的前提做了两轮废码还写进 cr.md 说"宁可留下已知问题"——现成解法连着两轮没看见。
+- **原则**:writer 保持不可变+拒覆盖(防篡改),**调用方**负责幂等(捕获→记 skipped→继续)。这与 Git `check_collision` 同类。
+- **"stage 03 最初没考虑重跑?"**:exporter 从未声称支持,guard 是特性;缺的是 `ResearchChainRunner.execute` 编排层幂等(后加的,当时无此需求)。
+- **已验证**:refusal 消息自带路径,路径末段==export 的 content-derived id,`read()` 读回 manifest 的 id/digest 均一致 ⇒ §8.59 自称的"真正先决条件"也不必要。
+- **实现**:`QlibExportStageAdapter.run` 捕获 "already exists" → 提 id → `read()` 全量校验(含 URI,不属于本 run 即拒)→ 返回。测试 2 例;变异 2 红。**自我纠正**:第一版用 monkeypatch 让 export 恒抛 AssertionError 想证明"不再调用",反使分支失效;改为计数。
+- **仍未做**:其他 stage 同等幂等未铺开;整条 v5 execute 仍未跑通(stage 03 已通)。
+- **全量**:`.venv` 1191/27、`.venv-qlib` 1218/0。

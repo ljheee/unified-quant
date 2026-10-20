@@ -2280,3 +2280,77 @@ staging + manifest 起草逻辑整段抽出（约 100 行、含文件级 checksu
 
 `.venv` **1191 passed / 25 skipped / exit 0**（父 `78c1967` 1188/25，净 **+3**）；
 `.venv-qlib` **1216 passed / 0 skipped**（父 1213/0，净 **+3**）。
+
+### 8.60 框架纠正：幂等属于调用方，不是 writer（2026-10-20）
+
+**触发**：用户连续四问——"持续多久了／根源是不是搞错了／每个 stage 都要支持重跑幂等？业界也是这样吗／stage 03 最初没有考虑重跑？"
+
+**这四问直接推翻了我前两轮的框架。承认如下。**
+
+#### A. 我错在哪（证据）
+
+我把"重跑撞 already exists"描述成**结构性阻塞**，还说正解是"先抽 `derive_generation_id()` 让 identity 可预先计算"。
+
+反证就在仓库里、且是生产代码：
+
+`scripts/publish_market_datasets.py:54-67` 的 `_attempt()`，docstring 原文：
+> "Publish one immutable partition, **tolerating an already-published one**. Every
+> publisher rejects overwrites, so a partially completed run must be resumable: an
+> existing partition is recorded as skipped instead of aborting the whole window."
+
+`scripts/ingest_window.py:13` 同样模式；`publish_adjusted_window.py` 有
+`jump_baseline` + `skipped_sessions` 记账。
+
+**所以：
+- 不需要改 writer；不需要抽 identity 派生；也不需要 `read()` 的复用分支。**
+- 上两轮我为这些不存在的前提做了两轮废码并回退，还写进 cr.md 说"宁可留下已知问题"
+  ——那个"已知问题"有个一行就能用的现成解法，我连着两轮没看见。
+
+#### B. 四问的逐条回答（用证据，不用推测）
+
+**"持续多久了"**：guard 自 `1467c8f`（exporter 诞生）就在，但**它不是 stage 03 的缺陷**——
+同形状 guard 30+ 处遍布所有 writer。真正没考虑重跑的是 **`ResearchChainRunner.execute`
+这条编排路径**（后加的，当时没有"跑到一半失败要能重跑"的需求）。
+注意：`publish_adjusted_window.py` / `publish_market_datasets.py` **都**考虑了。
+
+**"每个 stage 都要支持重跑幂等？业界也这样？"**：不是每个 writer 各自实现。原则是
+**writer 保持不可变 + 拒覆盖**（防篡改），**调用方负责幂等**（捕获 → 记为 skipped → 继续）。
+这正是 `_attempt` 的形状，也是我验证过的 Git `check_collision` 同类结构
+（同内容 skip、不同 refuse）。我此前把"调用方职责"误读成"writer 层要支持复用"，
+才会往 `read()` 里加校验、才会想去抽 identity。
+
+**"stage 03 最初没有考虑重跑？"**：建模层（exporter）从未声称支持重跑，guard 是它的
+**特性**。缺的是编排层的幂等，而这个缺口与 exporter 的设计目标无关。
+
+#### C. 本轮落地（先验证后实现）
+
+**验证**（脚本实测，非推断）：
+1. export 的 refusal 消息**自带完整 snapshot 路径**，路径末段就是 export 的 content-derived id；
+2. 该 id 与首次发布的 `generation_id` **完全相等**；
+3. 用它调 `read(provider_uri=...)` 得回的 manifest，`generation_id` 与 `manifest_digest_sha256`
+   均与首次发布一致。
+
+⇒ **`derive_generation_id()` 确实不必要**（推翻我 §8.59 自称的"真正先决条件"）。
+
+**实现**：`QlibExportStageAdapter.run` 捕获含 "already exists" 的 refusal，
+用 `_read_back_published_export()` 从消息里提取 id，经 `read()` 全量校验（含
+provider URI）后返回该 manifest。URI 不属于本 run 的会被拒，**不会被静默采纳**。
+
+测试 2 例：重复执行复用同一 snapshot / 换 URI 则拒。
+变异（永不恢复）→ 2 例红。
+
+**测试写法上的一处自我纠正**：第一版 monkeypatch 让 `export` 恒抛 `AssertionError`
+来证明"不再调用 export"——但实现只在**真实 refusal** 时恢复，这个 stub 反而让分支失效。
+改为**计数**：断言第二次仍调用 export 一次（它的 refusal 正是驱动恢复的信号）。
+
+#### D. 仍未做（诚实登记）
+
+- 其他 stage（dataset / model_run / prediction / backtest）的同等幂等**未做**——
+  模式已验证，但逐个铺开要单独一轮。
+- §8.56 的"跑通整条 v5 execute"仍未达成：stage 03 通了，后面还有 model/预测/回测各关。
+
+#### E. 全量
+
+`.venv` **1191 passed / 27 skipped / exit 0**（父 `28eb49b` 1191/25；+2 测试里 1 例在
+`.venv` 被 qlib gate 跳过，故 skip +2）；
+`.venv-qlib` **1218 passed / 0 skipped**（父 1216/0，净 **+2**）。
