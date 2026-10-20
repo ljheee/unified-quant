@@ -2214,3 +2214,69 @@ prod 调用方（`engine.py:300`，扁平表）行为不变**，同时让混合�
 2. **Alphalens 式 loss budget**（丢失率超阈值即响）：我们无对应物。
 3. `membership_input.py` / `partition_set.py` / `dividend_events.py` 的私有访问。
 4. "7 轮无效尝试"的**跑通整条 v5 execute**：仍卡在内容寻址制品不幂等，属第 1 项的前置。
+
+### 8.59 Qlib export 读时校验：为什么不在写时，以及"复用"为何本轮不做（2026-10-20）
+
+**触发**：用户"为什么'读时全字段校验'，而不是写时校验？"→"好"→"export() 的 identity 是在函数内部…之前的设计目标就是不暴露？"→"A"。
+
+#### A. 为什么是读时（原样记录推理，因为它不是"想当然"）
+
+`provider_uri` 是**读方**参数，写时没有"应然值"。`runner.py:524` 每次 execute 现算：
+`provider_uri = f"file://{Path(export_layout_root or run_store.root/'qlib_exports').absolute()}"`。
+同一个 dataset content、不同 run store 位置 → 不同 URI → **导出内容完全一样**。
+写时能做的只是"记下本次 URI"（`:145` 已经在做），有意义的问题只有一个：
+**"我要读的这个制品，是不是用我这个 URI 导出的？"**
+
+写时已记、读时才校——这就是 (b) 的位置。
+
+#### B. 纠正用户问题里的一个前提（也纠正我自己）
+
+用户问"之前的设计目标就是不暴露？"。**查 git 历史：不是。**
+
+- `1467c8f`（最初）：`snapshot = .../generation={generation_id}`，identity **直接使用入参**，调用方天然知道。
+- `6325166`（治理修复"bind quality reports across model publications"）：改为从**完整 manifest**（含每个文件的 checksum 与 byte_size）派生，identity 因此变成"必须写完文件才知道"。
+- 那次改动的目的是把质量评审绑到导出内容的真实身份，**不是封装 identity**。
+- 残留证据：`manifest["export_layout"]["root"]` 初值写入参 `generation_id`（`:143`），写完又被改写为 `export_generation_id`（`:176`）——identity 语义中途变过，那个字段是旧设计的残留。
+
+所以"抽出 identity 派生"不是破坏设计意图。**但本轮仍未做**，原因见 D。
+
+#### C. 已落地：`read()` 的读时 URI 校验
+
+`QlibDatasetExporter.read(dataset_name, generation_id, *, provider_uri=None)`：
+传入 URI 时比对 `manifest["provider_uri_sha256"]`，不一致即拒。参数**可选**——
+现有 10 个调用点（7 测试 + 3 生产）都不传，行为不变。
+
+**一个自我删除**：我最初同时加了 `exporter_fingerprint` 校验，测试写出来后被**已有的 generation 检查先拦下**——因为该字段**在** identity 内，内容比对已覆盖它。**该校验是冗余的，已删除**，理由写进测试类 docstring，避免后来者再加一遍。
+
+测试 `TestReadVerifiesTheRequestNotJustTheArtifact` 3 例：同 URI 读回 / 不同 URI 拒 /
+**URI 不在 identity 内**（设计前提的可执行断言：两次不同 URI 导出必须同 id 且 URI 摘要不同）。
+变异（让条件永不成立）→ 9 例红。
+
+#### D. 复用分支：为什么我写完又回退（本节最重要）
+
+我按 A 实现了"先 read、命中则跳过 export"。**实测发现它查错了 key**：
+
+`export()` 的 identity 是函数内派生的 `export_generation_id`，而 stage 手里只有
+`dataset_generation_id`——两者不同。read 用 dataset id 查目录必然 unpublished →
+fallback 到 export → 撞"already exists"。**报错链比改动前更长**。
+
+深层原因：**在调用 export 之前，调用方无法知道 export_generation_id**。这不是写错一行，
+而是"复用"需要先有 `derive_generation_id()`，而那需要把嵌入在 `export()` 锁内的
+staging + manifest 起草逻辑整段抽出（约 100 行、含文件级 checksum 与零字节检查）。
+
+我在这个抽取上做了两轮，产出过废码（`if False else` 占位、`__wrapped__` 臆测），
+最终**全部回退**，只保留读时校验。理由：宁可留下"重跑仍会撞"这个已知问题，
+也不把一段没把握的重构混进本轮。
+
+#### E. 状态与登记
+
+- 已落地：读时 URI 校验 + 3 测试 + 变异必红。**零破坏**（参数可选，10 个调用点不变）。
+- **未解决**（登记）："重跑 stage 03 仍撞 already exists"。正解是先抽
+  `derive_generation_id()`（让 identity 可预先计算），再谈复用。**这是 §8.56 的后续，
+  不是本轮范围。**
+- Alphalens 式 loss budget 仍未做。
+
+#### F. 全量
+
+`.venv` **1191 passed / 25 skipped / exit 0**（父 `78c1967` 1188/25，净 **+3**）；
+`.venv-qlib` **1216 passed / 0 skipped**（父 1213/0，净 **+3**）。

@@ -50,6 +50,33 @@ Each family is content-addressed and immutable: `<family>/generation=<id>/{manif
 
 Quality decisions are Ed25519-signed and bound to a subject generation; `bind_reviewed_quality_decision` refuses a decision that is not reviewed, not bound to this subject, or signed by a repository test-mode key while `UQ_RUNTIME_MODE=production` (`src/uq/runtime.py:34`).
 
+## Qlib export identity and read-time verification
+
+Two facts about `QlibDatasetExporter` that are not visible from a call site:
+
+1. **The identity is content-derived, not passed in.** ``export`` derives
+   ``export_generation_id`` by hashing the files it produced (including each file's
+   checksum and byte size), so the id cannot be known before the files exist. History:
+   the original implementation used the caller-supplied ``generation_id``; the change
+   that bound quality reports to the export's real identity moved derivation inside
+   the function. The consequence is that a caller holding only the *dataset* generation
+   id cannot locate the export — the two ids differ, and one is not derivable from the
+   other without staging the same bytes.
+2. **``provider_uri_sha256`` and ``export_layout`` sit outside the identity.** A URI
+   says where the artifact will be read from, not what it contains, so two runs with
+   different URIs produce byte-identical exports with the same id. That is why a
+   content comparison cannot detect a cross-URI reuse, and ``read()`` accepts an
+   optional ``provider_uri`` and refuses a mismatch. The check is read-time because at
+   write time there is no "correct" URI to compare against.
+
+``exporter_fingerprint`` is *inside* the identity, so a mismatch is already refused as
+a generation mismatch — do not add a second check for it.
+
+**Known limitation:** a re-run of the export stage still dies on the immutability
+guard, because the identity is not knowable before publishing. A reuse branch would
+first need the derivation extracted so a caller can probe before writing
+(`cr.md` §8.56, §8.59).
+
 ## Constraints, Failures, and Compatibility
 
 - Null handling is policy, not accident: a null label means "insufficient future rows" and is dropped before finiteness checks; a null feature makes a row unusable for learning but is preserved for inference. Folding the two into one policy either hides defects or deletes valid rows.
@@ -60,7 +87,7 @@ Quality decisions are Ed25519-signed and bound to a subject generation; `bind_re
 
 ## Verification Evidence
 
-- `.venv/bin/python -m pytest` → `1185 passed, 25 skipped` on HEAD `54676a0`; `.venv-qlib/bin/python -m pytest` → `1210 passed, 0 skipped`.
+- `.venv/bin/python -m pytest` → `1191 passed, 25 skipped`; `.venv-qlib/bin/python -m pytest` → `1216 passed, 0 skipped`. Counts updated by the change that adds the read-time provider-URI verification section above.
 - Model-layer suites: `tests/test_model_layer_contracts.py`, `tests/test_model_labels_dataset.py`, `tests/test_model_features_dataset_writer.py`, `tests/test_feature_preprocessing.py`, `tests/test_model_trainer.py`, `tests/test_model_qlib_export.py`, `tests/test_model_predictions.py`, `tests/test_model_end_to_end.py` (partly Qlib-gated), `tests/test_build_label_sets.py`, `tests/test_label_set_writer.py`, `tests/test_drop_unlabeled_rows.py`, `tests/test_accepted_store_runtime.py`, `tests/test_model_store_isolation.py`, `tests/test_release_acceptance.py`.
 - Acceptance matrix: `evidence/model-layer/acceptance-matrix.json` records 59 requirements, 59 passed, 0 blocked, each citing an exact `test_id`.
 - Release binding: `evidence/research-chain/release/release-record.json` binds v0.8 to `release_head` `9f208267e585b0f95a219af2dd3f9367a5fb4d3e`, CI run `34004669663`, 10 covered environment cells, and declares the factor-layer reference-price provenance limitation.

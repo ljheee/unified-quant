@@ -477,3 +477,12 @@ drop_unlabeled_rows 落地(2026-10-18,cr.md §8.54)
 - **文档**:`docs/subsystems/research-chain.md` 与 `adjustment-and-corporate-actions.md` 各新增一节(此前 0 覆盖);`checked_events` 消费方如实标 **UNKNOWN**。
 - **全量**:`.venv` 1188/25、`.venv-qlib` 1213/0(父 1185/25、1210/0,净 +3 +3)。三次变异全必红。
 - **本轮明确不做**:①读时全字段校验+复用分支(§8.56 核心问题的正确解,需先有校验);②Alphalens 式 loss budget;③另三处私有访问;④跑通整条 v5 execute(仍卡内容寻址不幂等)。
+
+export 读时校验 + 复用分支回退(2026-10-20,cr.md §8.59)
+- **为什么读时**:`provider_uri` 是读方参数(`runner.py:524` 每次 execute 现算),写时无"应然值";写时只需记下(`:145` 已在做),读时才校"这个制品是不是用我这个 URI 导出的"。
+- **纠正一个前提**:identity 最初(`1467c8f`)**就等于入参**、天然暴露;`6325166` 为绑质量评审才改为从完整 manifest 派生,identity 才变成"写完才知道"。**不是刻意封装**。残留证据:`export_layout.root` 先写入参后改写(`:143` vs `:176`)。
+- **已落地**:`read(..., provider_uri=None)` 比对 URI,不一致拒;参数可选 ⇒ 10 个调用点行为不变。测试 3 例(同 URI/不同 URI/**URI 不在 identity 内**);变异 9 红。
+- **自我删除**:原加的 `exporter_fingerprint` 校验**冗余**——该字段在 identity 内,已被 generation 检查覆盖(测试先红在那)。已删,理由写进 docstring。
+- **复用分支写完又回退**:实测查错 key——export 的 identity 是内部派生的 `export_generation_id`,stage 手里只有 `dataset_generation_id`,read 必 unpublished → fallback → 撞 already exists,**报错链更长**。正解需先抽 `derive_generation_id()`(约 100 行 staging+manifest 起草抽取)。我在此产出过废码,已全部回退。**宁可留下已知问题,不混入没把握的重构。**
+- **仍未解决**:重跑 stage 03 仍撞 already exists(§8.56 后续,非本轮范围)。
+- **全量**:`.venv` 1191/25、`.venv-qlib` 1216/0(父 1188/25、1213/0)。

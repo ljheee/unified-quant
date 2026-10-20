@@ -228,7 +228,13 @@ class QlibDatasetExporter:
             raise
         return manifest
 
-    def read(self, dataset_name: str, generation_id: str) -> tuple[dict[str, Any], Path]:
+    def read(
+        self,
+        dataset_name: str,
+        generation_id: str,
+        *,
+        provider_uri: str | None = None,
+    ) -> tuple[dict[str, Any], Path]:
         snapshot = self.export_root / f"dataset={dataset_name}" / f"generation={generation_id}"
         manifest_path = snapshot / "manifest.json"
         if not snapshot.is_dir() or not manifest_path.is_file():
@@ -240,6 +246,21 @@ class QlibDatasetExporter:
         ModelContractLoader.validate("qlib_dataset_export", manifest)
         if manifest["generation_id"] != generation_id:
             raise ContractError("path generation does not match Qlib export manifest identity")
+        # The manifest records the provider URI it was exported for
+        # (`provider_uri_sha256`), and that field is deliberately *outside* the
+        # identity: the URI describes how the artifact will be read, not what it
+        # contains, so two runs with different URIs legitimately produce
+        # byte-identical exports sharing one generation id. That makes it invisible
+        # to any content comparison, and reusing an artifact across URIs would mint
+        # a receipt attesting one URI with evidence produced under another. The URI
+        # cannot be checked at write time -- there is no "correct" value then, it is
+        # simply where this run wrote -- so the check belongs here, against the
+        # value the caller is asking with. Optional because the existing callers
+        # read back an artifact they have just written themselves.
+        if provider_uri is not None and manifest.get("provider_uri_sha256") != _sha256_text(provider_uri):
+            raise ContractError(
+                "Qlib export was published for a different provider URI; refusing to reuse it"
+            )
         checksum=manifest.get("quality_report_checksum_sha256"); report_path=self.export_root/"external_quality_reviews"/f"{checksum}.json"
         try: report=json.loads(report_path.read_text())
         except (OSError,json.JSONDecodeError) as exc: raise ContractError("Qlib export quality report unavailable") from exc

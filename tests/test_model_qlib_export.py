@@ -371,3 +371,53 @@ class TestLegacyExporterIsolation:
 def ModelContractLoader_validate(payload: dict) -> None:
     from uq.contracts.model_layer import ModelContractLoader
     ModelContractLoader.validate("qlib_dataset_export", payload)
+
+
+class TestReadVerifiesTheRequestNotJustTheArtifact:
+    """`read()` is the gate that makes reuse safe.
+
+    The seven pre-existing checks all verify the artifact against *itself*. This class
+    adds the request side: `provider_uri_sha256` sits outside the identity, so a
+    byte-identical export can legitimately be shared by runs whose URIs differ --
+    which is exactly the case a content comparison cannot see.
+
+    `exporter_fingerprint` is deliberately *not* re-checked here: it participates in
+    the identity, so a mismatch is already refused as a generation mismatch. A test
+    written to tamper it failed on that earlier check, which is the evidence it is
+    redundant.
+    """
+
+    def _publish(self, tmp_path: Path, provider_uri: str) -> dict:
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        return exporter.export(
+            dataset_name="x", generation_id="e" * 64,
+            frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+            calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+            provider_uri=provider_uri, quality_decision=export_decision(),
+        )
+
+    def test_the_same_uri_reads_back(self, tmp_path: Path) -> None:
+        manifest = self._publish(tmp_path, "file:///one")
+        read, _ = QlibDatasetExporter(tmp_path / "exports").read(
+            "x", manifest["generation_id"], provider_uri="file:///one"
+        )
+        assert read["generation_id"] == manifest["generation_id"]
+
+    def test_a_different_uri_is_refused(self, tmp_path: Path) -> None:
+        # Without this, a run pointed at `file:///two` would reuse the snapshot
+        # published for `file:///one` and its receipt would attest the second URI
+        # with evidence produced under the first.
+        manifest = self._publish(tmp_path, "file:///one")
+        with pytest.raises(ContractError, match="different provider URI"):
+            QlibDatasetExporter(tmp_path / "exports").read(
+                "x", manifest["generation_id"], provider_uri="file:///two"
+            )
+
+    def test_the_uri_is_absent_from_the_identity(self, tmp_path: Path) -> None:
+        # The premise of the whole design: changing the URI must not change the
+        # generation id, which is why a read-time check is needed at all.
+        first = self._publish(tmp_path / "a", "file:///one")
+        second = self._publish(tmp_path / "b", "file:///two")
+        assert first["generation_id"] == second["generation_id"]
+        assert first["provider_uri_sha256"] != second["provider_uri_sha256"]
