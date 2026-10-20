@@ -1,4 +1,4 @@
-<!-- reviewed-through: UNKNOWN (bootstrap the project before using this watermark) -->
+<!-- reviewed-through: 7e2f3c99c7aef9f0f4f902e881b6c2ce457d39e2 -->
 # Project Lessons and Retrospectives (Lessons)
 
 This is the target project's living incident and learning log, not a collection of generic examples. Except for the maintenance protocol defined in this file, every entry must come from commits, issues/PRs, CI output, reproduction records, or verifiable maintainer feedback inspected for this project; do not copy specific technical rules from templates or other projects.
