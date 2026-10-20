@@ -136,6 +136,15 @@ def verify_against_events(
     jump is ``adj_factor_D / adj_factor_{D-1}``. An event date whose session is
     absent from the frame is skipped and reported rather than failed -- a window
     that starts after an event legitimately does not contain it.
+
+    ``events`` comes in two shapes and they are not interchangeable. A frame
+    carrying an ``instrument`` column is split by instrument and each instrument is
+    replayed against **its own** events only; a frame without one is treated as the
+    events of every instrument in ``frame``. A flat table replayed against many
+    instruments is a false-failure machine: instrument B has no corporate action, so
+    its factor is flat by right, yet A's event date would demand a jump it never
+    made. Accepting the ambiguous flat shape without naming it in the signature is
+    what invites that, so it is documented rather than implied.
     """
     required = {"instrument", "datetime", "adj_factor"}
     missing = sorted(required - set(frame.columns))
@@ -144,21 +153,13 @@ def verify_against_events(
     if events is None or len(events) == 0:
         return {"checked_events": 0, "skipped_events": [], "tolerance": float(tolerance)}
 
-    event_dates: dict[dt.date, tuple[float, float, float]] = {}
-    for row in events.to_dict(orient="records"):
-        day = dt.date(int(row["year"]), int(row["month"]), int(row["day"]))
-        event_dates[day] = (
-            float(row.get("fenhong") or 0.0),
-            float(row.get("songzhuangu") or 0.0),
-            float(row.get("peigu") or 0.0),
-        )
-
     ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort")
     checked = 0
     skipped: list[str] = []
     failures: list[str] = []
     for instrument, rows in ordered.groupby("instrument", sort=True):
         rows = rows.reset_index(drop=True)
+        event_dates = _event_dates_for(events, instrument)
         sessions = [pd.Timestamp(value).date() for value in rows["datetime"]]
         factors = pd.to_numeric(rows["adj_factor"], errors="coerce").to_numpy()
         closes = pd.to_numeric(rows["close"], errors="coerce").to_numpy() if "close" in rows else None
@@ -202,3 +203,30 @@ def verify_against_events(
             + "; ".join(failures[:5])
         )
     return {"checked_events": checked, "skipped_events": skipped, "tolerance": float(tolerance)}
+
+
+def _event_dates_for(
+    events: pd.DataFrame, instrument: str
+) -> dict[dt.date, tuple[float, float, float]]:
+    """One instrument's events as ``date -> (fenhong, songzhuangu, peigu)``.
+
+    The ``instrument`` column decides the scope. Without it the table is the events
+    of *every* instrument in the frame under test, which is only correct for a
+    single-instrument frame -- the caller's shape, stated in ``verify_against_events``.
+    """
+    if "instrument" in events.columns:
+        symbol = instrument.split(".")[0]
+        scoped = events[events["instrument"].astype(str).isin(
+            {instrument, symbol, f"{symbol}.SH", f"{symbol}.SZ", f"{symbol}.BJ"}
+        )]
+    else:
+        scoped = events
+    dates: dict[dt.date, tuple[float, float, float]] = {}
+    for row in scoped.to_dict(orient="records"):
+        day = dt.date(int(row["year"]), int(row["month"]), int(row["day"]))
+        dates[day] = (
+            float(row.get("fenhong") or 0.0),
+            float(row.get("songzhuangu") or 0.0),
+            float(row.get("peigu") or 0.0),
+        )
+    return dates

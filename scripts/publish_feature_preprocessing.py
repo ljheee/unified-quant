@@ -188,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     partition_ids: list[str] = []
     manifests: list[dict[str, Any]] = []
     for value in dates:
-        partition = store._partition(
+        partition = store.partition_path(
             input_dataset="bars_daily",
             input_schema_version="v2",
             factor_set=args.factor_set,

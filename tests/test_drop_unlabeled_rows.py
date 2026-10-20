@@ -110,7 +110,12 @@ class TestDropUnlabelledFactorRows:
     def test_nothing_to_drop_returns_the_frame_untouched(self):
         frame = _frame_for()
         kept, audit = drop_unlabelled_factor_rows(frame, _labels_for({}))
-        assert audit == {}
+        # The frame is returned unchanged, and the audit still reports the two
+        # shapes it inspected (both zero) rather than being empty -- an empty dict
+        # would not distinguish "nothing to drop" from "nothing was checked".
+        assert audit["null_labels"] == 0
+        assert audit["absent_keys"] == 0
+        assert audit["rows"] == 0
         pd.testing.assert_frame_equal(kept, frame)
 
     def test_the_result_carries_a_reset_index(self):
@@ -121,6 +126,37 @@ class TestDropUnlabelledFactorRows:
             _frame_for(), _labels_for({"A": ["2026-01-05"]})
         )
         assert kept.index.tolist() == list(range(len(kept)))
+
+    def test_a_factor_row_absent_from_the_label_frame_is_dropped(self):
+        # The shape a value test cannot see: `C` has factor rows but no key in the
+        # label frame at all, so `label_frame["label"].isna()` names nothing. The
+        # downstream left join would turn it into a NaN label and publish it. The
+        # audit separates it from a present-but-null label so the report says which
+        # shape was actually removed.
+        labels = _labels_for({})
+        labels = labels[labels["instrument"] != "A"]
+        kept, audit = drop_unlabelled_factor_rows(_frame_for(), labels)
+        assert "A" not in set(kept["instrument"])
+        assert set(kept["instrument"]) == {"B"}
+        assert audit["absent_keys"] == len(WINDOW)
+        assert audit["null_labels"] == 0
+        # and the surviving rows really do join to a label
+        joined = kept.merge(
+            labels, how="left", left_on=["instrument", "datetime"],
+            right_on=["instrument", "decision_date"],
+        )
+        assert not joined["label"].isna().any()
+
+    def test_both_shapes_are_counted_separately(self):
+        # A produces present-but-null labels; C is absent entirely. Same policy, two
+        # defects, one report that does not conflate them.
+        labels = _labels_for({"A": [WINDOW[0]]})
+        labels = labels[labels["instrument"] != "B"]
+        kept, audit = drop_unlabelled_factor_rows(_frame_for(), labels)
+        assert audit["null_labels"] == 1
+        assert audit["absent_keys"] == len(WINDOW)
+        assert audit["rows"] == 1 + len(WINDOW)
+        assert set(kept["instrument"]) == {"A"}
 
 
 def test_names_exactly_the_rows_whose_label_is_null():

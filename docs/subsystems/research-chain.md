@@ -60,6 +60,39 @@ research_runs/results/request=<generation>/run=<run_id>/result=<generation>/mani
 
 State and result manifests are content-addressed with `generation_id` and `manifest_digest_sha256`. A same-run/same-stage state write is allowed to rewrite with an identical digest (idempotent retry) and replaces the ledger otherwise; content-addressed artifacts are never rewritten, because artifact publication is the only moment content consistency can be checked.
 
+## Dataset-stage missing-data policy (`missing_policy`)
+
+Three mutually exclusive values, guarding three different defects. They are separate
+because a null *feature* and a null *label* are not the same fact: a feature can be
+undefined by definition (`close_location_1d` when `high == low`, i.e. a limit-locked
+session; a 20-session warm-up), while a label is undefined because the forward price does
+not exist. scikit-learn draws the same line inside one call — `ensure_all_finite` governs X
+only and its docstring states it "does not influence whether y can have np.inf, np.nan,
+pd.NA values", while `_assert_all_finite(y)` is unconditional. Qlib separates them too:
+`DropnaLabel` is a distinct processor and `is_for_infer()` is `False` for it, `True` for
+`DropnaProcessor(fields_group="feature")` — a row can be untrainable and still scoreable.
+
+| Value | Removes | Post-merge null check |
+| --- | --- | --- |
+| `fail_closed` | nothing | any null in features or label → refuse |
+| `drop_incomplete_rows` | rows with a null **feature** | any surviving **label** null → refuse |
+| `drop_unlabeled_rows` | rows with a null **label** (plus feature nulls) | none — it drops them |
+
+Dropping happens **before** the preprocessing transform, not after the label merge:
+`DatasetWriter` requires the published frame and the preprocessing output to carry the
+same rows and re-derives `output_frame_sha256` from the dataset frame on both publish and
+read. A null label is only knowable post-merge, so `drop_unlabelled_factor_rows` filters the
+preprocessing *input* and the transform is re-run.
+
+**Two shapes of a missing label, and why both must be dropped.** A label that is *present
+but null* leaves a row in `label_frame` that `unlabeled_keys` can name. A label whose key is
+*absent* leaves no row at all, so no value test can see it — yet a left join turns it into a
+NaN that would reach the published dataset. The sibling policies caught both shapes because
+they assert on the merged frame; this one caught only the first, because the check was
+frame-local. `drop_unlabelled_factor_rows` now compares key sets with `pandas`
+`indicator=True` and treats `left_only` the same as null, reporting `null_labels` and
+`absent_keys` separately. No `validate=` value detects this — those guard key *uniqueness*.
+
 ## Constraints, Failures, and Compatibility
 
 - Failure reasons are a closed set (`src/uq/research_chain/resolver.py:43`): `request_invalid`, `input_unresolved`, `input_tampered`, `lineage_mismatch`, `quality_decision_missing`, `quality_decision_rejected`, `stage_failed`, `store_read_failed`, `overwrite_conflict`, `reproducibility_failed`, `result_reconciliation_failed`. Each maps to a CLI exit code.
@@ -69,7 +102,7 @@ State and result manifests are content-addressed with `generation_id` and `manif
 
 ## Verification Evidence
 
-- `.venv/bin/python -m pytest` → `1185 passed, 25 skipped` on HEAD `54676a0`; `.venv-qlib/bin/python -m pytest` → `1210 passed, 0 skipped` (the 25 `.venv` skips are Qlib-gated research-chain tests).
+- `.venv/bin/python -m pytest` → `1188 passed, 25 skipped`; `.venv-qlib/bin/python -m pytest` → `1213 passed, 0 skipped` (the 25 `.venv` skips are Qlib-gated research-chain tests). Counts updated by the change that adds the missing-data-policy section above.
 - Research-chain suites: `tests/test_research_chain_phase0.py`–`phase5.py`, `tests/test_research_chain_release_evidence.py`, `tests/test_research_v4_contract.py`, `tests/test_research_membership_input.py`.
 - Paper-stage integration: `tests/test_paper_execution_research_stage_runner.py` and `tests/test_paper_execution_research_integration_phase*.py`.
 - CLI dry-run smoke with the shipped fixture: `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` (documented in `docs/user-guide.md` §6).

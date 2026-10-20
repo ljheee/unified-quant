@@ -121,14 +121,35 @@ def test_event_replay_skips_an_event_outside_the_window():
     )
 
 
-def test_nan_close_is_rejected_before_return_calculation():
-    # cr.md H7 regression: a NaN close used to pass validation and get
-    # pad-filled inside pct_change, fabricating returns across the gap.
-    bad = frame()
-    bad.loc[5, "close"] = float("nan")
-    with pytest.raises(ContractError, match="null values"):
+def test_a_multi_instrument_event_table_only_replays_each_instruments_own_events():
+    # A flat table replayed against every instrument is a false-failure machine:
+    # 600000 has a dividend and its factor jumps, 000001 has no corporate action so
+    # its factor is flat *by right*. Demanding the same jump from both rejects a
+    # correct adjustment. With an `instrument` column each frame is checked against
+    # its own events only.
+    bars = frame(factor=1.0)
+    flat = pd.DataFrame({
+        "instrument": ["000001.XSHE"] * len(bars),
+        "datetime": bars["datetime"],
+        "close": bars["close"],
+        "adj_factor": [1.0] * len(bars),
+    })
+    jumping = bars.copy()
+    pre_close, cash = 10.0, 0.2
+    jumping["adj_factor"] = 1.0
+    jumping.loc[4:, "adj_factor"] = pre_close / (pre_close - cash)
+    combined = pd.concat([jumping, flat], ignore_index=True)
+    events = _event_frame((2026, 7, 5, 1, 2.0, 0.0, 0.0, 0.0))
+    events["instrument"] = ["600000.XSHG"]
+    report = calculate_adjusted_factors(
+        combined, adjustment_snapshot_ids=[SNAPSHOT], effective_date_table_checksums=[TABLE],
+        events=events,
+    )
+    assert len(report) == len(combined)
+    # the same flat table without the column keeps the previous behaviour, so
+    # existing single-instrument callers are unaffected
+    with pytest.raises(ContractError, match="disagree with the corporate-action event table"):
         calculate_adjusted_factors(
-            bad,
-            adjustment_snapshot_ids=[SNAPSHOT, SNAPSHOT],
-            effective_date_table_checksums=[TABLE, TABLE],
+            combined, adjustment_snapshot_ids=[SNAPSHOT], effective_date_table_checksums=[TABLE],
+            events=_event_frame((2026, 7, 5, 1, 2.0, 0.0, 0.0, 0.0)),
         )

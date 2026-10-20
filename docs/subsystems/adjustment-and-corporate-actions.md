@@ -65,8 +65,31 @@ Snapshots carry: instrument, session/effective-date table, the raw exchange even
 
 The event store is content-addressed and append-only; revisions are keyed by content, so byte-identical revisions collapse rather than duplicating a revision number.
 
-## Constraints, Failures, and Compatibility
+## Event-table replay: what is compared, and against which instruments
 
+`src/uq/factors/adjusted_price.py::verify_against_events` replays the event table against
+the adjusted frame and compares **jumps, never levels** (derivations anchor the cumulative
+factor at different points, so two correct implementations differ by a constant scale).
+
+`events` accepts two shapes, and the distinction is load-bearing:
+
+| Shape | Behaviour |
+| --- |
+| carries an `instrument` column | split by instrument; each instrument is replayed against **its own** events only |
+| no `instrument` column | the table is treated as the events of **every** instrument in the frame |
+
+A flat table replayed against every instrument is a false-failure machine: an instrument
+with no corporate action has a flat factor *by right* (62 of 5059 real names), yet a foreign
+ex-date would demand a jump it never made. The flat shape therefore remains valid only for
+a single-instrument frame — which is what the production caller passes
+(`src/uq/factors/engine.py:300` takes an instrument-agnostic table). `pandas`' `indicator`
+is not used here; scoping is an explicit column filter over the instrument's spellings.
+
+`checked_events` / `skipped_events` are returned for audit. **Unverified**: whether any
+caller consumes `checked_events` today — the adjusted-window publisher records
+`skipped_events` only (`scripts/publish_adjusted_window.py:292`).
+
+## Constraints, Failures, and Compatibility
 - **Semantic changes require a new snapshot version.** Documented precedents: v1→v2 for a factor-basis change, v2→v3 for the `.XBSE` pattern widening, v3→v5 for the TDX lineage. Each older version stays readable and keeps rejecting what it rejected, so existing partitions are never silently relabelled.
 - **Tolerance is physical, not arbitrary.** The exchange publishes ex-right reference price at 0.01 CNY resolution and providers publish `adj_factor` at four decimals, so a purely relative jump tolerance consumed up to 89 % of the `1e-3` budget on a measured low-priced name and outright rejected a legal one. The gate now adds a floor of `tick / previous_close` (`src/uq/pipeline/adjusted_price.py`), which absorbs rounding without masking a genuine drift.
 - **Structural gaps are declared, not counted as failures.** Because Tushare carries no rights-issue fields, `peigu`/`peigujia` `amount_diverged` rows only state that the disclosure side lacks the data; `fenhong`/`songzhuangu` divergences are the real two-source disagreements. Pure-bonus disclosures that cannot be mapped to the exchange event shape are counted as `uncovered` rather than failing the gate, so the gate does not turn a structural exclusion into a false red on most real instruments.
@@ -74,7 +97,7 @@ The event store is content-addressed and append-only; revisions are keyed by con
 
 ## Verification Evidence
 
-- `.venv/bin/python -m pytest` → `1185 passed, 25 skipped` on HEAD `54676a0`; `.venv-qlib/bin/python -m pytest` → `1210 passed, 0 skipped`.
+- `.venv/bin/python -m pytest` → `1188 passed, 25 skipped`; `.venv-qlib/bin/python -m pytest` → `1213 passed, 0 skipped`. Counts updated by the change that adds the event-replay and missing-data-policy sections above.
 - Adjustment-focused suites: `tests/test_adjustment_chain.py` (incl. the TDX lineage, v5/v3 mutual exclusion, consumption tests), `tests/test_adjustment_snapshot_runtime.py`, `tests/test_adjustment_cash.py`, `tests/test_adjustment_events.py`, `tests/test_build_tdx_adjustments.py`, `tests/test_corporate_action_reconcile.py`, `tests/test_reconcile_corporate_actions.py`, `tests/test_publish_adjusted_window.py`, `tests/test_adjusted_price_pipeline.py`.
 - Snapshot-version coexistence is locked by `tests/test_gate_exit_contracts.py:300` `test_xbse_widening_lands_as_v3_not_an_in_place_edit` and by the v3/v5 mutual-exclusion tests in `tests/test_adjustment_chain.py`.
 - The tick floor is locked by `tests/test_adjusted_price_pipeline.py:463` `test_the_tick_floor_absorbs_exchange_rounding_without_masking_a_drift`; removing the floor fails it.

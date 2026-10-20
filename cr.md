@@ -2132,3 +2132,85 @@ AttributeError——唯一例外是 export→model（`_read_receipt` 有落盘�
   `publish_feature_preprocessing.py` 调私有 `_partition`）**未处理**，按"只修 FC"的范围约定留待下轮。
 - `drop_unlabeled_rows` 的"缺席形态"（因子行不在 label 帧中而非 present-null）仍无合并后
   surviving-null 检查——与 `fail_closed` / `drop_incomplete_rows` 的不对称仍在，已登记未修。
+
+### 8.58 §8.57 的 OBS 族 + surviving-null 缺口：三项修复（2026-10-20）
+
+**触发**：用户"建立todo，全部完成；复杂难点派subagent联网调研后再综合给出设计结论"→"好；那这一轮落地的范围是哪些？"→"Implement the plan"。
+
+**两个 subagent 调研（结论均改变了我原来的设计前提）**
+
+**① surviving-null**（Feynman）
+- sklearn `utils/validation.py:1361`：`_assert_all_finite(y)` **无条件**执行；而同文件 `:1251`
+  docstring 明说 `ensure_all_finite` "does not influence whether y can have np.inf, np.nan, pd.NA"。
+  **X 与 y 的 finiteness 是两个独立开关**——这是"特征缺失"与"标签缺失必须分策略"最硬的公开证据。
+- **纠正我的错误假设**：我原打算"加合并后 surviving-null 检查"。调研指出那**不够**——
+  `drop_unlabeled_rows` 的既有检查是 **frame-local** 的（只看 `label_frame["label"].isna()`），
+  而"键缺席"那种形状**不产生任何行**，合并后检查也救不了它（合并后检查只在
+  `fail_closed`/`drop_incomplete_rows` 里有，所以它们两种形状都能拦）。
+- pandas `indicator` 文档明确用于"merge key 只出现在一侧"；`validate=` 经源码
+  （`merge.py` `_ValidateOperation`）核实**只查键唯一性**，不能用于此。
+- Alphalens 的顺序是 factor-filter → merge → drop → **loss budget**（`utils.py:641/669/680/690`），
+  比我们多一层"丢失率超阈值即响"，我们无对应物（登记未做）。
+- vnpy/mlfinlab **未取到源码**，无任何主张；XGBoost/LightGBM 的 label NaN 策略**未取到证据**。
+
+**② 复用已发布制品**（Wegener）
+- Gradle 原文是 "If a task property **affects the output**, be sure to register it as an input"
+  （`docs.gradle.org/current/userguide/incremental_build.html`）。**我上一轮漏读了条件从句**，
+  把它当成"所有配置都必须进 key"，据此主张 (a) 是"根治"——那是引用过度。
+- 按原始规则复核本仓库：`provider_uri` 是 Qlib **读**导出的位置，不影响导出内容；
+  `export_layout.root` 含 `generation_id`（纳入 key 会引入循环依赖），其 `dataset_name`
+  也不影响导出内容。**两者都不该进 key**，该进的是读时校验。
+- Nix `substitution-goal.cc:45-50` 的既有路径短路**以 request-scoped 的 `repair` 为条件**；
+  `local-store.cc:1096-1150` 重流过 HashSink 硬失败。DVC `output.py:599-614` 同样重算再比。
+- Git `object-file.c` `finalize_object_file_flags` + `check_collision` 是"同内容 skip、
+  不同内容 refuse、读时再校验"的最干净先例。
+- **结论修正**：正确修法是 **(b)+(c) 读时全字段校验**，零破坏、零 schema 变更；
+  我原计划的 "(a) 把 provider_uri 纳入 identity + schema v3 + 重发制品" **本轮不做**（已作为独立后续登记）。
+
+#### 三项修复
+
+**A. `drop_unlabelled_factor_rows` 的键集比对改为全量**（`src/uq/research_chain/adapters.py`）
+现状经合成数据复现：因子行在 label 帧中**缺席**（非 present-null）时，1 条 NaN label
++1 条缺席行存活进 dataset。改为因子帧键集对 `label_frame[[instrument, decision_date]]`
+做 `indicator=True` 左连接，`left_only`（缺席）与 present-null **同等移除**。
+audit 增 `null_labels` / `absent_keys` 两个分项，使报告能区分两种形状。
+测试 `tests/test_drop_unlabeled_rows.py` 增 3 例（缺席形状被丢 / 两形状分开计数 / 无缺失时
+audit 报 0 而非空 dict），共 11 例。
+**变异**：去掉 `& key_present=="both"` 守卫 → 2 例红。
+
+**B. `verify_against_events` 按 instrument 过滤**（`src/uq/factors/adjusted_price.py`)
+原 `event_dates` 是**全局** dict，内层 `groupby("instrument")` 会让 A 的事件日去校验 B 的跳变
+（误杀方向）。抽出 `_event_dates_for(events, instrument)`：帧内有 `instrument` 列则按列分组
+（含裸代码与 `.SH/.SZ/.BJ` 拼写），无则退化为"全局表适用于所有 instrument"——**保持现有唯一
+prod 调用方（`engine.py:300`，扁平表）行为不变**，同时让混合表可用。
+误杀风险经评估为**休眠**（当前无 prod 调用方传多标的表），故未改调用方，只让 API 形状不再邀请误用。
+测试增 1 例（混合表下无事件的标的不被误杀；去掉列则旧行为不变），共 11 例。
+**变异**：去掉 instrument scoping → 1 例红。
+
+**C. `FactorStore.partition_path` 公开**（`src/uq/factors/store.py` + 脚本）
+`scripts/publish_feature_preprocessing.py` 原调私有 `_partition`（家族第 4 处：
+另三处 `membership_input.py:169`、`factors/partition_set.py:65`、`dividend_events.py`
+留待下轮，避免扩大 diff）。公开 `partition_path`，`_partition` 委托它（内部调用不变）。
+测试增 1 例（公开路径 == 布局 / 私有访问器委托同一路径）。
+**变异**：把 `_partition` 改成不复委托 → 4 例红。
+
+#### 文档
+
+- `docs/subsystems/research-chain.md` 新增"Dataset-stage missing-data policy"一节（此前 0 覆盖）：
+  三值语义表、为何必须在 transform 前丢行、两种 label 缺失形状及 `indicator` 依据。
+- `docs/subsystems/adjustment-and-corporate-actions.md` 新增"Event-table replay"一节（此前 0 覆盖）：
+  比跳变不比水平、`events` 双形状表、`checked_events` 消费方**未验证**（如实标注 UNKNOWN）。
+- 两页验证数字更新为 `1188/25` 与 `1213/0`（HEAD 待本次提交后补）。
+
+#### 全量
+
+`.venv` **1188 passed / 25 skipped / exit 0**（父 `54676a0` 1185/25，净 **+3**）；
+`.venv-qlib` **1213 passed / 0 skipped**（父 1210/0，净 **+3**）。
+三次变异均必红（A×1、B×1、C×1），全部 `git checkout` 恢复并核净。
+
+#### 本轮明确不做（已登记）
+
+1. **(b)+(c) 读时全字段校验 + 复用分支**：依赖先有校验，否则正是 §8.56 的"自相矛盾凭证"入口。
+2. **Alphalens 式 loss budget**（丢失率超阈值即响）：我们无对应物。
+3. `membership_input.py` / `partition_set.py` / `dividend_events.py` 的私有访问。
+4. "7 轮无效尝试"的**跑通整条 v5 execute**：仍卡在内容寻址制品不幂等，属第 1 项的前置。

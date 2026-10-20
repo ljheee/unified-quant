@@ -286,3 +286,25 @@ def test_refuses_a_decisions_document_without_the_family(tmp_path: Path) -> None
     path.write_text(json.dumps({"quality_decisions": {}}))
     code = module.main(_argv(tmp_path, drop=False, decisions=path, partition=partition))
     assert code == 2
+
+
+def test_the_published_partition_path_is_the_stores_own_layout(tmp_path: Path) -> None:
+    # The script must name a partition through the store's public path API rather
+    # than rebuilding the layout from the four coordinates: the layout is a contract
+    # of `FactorStore`, and a second copy of it drifts.
+    from uq.contracts.factor_governance import FactorRegistry
+    from uq.factors.store import FactorStore
+
+    store = FactorStore(tmp_path, FactorRegistry(_ROOT))
+    coordinates = dict(
+        input_dataset="bars_daily", input_schema_version="v2",
+        factor_set="basic", factor_version="2.0.0",
+        partition_date=DATES[0].date(),
+    )
+    assert store.partition_path(**coordinates) == (
+        tmp_path / "factors" / "dataset=bars_daily/schema_version=v2"
+        / "factor_set=basic/factor_version=2.0.0"
+        / f"date={DATES[0].date().isoformat()}"
+    )
+    # the private accessor delegates, so the two cannot fork
+    assert store._partition(**coordinates) == store.partition_path(**coordinates)

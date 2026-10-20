@@ -30,6 +30,27 @@ class FactorStore:
         self.root = root
         self.registry = registry
 
+    def partition_path(
+        self,
+        *,
+        input_dataset: str,
+        input_schema_version: str,
+        factor_set: str,
+        factor_version: str,
+        partition_date: date,
+    ) -> Path:
+        """The governed directory holding one factor partition.
+
+        Public because production entry points need to name a partition before they
+        can read it (``scripts/publish_feature_preprocessing.py`` did, and reached for
+        the private ``_partition`` to do it). The layout is a contract of this store,
+        so the callers should not have to rebuild the path from the four coordinates.
+        """
+        return self.root / "factors" / (
+            f"dataset={input_dataset}/schema_version={input_schema_version}/"
+            f"factor_set={factor_set}/factor_version={factor_version}/date={partition_date.isoformat()}"
+        )
+
     def _partition(
         self,
         *,
@@ -39,9 +60,10 @@ class FactorStore:
         factor_version: str,
         partition_date: date,
     ) -> Path:
-        return self.root / "factors" / (
-            f"dataset={input_dataset}/schema_version={input_schema_version}/"
-            f"factor_set={factor_set}/factor_version={factor_version}/date={partition_date.isoformat()}"
+        return self.partition_path(
+            input_dataset=input_dataset, input_schema_version=input_schema_version,
+            factor_set=factor_set, factor_version=factor_version,
+            partition_date=partition_date,
         )
 
     def publish(

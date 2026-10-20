@@ -230,28 +230,48 @@ def unlabeled_keys(label_frame: pd.DataFrame) -> pd.DataFrame:
 def drop_unlabelled_factor_rows(
     factor_frame: pd.DataFrame, label_frame: pd.DataFrame
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Remove the factor rows whose label is null, before the transform.
+    """Remove the factor rows this stage cannot train on, before the transform.
 
     A null label is only knowable after the label merge, which is downstream of
     preprocessing, so this cannot filter the merged frame: `DatasetWriter` requires
     the published frame and the preprocessing output to carry the same rows. The
     filter is applied to the preprocessing *input* instead and the transform re-run.
+
+    Two shapes are removed, and both must be, because only one of them is visible to
+    a value test. A label that is *present but null* leaves a row in ``label_frame``
+    that ``unlabeled_keys`` can name. A label whose key is *absent* leaves no row at
+    all, so no value test can see it -- yet a later left join turns it into a NaN that
+    reaches the published dataset. That asymmetry is exactly why the two sibling
+    policies (which assert on the merged frame) caught both shapes while this one
+    caught only the first: the check was frame-local. The key-set comparison below is
+    total instead. pandas documents ``indicator`` specifically for "the merge key only
+    appears in one frame"; no ``validate=`` value detects it, because those guard key
+    *uniqueness* (``merge.py``'s ``_ValidateOperation``).
     """
     dropped_keys = unlabeled_keys(label_frame)
-    if dropped_keys.empty:
-        return factor_frame, {}
-    merged = factor_frame.merge(
+    present_keys = label_frame[["instrument", "decision_date"]].drop_duplicates()
+    null_label = factor_frame.merge(
         dropped_keys.drop_duplicates(),
         how="left", left_on=["instrument", "datetime"],
-        right_on=["instrument", "decision_date"], indicator=True,
+        right_on=["instrument", "decision_date"], indicator="null_label",
     )
-    keep_mask = (merged["_merge"] == "left_only").to_numpy()
-    kept = factor_frame.loc[keep_mask].reset_index(drop=True)
-    if kept.empty:
+    key_present = factor_frame.merge(
+        present_keys,
+        how="left", left_on=["instrument", "datetime"],
+        right_on=["instrument", "decision_date"], indicator="key_present",
+    )
+    keep_mask = (
+        (null_label["null_label"] == "left_only").to_numpy()
+        & (key_present["key_present"] == "both").to_numpy()
+    )
+    if not keep_mask.any():
         raise ContractError("drop_unlabeled_rows left no labeled rows")
+    kept = factor_frame.loc[keep_mask].reset_index(drop=True)
     audit = {
         "rows": int((~keep_mask).sum()),
-        "instruments": int(dropped_keys["instrument"].nunique()),
+        "instruments": int(factor_frame.loc[~keep_mask, "instrument"].nunique()),
+        "null_labels": int((null_label["null_label"] == "both").sum()),
+        "absent_keys": int((key_present["key_present"] == "left_only").sum()),
         "note": (
             "label is the target: these rows cannot be trained on but may still be "
             "scored at inference; see missing_policy drop_unlabeled_rows"

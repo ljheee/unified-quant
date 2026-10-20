@@ -468,3 +468,12 @@ drop_unlabeled_rows 落地(2026-10-18,cr.md §8.54)
 - **元问题**:这轮通病是**只找支持自己假设的证据**。修法:每个结论先列"依赖哪些未验证前提"再逐条验。
 - **交接(若要做)**:复用已存在 export 制品需要新增 5 项复用前校验(3 项身份 + read 全通过 + 决定是否补写本次 run report),不是"加个分支"。
 - **状态**:冒烟本来目的(样本筛选策略全 A 落地)**已达成**;"跑通整条 execute"未达成,卡点已定位,不再投入。全量 `.venv` 1180/24、`.venv-qlib` 1204/0。
+
+三项修复(2026-10-20,cr.md §8.58)
+- **调研结论纠正我两个错误**:①"加合并后 surviving-null 检查"不够——`drop_unlabeled_rows` 的检查是 **frame-local** 的,"键缺席"不产生行,合并后检查也救不了;②Gradle 原文有条件从句 "affects the output",我上轮漏读,据此主张 (a) 是"根治"属**引用过度**——`provider_uri`/`export_layout` 都不影响导出内容,不该进 key,该进的是读时校验。
+- **A** `drop_unlabelled_factor_rows` 键集改全量(`indicator=True`,`left_only` 与 present-null 同等移除),audit 增 `null_labels`/`absent_keys` 分项。测试 11 例;变异(去守卫)2 红。
+- **B** `verify_against_events` 抽 `_event_dates_for` 按 instrument 过滤(双形态:有 instrument 列则分组,无则全局=现行为,保持 `engine.py:300` 不变)。测试 11 例;变异(去 scoping)1 红。误杀风险**休眠**,只让 API 形状不再邀请误用,未改调用方。
+- **C** `FactorStore.partition_path` 公开,`_partition` 委托它;脚本改调公开方法。测试 8 例;变异(不复委托)4 红。另三处私有访问(`membership_input.py`/`partition_set.py`/`dividend_events.py`)留待下轮。
+- **文档**:`docs/subsystems/research-chain.md` 与 `adjustment-and-corporate-actions.md` 各新增一节(此前 0 覆盖);`checked_events` 消费方如实标 **UNKNOWN**。
+- **全量**:`.venv` 1188/25、`.venv-qlib` 1213/0(父 1185/25、1210/0,净 +3 +3)。三次变异全必红。
+- **本轮明确不做**:①读时全字段校验+复用分支(§8.56 核心问题的正确解,需先有校验);②Alphalens 式 loss budget;③另三处私有访问;④跑通整条 v5 execute(仍卡内容寻址不幂等)。
