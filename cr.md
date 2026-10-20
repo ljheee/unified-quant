@@ -2354,3 +2354,74 @@ provider URI）后返回该 manifest。URI 不属于本 run 的会被拒，**不
 `.venv` **1191 passed / 27 skipped / exit 0**（父 `28eb49b` 1191/25；+2 测试里 1 例在
 `.venv` 被 qlib gate 跳过，故 skip +2）；
 `.venv-qlib` **1218 passed / 0 skipped**（父 1216/0，净 **+2**）。
+
+### 8.61 二次纠正：撤销 §8.60 的"调用方幂等"补丁（2026-10-20）
+
+**触发**：用户"如果所有 stage 都按这个模式修，就不合理吧？什么场景需要重跑？之前的设计，
+就是要每次重跑都输出一个制品？跑到一半中断后，过程信息的价值有多大？重跑使用的数据集肯定不变吧？"
+
+#### A. 我先做了一个错误判断，然后被自己刚写的代码推翻
+
+我上一轮用 `publish_market_datasets.py` 的 `_attempt()` 当"反证"，说框架搞错了，
+然后给 export 和 dataset 都加了"already exists → 复用已发布制品"的捕获。**那是错的。**
+
+**我刚才实测**：`DatasetBuilder.build(...)` 产出的 manifest 里
+`run_id = 00000000-0000-4000-8000-000000000000`、`created_at = 1970-01-01T00:00:00+00:00`
+——**都不参与 identity**。所以 dataset 的 identity 是纯内容哈希，与"第几次跑、哪个 run"无关。
+
+由此推出两个事实，联合起来说明我的补丁解决的是一个**我自己制造的问题**：
+
+1. **同 request 同 run 重跑** → resume 会跳过已 passed 的 stage，**根本走不到 writer**。
+   `_resume_from_passed_stages`（`runner.py:150`）早就覆盖了这个场景。
+2. **同 request 换 run 重跑** → identity 相同 → 撞 already exists。而**这个场景是我冒烟脚本
+   造出来的**：我为了绕开 stage 台账冲突，每次 `req['run_id']=str(uuid.uuid4())`。
+   同一份研究重跑本该沿用同一个 run_id。
+
+我为了自己制造的碰撞写了代码，还在 cr.md 里写成"框架纠正"。
+
+#### B. 为什么不能"每次重跑都换新 identity"
+
+ dataset 的 `generation_id` 是内容哈希，**同输入同输出必须同 id**，否则：
+
+- `AdjustedPriceDatasetStore._read_verified_directory` 靠 id 反查 partition（`owning_contracts.py:161`），
+  两个 id 指同一份数据就是**定位歧义**；
+- v5 request 绑 `{family, generation_id, manifest_digest}` 并据此校验制品未被改；重跑换 id 会让
+  "这份 dataset 属于这个 request"这条链断掉。
+
+输入真的变了 → identity 自然变，**这条路径本来就在工作**，不需要任何改动。
+
+#### C. 不是所有 stage 都该有这个补丁（用户的质疑成立）
+
+| 族 | identity 是否含 run/时间 | 重跑会不会撞 |
+|---|---|---|
+| dataset / qlib_export / factor | 否（纯内容） | **会**（但同 run 下被 resume 挡住） |
+| model_run / prediction / backtest_result | **是**（含 `created_at`/`run_id`） | 不会，天然出新 id |
+
+所以逐 stage 铺开等于给大部分 stage 加死代码。我上一轮说"逐个铺开单独一轮"也是错的。
+
+#### D. 撤销内容（本次提交）
+
+- `src/uq/research_chain/adapters.py`：撤掉 export 与 dataset 两处 `already exists` 捕获，
+  删除随之引入的 `_read_back_published_export` 与 `generation_from_refusal`，
+  以及只为它们添加的 `import re`。
+- `tests/test_research_chain_phase3.py`：删除两个复用测试。
+- `docs/subsystems/model-layer.md`：把"幂等在调用方"改写为"同 request+run 的重跑由 resume 跳过，
+  调用方无 already exists 恢复；跨 run 撞 id 时 refusal 是正确应答"。
+- **保留**：`read(provider_uri=...)` 的读时 URI 校验（`28eb49b`）——它有独立价值，
+  与本次撤销的复用分支无关。
+
+#### E. 验证
+
+撤销后回到 `28eb49b` 的基线：`.venv` **1191 passed / 25 skipped**、
+`.venv-qlib` **1216 passed / 0 skipped**，与父提交完全一致（净 0）。
+
+#### F. 教训（如实写下来）
+
+**"在 sibling 脚本里找到一个模式"不等于"这个模式适用于我当时的场景"。**
+`publish_market_datasets.py` 的 `_attempt` 解决的是"窗口批处理中断后续跑同一窗口"——
+它是**同一个 request、同一份 batch**，与"我每次换 run_id 重跑"根本不同。
+我看到一个看起来相关的先例就推出现阶段结论，这是 §8.56 那个"只找支持自己的证据"的**同构复发**，
+只不过这次披着"反证"的外衣。
+
+**判断准则（供以后用）**：要承认"这里需要幂等"，必须先证明
+① 该 stage 在同 run 下确实会被走到两次，且 ② 这不是调用方自己制造的场景。

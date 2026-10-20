@@ -1199,24 +1199,6 @@ class QlibExportStageAdapter:
         self.dataset_writer = dataset_writer
         self.run_store = run_store
 
-    def _read_back_published_export(
-        self, refusal: ContractError, dataset_name: str, *, provider_uri: str
-    ) -> dict[str, Any]:
-        """Recover the manifest of an export that is already published.
-
-        The publisher's refusal names the snapshot directory it would not overwrite,
-        and that directory is named by the export's own content-derived generation id
-        -- so no identity derivation has to be exposed to recover it. The recovered
-        manifest is loaded through the same `read()` gate a caller uses after a fresh
-        publish, which validates the manifest, the bound quality report, the file
-        list and every file's checksum and size, and (with ``provider_uri``) that the
-        artifact was exported for this run's provider.
-        """
-        match = re.search(r"generation=([0-9a-f]{64})", str(refusal))
-        if match is None:
-            raise refusal
-        return self.exporter.read(dataset_name, match.group(1), provider_uri=provider_uri)[0]
-
     def run(
         self,
         plan: ResolvedExecutionPlan,
@@ -1256,36 +1238,18 @@ class QlibExportStageAdapter:
         numeric_columns = [*feature_columns, label_column]
         if export_frame[numeric_columns].isna().any().any():
             raise ContractError("Qlib export cannot contain missing governed dataset values")
-        try:
-            export_manifest = self.exporter.export(
-                dataset_name=dataset_manifest["dataset_name"],
-                generation_id=dataset_generation_id,
-                frame=export_frame,
-                feature_mapping=feature_mapping,
-                label_column=label_column,
-                label_mapping=label_column.upper(),
-                calendar_dates=calendar_dates,
-                instruments=instruments,
-                provider_uri=provider_uri,
-                quality_decision=_decision_payload(export_quality_decision),
-            )
-        except ContractError as exc:
-            if "already exists" not in str(exc):
-                raise
-            # A retry of a stage that already landed. The publisher is immutable by
-            # design -- that is what keeps a published artifact from being
-            # overwritten -- so idempotence belongs here, at the call site, the same
-            # way `scripts/publish_market_datasets.py` tolerates an already-published
-            # partition and records it as skipped. Recovery does not need the
-            # exporter to expose its identity derivation first: the refusal names the
-            # snapshot it refused to overwrite, and the snapshot directory *is* the
-            # content-derived generation id. `read()` then re-verifies the recovered
-            # artifact in full, including the provider URI this request asks with, so
-            # a snapshot that does not belong to this run is refused rather than
-            # silently adopted.
-            export_manifest = self._read_back_published_export(
-                exc, dataset_manifest["dataset_name"], provider_uri=provider_uri,
-            )
+        export_manifest = self.exporter.export(
+            dataset_name=dataset_manifest["dataset_name"],
+            generation_id=dataset_generation_id,
+            frame=export_frame,
+            feature_mapping=feature_mapping,
+            label_column=label_column,
+            label_mapping=label_column.upper(),
+            calendar_dates=calendar_dates,
+            instruments=instruments,
+            provider_uri=provider_uri,
+            quality_decision=_decision_payload(export_quality_decision),
+        )
         verified_export = self.exporter.read(dataset_manifest["dataset_name"], export_manifest["generation_id"])
         if verified_export[0]["generation_id"] != export_manifest["generation_id"]:
             raise ContractError("Qlib export readback identity mismatch")
