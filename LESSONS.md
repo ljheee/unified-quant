@@ -1,4 +1,4 @@
-<!-- reviewed-through: 7e2f3c99c7aef9f0f4f902e881b6c2ce457d39e2 -->
+<!-- reviewed-through: e33603830f7b06df07613b260e00b7d3b6d1cb51 -->
 # Project Lessons and Retrospectives (Lessons)
 
 This is the target project's living incident and learning log, not a collection of generic examples. Except for the maintenance protocol defined in this file, every entry must come from commits, issues/PRs, CI output, reproduction records, or verifiable maintainer feedback inspected for this project; do not copy specific technical rules from templates or other projects.
@@ -79,6 +79,99 @@ When recording a specific event, evidence may support checking whether it can be
 - **Done right:** The miscount was caught within the same review and corrected before it entered any release claim.
 - **Status:** active
 - **Distinct review dates observed:** 1 (2026-10-18) — far below the promotion threshold
+
+<!-- frozen-review-lessons: sha256:20ebdcb00d8fb5c12b677ab0e5798cd1e0b51e9748204bb1555ca55c55ed6531 -->
+### L-0006 — Keep one definition of hot-path behaviour and lock that definition directly; a green suite may be pinning a copy
+- **Why:** The drop-unlabeled execution segment survived both mutations (invert `keep_mask`; no-op that never drops) under a 1180-test green suite. The root cause was not a missing test but three copies of the same logic — the stage implementation, an in-test re-implementation, and a fixture that never ran — so the suite pinned the copies while the production path had zero coverage.
+- **Review evidence:**
+  - `2026-10-20` — [cr.md:2007 §8.57 FC-N1: the drop segment had no direct coverage and both mutations survived](cr.md#L2007) and [cr.md:2052 mutation scorecard M4a/M4b both survived](cr.md#L2052); fix commit `54676a0` extracted `drop_unlabelled_factor_rows` as the single definition and locked it with `TestDropUnlabelledFactorRows`
+- **Fix or follow-up:** Landed in `54676a0`. When adding behaviour on a hot path (dataset policy execution, writer invariants), check that the logic exists exactly once and that the test imports and pins that definition instead of re-writing a parallel copy.
+- **Done right:** The fix verified both mutation directions (inverted mask and no-op mask) and recorded the mutation-verification claim in the commit message itself.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0007 — Replay resume paths in a fresh process; same-process green does not prove fresh-process recovery
+- **Why:** Research-chain stages hand results between adapters through `adapter.last_result`, an attribute no adapter ever initialized, so a fresh-process resume crashed with AttributeError at every boundary after the model stage. Every existing resume test ran inside a single process and never reached the missing-attribute branch, which made the gap structurally invisible.
+- **Review evidence:**
+  - `2026-10-20` — [cr.md:2016 §8.57 FC-N2: the `last_result` hand-off breaks fresh-process resume at every post-model boundary](cr.md#L2016); fix commit `54676a0` declares the attribute on the four adapters and rebuilds the hand-off from the published manifest and artifact store, the same read-back path the model stage uses after training
+- **Fix or follow-up:** Landed in `54676a0`. When adding a cross-stage hand-off, check that it has an on-disk read-back path and that resume tests kill and restart the process instead of chaining stages in one interpreter.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0008 — Verify syntax and behaviour on the minimum declared Python version; a green run on a newer interpreter does not cover the declared range
+- **Why:** `56d9750` landed a nested same-quote f-string (`f"{stage_plan_for_request({"contract_version": 1}).index(stage):02d}"`, a PEP 701 form that only parses on Python 3.12+) while `pyproject.toml` declares `requires-python >= 3.11`. The local 3.12 environment stayed green and the defect surfaced only when the 3.11 path was exercised; `e4d7e45` rewrote it the same day.
+- **Review evidence:**
+  - `2026-10-20` — [tests/test_paper_execution_research_integration_phase0.py, the file whose 3.12-only f-string e4d7e45 rewrote for 3.11](tests/test_paper_execution_research_integration_phase0.py); commits `56d9750` (introduced) and `e4d7e45` ("support python 3.11 stage paths"), both 2026-09-10, verified from the diffs
+- **Fix or follow-up:** Landed in `e4d7e45`. The certified range is 3.11/3.12/3.13; before treating a change as certified, either exercise it on the 3.11 floor (a `compileall` of the touched files is enough for syntax) or wait for the remote matrix instead of trusting the newest local interpreter.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0009 — Gate optional-dependency tests at the import layer, and grep for sibling instances before closing one
+- **Why:** `72b35ce` gated the phase-3 Qlib test "independently", but the gate sat on a helper that itself hard-imported qlib, so the gate was dead and collection still crashed in qlib-less cells. The same class had to be fixed again the same day: `7ee7a8f` moved the phase-5 gating to the import layer ("gate qlib tests without hard import") and re-pinned the affected gate report.
+- **Review evidence:**
+  - `2026-10-20` — [tests/test_research_chain_phase5.py, import-layer gating landed by 7ee7a8f](tests/test_research_chain_phase5.py) and [tests/test_research_chain_phase3.py, where the first (dead) gate of 72b35ce sat](tests/test_research_chain_phase3.py); both commits dated 2026-09-05
+- **Fix or follow-up:** Landed in `72b35ce` + `7ee7a8f`. Optional-dependency gating belongs where the import happens (`pytest.importorskip` / `find_spec` before any import of the optional package), never on a helper downstream of a hard import. When fixing one mis-gated test, grep the suite for the same pattern before calling the class closed.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0010 — Tests may only depend on the locked environment; never shell out to host binaries
+- **Why:** The phase-5 audit test shelled out to the host's `rg`. `b0614dc`'s own message records the blast radius: "Phase 5 audit invoked external rg, absent in CI; all ten runtime cells failed on the test dependency." The certified environment is `uv.lock` plus the runner image; a host binary is outside both, so the failure only appeared on the remote matrix.
+- **Review evidence:**
+  - `2026-10-20` — [tests/test_paper_execution_phase5.py, the audit made portable by b0614dc](tests/test_paper_execution_phase5.py); commit `b0614dc` (2026-09-09), whose message carries the all-ten-cells failure summary quoted above
+- **Fix or follow-up:** Landed in `b0614dc`. A test that needs search/filter capability implements it in Python against locked dependencies; treat any `subprocess` call to a non-Python binary in tests as a certification blocker.
+- **Done right:** The same commit archived the failed remote run as `evidence/paper-execution/release/final-cr/remote-failed-run-34353302888.json` instead of discarding it — failed evidence was preserved as evidence.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0011 — Every check an evidence record cites must exist and run in the run that produced the evidence
+- **Why:** The paper-execution release evidence archived from run 38252277339 cited a lock test that only landed in `a76e89e` — the certified matrix that produced the evidence had never executed one of the checks the record relied on. The whole evidence set had to be superseded: `d459006` re-ran the gate at `a76e89e` (run 38253299816) and rebound the release record, per its own message.
+- **Review evidence:**
+  - `2026-10-20` — [evidence/paper-execution-research-integration/release/release-record.json, the record rebound by d459006](evidence/paper-execution-research-integration/release/release-record.json); commits `a76e89e` and `d459006` (2026-10-12), the latter's message stating the lock test landed in `a76e89e` and superseding run 38252277339
+- **Fix or follow-up:** Land the gating test first, run the gate, and only then archive evidence that cites it. If a record cites check X, the cited run must be one where X existed; when in doubt, re-run rather than re-word.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0012 — Bind evidence to the last code-affecting commit, not to a moving HEAD; exempt docs-only drift explicitly
+- **Why:** After the A500 pilot archive (`23cb49a`), the evidence binding chased HEAD through a dozen bind/rebind commits on 2026-10-11/12 (`55c478a`, `54a50aa`, `acd1eea`, `709ccd3`, `21312e5`, `be672b8`, `9d9aeb4`, `2c54f80`, `4347d52`, `c1ddc55`, `609a32f`, `5cbe7f7`), because each new code commit invalidated the recorded `git_commit`; a full gate re-run was even spent on `6facb19`, a one-line docs-only commit. Binding to a moving target turns an evidence record into a race.
+- **Review evidence:**
+  - `2026-10-20` — [evidence/paper-execution-research-integration/release/release-record.json, the target of the binding chase](evidence/paper-execution-research-integration/release/release-record.json); the commit chain verified via `git log 35c4e1b..7970eec`, and `6facb19` confirmed as a one-line `pendding.md` change from its own stat
+- **Fix or follow-up:** Archive evidence only once the code shape has settled; record the last code-affecting commit as the binding and state explicitly that later docs/evidence-only commits do not invalidate it. If HEAD must move, define which path classes require re-binding (code, schemas, workflows) and which do not.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0013 — Registration of an optional comparison component must match its optional semantics; fake-adapter tests cannot see real connection costs
+- **Why:** `31af0d9` wired the TDX comparator into the v2 builder's adapter map unconditionally, and the router selects every registered `compare_with` source, so each v2 run paid the TDX multi-server connect/retry cost although the default path does not enforce the comparison. `29514dd`'s message carries the measurement: the same five sessions exceeded 150 s and had to be killed with TDX registered, versus 2.4 s total unregistered. No fake-adapter test could surface this, because fakes never open sockets.
+- **Review evidence:**
+  - `2026-10-20` — [src/uq/pipeline/daily.py, where 29514dd made comparator registration conditional on cross-validation being required](src/uq/pipeline/daily.py); commits `31af0d9` and `29514dd` (2026-10-11), measurement quoted from the fix message
+- **Fix or follow-up:** Landed in `29514dd`. Default registration must follow the feature's default semantics (off unless required). For components whose cost is connection or IO, run one measured smoke of the real registration path before release; mocked adapters structurally cannot surface connection cost.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0014 — Skip gates must sit on the tested code's real import chain, and wiring assertions must hit the instance actually wired
+- **Why:** `d62f419`'s CLI wiring test skipped only when `joblib` was absent, but `_build_runner` imports the Qlib-backed trainer — base CI cells install joblib and not qlib, so the test ran exactly where it had to fail. The same test also constructed `run_store = FileResearchRunStore(tmp_path)`, passed a *different* instance into `_build_runner`, and asserted on the decoy. `7eecc3c` fixed both: the gate now also requires qlib (matching the sibling provider-wiring test), and the assertion is `runner.dataset_adapter.membership_store is store` on the object actually passed.
+- **Review evidence:**
+  - `2026-10-20` — [tests/test_research_membership_input.py `test_cli_build_runner_wires_membership_governance_into_the_dataset_stage`, both defects visible in the d62f419 version and fixed in 7eecc3c](tests/test_research_membership_input.py); commits `d62f419` and `7eecc3c` (2026-10-12), verified from the diffs
+- **Fix or follow-up:** Landed in `7eecc3c`. Before choosing a skip guard, trace the import chain of the unit under test and gate on the full set of optional packages it touches (match the sibling pattern, e.g. `@requires_qlib`). In wiring tests, assert identity (`is`) against the object passed in, never against a separately constructed look-alike.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0015 — Tile review ranges seamlessly, and after parallel sessions diff the committed tree against the pre-verified state
+- **Why:** §8.17 covered `7970eec..11a11c9` and §8.22 started at `b81b44a`; the three commits in between — `cd7cf10` (closes eight external-review findings), `4bb29b1` (closes nine second-pass CR findings), and `b81b44a` (the very commit recording §8.17) — fell into no review range. The hole is mechanically verifiable from the two section headers plus `git log`. Inside it, two additions carried into `4bb29b1` from a parallel session had been mutation-verified only in the pre-commit worktree, and the committed tree was never diffed against that verified state (as recorded in the round's own notes), so pre-commit verification did not provably cover what landed.
+- **Review evidence:**
+  - `2026-10-20` — [cr.md:565 §8.17 header, range 7970eec..11a11c9](cr.md#L565) and [cr.md:656 §8.22 header, range b81b44a..HEAD](cr.md#L656); `git log 11a11c9..b81b44a` returns exactly `cd7cf10`, `4bb29b1`, `b81b44a`
+- **Fix or follow-up:** When reviews proceed in ranges, the next round's `from` must equal the previous round's `through` — the frozen-review machinery now enforces this via the watermark, and this lesson is the historical evidence for why it must. When a commit carries content prepared in a parallel session, diff the committed tree against the verified worktree state before claiming the pre-commit verification covers it.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0016 — Fix-round ledger entries need a dedicated traceability pass: spec anchors, counts, cross-references, status sentences
+- **Why:** The §8.24/§8.25 closure rounds document the ledger-defect class found when the §8.22/§8.23 fix-round records were traced: CR22-2's spec anchor pointed at §7.2 while the cited fail-closed rule lives in §7.3, and OBS-3's "4 new locks killed" understated a real count of 6 — prose drift that code review structurally cannot catch. The same class surfaced again in this review: §8.12's header claims "全部 61 提交" over `2e45e19..7970eec`, which `git rev-list --count` returns as 59 (60 even counting both endpoints).
+- **Review evidence:**
+  - `2026-10-20` — [cr.md:663 CR22-2, the spec-anchor misreference fixed in §8.24](cr.md#L663) and [cr.md:731 OBS-3, the mutation-count misstatement corrected in §8.25](cr.md#L731), with the closure rounds at [cr.md:702 §8.24](cr.md#L702) and [cr.md:723 §8.25](cr.md#L723)
+  - `2026-10-20` — [cr.md:455 §8.12 header claiming 61 commits](cr.md#L455) versus `git rev-list --count 2e45e19..7970eec` = 59, re-derived in this review
+- **Fix or follow-up:** After any fix round, run one pass whose only job is ledger fidelity: re-derive every count with git, open every cited anchor, and re-read every quoted verdict against its source. This class is distinct from L-0005 (run-output counts): it concerns references and statements inside the ledger itself.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+<!-- /frozen-review-lessons: sha256:20ebdcb00d8fb5c12b677ab0e5798cd1e0b51e9748204bb1555ca55c55ed6531 -->
 <!-- ACTIVE_LESSONS:END -->
 
 ## Promotion history
