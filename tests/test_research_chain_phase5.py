@@ -254,6 +254,7 @@ def _build_runner(tmp_path: Path, dataset_adapter, factor_store, run_store: File
         model_adapter=ModelStageAdapter(
             trainer=QlibRuntimeTrainer(), exporter=exporter, artifact_store=ArtifactStore(tmp_path),
             dataset_writer=writer, universe_store=dataset_adapter.universe_store, run_store=run_store,
+            factor_store=factor_store,
         ),
         prediction_adapter=PredictionStageAdapter(PredictionBuilder(tmp_path), run_store),
         portfolio_adapter=portfolio,

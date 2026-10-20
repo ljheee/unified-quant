@@ -194,6 +194,7 @@ def test_model_chain_exports_trains_and_predicts(tmp_path: Path):
     model_adapter = ModelStageAdapter(
         trainer=QlibRuntimeTrainer(), exporter=exporter, artifact_store=ArtifactStore(tmp_path),
         dataset_writer=writer, universe_store=dataset_adapter.universe_store, run_store=run_store,
+        factor_store=dataset_adapter.factor_store,
     )
     model_result = model_adapter.run(
         plan,
@@ -321,3 +322,66 @@ def test_tampered_artifact_rejects_read(tmp_path: Path):
     (partition / "artifact.bin").write_bytes(b"tampered")
     with pytest.raises(ContractError):
         store.read("0" * 64, "a" * 64)
+
+
+def test_model_stage_reads_every_partition_the_dataset_declared(tmp_path: Path):
+    """cr.md 8.62: a multi-partition dataset must be read as a set, not one row.
+
+    The model manifest's lineage is what `ModelRunBuilder` binds, so a dataset
+    that declares more partitions than the request binds must be read through
+    the factor store for the unbound ones. The earlier shape read only the bound
+    partition, which silently dropped the rest of the lineage.
+    """
+    pytest.importorskip("qlib")
+    from uq.models.qlib_runtime import QlibRuntimeTrainer
+
+    plan, dataset_result, _, _, dataset_adapter = _prepare_model_stage(tmp_path)
+    _, model_frame = DatasetWriter(tmp_path).read(
+        dataset_result.manifest["dataset_name"],
+        dataset_result.manifest["semantic_version"],
+        dataset_result.manifest["generation_id"],
+    )
+    assert model_frame.shape[0] > 0
+
+    bound_generation = plan.stage_bindings[0].generation_id
+    unbound_generation = "b" * 64
+    dataset_manifest = dict(dataset_result.manifest)
+    dataset_manifest["factor_generation_ids"] = [bound_generation, unbound_generation]
+
+    run_store = FileResearchRunStore(tmp_path)
+    factor_binding = plan.stage_bindings[0]
+    seen: list[str] = []
+
+    class _RecordingFactorStore:
+        def read_manifest(self, generation_id: str) -> dict:
+            seen.append(generation_id)
+            return {"generation_id": generation_id}
+
+    adapter = ModelStageAdapter(
+        trainer=QlibRuntimeTrainer(),
+        exporter=QlibDatasetExporter(tmp_path / "qlib_exports"),
+        artifact_store=ArtifactStore(tmp_path),
+        dataset_writer=DatasetWriter(tmp_path),
+        universe_store=dataset_adapter.universe_store,
+        run_store=run_store,
+        factor_store=_RecordingFactorStore(),
+    )
+    try:
+        factor_store = dataset_adapter.factor_store
+    except AttributeError:  # pragma: no cover - the regression under test
+        pytest.fail("ModelStageAdapter must hold the factor store its lineage read uses")
+
+    lineage = adapter._factor_lineage(
+        dataset_manifest,
+        factor_binding=factor_binding,
+        factor_generation_id=bound_generation,
+    )
+    # 1) every declared partition is present in the lineage,
+    assert set(lineage) == {bound_generation, unbound_generation}
+    # 2) the bound one came from the run store, not the factor store,
+    assert lineage[bound_generation]["generation_id"] == bound_generation
+    assert lineage[bound_generation].get("manifest_digest_sha256") == factor_binding.manifest_digest_sha256
+    # 3) and the unbound one was read from the owning factor store.
+    assert seen == [unbound_generation]
+    assert lineage[unbound_generation] == {"generation_id": unbound_generation}
+    assert factor_store is dataset_adapter.factor_store

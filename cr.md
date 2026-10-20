@@ -2425,3 +2425,68 @@ provider URI）后返回该 manifest。URI 不属于本 run 的会被拒，**不
 
 **判断准则（供以后用）**：要承认"这里需要幂等"，必须先证明
 ① 该 stage 在同 run 下确实会被走到两次，且 ② 这不是调用方自己制造的场景。
+
+### 8.62 全 A v5 首次 execute：一个只被真实数据抓出的 latent bug（2026-10-21）
+
+**背景（延续 §8.55/§8.61）**：整条 v5 `execute` 键路此前从未在真实数据上跑过。
+本轮按 `pendding.md` 的冒烟口径，在干净 data root（`/tmp/uq-smoke-clean`，
+只有绑定的那一代制品）上以固定 run id 重跑，逐 stage 推进。
+
+**stage 00/01/02/03 全部 passed**（stage 01 的因子分区、stage 02 的 model_dataset、
+stage 03 的 qlib_export + qlib_init_receipt），与 §8.61 结束时一致。
+
+#### A. 抓到的 bug：`ModelStageAdapter` 从未持有 factor store
+
+`adapters.py:1388`（本轮抽成 `_factor_lineage`）要读 dataset 声明的**全部** factor 分区
+（§8.57 A2 那次"读全 16 个分区"的改动引入的），但 `ModelStageAdapter.__init__`
+**没有 `factor_store` 形参**——上一轮的修复只把参数加进了 `DatasetStageAdapter`
+那一侧的调用处，`ModelStageAdapter` 这一侧只加了 `self.factor_store` 的**使用**，
+忘了加**赋值**。
+
+这条路径在测试里从来不被走到：所有现存 fixture 的 dataset 都只声明**一个** factor 分区，
+`for generation_id in dataset_manifest["factor_generation_ids"]` 的循环体里
+`if generation_id == factor_generation_id` 恒真，`else` 分支是死代码。
+真实全 A 窗口 16 个分区才第一次把它激活。
+
+**修复**：`__init__` 增加 `factor_store` 形参与赋值；`cli.py:356` `_build_runner` 传入；
+两处测试构造点同步（`test_research_chain_phase3.py:194`、`test_research_chain_phase5.py:254`，
+原本 `factor_store` 就在作用域内）。
+
+**抽取**：把内联的读取循环抽成 `ModelStageAdapter._factor_lineage()`，
+让"绑定分区走 run store、未绑定分区走 factor store"可被单独驱动，
+否则只能靠全链路测试间接覆盖。
+
+#### B. 变异测试：先失败一次，才发现锁不存在
+
+按标准流程"删掉赋值 → 跑全量"：
+
+```
+.venv-qlib   1216 passed, 0 failed   ← 变异**存活**
+```
+
+**即修复没有测试锁定。** 这与 §8.57 那条"新锁必须先证明会红"是同一条纪律，
+本轮又踩了一次——只确认了"修复后是绿的"，没确认"修复前是红的"。
+
+**新锁**：`tests/test_research_chain_phase3.py::test_model_stage_reads_every_partition_the_dataset_declared`
+构造一个 dataset 声明"绑定分区 + 一个额外的 `b`*64"的谱系，用记录型 fake factor store 断言三件事：
+① 声明的每个分区都出现在返回的 lineage 里；
+② 绑定分区来自 run store（manifest digest 与 binding 一致）；
+③ 未绑定分区**必须**从 factor store 读（fake 记录到 `b`*64）。
+
+**变异（删 `self.factor_store = factor_store`）**：该测试 FAIL
+（`AttributeError: 'ModelStageAdapter' object has no attribute 'factor_store'`）→ 已杀死。
+
+#### C. 验证
+
+- `.venv-qlib/bin/python -m pytest tests/` → **1217 passed / 0 skipped**
+- `.venv/bin/python -m pytest tests/` → **1191 passed / 26 skipped**
+  （`.venv` 无 qlib，新锁与 phase3/5 的 qlib 用例一同 skip，故 skip 25→26；
+   `1217 = 1191 + 26` 对账一致）
+- 变异：删赋值 → 新锁 FAIL（如上）；恢复后全绿。
+
+#### D. 遗留与下一步
+
+**未跑通**：model stage 之后的 prediction / portfolio / backtest 尚未在真实数据上走到。
+下一轮用同一干净 root + 同一固定 run id 续跑（resume 会跳过已 passed 的 00–03）。
+**审查边界**：本轮与 §8.48 以来的所有 smoke 都使用仓库测试评审密钥，
+制品只证明链路可跑，**不构成研究结论**。

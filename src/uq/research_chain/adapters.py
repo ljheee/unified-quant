@@ -1314,6 +1314,7 @@ class ModelStageAdapter:
         dataset_writer: DatasetWriter,
         universe_store: UniverseSnapshotStore,
         run_store: FileResearchRunStore,
+        factor_store: Any,
     ) -> None:
         self.trainer = trainer
         self.exporter = exporter
@@ -1321,11 +1322,41 @@ class ModelStageAdapter:
         self.dataset_writer = dataset_writer
         self.universe_store = universe_store
         self.run_store = run_store
+        self.factor_store = factor_store
         # A resumed run skips this stage, so nothing assigns this attribute
         # in-process. Declaring it here turns a silent AttributeError into an
         # explicit "unavailable" that the runner can recover from by reading the
         # published artifact back.
         self.last_result: Any = None
+
+    def _factor_lineage(
+        self,
+        dataset_manifest: Mapping[str, Any],
+        *,
+        factor_binding,
+        factor_generation_id: str,
+    ) -> dict[str, Any]:
+        """Read every factor partition the dataset's preprocessing spanned.
+
+        The bound partition is read through the run store, because the run
+        published it and the request carries its binding; every other partition
+        comes from the factor store that owns it. Reading only the bound
+        partition was correct while a dataset carried one, but a per-date
+        transform spans the whole window, so the model manifest's lineage has
+        to cover all of them.
+        """
+        manifests: dict[str, Any] = {}
+        for generation_id in dataset_manifest["factor_generation_ids"]:
+            if generation_id == factor_generation_id:
+                manifests[generation_id] = self.run_store.read_published_document(
+                    "factor_partition", generation_id,
+                    manifest_digest_sha256=factor_binding.manifest_digest_sha256,
+                    data_checksum_sha256=factor_binding.data_checksum_sha256,
+                )
+            else:
+                manifests[generation_id] = self.factor_store.read_manifest(generation_id)
+        return manifests
+
 
     def run(
         self,
@@ -1376,17 +1407,11 @@ class ModelStageAdapter:
         # the model stage has to read all of them. Reading only the single bound
         # partition was correct when the dataset carried one; a per-date transform
         # spans the whole window and the run manifest now lists each partition.
-        factor_manifests = {}
-        for generation_id in dataset_manifest["factor_generation_ids"]:
-            if generation_id == factor_generation_id:
-                factor_manifest = self.run_store.read_published_document(
-                    "factor_partition", generation_id,
-                    manifest_digest_sha256=factor_binding.manifest_digest_sha256,
-                    data_checksum_sha256=factor_binding.data_checksum_sha256,
-                )
-            else:
-                factor_manifest = self.factor_store.read_manifest(generation_id)
-            factor_manifests[generation_id] = factor_manifest
+        factor_manifests = self._factor_lineage(
+            dataset_manifest,
+            factor_binding=factor_binding,
+            factor_generation_id=factor_generation_id,
+        )
         run_manifest, bound_definition = ModelRunBuilder.build(
             definition=definition,
             dataset_manifest=dataset_manifest,

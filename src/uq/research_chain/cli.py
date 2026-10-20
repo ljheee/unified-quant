@@ -360,6 +360,7 @@ def _build_runner(
             dataset_writer=dataset_writer,
             universe_store=universe_store,
             run_store=run_store,
+            factor_store=factor_store,
         ),
         prediction_adapter=PredictionStageAdapter(prediction_builder, run_store),
         portfolio_adapter=PortfolioStageAdapter(
