@@ -31,9 +31,51 @@ from ..risk.contracts import (
 )
 
 
+def _prediction_binding_date(binding: Any) -> str | None:
+    """The decision date one prediction_set binding was published for, if it carries one.
+
+    The date is a physical-path segment (`.../date=YYYY-MM-DD`) rather than a
+    manifest field, so it is recoverable from the plan alone: a resumed run has
+    no in-memory prediction results to read it from. A resolver-built binding has
+    no physical path (only stage output bindings do), so a missing path yields
+    `None` rather than failing -- the caller then has no date to order by and
+    must take the dates from the prediction stage itself.
+    """
+    physical_path = binding.physical_path if not isinstance(binding, Mapping) else binding.get("physical_path")
+    if not physical_path:
+        return None
+    return Path(physical_path).name.removeprefix("date=")
+
+
+def _binding_key(stage: str, binding: Any) -> tuple[str, str, str]:
+    """Identity of one output binding, per date where the family repeats.
+
+    cr.md 8.62 C: `prediction_set` and `target_weights` publish one binding per
+    decision date under the *same* output family, so the family alone cannot
+    stand in for a binding. Folding a stage record back into the plan on family
+    alone dropped every date but the last one, which the single-date fixtures
+    could not see.
+
+    The key deliberately excludes `physical_path`: the resolver builds plan
+    bindings without one, while the stage records always carry it, so a
+    path-based key would never match and every replayed stage would leave a
+    duplicate binding behind for its own family.
+    """
+    if isinstance(binding, Mapping):
+        family, generation_id = binding.get("output_family"), binding.get("generation_id")
+    else:
+        family, generation_id = binding.output_family, binding.generation_id
+    return (stage, str(family), str(generation_id))
+
+
 def _result_output_binding(binding: ResolvedStageBinding) -> dict[str, Any]:
     physical_path = binding.physical_path
     if not physical_path:
+        # cr.md 8.62 C: `prediction_set` and `target_weights` publish one binding
+        # per decision date, and their read-back needs the date segment. A
+        # resolver-built binding has no path at all, so it cannot stand in for a
+        # published one; the published binding for the same (stage, family,
+        # generation) is the one this result must describe.
         physical_path = {
             "universe_snapshot": f"universes/generation={binding.generation_id}/manifest.json",
             "adjusted_price_dataset": f"adjusted_prices/generation={binding.generation_id}/manifest.json",
@@ -656,7 +698,24 @@ class ResearchChainRunner:
         created_at: str,
         definition_decision_provider: Callable[..., Mapping[str, Any]] | None,
     ) -> None:
-        first_prediction = self._binding(plan, "prediction_set")
+        # cr.md 8.62 C: prediction_set is a per-date family, so it is selected
+        # with the date-qualified helper, not the single-binding `_binding()`
+        # that refuses a repeated family. The first decision date's binding is
+        # what the definition names; the map below carries all of them.
+        prediction_bindings = [
+            binding for binding in self._stage_bindings(plan, "prediction_publication")
+            if binding.output_family == "prediction_set"
+        ]
+        if not prediction_bindings:
+            raise ContractError("research plan has no prediction_set binding")
+        # Order by the date each binding was published for. A resolver-built
+        # binding has no date in its path, so those sort last and only matter
+        # when no published prediction carries one.
+        dated = sorted(
+            prediction_bindings,
+            key=lambda binding: (_prediction_binding_date(binding) is None, _prediction_binding_date(binding) or ""),
+        )
+        first_prediction = dated[0]
         universe_binding = self._binding(plan, "universe_snapshot")
         definition = _synthesized_portfolio_definition(
             plan,
@@ -665,10 +724,9 @@ class ResearchChainRunner:
             universe_generation_id=universe_binding.generation_id,
             created_at=created_at,
         )
-        decision_dates = sorted({
-            Path(binding.physical_path).name.removeprefix("date=")
-            for binding in self._stage_bindings(plan, "prediction_publication")
-        })
+        # Dates only, and only the bindings that actually carry one: a
+        # resolver-built stand-in has no date to contribute.
+        decision_dates = [date for date in (_prediction_binding_date(binding) for binding in dated) if date]
         result = self.portfolio_adapter.run(
             plan,
             prediction_stage_result=self.prediction_adapter.last_result,
@@ -696,8 +754,8 @@ class ResearchChainRunner:
             runner_identity=dict(runner_identity),
             created_at=created_at,
             prediction_generation_by_date={
-                Path(binding.physical_path).name.removeprefix("date="): binding.generation_id
-                for binding in self._stage_bindings(plan, "prediction_publication")
+                _prediction_binding_date(binding): binding.generation_id
+                for binding in prediction_bindings
             },
         )
         self.portfolio_adapter.last_result = result
@@ -834,10 +892,17 @@ class ResearchChainRunner:
         state = ModelContractLoader(self.run_store.root).load("research_run_state", state_path)
         output_bindings = state["stage_records"][-1]["output_bindings"]
         stage = state["stage_records"][-1]["stage"]
-        existing_families = {binding["output_family"] for binding in output_bindings}
+        # Per-date families (prediction_set, target_weights) legitimately publish
+        # many bindings under one family in a single stage record, so "the family
+        # this stage just wrote" does not identify a single binding. Dedupe on the
+        # reproduction key (stage, family, generation id, physical path) instead of
+        # the family alone, or every date but the last one is silently dropped.
+        existing_keys = {
+            _binding_key(stage, binding) for binding in output_bindings
+        }
         retained = [
             binding for binding in plan.stage_bindings
-            if not (binding.stage == stage and binding.output_family in existing_families)
+            if _binding_key(binding.stage, binding) not in existing_keys
         ]
         return replace(plan, stage_bindings=tuple([
             *retained,
@@ -888,6 +953,22 @@ class ResearchChainRunner:
         self._reverify_input_sets(plan)
         for stage in stage_plan[1:-1]:
             bindings = self._stage_bindings(plan, stage)
+            # cr.md 8.62 C: `prediction_set` and `target_weights` publish one
+            # binding per decision date, so a family-level dedupe (or a
+            # path-less resolver stand-in for the same family) must not survive
+            # next to the published ones. Drop a stand-in only when the stage
+            # actually published that family -- resolver-only input families
+            # (universe snapshot, adjusted prices, labels, preprocessing, config)
+            # keep their path-less binding, which `_result_output_binding`
+            # reconstructs a path for.
+            published_families = {
+                binding.output_family for binding in bindings if binding.physical_path
+            }
+            bindings = [
+                binding for binding in bindings
+                if binding.physical_path
+                or binding.output_family not in published_families
+            ]
             if not bindings:
                 raise ContractError(f"research stage output is missing: {stage}")
             if stage == "paper_execution":
@@ -1089,10 +1170,10 @@ class ResearchChainRunner:
         """Fold one recorded stage's output bindings into the plan."""
         stage = stage_record["stage"]
         output_bindings = stage_record["output_bindings"]
-        existing_families = {binding["output_family"] for binding in output_bindings}
+        existing_keys = {_binding_key(stage, binding) for binding in output_bindings}
         retained = [
             binding for binding in plan.stage_bindings
-            if not (binding.stage == stage and binding.output_family in existing_families)
+            if _binding_key(binding.stage, binding) not in existing_keys
         ]
         bindings = tuple([
             *retained,

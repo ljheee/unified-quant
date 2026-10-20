@@ -610,3 +610,99 @@ def test_remote_evidence_aggregation_is_mechanically_verified() -> None:
     assert summary["cell_count"] == 10
     assert summary["git_commit"] == "7ee7a8f60a5da61b686cb34550597df149a50f69"
 
+
+
+def test_a_multi_date_stage_keeps_every_date_when_folded_into_the_plan(tmp_path: Path):
+    """cr.md 8.62 C: per-date families must not be deduped by family name.
+
+    `prediction_set` and `target_weights` publish one binding per decision date
+    under the same output family. Folding a recorded stage back into the plan on
+    family alone kept the last date and dropped the rest, so the portfolio stage
+    bound a single date and reconciliation read a plan that no longer described
+    every published prediction. The single-date fixtures could not see it.
+    """
+    from uq.research_chain.runner import ResearchChainRunner, _binding_key
+
+    stage = "prediction_publication"
+    published = [
+        {
+            "output_family": "prediction_set",
+            "generation_id": str(index).ljust(64, "0"),
+            "manifest_digest_sha256": "2" * 64,
+            "data_checksum_sha256": "3" * 64,
+            "physical_path": f"predictions/prediction_set={'0' * 64}/date=2026-01-{day:02d}",
+            "quality_decision_checksum_sha256": "0" * 64,
+            "failure_reason": None,
+        }
+        for index, day in enumerate([5, 6, 7], start=1)
+    ]
+    stage_record = {
+        "stage": stage,
+        "status": "passed",
+        "output_bindings": published,
+        "failure_reason": None,
+    }
+    # The resolver's own stand-in binding for the same family and generation is
+    # already in the plan and carries no physical path.
+    resolver_stand_in = ResolvedStageBinding(
+        stage=stage,
+        output_family="prediction_set",
+        generation_id=published[0]["generation_id"],
+        manifest_digest_sha256="2" * 64,
+        data_checksum_sha256="3" * 64,
+    )
+    plan = SimpleNamespace(stage_bindings=(resolver_stand_in,))
+    runner = ResearchChainRunner.__new__(ResearchChainRunner)
+
+    folded = runner._apply_stage_bindings(plan, stage_record)
+    per_date = [
+        binding for binding in folded.stage_bindings
+        if binding.output_family == "prediction_set"
+    ]
+    # 1) every published date survives the fold,
+    assert len(per_date) == 3
+    assert {
+        Path(binding.physical_path).name.removeprefix("date=") for binding in per_date
+    } == {"2026-01-05", "2026-01-06", "2026-01-07"}
+    # 2) and the path-less stand-in is replaced, not duplicated.
+    assert sum(binding.physical_path is None for binding in per_date) == 0
+    assert len({_binding_key(binding.stage, binding) for binding in per_date}) == 3
+
+    # Folding twice (a re-read of the same state) must stay idempotent.
+    refolded = runner._apply_stage_bindings(folded, stage_record)
+    assert len([
+        binding for binding in refolded.stage_bindings
+        if binding.output_family == "prediction_set"
+    ]) == 3
+
+
+def test_the_portfolio_stage_binds_the_earliest_decision_date(tmp_path: Path):
+    """cr.md 8.62 C: the definition must name the earliest prediction, not an
+    arbitrary one. With one binding per date, `bindings[0]` (or `[-1]`) is an
+    artefact of the plan's ordering, which a resumed run can permute.
+    """
+    from uq.research_chain.adapters import _earliest_prediction_binding
+
+    bindings = [
+        ResolvedStageBinding(
+            stage="prediction_publication",
+            output_family="prediction_set",
+            generation_id=str(index).ljust(64, "0"),
+            manifest_digest_sha256="2" * 64,
+            data_checksum_sha256="3" * 64,
+            physical_path=f"predictions/prediction_set={'0' * 64}/date={day}",
+        )
+        for index, day in enumerate(["2026-01-30", "2026-01-05", "2026-01-19"], start=1)
+    ]
+    # Deliberately shuffle twice: the selection must not depend on plan order.
+    chosen = _earliest_prediction_binding(bindings)
+    assert Path(chosen.physical_path).name.removeprefix("date=") == "2026-01-05"
+    assert chosen.generation_id == "2".ljust(64, "0")
+    assert _earliest_prediction_binding(list(reversed(bindings))).generation_id == chosen.generation_id
+
+    # A path-less resolver stand-in is never preferred over a published one.
+    stand_in = ResolvedStageBinding(
+        stage="prediction_publication", output_family="prediction_set",
+        generation_id="9" * 64, manifest_digest_sha256="2" * 64, data_checksum_sha256="3" * 64,
+    )
+    assert _earliest_prediction_binding([stand_in, *bindings]) is chosen

@@ -11,6 +11,7 @@ import pytest
 
 from tests.review_key import REVIEWER_PRIVATE_KEY
 from uq.contracts.model_layer import (
+    ModelContractLoader,
     bind_reviewed_quality_decision,
     canonical_json,
     create_reviewed_quality_decision,
@@ -385,3 +386,41 @@ def test_model_stage_reads_every_partition_the_dataset_declared(tmp_path: Path):
     assert seen == [unbound_generation]
     assert lineage[unbound_generation] == {"generation_id": unbound_generation}
     assert factor_store is dataset_adapter.factor_store
+
+
+def test_artifact_decision_is_bound_before_publication(tmp_path: Path):
+    """cr.md 8.62 B: a provider's raw signed decision must reach publish bound.
+
+    `ArtifactStore.publish` validates the report against
+    `model_quality_report.v2`, whose field set carries `bound_generation_id`
+    and `report_checksum_sha256`. A reviewer provider returns the signed
+    decision instead, so the adapter has to bind it -- otherwise the
+    production path fails schema validation on every provider-form call.
+    """
+    generation = "a" * 64
+    bound = artifact_decision(generation)
+    assert "bound_generation_id" in bound
+
+    # 1) a provider's raw signed decision (what the CLI's provider path returns)
+    from uq.contracts.model_layer import create_reviewed_quality_decision
+
+    raw = create_reviewed_quality_decision(
+        binding_type="model_artifact_v1", policy="reject_all", status="passed",
+        checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+        errors=[], warnings=[], producer_code_fingerprint="0" * 64,
+        private_key_pem=REVIEWER_PRIVATE_KEY,
+        subject_generation_id=generation, subject_content_sha256=generation,
+    )
+    assert "bound_generation_id" not in raw
+    ModelContractLoader.validate("model_quality_report", ModelStageAdapter._bound_artifact_report(raw, generation))
+    assert ModelStageAdapter._bound_artifact_report(raw, generation)["bound_generation_id"] == generation
+
+    # 2) an already-bound decision passes through, still checked against the subject
+    passed = ModelStageAdapter._bound_artifact_report(bound, generation)
+    assert passed["bound_generation_id"] == generation
+    assert passed["report_checksum_sha256"] == bound["report_checksum_sha256"]
+
+    # 3) a decision bound to another generation is refused
+    other = artifact_decision("b" * 64)
+    with pytest.raises(ContractError, match="different artifact generation"):
+        ModelStageAdapter._bound_artifact_report(other, generation)

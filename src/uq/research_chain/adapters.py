@@ -47,6 +47,22 @@ _STAGE_BINDING_KEYS = {
 }
 
 
+def _earliest_prediction_binding(bindings: Sequence[Any]) -> Any:
+    """The prediction binding for the earliest decision date.
+
+    cr.md 8.62 C: `prediction_set` publishes one binding per decision date, so
+    the portfolio stage must bind the earliest one deterministically instead of
+    taking whatever the plan happened to list first. Bindings whose physical
+    path carries no date sort last: those are resolver-built stand-ins, and the
+    earliest published one is the better-defined subject.
+    """
+    def sort_key(binding: Any) -> tuple[bool, str]:
+        date_part = Path(binding.physical_path).name.removeprefix("date=") if binding.physical_path else None
+        return (date_part is None, date_part or "")
+
+    return sorted(bindings, key=sort_key)[0]
+
+
 def _stage_binding(plan: ResolvedExecutionPlan, *, stage: str, output_family: str):
     matches = [
         binding for binding in plan.stage_bindings
@@ -826,7 +842,11 @@ class PortfolioStageAdapter:
         ]
         if not prediction_bindings:
             raise ContractError("resolved plan has no prediction_set binding")
-        prediction_binding = prediction_bindings[0]
+        # cr.md 8.62 C: this family has one binding per decision date, so
+        # `bindings[0]` was an arbitrary one. Bind to the date the runner passed
+        # first (the earliest decision date), which is also the generation the
+        # definition names.
+        prediction_binding = _earliest_prediction_binding(prediction_bindings)
         if prediction_stage_result.manifest["generation_id"] != prediction_binding.generation_id:
             raise ContractError("portfolio prediction binding mismatch")
         if (
@@ -1357,6 +1377,44 @@ class ModelStageAdapter:
                 manifests[generation_id] = self.factor_store.read_manifest(generation_id)
         return manifests
 
+    @staticmethod
+    def _bound_artifact_report(
+        decision: Mapping[str, Any],
+        artifact_generation: str,
+    ) -> dict[str, Any]:
+        """Bind a reviewer's artifact decision to the derived artifact generation.
+
+        cr.md 8.62 B: the caller's provider returns the reviewer's *signed
+        decision* (`create_reviewed_quality_decision`), whose field set is the
+        13 signed fields and carries `subject_generation_id`.
+        `ArtifactStore.publish` validates against `model_quality_report.v2`
+        and requires `bound_generation_id` plus `report_checksum_sha256`.
+        Handing it the raw decision fails schema validation before any
+        cryptographic check runs, so every provider-form caller reached this
+        exception. A pre-bound decision (the field set of the tests' fixtures)
+        also reaches `ArtifactStore.publish` and must stay acceptable, because
+        a bound report already carries `bound_generation_id` and a verified
+        `report_checksum_sha256`; re-binding it is not possible either --
+        `bind_reviewed_quality_decision` accepts either the resolver envelope
+        or the raw signed decision, and a bound report is neither.
+
+        So the two accepted shapes are distinguished by `bound_generation_id`
+        rather than by field count, and the raw one goes through the owning
+        bind that `predictions.py:137`, `trainer.py:365` and
+        `qlib_export.py:184` use before publishing.
+        """
+        if "bound_generation_id" in decision:
+            if decision["bound_generation_id"] != artifact_generation:
+                raise ContractError("artifact decision is bound to a different artifact generation")
+            return dict(decision)
+        report, _ = bind_reviewed_quality_decision(
+            decision,
+            binding_type="model_artifact_v1",
+            subject_generation_id=artifact_generation,
+            subject_content_sha256=artifact_generation,
+        )
+        return report
+
 
     def run(
         self,
@@ -1453,7 +1511,10 @@ class ModelStageAdapter:
         self.artifact_store.publish(
             artifact_manifest,
             artifact_bytes,
-            quality_report=dict(artifact_quality_decision_provider(artifact_generation)),
+            quality_report=self._bound_artifact_report(
+                artifact_quality_decision_provider(artifact_generation),
+                artifact_generation,
+            ),
         )
         artifact_readback, _ = self.artifact_store.read(
             run_manifest["run_content_generation_id"], artifact_generation,

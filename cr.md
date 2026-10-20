@@ -2490,3 +2490,68 @@ stage 03 的 qlib_export + qlib_init_receipt），与 §8.61 结束时一致。
 下一轮用同一干净 root + 同一固定 run id 续跑（resume 会跳过已 passed 的 00–03）。
 **审查边界**：本轮与 §8.48 以来的所有 smoke 都使用仓库测试评审密钥，
 制品只证明链路可跑，**不构成研究结论**。
+
+### 8.62 续：artifact 质量决策未绑定 + 多日期家族被家族名折叠（2026-10-21）
+
+接 §8.62 A/B。同一条真实跑批继续往下推，在 model stage 之后连抓三个**只在多日期/生产路径**
+才暴露的缺陷。三个都不是我改出来的新问题，是这条链路第一次被真实数据驱动到那里。
+
+#### B2. `ArtifactStore.publish` 收到的是"签名决策"，不是"绑定报告"
+
+runner 给 model stage 的 `artifact_quality_decision_provider` 是
+`quality_decisions["model_artifact"]`，即评审方 provider 返回的**原始签名决策**
+（13 个签名字段，带 `subject_generation_id`）。
+而 `ArtifactStore.publish` 第一件事是 `ModelContractLoader.validate("model_quality_report", ...)`，
+该 schema 要求 `bound_generation_id` 与 `report_checksum_sha256` 且**不接受** `subject_generation_id`。
+
+⇒ 任何 provider 形式的调用方（= 生产 CLI 的 provider 模式）在 schema 校验就炸，
+`ContractError: model_quality_report.v2.json validation failed: ... Additional
+properties are not allowed ('subject_generation_id' was unexpected)`。
+**测试全绿是因为测试传的是已绑定的 `artifact_decision(generation)`**——fixture 替生产路径
+把 bind 做掉了。
+
+修复（`adapters.py` `_bound_artifact_report`）：按 `bound_generation_id` 是否存在分流，
+原始决策走 `bind_reviewed_quality_decision`（`predictions.py:137`、`trainer.py:365`、
+`qlib_export.py:184` 同一入口），已绑定的直通并**仍然校验**它绑的是本次派生的 artifact generation
+（防跨制品重放）。第一版我用 `dict(decision)` 破坏了 `owning_report` 信封探测，
+失败后改回原对象；第二版只按字段数分流会把"已绑定"判成"缺字段"，
+最终按语义字段 `bound_generation_id` 分流。
+
+锁：`test_artifact_decision_is_bound_before_publication` 三断言
+(原始决策 bind 后 schema 通过 / 已绑定直通 / 绑到别的 generation 被拒)。
+变异（删 bind 分支）→ 2 红。
+
+#### C. `prediction_set` / `target_weights` 是按日期的家族，却被按"家族名唯一"折叠
+
+三个耦合的缺陷，同一个根因：**一个 stage record 里同一 `output_family` 有 17 条绑定，
+而所有下游查询都把 family 当唯一键。**
+
+1. `_plan_with_stage_outputs` 与 `_apply_stage_bindings`（两处同源码码）按 family 去重，
+   于是把 stage 刚发布的 16 条预测全部丢掉，只留最后一条 ⇒
+   报 `ambiguous prediction_set binding in research plan`。
+2. `_binding()` 只认唯一 family，多日期必然 ambiguous ⇒ 改成按"发布日期"选取最早一条。
+3. `_reconcile` 的回读用 `binding.physical_path` 取日期，而 resolver 造的同 family 占位绑定
+   **没有 physical_path** ⇒ `TypeError: ... not 'NoneType'`。
+   但 `universe_snapshot` 等纯输入家族同样无 path 且必须保留，所以不能一律丢弃。
+
+修复：`_binding_key(stage, family, generation_id)` 取代 family 键
+（**不含 physical_path**：resolver 绑定无 path、stage record 有 path，
+含 path 则永远不匹配，等于把去重整个取消掉）；
+`_prediction_binding_date` / `_earliest_prediction_binding` 按日期选择；
+reconcile 只在该家族确有已发布绑定时才丢无 path 的占位。
+
+锁：`test_a_multi_date_stage_keeps_every_date_when_folded_into_the_plan`
+（三条日期都在、占位不重复、折叠幂等）、
+`test_the_portfolio_stage_binds_the_earliest_decision_date`（乱序两次结果一致、占位不优先）。
+变异：family 键回退 → 新锁 FAIL；helper 返回最后一条 → 新锁 FAIL + 3 条现有测试 FAIL。
+**如实记录**：第一版变异（调用点写 `prediction_bindings[-1]`）**存活**——
+计划序在单测里恰好确定，故选最早一条当时**没有锁**。补了排序锁后才杀死。
+
+#### 验证
+
+- `.venv-qlib` **1220 passed / 0 skipped**、`.venv` **1194 passed / 26 skipped**
+  （两把新锁都不依赖 qlib：第一条锁原本 import 了未用的 `QlibRuntimeTrainer`，
+   在 `.venv` 直接失败，删掉后两个环境都能跑）。
+- 证据索引：`evidence/paper-execution-research-integration/phase-0/evidence-index.json` 的
+  `runner.py` 摘要已刷新（该文件的既有键序不是 producer 的输出形状，
+  所以按原形状只改那一个摘要，而不是重跑 producer）。
