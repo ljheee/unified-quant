@@ -29,28 +29,6 @@ When recording a specific event, evidence may support checking whether it can be
 ## Active lessons
 
 <!-- ACTIVE_LESSONS:START -->
-### L-0001 — Store roots are "in store only" for symlink policy, and prove it with a symlinked root in the test
-- **Why:** The governed-store symlink guard walked every lexical *ancestor* of the path it was given, so a legitimate store root spelled through macOS `/tmp` → `/private/tmp` (or any symlinked project directory) was refused outright, while a link placed *inside* a store root could still be reached depending on how the path was spelled. The suite never caught either direction because pytest hands tests an already-resolved `tmp_path`, so no test ever spelled a root through a link. Three sibling call sites kept the ancestor-walking variant after the shared guard was introduced, and the guard's own "resolved path" fallback was itself an accept-on-link hole.
-- **Review evidence:**
-  - `2026-09-15` — [cr.md:135, finding 10 verdict: the ancestor symlink walk makes every macOS tmp-root store read fail](cr.md#L135)
-  - `2026-10-13` — [cr.md:555 B9, single-source `reject_symlinks_within` scoped at and below the root](cr.md#L555)
-  - `2026-10-14` — [cr.md:679 B9-A/B/C/D round (evidence lines through :698), three residual call sites and the resolved-path hole, with the consistent-spelling rule](cr.md#L679) and, in the same round, [tests/test_external_review_20261014.py, every test builds its root through a real symlink the way macOS spells `/tmp`](tests/test_external_review_20261014.py)
-- **Fix or follow-up:** `src/uq/contracts/paths.py:32` `reject_symlinks_within` is the single guard: nothing above the root is checked, every component from the root down must not be a link, and the resolved path must still land inside the resolved root. Callers must spell `path` and `root` consistently (both unresolved or both resolved), because a resolved path has already dropped the very link the guard exists to find. When adding a store or changing its path handling, reuse this guard and add a test whose root is a real symlink — a resolved `tmp_path` cannot detect a regression here.
-- **Done right:** The rule and its rationale live in the `src/uq/contracts/paths.py` module and function docstrings, and the negative locks cover link-inside-store, out-of-root and `..` escape, so the fix is documented where the next caller will read it.
-- **Status:** active
-- **Distinct review dates observed:** 3 (2026-09-15, 2026-10-13, 2026-10-14) — meets the promotion threshold, but promotion is a separate write through the frozen-review writer with a maintainer-authorized range, so it is not performed here
-
-### L-0002 — Re-pin every evidence-index digest a source change touches, and re-read the pinned file rather than trusting the claim
-- **Why:** `evidence-index.json` files pin per-file SHA-256 for source paths, so a source change without a re-pin makes the freshness test red. Three rounds recorded this, and one round went further: two `model_layer.py`/`runner.py` digests were left unpinned, the resulting red was initially misattributed to "out-of-range parallel-session work in flight", and the correction only came from comparing the stash state. Re-pinning is also a hot-path cost — the same file was re-pinned twice in one review session.
-- **Review evidence:**
-  - `2026-09-16` — [cr.md:252, the convention that a source change re-pins its index records in the same round](cr.md#L252)
-  - `2026-10-12` — [cr.md:360, four stale digests in the phase-0 index re-pinned, with both freshness tests green afterwards](cr.md#L360)
-  - `2026-10-14` — [cr.md:677, a self-introduced red first misattributed to out-of-range parallel work, then re-pinned in the same round](cr.md#L677)
-- **Fix or follow-up:** When a change touches a source file that an `evidence-index.json` pins, re-pin that digest in the same change and verify by re-reading the index, not by intention. When a freshness test fails, determine whether the change caused it (compare the stash state) before attributing it to anything else. A file pinned more than once in a short window is a signal that it is a hot path and deserves a comment, not a second fix.
-- **Done right:** The freshness tests are mechanical (`tests/test_adv_review_fixes.py:1050` `test_evidence_indexes_are_fresh_and_never_index_themselves`), so the omission cannot pass CI silently — the cost of a missed re-pin is a red suite, not a wrong claim.
-- **Status:** active
-- **Distinct review dates observed:** 3 (2026-09-16, 2026-10-12, 2026-10-14) — meets the promotion threshold, but promotion is a separate write through the frozen-review writer with a maintainer-authorized range, so it is not performed here
-
 ### L-0003 — Before rewriting or pruning a test file, check its test ids against the evidence records that cite them
 - **Why:** Four tests registered in `evidence/research-chain/release/release-record.json` had been deleted from `tests/test_research_chain_phase5.py` during an earlier "dead-code cleanup" of the same file. They were not dead code; they were live contracts cited by the release gate, and the deletion only surfaced when the gate was re-run. Deleting a test that evidence depends on converts a real check into a silent gap, which is worse than the file being longer.
 - **Review evidence:**
@@ -222,8 +200,35 @@ When recording a specific event, evidence may support checking whether it can be
 ## Promotion history
 
 > Preserve each promoted lesson's original ID, explanation, dated evidence, and follow-up here; record the promotion date and standards rule ID.
+>
+> 2026-10-20: L-0001 and L-0002 were promoted by a one-off maintainer-authorized hand migration. Both records predate the writer-managed block format, so the writer's promotion path hard-fails on them; this promotion is therefore not bound to a review range_key. IDs, review dates, and citations are preserved verbatim.
 
 <!-- PROMOTED_LESSONS:START -->
+### L-0001 — Store roots are "in store only" for symlink policy, and prove it with a symlinked root in the test
+- **Why:** The governed-store symlink guard walked every lexical *ancestor* of the path it was given, so a legitimate store root spelled through macOS `/tmp` → `/private/tmp` (or any symlinked project directory) was refused outright, while a link placed *inside* a store root could still be reached depending on how the path was spelled. The suite never caught either direction because pytest hands tests an already-resolved `tmp_path`, so no test ever spelled a root through a link. Three sibling call sites kept the ancestor-walking variant after the shared guard was introduced, and the guard's own "resolved path" fallback was itself an accept-on-link hole.
+- **Review evidence:**
+  - `2026-09-15` — [cr.md:135, finding 10 verdict: the ancestor symlink walk makes every macOS tmp-root store read fail](cr.md#L135)
+  - `2026-10-13` — [cr.md:555 B9, single-source `reject_symlinks_within` scoped at and below the root](cr.md#L555)
+  - `2026-10-14` — [cr.md:679 B9-A/B/C/D round (evidence lines through :698), three residual call sites and the resolved-path hole, with the consistent-spelling rule](cr.md#L679) and, in the same round, [tests/test_external_review_20261014.py, every test builds its root through a real symlink the way macOS spells `/tmp`](tests/test_external_review_20261014.py)
+- **Fix or follow-up:** `src/uq/contracts/paths.py:32` `reject_symlinks_within` is the single guard: nothing above the root is checked, every component from the root down must not be a link, and the resolved path must still land inside the resolved root. Callers must spell `path` and `root` consistently (both unresolved or both resolved), because a resolved path has already dropped the very link the guard exists to find. When adding a store or changing its path handling, reuse this guard and add a test whose root is a real symlink — a resolved `tmp_path` cannot detect a regression here.
+- **Done right:** The rule and its rationale live in the `src/uq/contracts/paths.py` module and function docstrings, and the negative locks cover link-inside-store, out-of-root and `..` escape, so the fix is documented where the next caller will read it.
+- **Status:** promoted
+- **Distinct review dates observed:** 3 (2026-09-15, 2026-10-13, 2026-10-14)
+- **Promoted rule:** PS-0001
+- **Promotion date:** 2026-10-20
+
+### L-0002 — Re-pin every evidence-index digest a source change touches, and re-read the pinned file rather than trusting the claim
+- **Why:** `evidence-index.json` files pin per-file SHA-256 for source paths, so a source change without a re-pin makes the freshness test red. Three rounds recorded this, and one round went further: two `model_layer.py`/`runner.py` digests were left unpinned, the resulting red was initially misattributed to "out-of-range parallel-session work in flight", and the correction only came from comparing the stash state. Re-pinning is also a hot-path cost — the same file was re-pinned twice in a short window.
+- **Review evidence:**
+  - `2026-09-16` — [cr.md:252, the convention that a source change re-pins its index records in the same round](cr.md#L252)
+  - `2026-10-12` — [cr.md:360, four stale digests in the phase-0 index re-pinned, with both freshness tests green afterwards](cr.md#L360)
+  - `2026-10-14` — [cr.md:677, a self-introduced red first misattributed to out-of-range parallel work, then re-pinned in the same round](cr.md#L677)
+- **Fix or follow-up:** When a change touches a source file that an `evidence-index.json` pins, re-pin that digest in the same change and verify by re-reading the index, not by intention. When a freshness test fails, determine whether the change caused it (compare the stash state) before attributing it to anything else. A file pinned more than once in a short window is a signal that it is a hot path and deserves a comment, not a second fix.
+- **Done right:** The freshness tests are mechanical (`tests/test_adv_review_fixes.py:1050` `test_evidence_indexes_are_fresh_and_never_index_themselves`), so the omission cannot pass CI silently — the cost of a missed re-pin is a red suite, not a wrong claim.
+- **Status:** promoted
+- **Distinct review dates observed:** 3 (2026-09-16, 2026-10-12, 2026-10-14)
+- **Promoted rule:** PS-0002
+- **Promotion date:** 2026-10-20
 <!-- PROMOTED_LESSONS:END -->
 
 ## Entry format

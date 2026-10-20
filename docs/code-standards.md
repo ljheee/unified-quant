@@ -58,6 +58,13 @@ This document defines the minimum review standards applicable to all projects, a
 The following bounded block is the authoritative location for project-specific stable promoted rules. Do not count one-off temporary safeguards as stable promotions.
 
 <!-- PROMOTED_RULES:START -->
+##### PS-0001 — Governed-store symlink policy is "in store only": nothing above the root is checked, every component from the root down must not be a link, the resolved path must land inside the resolved root, and a test must spell the store root through a real symlink
+- **Scope:** any governed store, and any change to store path handling (`src/uq/contracts/paths.py` and all its callers)
+- **Evidence lessons:** `L-0001`
+
+##### PS-0002 — A change that touches a source file pinned by an evidence index re-pins that digest in the same change, verifies by re-reading the index, and investigates a freshness red against the stash state before attributing it elsewhere
+- **Scope:** any change to a file pinned by an `evidence-index.json` under `evidence/**`
+- **Evidence lessons:** `L-0002`
 <!-- PROMOTED_RULES:END -->
 
 If the block is empty, no project-specific stable rule is currently promoted.
