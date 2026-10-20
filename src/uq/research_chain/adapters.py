@@ -47,20 +47,38 @@ _STAGE_BINDING_KEYS = {
 }
 
 
-def _earliest_prediction_binding(bindings: Sequence[Any]) -> Any:
-    """The prediction binding for the earliest decision date.
+def _prediction_binding_for(bindings: Sequence[Any], generation_id: str) -> Any:
+    """The binding for the prediction generation a hand-off carries.
 
-    cr.md 8.62 C: `prediction_set` publishes one binding per decision date, so
-    the portfolio stage must bind the earliest one deterministically instead of
-    taking whatever the plan happened to list first. Bindings whose physical
-    path carries no date sort last: those are resolver-built stand-ins, and the
-    earliest published one is the better-defined subject.
+    cr.md 8.62 C: the runner's hand-off is the *last* prediction it built
+    (`results[-1]`), and the runner's synthesized definition names that same
+    generation. Selecting "the earliest date" instead made the adapter refuse a
+    perfectly consistent run, because the hand-off and the definition disagree
+    with which date they mean. Keying on the generation that is actually being
+    carried removes the ambiguity without changing the selection rule.
+    """
+    matches = [binding for binding in bindings if binding.generation_id == generation_id]
+    if not matches:
+        raise ContractError("no prediction_set binding for the prediction the run carries")
+    return matches[0]
+
+
+def _latest_prediction_binding(bindings: Sequence[Any]) -> Any:
+    """The prediction binding for the latest decision date.
+
+    cr.md 8.62 C: `prediction_set` publishes one binding per decision date. The
+    runner's cross-stage hand-off is the *last* prediction it built, so the
+    restored one has to be the same date, or the portfolio stage binds a
+    generation the run never carried. Bindings whose physical path carries no
+    date sort last: those are resolver-built stand-ins with no date to order by.
     """
     def sort_key(binding: Any) -> tuple[bool, str]:
         date_part = Path(binding.physical_path).name.removeprefix("date=") if binding.physical_path else None
-        return (date_part is None, date_part or "")
+        # A path-less binding has no date to order by, so it sorts *first*: this
+        # helper selects `[-1]`, and a stand-in must never be what it returns.
+        return (date_part is not None, date_part or "")
 
-    return sorted(bindings, key=sort_key)[0]
+    return sorted(bindings, key=sort_key)[-1]
 
 
 def _stage_binding(plan: ResolvedExecutionPlan, *, stage: str, output_family: str):
@@ -843,10 +861,12 @@ class PortfolioStageAdapter:
         if not prediction_bindings:
             raise ContractError("resolved plan has no prediction_set binding")
         # cr.md 8.62 C: this family has one binding per decision date, so
-        # `bindings[0]` was an arbitrary one. Bind to the date the runner passed
-        # first (the earliest decision date), which is also the generation the
-        # definition names.
-        prediction_binding = _earliest_prediction_binding(prediction_bindings)
+        # `bindings[0]` was an arbitrary one. Bind the date the prediction
+        # hand-off actually carries, and check the rest through the per-date map
+        # below.
+        prediction_binding = _prediction_binding_for(
+            prediction_bindings, prediction_stage_result.manifest["generation_id"]
+        )
         if prediction_stage_result.manifest["generation_id"] != prediction_binding.generation_id:
             raise ContractError("portfolio prediction binding mismatch")
         if (
@@ -1081,7 +1101,16 @@ class BacktestStageAdapter:
             raise ContractError("backtest price binding mismatch")
         adjusted_manifest = self.adjusted_price_store.read_manifest(price_binding["dataset_generation_id"])
         price_frame = self.adjusted_price_store.read_frame(price_binding["dataset_generation_id"])
-        required_price_columns = {"datetime", "instrument", "open", "high", "low", "close", "volume", "amount"}
+        # cr.md 8.62 F: `bars_daily/v2` renames the session key `datetime` to
+        # `session_date` (config/schemas/bars_daily.v2.yaml migration), and the
+        # published adjusted-price partitions key on whichever the source schema
+        # declares -- the factor side stays `datetime`-keyed by
+        # `_validate_factor_frame`. Requiring only `datetime` made a v2 backtest
+        # refuse its own published price panel, so the panel's own key is used.
+        session_column = "session_date" if "session_date" in price_frame.columns else "datetime"
+        required_price_columns = {
+            session_column, "instrument", "open", "high", "low", "close", "volume", "amount",
+        }
         if not required_price_columns.issubset(price_frame.columns):
             raise ContractError("backtest price dataset is missing required columns")
         if file_sha256_bytes(
@@ -1089,7 +1118,7 @@ class BacktestStageAdapter:
         ) != price_binding["data_checksum_sha256"]:
             raise ContractError("backtest price data checksum mismatch")
         price_panel = price_frame.copy()
-        price_panel["date"] = pd.to_datetime(price_panel["datetime"]).dt.strftime("%Y-%m-%d")
+        price_panel["date"] = pd.to_datetime(price_panel[session_column]).dt.strftime("%Y-%m-%d")
         price_panel = price_panel.set_index(["date", "instrument"])[["open", "high", "low", "close", "volume", "amount"]]
 
         calendar_frame = self.market_dataset_store.read_frame(

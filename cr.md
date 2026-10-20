@@ -2555,3 +2555,68 @@ reconcile 只在该家族确有已发布绑定时才丢无 path 的占位。
 - 证据索引：`evidence/paper-execution-research-integration/phase-0/evidence-index.json` 的
   `runner.py` 摘要已刷新（该文件的既有键序不是 producer 的输出形状，
   所以按原形状只改那一个摘要，而不是重跑 producer）。
+
+### 8.62 续二：resume 的跨阶段握手 + v2 价格面板键名（2026-10-21）
+
+接 §8.62/B2/C。同一条真实跑批继续推进，本轮在 portfolio / backtest 又抓两个真缺陷。
+
+#### D. resume 只恢复了 model stage 的握手，漏掉 prediction 与 portfolio
+
+`_restore_cross_stage_state` 的 docstring 明写 "Only `model_training` needs restoring
+for now"，但我的冒烟脚本每失败一次就重跑同一个 run，于是 **resume 成为主路径**，
+把这条断言证伪了：
+
+- `portfolio stage` 读 `self.prediction_adapter.last_result.manifest` → resume 下是 `None`
+  ⇒ `AttributeError: 'NoneType' object has no attribute 'manifest'`。
+- `backtest stage` 读 `self.portfolio_adapter.last_result.published_state` 与
+  `.target_weight_manifests`、`.definition_manifest` → 同因。
+
+修复（`runner.py`）：`_restored_prediction_result` 从已发布预测重建握手；
+`_restored_portfolio_result` 从已发布 target weights 重建。
+两个实现细节值得记：
+1. **definition 不能凭空造**：`_synthesized_portfolio_definition` 是 runner 现场合成、
+   从不落盘的，所以恢复时按同样的输入重新合成（同一 plan 绑定 + 同一 state 的
+   `created_at`），而不是给个 `{}`——后者会让 backtest 在
+   `definition_manifest["universe_snapshot_generation_id"]` 上 KeyError。
+2. **state 摘要不能猜**：`BacktestStageAdapter` 会用
+   `portfolio_stage_result.published_state.manifest_digest_sha256` 回读 portfolio stage
+   的 state，而 `read_state` 对不上摘要就拒。从 binding 的 digest 推或按 stage 号猜
+   `stage=05` 都失败；正解是 `_state_path_for(plan, stage)` 定位真实 state 文件、
+   用 `ModelContractLoader` 读回它自己的 `manifest_digest_sha256`。
+
+#### E.（自我纠正）"选最早日期"是错的，必须选握手真正携带的那一个
+
+我上一轮为"多日期家族"引入 `_earliest_prediction_binding`，理由是"计划序任意、要确定性"。
+真实跑批立刻打脸：`_run_predictions` 的 `last_result` 是 `results[-1]`，
+即**最后一个**决策日，而 runner 合成 definition 时用的也是它。
+于是 adapter 按"最早日期"选绑定、与握手携带的 generation 不同 ⇒
+`portfolio prediction binding mismatch`——**把一次完全自洽的运行拒掉了**。
+
+修法：`_prediction_binding_for(bindings, generation_id)` 直接按"握手携带的 generation"
+选绑定，语义上不可能再有歧义；`_earliest_prediction_binding` 改为 `_latest_prediction_binding`
+（因为恢复握手时要复现的就是最后一个日期）。
+
+顺带修掉 `_latest_prediction_binding` 排序键的一个反转缺陷：无 path 的 resolver 占位绑定
+原本排在最后，而 `[-1]` 会选中它——改为排在最前。
+
+**教训**："确定性地选一个"不如"选那个无论如何都对得上的"。我上一轮写的
+`test_the_portfolio_stage_binds_the_earliest_decision_date` 锁住的是一个**错误契约**，
+本轮已改写为 `test_the_portfolio_stage_binds_the_date_the_hand_off_carries`。
+
+#### F. v2 价格面板仍按 `datetime` 取键
+
+`config/schemas/bars_daily.v2.yaml` 的 migration 明写 `datetime -> session_date`，
+发布的 `canonical/bars_adjusted/adjusted-v2` 分区确实用 `session_date`，
+而 `BacktestStageAdapter` 的 `required_price_columns` 硬编码 `datetime`
+⇒ `backtest price dataset is missing required columns`。
+修复：从帧自身读键名（`session_date` 优先、否则 `datetime`），
+`required_price_columns` 与 `price_panel["date"]` 用同一个选择，v1 路线不受影响。
+锁：`test_a_v2_price_panel_is_keyed_on_its_own_session_column`；变异（改回硬编码）→ 红。
+
+#### 验证
+
+- `.venv-qlib` **1219 passed / 0 skipped**、`.venv` **1195 passed / 26 skipped**
+  （父提交 `.venv-qlib` 1220 含两条被本轮 runner.py 改动刷新证据索引后恢复的测试）。
+- 变异：`_latest_prediction_binding` 返回 `[0]` → 4 红；`session_column` 硬编码 → 1 红；
+  `_binding_key` 退回家族键 → 新锁红。
+- phase-0 证据索引的 `runner.py` 摘要按原形状刷新。

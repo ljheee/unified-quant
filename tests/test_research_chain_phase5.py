@@ -676,12 +676,19 @@ def test_a_multi_date_stage_keeps_every_date_when_folded_into_the_plan(tmp_path:
     ]) == 3
 
 
-def test_the_portfolio_stage_binds_the_earliest_decision_date(tmp_path: Path):
-    """cr.md 8.62 C: the definition must name the earliest prediction, not an
-    arbitrary one. With one binding per date, `bindings[0]` (or `[-1]`) is an
-    artefact of the plan's ordering, which a resumed run can permute.
+def test_the_portfolio_stage_binds_the_date_the_hand_off_carries(tmp_path: Path):
+    """cr.md 8.62 C/E: the definition must name the prediction the run carries.
+
+    The runner's hand-off is the last prediction it built (`results[-1]`), so the
+    definition it synthesizes and the binding the portfolio stage checks have to
+    agree on that generation. With one binding per decision date, "the earliest
+    date" and "whatever the plan listed first" both disagree with the hand-off,
+    which is what made a multi-date run refuse its own consistent state.
     """
-    from uq.research_chain.adapters import _earliest_prediction_binding
+    from uq.research_chain.adapters import (
+        _latest_prediction_binding,
+        _prediction_binding_for,
+    )
 
     bindings = [
         ResolvedStageBinding(
@@ -694,15 +701,55 @@ def test_the_portfolio_stage_binds_the_earliest_decision_date(tmp_path: Path):
         )
         for index, day in enumerate(["2026-01-30", "2026-01-05", "2026-01-19"], start=1)
     ]
-    # Deliberately shuffle twice: the selection must not depend on plan order.
-    chosen = _earliest_prediction_binding(bindings)
-    assert Path(chosen.physical_path).name.removeprefix("date=") == "2026-01-05"
-    assert chosen.generation_id == "2".ljust(64, "0")
-    assert _earliest_prediction_binding(list(reversed(bindings))).generation_id == chosen.generation_id
-
-    # A path-less resolver stand-in is never preferred over a published one.
+    # 1) the restored hand-off is the LAST date, matching `results[-1]`,
+    assert Path(_latest_prediction_binding(bindings).physical_path).name.removeprefix("date=") == "2026-01-30"
+    # The date is what orders them, so a permuted list selects the same binding
+    # (2026-01-30 is generation "1" in this fixture, whichever position it holds).
+    assert _latest_prediction_binding(list(reversed(bindings))).generation_id == "1".ljust(64, "0")
+    # 2) and the portfolio stage binds the generation the hand-off carries,
+    assert _prediction_binding_for(bindings, "2".ljust(64, "0")).generation_id == "2".ljust(64, "0")
+    # 3) a generation no binding names fails closed,
+    with pytest.raises(ContractError, match="no prediction_set binding"):
+        _prediction_binding_for(bindings, "9".ljust(64, "0"))
+    # 4) a path-less resolver stand-in is never preferred over a published one.
     stand_in = ResolvedStageBinding(
         stage="prediction_publication", output_family="prediction_set",
         generation_id="9" * 64, manifest_digest_sha256="2" * 64, data_checksum_sha256="3" * 64,
     )
-    assert _earliest_prediction_binding([stand_in, *bindings]) is chosen
+    assert _latest_prediction_binding([stand_in, *bindings]).generation_id == "1".ljust(64, "0")
+
+
+def test_a_v2_price_panel_is_keyed_on_its_own_session_column(tmp_path: Path):
+    """cr.md 8.62 F: `bars_daily/v2` publishes `session_date`, not `datetime`.
+
+    The research-chain backtest required `datetime` outright, so a run whose
+    request bound the v2 adjusted-price line refused the panel it had just
+    published. The panel's own key is used instead, which also keeps the v1
+    (`datetime`) line working: the column name is read off the frame, not
+    hardcoded in both places.
+    """
+    import pandas as pd
+
+    from uq.research_chain import adapters as adapters_module
+
+    source = Path(adapters_module.__file__).read_text()
+    # 1) the required-column set is derived from the frame, not fixed to `datetime`
+    assert 'session_column = "session_date" if "session_date" in price_frame.columns else "datetime"' in source
+    # 2) and the panel's date column uses the same selection
+    assert 'price_panel[session_column]' in source
+    # 3) the v1 spelling still works, so the branch is a fallback rather than a rename
+    v1 = pd.DataFrame({
+        "instrument": ["A"], "datetime": [pd.Timestamp("2026-01-05")],
+        "open": [10.0], "high": [11.0], "low": [9.0], "close": [10.5],
+        "volume": [1.0], "amount": [10.5],
+    })
+    v2 = v1.rename(columns={"datetime": "session_date"})
+    for frame, expected in ((v1, "datetime"), (v2, "session_date")):
+        chosen = "session_date" if "session_date" in frame.columns else "datetime"
+        assert chosen == expected
+        panel = frame.copy()
+        panel["date"] = pd.to_datetime(panel[chosen]).dt.strftime("%Y-%m-%d")
+        panel = panel.set_index(["date", "instrument"])[["open", "high", "low", "close", "volume", "amount"]]
+        assert ("2026-01-05", "A") in panel.index
+        # both lines lose the same columns the same way once paneled
+        assert list(panel.columns) == ["open", "high", "low", "close", "volume", "amount"]

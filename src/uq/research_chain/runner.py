@@ -103,7 +103,9 @@ from .adapters import (
     ModelStageAdapter,
     ModelStageResult,
     PortfolioStageAdapter,
+    PortfolioStageResult,
     PredictionStageAdapter,
+    PredictionStageResult,
     QlibExportStageAdapter,
     _synthesized_portfolio_definition,
     build_stage_state,
@@ -708,14 +710,15 @@ class ResearchChainRunner:
         ]
         if not prediction_bindings:
             raise ContractError("research plan has no prediction_set binding")
-        # Order by the date each binding was published for. A resolver-built
-        # binding has no date in its path, so those sort last and only matter
-        # when no published prediction carries one.
-        dated = sorted(
-            prediction_bindings,
-            key=lambda binding: (_prediction_binding_date(binding) is None, _prediction_binding_date(binding) or ""),
+        # cr.md 8.62 C: the hand-off is the last prediction built
+        # (`self.prediction_adapter.last_result` is `results[-1]`), so the
+        # definition must name that same generation. Selecting the earliest date
+        # instead made the portfolio stage refuse a consistent run.
+        from .adapters import _prediction_binding_for
+
+        first_prediction = _prediction_binding_for(
+            prediction_bindings, self.prediction_adapter.last_result.manifest["generation_id"]
         )
-        first_prediction = dated[0]
         universe_binding = self._binding(plan, "universe_snapshot")
         definition = _synthesized_portfolio_definition(
             plan,
@@ -726,7 +729,11 @@ class ResearchChainRunner:
         )
         # Dates only, and only the bindings that actually carry one: a
         # resolver-built stand-in has no date to contribute.
-        decision_dates = [date for date in (_prediction_binding_date(binding) for binding in dated) if date]
+        decision_dates = [
+            date for date in
+            (_prediction_binding_date(binding) for binding in prediction_bindings)
+            if date
+        ]
         result = self.portfolio_adapter.run(
             plan,
             prediction_stage_result=self.prediction_adapter.last_result,
@@ -1162,6 +1169,106 @@ class ResearchChainRunner:
         self.model_adapter.last_result = ModelStageResult(
             run_manifest=run_manifest,
             artifact_manifest=artifact_manifest,
+        )
+        # cr.md 8.62 D: the portfolio stage consumes the prediction hand-off, not
+        # just the plan's bindings, so a resume that replays prediction_publication
+        # has to re-hydrate it too. It is a per-date family, so the earliest
+        # published prediction is the one the hand-off carries.
+        if "prediction_publication" in completed:
+            self.prediction_adapter.last_result = self._restored_prediction_result(plan)
+        # cr.md 8.62 D: the backtest stage reads the portfolio hand-off the same
+        # way, so a resume that replays portfolio_construction has to rebuild it
+        # from the published per-date target weights.
+        if "portfolio_construction" in completed:
+            self.portfolio_adapter.last_result = self._restored_portfolio_result(plan)
+
+    def _restored_portfolio_result(self, plan: ResolvedExecutionPlan) -> Any:
+        """Rebuild the portfolio hand-off from the published target weights.
+
+        The definition is *synthesized* by the runner (never stored), so it is
+        re-derived the same way `_run_portfolio` derives it, from the same plan
+        bindings. Only the per-date target weights have to be read back.
+        """
+        from .adapters import _latest_prediction_binding
+        from .contracts import PublishedState
+
+        bindings = [
+            binding for binding in plan.stage_bindings
+            if binding.stage == "portfolio_construction"
+            and binding.output_family == "target_weights"
+        ]
+        if not bindings:
+            raise ContractError("resumed run has no published target_weights binding")
+        manifests: dict[str, dict[str, Any]] = {}
+        frames: dict[str, pd.DataFrame] = {}
+        for binding in sorted(bindings, key=lambda item: _binding_key(item.stage, item)):
+            # `target_weights/date=YYYY-MM-DD/generation=...`
+            decision_date = Path(binding.physical_path).parent.name.removeprefix("date=")
+            manifest, frame = self.portfolio_adapter.target_weight_store.read(
+                binding.generation_id, decision_date,
+            )
+            if manifest["generation_id"] != binding.generation_id:
+                raise ContractError("target-weight readback identity mismatch on resume")
+            manifests[decision_date] = manifest
+            frames[decision_date] = frame
+        # The backtest stage re-reads the portfolio stage's own state snapshot, so
+        # the restored hand-off has to carry that snapshot's real digest. Deriving
+        # it from a binding (or guessing a stage number) cannot satisfy
+        # `read_state`, which refuses a digest it cannot reproduce.
+        state_path = self._state_path_for(plan, "portfolio_construction")
+        state = ModelContractLoader(self.run_store.root).load("research_run_state", state_path)
+        published_state = PublishedState(
+            manifest_path=state_path,
+            manifest_digest_sha256=state["manifest_digest_sha256"],
+        )
+        prediction_bindings = [
+            binding for binding in plan.stage_bindings
+            if binding.stage == "prediction_publication"
+            and binding.output_family == "prediction_set"
+        ]
+        definition = _synthesized_portfolio_definition(
+            plan,
+            template=plan.request["portfolio_definition_template"],
+            prediction_generation_id=_latest_prediction_binding(prediction_bindings).generation_id,
+            universe_generation_id=self._binding(plan, "universe_snapshot").generation_id,
+            created_at=state["created_at"],
+        )
+        return PortfolioStageResult(
+            definition_manifest=definition,
+            target_weight_manifests=manifests,
+            target_weight_frames=frames,
+            published_state=published_state,
+        )
+
+    def _state_path_for(self, plan: ResolvedExecutionPlan, stage: str) -> Path:
+        """The published state snapshot path for one stage of this run."""
+        number = stage_plan_for_request(plan.request).index(stage)
+        return (
+            self.run_store.root / "research_runs" / "states"
+            / f"request={plan.request['request_content_generation_id']}"
+            / f"run={plan.request['run_id']}" / f"stage={number:02d}" / "manifest.json"
+        )
+
+    def _restored_prediction_result(self, plan: ResolvedExecutionPlan) -> Any:
+        """Rebuild the prediction hand-off from the published prediction sets."""
+        from .adapters import _latest_prediction_binding
+
+        bindings = [
+            binding for binding in plan.stage_bindings
+            if binding.stage == "prediction_publication"
+            and binding.output_family == "prediction_set"
+        ]
+        if not bindings:
+            raise ContractError("resumed run has no published prediction_set binding")
+        binding = _latest_prediction_binding(bindings)
+        manifest, frame = self.prediction_adapter.prediction_builder.read(
+            binding.generation_id,
+            Path(binding.physical_path).name.removeprefix("date=") if binding.physical_path else plan.request["window_start_date"],
+        )
+        if manifest["generation_id"] != binding.generation_id:
+            raise ContractError("prediction readback identity mismatch on resume")
+        return PredictionStageResult(
+            manifest=manifest, frame=frame, published_state=None,
         )
 
     def _apply_stage_bindings(
