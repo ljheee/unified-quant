@@ -1,4 +1,4 @@
-<!-- reviewed-through: 673f3244a7d459aa22b194956e6725b3638bc7c5 -->
+<!-- reviewed-through: 711cae95df5c3e87951d4e01739866bd762034a7 -->
 # Project Lessons and Retrospectives (Lessons)
 
 This is the target project's living incident and learning log, not a collection of generic examples. Except for the maintenance protocol defined in this file, every entry must come from commits, issues/PRs, CI output, reproduction records, or verifiable maintainer feedback inspected for this project; do not copy specific technical rules from templates or other projects.
@@ -165,15 +165,6 @@ When recording a specific event, evidence may support checking whether it can be
 - **Status:** active
 - **Distinct review dates observed:** 1 (2026-10-20)
 
-### L-0018 — A test whose fixture never drives execution through the target branch is fake-green; prove teeth with one disabling mutation
-- **Why:** Twice in the same week a first-version test passed while locking nothing, and both were exposed only by mutation: FC-M7's suspension-side test used an all-NaN panel, so the instrument was skipped before the suspension branch and no fill row ever existed (the side-flip mutation survived); the BSE fallback test used the default `600000`/`000001` instruments, so the assertion held vacuously over an always-empty array (the fallback-disabling mutation survived). Both were self-registered as 返工 and rewritten so the fixture forces control flow through the branch under test.
-- **Review evidence:**
-  - `2026-10-20` — [cr.md:1222, FC-M7 suspension-side first test fake-green on an all-NaN panel, self-registered rework, fixed by declaring the suspension with valid prices](cr.md#L1222)
-  - `2026-10-20` — [cr.md:1293, BSE fallback fixture asserting on an always-empty array with default instruments, self-registered fixture rework, fixed with `920000.XBSE`](cr.md#L1293)
-- **Fix or follow-up:** Landed — FC-M7 declares the suspension via `suspension_dates` with valid prices so a fill row is actually produced, and the BSE test uses `920000.XBSE` so the asserted array is non-empty. Rule: a branch-targeting test must assert on an artifact only that branch can produce (a fill row, a non-empty collection), and the cheapest teeth-proof is one mutation that disables the branch — if the mutation survives, the fixture, not the code, is wrong.
-- **Status:** active
-- **Distinct review dates observed:** 1 (2026-10-20)
-
 ### L-0019 — A threshold or guard that can reject real data must be validated against the real data distribution before it ships
 - **Why:** §8.36 wrote the adjusted-price jump tolerance as a pure relative 1e-3; the exchange rounds ex-rights reference prices to the tick, so the legitimate residual is ≈ `tick / previous_close` — a 3-yuan instrument exceeds budget and would have its whole session refused, and the real all-A window already had 600858's residual at 89% of budget. The defect was pushed in `9c811ac` and caught by the §8.37 self-review, which reworked the gate with the physical floor. Same shape in FC-M3: wiring `assert_not_raw_close` into production as a blanket guard would have rejected 62/5059 instruments in one real session whose factors are legitimately constant 1.0 (never had a corporate action) — a fixture invariant mistaken for a data invariant, reverted after the empirical check.
 - **Review evidence:**
@@ -195,6 +186,36 @@ When recording a specific event, evidence may support checking whether it can be
 - **Status:** active
 - **Distinct review dates observed:** 1 (2026-10-20)
 <!-- /frozen-review-lessons: sha256:ceb49c7f5124076eec5b489c66b4628bdefa57561a78d5f4a7456f6062a781b5 -->
+
+<!-- frozen-review-lessons: sha256:2ac1a0d7044c14542e9f560a0c8335132b98c10c00da19aed8b3a77abaa8caac -->
+### L-0018 — A test whose fixture never drives execution through the target branch is fake-green; prove teeth with one disabling mutation
+- **Why:** Twice in the same week a first-version test passed while locking nothing, and both were exposed only by mutation: FC-M7's suspension-side test used an all-NaN panel, so the instrument was skipped before the suspension branch and no fill row ever existed (the side-flip mutation survived); the BSE fallback test used the default `600000`/`000001` instruments, so the assertion held vacuously over an always-empty array (the fallback-disabling mutation survived). Both were self-registered as 返工 and rewritten so the fixture forces control flow through the branch under test.
+- **Review evidence:**
+  - `2026-10-20` — [cr.md:1222, FC-M7 suspension-side first test fake-green on an all-NaN panel, self-registered rework, fixed by declaring the suspension with valid prices](cr.md#L1222)
+  - `2026-10-20` — [cr.md:1293, BSE fallback fixture asserting on an always-empty array with default instruments, self-registered fixture rework, fixed with `920000.XBSE`](cr.md#L1293)
+  - `2026-10-21` — [commit `9edc85f`, `tests/test_research_chain_phase5.py::test_a_v2_price_panel_is_keyed_on_its_own_session_column` asserts on the source text of `adapters.py` plus a pandas re-enactment, so it kills the hardcode mutation but never drives `BacktestStageAdapter.run` through a real price panel; the real production failure surfaced behind a missing window-level artifact, commit `711cae9`](cr.md#L2559)
+- **Fix or follow-up:** Landed — FC-M7 declares the suspension via `suspension_dates` with valid prices so a fill row is actually produced, and the BSE test uses `920000.XBSE` so the asserted array is non-empty. Rule: a branch-targeting test must assert on an artifact only that branch can produce (a fill row, a non-empty collection), and the cheapest teeth-proof is one mutation that disables the branch — if the mutation survives, the fixture, not the code, is wrong.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-20)
+
+### L-0021 — A pattern found in a sibling script is not evidence for the situation at hand; prove the failure is real and not self-inflicted before writing a framework correction
+- **Why:** `ce021f6` read `scripts/publish_market_datasets.py`'s `_attempt` helper ("tolerating an already-published one ... recorded as skipped") as proof that the export stage's "already exists" refusal was a framework error, and added "refuse → reuse the published artifact" capture to both the export and dataset stages — recorded in cr.md as a framework correction. `dbbfbd5` overturned it with a measurement: `DatasetBuilder.build` stamps `run_id` as a fixed zero UUID and `created_at` as the epoch, and neither participates in the identity, so a dataset's identity is a pure content hash. Therefore a same-request/same-run rerun is already skipped by `_resume_from_passed_stages` and never reaches the writer, and the only collision is a same-request rerun under a **new** run id — which is exactly what the author's own smoke script did to dodge a stage-ledger conflict. The "fix" solved a collision the fixer was creating, and the record called it a correction of the framework. The pattern also does not generalise: `model_run`/`prediction`/`backtest_result` carry `created_at`/`run_id` in their identities, so they already mint a new id per rerun and never collide — patching every stage would add dead code to most of them.
+- **Review evidence:**
+  - `2026-10-21` — [commit `ce021f6`, "the counter-example was in the repo all along ... `scripts/publish_market_datasets.py` documents its `_attempt` helper"](src/uq/research_chain/adapters.py) and [commit `dbbfbd5`, the measurement that overturned it: run_id/created_at are identity-neutral, so the only collision is a fresh run id the smoke script invented](cr.md#L2358)
+- **Fix or follow-up:** Before calling a refusal a framework defect, prove two things: (1) the stage is actually reached twice under the *same* run (check the resume path first — it may already skip it), and (2) the collision is not produced by the caller's own harness (a changing `run_id`, a moved directory, a hand-edited ledger). An immutable writer that refuses overwrites is a tamper guard, not a bug; if a real reuse case exists, the fix belongs at the call site, and it must be justified by a scenario an operator can actually hit.
+- **Done right:** `dbbfbd5` reverted the branches, helpers and tests together and returned to the parent baseline exactly (`.venv` 1191/25, `.venv-qlib` 1216/0 — net 0, re-confirmed at `through`), kept the independent read-time `provider_uri` check, and wrote the lesson into cr.md 8.61 rather than leaving it implicit.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-21)
+
+### L-0022 — A selection rule invented for determinism must align with the value the call chain actually carries; key on what cannot disagree, not on an arbitrary ordering
+- **Why:** `5626cfb` had to pick one binding out of a family that publishes one per decision date. It chose "the earliest decision date" for determinism, and wrote a test locking that contract (`test_the_portfolio_stage_binds_the_earliest_decision_date`). The next commit on the same real run, `9edc85f`, showed the rule was wrong rather than merely arbitrary: the runner's cross-stage hand-off is `results[-1]` — the **last** prediction built — and the definition the runner synthesises names that same generation. "Earliest" therefore disagreed with the hand-off permanently, and the portfolio stage refused a perfectly self-consistent run (`portfolio prediction binding mismatch`). The fix keys the selection on the generation the hand-off actually carries (`_prediction_binding_for`), which cannot disagree with it by construction. Two further details: the invented "latest" helper's sort key put path-less resolver stand-ins last, so `[-1]` selected a stand-in that names no date; and the wrong-contract test had to be rewritten in the same round that introduced it.
+- **Review evidence:**
+  - `2026-10-21` — [commit `5626cfb`, the earliest-date rule and its lock: "Locks: two new tests cover the multi-date fold ... and the earliest-date binding (order-independent, stand-in never preferred)"](cr.md#L2494) and [commit `9edc85f`, its self-correction: "the runner's hand-off is results[-1], the last decision date ... Selecting the earliest made the portfolio stage refuse a perfectly consistent run"](cr.md#L2559)
+- **Fix or follow-up:** When a per-item family forces a choice, first find which item the surrounding code already carries (a hand-off, a `last_result`, a `results[-1]`) and select by that identity; only invent an ordering when nothing else pins the answer. If an invented ordering is unavoidable, make the sort key total (path-less/stand-in entries must sort to a defined end) and assert the selection is invariant under permutation. When the rule is invented, say so in the commit message so a later real run can falsify it cheaply.
+- **Done right:** `9edc85f` rewrote the test that had locked the wrong contract instead of leaving both in place, and recorded the self-correction in both the commit message and cr.md; the mutation that first survived (`prediction_bindings[-1]` at the call site, because the fixture's plan order happened to be correct) is recorded in `5626cfb` rather than quietly dropped.
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-21)
+<!-- /frozen-review-lessons: sha256:2ac1a0d7044c14542e9f560a0c8335132b98c10c00da19aed8b3a77abaa8caac -->
 <!-- ACTIVE_LESSONS:END -->
 
 ## Promotion history
