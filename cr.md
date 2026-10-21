@@ -2673,3 +2673,71 @@ for now"，但我的冒烟脚本每失败一次就重跑同一个 run，于是 *
    `dataset=<generation>` 目录）在本轮是**手工拼的**，
    与 `scripts/publish_market_datasets.py` 发布的 `market-datasets/` 布局不同，
    需要确认哪一个才是生产路径、另一个是否有发布入口。
+
+### 8.62 续四：补 `backtest_market_data` 写侧（2026-10-21，三族输入的生产发布器）
+
+接 §8.62 续三。本轮把上一轮留下的唯一卡点做成生产入口,输入源按设计文档定,不是我现推的。
+
+#### A. 缺口性质:读侧一直在,写侧只有测试 helper
+
+`BacktestMarketDatasetStore.read_frame`(`owning_contracts.py:175`)是 `backtest_config.v1`
+三个绑定的唯一读路径,但 `backtest_market_data/dataset=<generation>` 这个布局的**唯一写者是
+`tests/test_research_chain_phase4.py`**。真实 run 因此无法供给 calendar / suspension /
+corporate_action 三类输入。
+
+`specs/layers/paper-execution-research-integration-plan.md` 的 phase 0.5 明写此缺口:
+"They exist as binding names only ... Real runs need publishers",并逐族定了来源——
+上两轮我把这个说成"未记录的设计选择",是流程错误:`specs/` 才是这类问题的第一查阅点。
+
+#### B. 输入源(按设计文档,逐族)
+
+| 族 | 来源 | 理由 |
+|---|---|---|
+| calendar | **canonical `bars_daily/v2` 自身的会话目录** | 用价格面板自己的会话当日历 ⇒ 回测的 `price_dates == calendar_dates` **按构造成立**,不靠对账 |
+| suspension | 主源 bars **`status` 列**;`suspend_d` 仅 reconciliation provenance | 设计明写"not a second truth";非 `trading`(含 `delisted`/`unknown`)一律记停牌,取保守方向 |
+| corporate_action | 与复权派生同一份 **`DividendEventStore`** 的 `div_proc=实施` 记录 | 同一份披露记录,排除集不会与因子线漂移 |
+
+#### C. 为何不复用 `market-datasets/`(两轮追问后的正确定位)
+
+不是"两套布局哪个更像",是**两个契约**:
+`backtest_config.v1` 的三个绑定在 schema 层就钉死**单 generation + 单 checksum**(无 window、
+无 partition 集),回测一次消费整窗口单一制品;`market-datasets/` 是 paper 路径的
+**逐会话/逐 ex-date 分区**,以 `partition_set` 绑定。
+所以"让回测改读 `market-datasets/`"是改发布契约而非改路径,本轮不做。
+这也修正了上一轮"A full-A run needs **both** roots"的误导表述——两者是不同契约的入口,
+恰好覆盖重叠的市场事实。
+
+#### D. 落地
+
+- `BacktestMarketDatasetStore.publish`:manifest-first、staging + `os.replace` + fsync、
+  拒符号链接、**同窗口重发记 skip**(内容哈希相同 ⇒ 必同一制品,不会误覆盖)、
+  generation 由帧自身字节派生。
+- 新契约 `config/schemas/contracts/backtest_market_dataset.v1.json`(含 `sources`/`producer`,
+  把"主源 vs 对账"的区分留在制品上)。
+- 生产脚本 `scripts/publish_backtest_market_data.py`,输出三个绑定值与 row counts。
+
+#### E. 两次自我纠正(都被自己的测试当场抓住)
+
+1. 窗口过滤我第一版错写在**公告日**上(还写了重复条件)。披露 store 是**公告日分区**的,
+   所以窗口外的公告分区是常态;正确判据是 **ex_date 落在窗口内**。
+   已在 `test_the_ex_date_not_the_announcement_date_decides_window_membership` 锁双向
+   (窗口前公告、ex_date 在窗口内 ⇒ 纳入;公告在窗口内、ex_date 在窗口外 ⇒ 排除)。
+2. 同一条测试的**期望值我也写错**:把窗口外的 2026-01-09 算进结果。测试红了之后
+   先怀疑实现,查证发现是自己期望错——没有改实现去迁就错误期望。
+
+#### F. 全 trading 窗口
+
+store 拒空帧,故发布一条显式 `suspended=False` 标记行:"无停牌"是**状态**而非缺输入,
+事件全无的窗口必须仍可发布、可读、可派生空停牌集。已锁。
+
+#### G. 验证
+
+`tests/test_publish_backtest_market_data.py` 10 例;变异(去掉 ex_date 窗口过滤)→ 2 红。
+`.venv` **1209 passed / 26 skipped**、`.venv-qlib` **1235 passed / 0 skipped**
+(父 1199/26、1225/0,净 +10 +10)。
+
+#### H. 仍未决
+
+① 整条 v5 execute 仍未端到端跑通(本轮只补三族写侧,**没有重跑**,不声称链路已通);
+② `backtest_config` 本身仍无生产发布器;
+③ `adjusted_price` 的 `expected_restated` 独立复权源仍未接线。

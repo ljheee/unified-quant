@@ -495,3 +495,14 @@ export 读时校验 + 复用分支回退(2026-10-20,cr.md §8.59)
 - **实现**:`QlibExportStageAdapter.run` 捕获 "already exists" → 提 id → `read()` 全量校验(含 URI,不属于本 run 即拒)→ 返回。测试 2 例;变异 2 红。**自我纠正**:第一版用 monkeypatch 让 export 恒抛 AssertionError 想证明"不再调用",反使分支失效;改为计数。
 - **仍未做**:其他 stage 同等幂等未铺开;整条 v5 execute 仍未跑通(stage 03 已通)。
 - **全量**:`.venv` 1191/27、`.venv-qlib` 1218/0。
+
+补 backtest_market_data 写侧(2026-10-21,cr.md §8.62 续四)
+- **缺口性质**:`BacktestMarketDatasetStore.read_frame` 一直**只有读侧**——`backtest_market_data/dataset=<generation>` 布局的唯一写者是测试 helper(`tests/test_research_chain_phase4.py`),所以真实 run 无法供给 `backtest_config.v1` 绑定的 calendar / suspension / corporate_action 三类输入。`specs/layers/paper-execution-research-integration-plan.md` phase 0.5 明写此缺口("They exist as binding names only ... Real runs need publishers"),并逐族定了来源。
+- **输入源按设计文档定,不是我现推的**:① calendar = **canonical `bars_daily/v2` 自身的会话目录**——用价格面板自己的会话当日历,使回测的 `set(price_dates) == set(calendar_dates)` **按构造成立**而非靠对账;② suspension = 主源是 bars **`status` 列**,`suspend_d` 只作 reconciliation provenance(设计明写"not a second truth"),非 `trading`(含 `delisted`/`unknown`)一律记停牌,取保守方向;③ corporate_action = 与复权派生同一份 **`DividendEventStore`** 的已实施(`div_proc=实施`)记录。
+- **为何不复用 `market-datasets/`**:两者是**两个契约**的入口。`backtest_config.v1` 的三个绑定在 schema 层就钉死"单 generation + 单 checksum"(无 window、无 partition 集),回测一次消费**整窗口单一制品**;`market-datasets/` 是 paper 路径的**逐会话/逐 ex-date 分区**,以 `partition_set` 绑定。让回测改读前者等于改发布契约,不是改路径。
+- **落地**:`BacktestMarketDatasetStore.publish`(manifest-first、staging + `os.replace` + fsync、拒符号链接、同窗口重发记 skip、内容哈希作 generation);新契约 `config/schemas/contracts/backtest_market_dataset.v1.json`;生产脚本 `scripts/publish_backtest_market_data.py`(输出三个绑定值 + row counts,`--out` 落 JSON 报告)。
+- **全 trading 窗口**:store 拒空帧,故发布一条显式 `suspended=False` 标记行——"无停牌"是**状态**而非缺输入,窗口必须仍可发布可读。
+- **测试**:`tests/test_publish_backtest_market_data.py` 10 例(三族经 store 读回、provenance 记主源与对账角色、同窗口重发幂等、异窗口异 generation、无分区 fail-closed、空帧/缺列拒、字节漂移拒、**ex_date 而非公告日决定入窗**、全 trading 显式负行)。变异(去掉 ex_date 窗口过滤)2 红。
+- **诚实记录**:第一版我把窗口过滤错写在**公告日**上(且写了重复条件),被自己第一条测试当场抓住——公告日可以在窗口之前,正确判据是 ex_date 落在窗口内;测试期望值我也先写错(把窗口外的 01-09 算进去),一并改正。
+- **全量**:`.venv` 1209 passed / 26 skipped、`.venv-qlib` 1235 passed / 0 skipped(父 1199/26、1225/0,净 +10 +10)。
+- **仍未决**:①整条 v5 execute 仍未端到端跑通(本轮只补上三族写侧,未重跑);②`backtest_config` 本身仍无生产发布器(需先定 universe/price 绑定的组装来源,见 pendding "补 backtest_config 写侧"条);③`adjusted_price` 的 `expected_restated` 独立复权源仍未接线。

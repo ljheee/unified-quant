@@ -165,9 +165,29 @@ per family, which is what makes the run reproducible — a fact `partition_set` 
 therefore change the published contract (`backtest_config.v1`), not just a path, and
 belongs to its own round with a maintainer decision.
 
-The gap that actually exists is that the three backtest families have no window-level
-publisher. Their correct shape is "frozen once per backtest window", and their input
-source is still an open design choice: derive them from the published `market-datasets`
-partitions (adds a dependency on the paper store) or re-derive from canonical bars
-`status`/`limit_*` plus `DividendEventStore` (duplicates `publish_market_datasets.py`
-logic). Unresolved until the maintainer chooses.
+The window-level publisher for the three backtest families is
+`scripts/publish_backtest_market_data.py` (store: `BacktestMarketDatasetStore.publish`,
+contract: `config/schemas/contracts/backtest_market_dataset.v1.json`). Its input sources
+are fixed by `specs/layers/paper-execution-research-integration-plan.md` phase 0.5, not
+chosen ad hoc:
+
+- **calendar** — the canonical `bars_daily/v2` session directories themselves, so the
+  backtest's `set(price_dates) == set(calendar_dates)` invariant holds by construction
+  rather than by reconciliation against a second vendor calendar.
+- **suspension** — primary source is the bars `status` column; Tushare `suspend_d` is
+  recorded as *reconciliation provenance only*, never a second truth. Anything that is
+  not `trading` (`suspended`, `delisted`, `unknown`) is recorded as suspended, which is
+  the conservative direction.
+- **corporate_action** — the same `DividendEventStore` the adjustment chain derives
+  factors from, taking only `div_proc=实施` records whose **`ex_date`** falls in the
+  window. The announcement date is *not* the membership test: the disclosure store is
+  announcement-anchored, so a partition dated before the window is ordinary, and an
+  announcement inside the window whose ex-date lands later is not this window's event.
+
+A window with no suspensions or no implemented corporate action is a state, not a
+missing input, so the publisher emits an explicit negative row rather than an empty
+frame (the store refuses an empty frame). Republishing the same window is a skip, not a
+refusal — every writer here is immutable, and an interrupted run must resume.
+
+`backtest_config` itself still has no production publisher; the three families are what
+its bindings reference.

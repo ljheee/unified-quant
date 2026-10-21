@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import uuid
+from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import pandas as pd
 
 from ..contracts.artifacts import QualityReportStore
-from ..contracts.canonical_v2 import file_sha256_bytes
+from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
+from ..contracts.gate_contracts import sha256_json, validate_contract
 from ..contracts.manifest import validate_canonical_v2_manifest
 from ..contracts.model_layer import (
     ModelContractLoader,
@@ -213,6 +217,98 @@ class BacktestMarketDatasetStore:
         if required_columns is not None and not required_columns.issubset(frame.columns):
             raise ContractError(f"{dataset_type} dataset is missing required columns")
         return frame
+
+    def publish(
+        self,
+        frame: pd.DataFrame,
+        *,
+        dataset_type: str,
+        window_start: date,
+        window_end: date,
+        sources: Mapping[str, str],
+        producer: str,
+    ) -> dict[str, Any]:
+        """Publish one whole-window market dataset for a backtest config binding.
+
+        `read_frame` has always had a writer-less counterpart: this store's layout was
+        written only by test helpers, so no real run could supply the calendar,
+        suspension or corporate-action input that `backtest_config.v1` binds
+        (a single `generation_id` + `checksum_sha256`, never a partition set).
+        This is that publisher, and it keeps the same contract `read_frame`
+        verifies: one immutable `backtest_market_data/dataset=<generation>`
+        directory whose generation id is a content hash of the frame's own bytes.
+
+        `sources` records provenance rather than being consumed, so the split the
+        paper plan mandates stays visible on the artifact: for suspensions the bars
+        `status` column is the primary source and `suspend_d` only reconciles, never
+        becoming a second truth.
+
+        A window already published byte-identically is reported as skipped rather
+        than refused, so an interrupted run resumes (every writer here is
+        immutable, which is the tamper guard, not a bug).
+        """
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            raise ContractError(f"{dataset_type} dataset requires a non-empty frame")
+        for column in ("date", "instrument"):
+            if column not in frame.columns:
+                raise ContractError(f"{dataset_type} dataset requires a {column} column")
+        ordered = frame.sort_values(["date", "instrument"], kind="mergesort").reset_index(drop=True)
+        generation = sha256_json({
+            "dataset_type": dataset_type,
+            "window_start": window_start.isoformat(),
+            "window_end": window_end.isoformat(),
+            "columns": list(ordered.columns),
+            "rows": ordered.to_dict(orient="records"),
+        })
+        directory = self.root / "backtest_market_data" / f"dataset={generation}"
+        if directory.is_dir():
+            # cr.md 8.62: the same window re-run is the resume path, so an identical
+            # re-publish is a skip, not a failure. A *different* frame that hashes to
+            # the same generation is impossible by construction of the content hash.
+            return self.read_manifest_by(generation, dataset_type=dataset_type)
+        staging = self.root / "backtest_market_data" / f".staging_{uuid.uuid4().hex}"
+        try:
+            staging.mkdir(parents=True)
+            data_path = staging / "data.parquet"
+            ordered.to_parquet(data_path, index=False)
+            data_checksum = file_sha256_bytes(data_path.read_bytes())
+            manifest = {
+                "dataset_version": "1.0.0",
+                "dataset_type": dataset_type,
+                "generation_id": generation,
+                "window_start": window_start.isoformat(),
+                "window_end": window_end.isoformat(),
+                "columns": list(ordered.columns),
+                "row_count": len(ordered),
+                "data_checksum_sha256": data_checksum,
+                "sources": dict(sources),
+                "producer": producer,
+                "serialization_profile": "parquet-v1",
+            }
+            manifest["manifest_digest_sha256"] = sha256_json(manifest)
+            validate_contract("backtest_market_dataset.v1.json", manifest)
+            (staging / "manifest.json").write_text(
+                json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+            reject_symlinks_within(self.root, directory.parent, label="backtest market data path")
+            fsync_tree(staging)
+            os.replace(staging, directory)
+            fsync_dir(directory.parent)
+        except Exception:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
+        return manifest
+
+    def read_manifest_by(self, generation_id: str, *, dataset_type: str) -> dict[str, Any]:
+        """Read a published backtest market dataset's manifest without a checksum."""
+        _validate_generation_id(generation_id, f"{dataset_type} dataset")
+        path = self.root / "backtest_market_data" / f"dataset={generation_id}" / "manifest.json"
+        if not path.is_file():
+            raise ContractError(f"unpublished {dataset_type} dataset: {generation_id}")
+        manifest = _read_json(path)
+        if manifest.get("generation_id") != generation_id or manifest.get("dataset_type") != dataset_type:
+            raise ContractError(f"{dataset_type} dataset manifest identity mismatch")
+        return manifest
 
 
 class LabelStore:

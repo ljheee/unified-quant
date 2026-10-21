@@ -295,11 +295,12 @@ v5 请求额外要求的两类绑定**有**随仓库提供的生产者:
 
 - `index_membership_binding`:`scripts/fetch_index_membership.py`。
 - `paper_execution_template` 的市场数据四族:`scripts/publish_market_datasets.py`。
+- `backtest_config` 绑定的 calendar / suspension / corporate_action 三族(整窗口单一制品,**不是**上面那四族的布局):`scripts/publish_backtest_market_data.py`。来源见 `docs/subsystems/research-chain.md`;除权排除集按 **`ex_date` 而非公告日**判入窗。
 
 两点提醒:
 
 - §6 的 dry-run 只校验请求本身并写 request/state manifest,**不会**去解析上面这些 store;绑定是到 execute 阶段才逐个读取校验的,所以 dry-run 通过不代表可以 execute。
-- 因此"一条命令从零跑到回测"按现有代码还做不到:上面六类要先产出并落到同一个 `--data-root`。已有生产入口的是四类:因子(`scripts/publish_factor_partitions.py`)、universe snapshot(`scripts/publish_universe_snapshots.py`)、label set(`scripts/build_label_sets.py`)与 feature preprocessing(`scripts/publish_feature_preprocessing.py`);其余两类(`adjusted_price`、`backtest_config`)的写侧虽已在 `src/uq/research_chain/owning_contracts.py` 提供,但仍只有测试里的 helper 会实际调用它们。
+- 因此"一条命令从零跑到回测"按现有代码还做不到:上面六类要先产出并落到同一个 `--data-root`。已有生产入口的是五类:因子(`scripts/publish_factor_partitions.py`)、universe snapshot(`scripts/publish_universe_snapshots.py`)、label set(`scripts/build_label_sets.py`)、feature preprocessing(`scripts/publish_feature_preprocessing.py`)与回测市场输入三族(`scripts/publish_backtest_market_data.py`);其余两类(`adjusted_price`、`backtest_config` 本身)的写侧虽已在 `src/uq/research_chain/owning_contracts.py` 提供,但仍只有测试里的 helper 会实际调用它们。
 
 ### 论文执行(v5 请求)的两个额外参数
 
