@@ -506,3 +506,16 @@ export 读时校验 + 复用分支回退(2026-10-20,cr.md §8.59)
 - **诚实记录**:第一版我把窗口过滤错写在**公告日**上(且写了重复条件),被自己第一条测试当场抓住——公告日可以在窗口之前,正确判据是 ex_date 落在窗口内;测试期望值我也先写错(把窗口外的 01-09 算进去),一并改正。
 - **全量**:`.venv` 1209 passed / 26 skipped、`.venv-qlib` 1235 passed / 0 skipped(父 1199/26、1225/0,净 +10 +10)。
 - **仍未决**:①整条 v5 execute 仍未端到端跑通(本轮只补上三族写侧,未重跑);②`backtest_config` 本身仍无生产发布器(需先定 universe/price 绑定的组装来源,见 pendding "补 backtest_config 写侧"条);③`adjusted_price` 的 `expected_restated` 独立复权源仍未接线。
+
+补 backtest_config 生产发布器(2026-10-21)
+- **缺口**:`BacktestConfigStore.publish` 会从内容派生 identity 并绑外部评审,但**没有东西组装内容**——真实 run 必须手写一份 config。已有 `--universe-root`/`--factor-root` 等入口,唯独缺这一族。
+- **落地**:`scripts/publish_backtest_config.py`。四个绑定逐一从**已发布的受治理制品**读取,不经文件系统推断:
+  - `universe_binding.snapshot_generation_id` ← 显式传入的 `universe_snapshot.v1` generation(snapshot 自身由 `valid_from`/`valid_to` 界定 PIT 范围,一个窗口只适用一份,故不猜);
+  - `price_source_binding` ← 显式传入的 `bars_adjusted/adjusted-v2` generation,含从 store 读回的 checksum;
+  - calendar / suspension / corporate_action ← `scripts/publish_backtest_market_data.py` 产出的报告,且**逐个再经 `BacktestMarketDatasetStore.read_frame` 回读校验**(报告与 store 不一致即拒,不会把错的 checksum 烙进 config)。
+- **评审不自己签**:`--quality-decisions-json` 接受两种形状——`{"provider_command": [...]}`(外部评审进程,生产形状,与 `--decision-provider-json` 同协议:五个命名 flag,stdout 出签名决策)或一份普通 decision 文档(仅当调用方已知 subject 时可用,subject 不符在 bind 处 fail-closed)。本族 identity 在评审绑定**之后**才确定(cr.md U9),所以静态预签文档原则上不适用,provider 是正路。
+- **`run_id`/`created_at` 用固定零/epoch**:二者不参与本族 identity,用每 run 变化值会为同一份数据铸出第二个 generation,破坏"这份 config 属于这个 request"的链(§8.61 同理)。
+- **顺带的价格护栏**:帧的会话日必须都落在 `--start/--end` 内,否则在发布期就拒绝,而不是等到回测阶段报一句既不含窗口名也不含绑定名的错。
+- **测试**:`tests/test_publish_backtest_config.py` 8 例——config 经 store 与真实 store 逐个回读、CLI 参数落成交易参数(const 字段不可配)、run_id/created_at 固定值、同配置重发被拒(此族无内容相同即跳过的分支,因为检测它需要 store 侧支持;调用方应复用上报的 generation)、市场绑定不解析即拒、adjusted price generation 不解析即拒、缺评审即拒、报告缺绑定即拒。测试里的评审方是一个**独立进程**(真实 provider 协议),不是绕过评审。
+- **诚实记录**:本轮我在脚本里先后留下三处烂代码——拼错的 `--volume-participation-capap`、一段"伪校验"(拿帧的 `.attrs` 比 manifest checksum)、一句 `raise SystemExit("unreachable")`。都在自测/肉眼复查时删掉,最终版没有它们。
+- **全量**:`.venv` 1217 passed / 26 skipped、`.venv-qlib` 1243 passed / 0 skipped(父 1209/26、1235/0,净 +8 +8)。

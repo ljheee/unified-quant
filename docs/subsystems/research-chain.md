@@ -189,5 +189,13 @@ missing input, so the publisher emits an explicit negative row rather than an em
 frame (the store refuses an empty frame). Republishing the same window is a skip, not a
 refusal — every writer here is immutable, and an interrupted run must resume.
 
-`backtest_config` itself still has no production publisher; the three families are what
-its bindings reference.
+`backtest_config` itself is assembled by `scripts/publish_backtest_config.py`, which
+resolves the four bindings from named, already-published artifacts (never inferred from
+the filesystem) and re-reads every market binding through its store before publishing,
+so a report that disagrees with the store is refused rather than baked into a
+content-addressed, immutable config. Its review arrives as
+`{"provider_command": [...]}` — the same external-reviewer protocol
+`--decision-provider-json` gives the research CLI — because this family's identity is
+only determined after the review is bound (cr.md U9). `run_id` and `created_at` are the
+fixed zero/epoch values: neither participates in the identity, so a per-run value would
+mint a second generation for one dataset and break "this config belongs to this request".

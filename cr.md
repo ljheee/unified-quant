@@ -2741,3 +2741,57 @@ store 拒空帧,故发布一条显式 `suspended=False` 标记行:"无停牌"是
 ① 整条 v5 execute 仍未端到端跑通(本轮只补三族写侧,**没有重跑**,不声称链路已通);
 ② `backtest_config` 本身仍无生产发布器;
 ③ `adjusted_price` 的 `expected_restated` 独立复权源仍未接线。
+
+### 8.62 续五：补 `backtest_config` 生产发布器（2026-10-21）
+
+接 §8.62 续四。三族市场输入有写侧之后,最后一个"只有读侧/只有测试 helper"的族补齐。
+
+#### A. 缺口与落地
+
+`BacktestConfigStore.publish` 会从内容派生 identity 并绑外部评审,但**没有东西组装内容**,
+真实 run 必须手写一份 config。`scripts/publish_backtest_config.py` 现在做这件事:
+四个绑定逐一从**已发布的受治理制品**读取,不经文件系统推断。
+
+#### B. 三个值得记的设计点
+
+1. **市场绑定必须回读校验,不能信报告**。脚本拿到
+   `publish_backtest_market_data.py` 的报告后,仍逐个用
+   `BacktestMarketDatasetStore.read_frame` 重新校验字节。否则一份与 store 不一致的报告
+   会把错的 checksum 直接烙进 config,而 config 的 identity 又覆盖这些绑定——
+   错误会变成不可变的。变异验证:删掉回读 → `test_a_market_binding_that_does_not_resolve_is_refused` 红。
+2. **评审不自己签,且形状必须是 provider**。本族的 identity 在评审绑定**之后**才确定
+   (cr.md U9:评审签的是 provisional generation,再由 recorded checksum 重导 final id),
+   所以静态预签文档原则上不适用。`--quality-decisions-json` 因此接受
+   `{"provider_command": [...]}`(外部评审进程,五个命名 flag 的协议与
+   `--decision-provider-json` 完全一致),普通 decision 文档也收但 subject 不符即 fail-closed。
+   测试里的评审方是**独立进程**,不是绕过评审的假对象。
+3. **`run_id`/`created_at` 取固定零/epoch**。二者不参与本族 identity,若按 run 变化,
+   同一份数据会铸出第二个 generation,而 owning store 按 id 找分区、请求按
+   `(family, generation_id, manifest_digest)` 校验制品未被改——两个 id 一份数据即歧义,
+   且会断掉"这份 config 属于这个 request"的链。§8.61 对同一原则有过完整论证。
+
+#### C. 顺带的价格护栏
+
+脚本检查帧的会话日全部落在 `--start/--end` 内,否则发布期就拒。理由是回测阶段虽然也会拒
+(`price_dates == calendar_dates`),但那条报错既不含窗口名也不含绑定名,运维无法定位;
+而缺失的"窗口级"制品问题在发布期就能说清。
+
+#### D. 诚实记录:本轮我在脚本里留过三处烂代码
+
+① 拼错的参数名 `--volume-participation-capap`;② 一段伪校验——拿
+`read_frame(...).attrs` 去比 manifest checksum,`attrs` 里根本没有这个键,属于**恒真**;
+③ 一句 `raise SystemExit("unreachable")` 占位。三者都是自测/复查时删掉的,最终版没有。
+这再次印证 L-0018:锁必须驱动真实分支,而**写锁的过程自己也会产出假绿代码**。
+
+#### E. 验证
+
+`tests/test_publish_backtest_config.py` 8 例;变异(删市场绑定回读)→ 1 红。
+`.venv` **1217 passed / 26 skipped**、`.venv-qlib` **1243 passed / 0 skipped**
+(父 1209/26、1235/0,净 +8 +8)。
+
+#### F. 整条 v5 execute 的现状（不夸口）
+
+六类输入制品中,现在**五类**有生产入口:因子、universe snapshot、label set、
+feature preprocessing、backtest_config(含其引用的三族市场输入)。
+仍缺:`adjusted_price` 的**窗口级**发布器(其 `expected_restated` 独立复权源亦未接线)。
+**端到端仍未重跑**,不声称链路已通。
