@@ -19,6 +19,7 @@ import pandas as pd
 import pytest
 
 from uq.errors import ContractError
+from uq.execution.set_binding_resolver import set_digest_sha256
 from uq.research_chain.owning_contracts import (
     AdjustedPriceDatasetStore,
     BacktestConfigStore,
@@ -179,7 +180,6 @@ def _run(root: Path, market: dict, price: str, universe: str, decisions: Path, *
         sys.executable, str(SCRIPT),
         "--data-root", str(root), "--universe-root", str(root),
         "--universe-id", UNIVERSE, "--universe-snapshot", universe,
-        "--adjusted-price-generation", price,
         "--market-inputs", str(root / "market-inputs.json"),
         "--start", START.isoformat(), "--end", END.isoformat(),
         "--backtest-name", "research-baseline",
@@ -210,7 +210,18 @@ def test_publishes_a_config_the_store_and_backtest_both_read_back(tmp_path: Path
 
     # the four bindings are exactly what the inputs said
     assert manifest["universe_binding"] == {"snapshot_generation_id": universe}
-    assert manifest["price_source_binding"]["dataset_generation_id"] == price
+    # cr.md 8.63: the price binding names the window's partition set, not one
+    # partition -- and the set digest is recomputable from the store.
+    binding = manifest["price_source_binding"]
+    assert set(binding) == {"family", "window_start", "window_end",
+                            "set_digest_sha256", "member_count"}
+    assert binding["family"] == "bars_adjusted_adjusted_v2"
+    triples = AdjustedPriceDatasetStore(tmp_path).list_partitions()
+    assert binding["member_count"] == len(triples)
+    assert set_digest_sha256(triples) == binding["set_digest_sha256"]
+    # and the set digest is bound to the same triples the store enumerates
+    assert binding["window_start"] == START.isoformat()
+    assert binding["window_end"] == END.isoformat()
     assert manifest["calendar_binding"]["generation_id"] == market["bindings"]["calendar_binding"]["generation_id"]
     assert manifest["suspension_binding"]["dataset_generation_id"] == market["bindings"]["suspension_binding"]["dataset_generation_id"]
     assert manifest["corporate_action_binding"]["dataset_generation_id"] == market["bindings"]["corporate_action_binding"]["dataset_generation_id"]
@@ -312,7 +323,8 @@ def test_an_unresolved_adjusted_price_generation_is_refused(tmp_path: Path) -> N
     _decisions_document(decisions, _reviewer_script(tmp_path / "reviewer.py"))
     with pytest.raises(subprocess.CalledProcessError) as exc:
         _run(tmp_path, market, "a" * 64, universe, decisions)
-    assert "unpublished adjusted price dataset" in exc.value.stderr
+    # the window has no published adjusted-v2 partition, so the set cannot be built
+    assert "no published adjusted-v2 partitions" in exc.value.stderr
 
 
 def test_a_missing_quality_decision_is_refused(tmp_path: Path) -> None:

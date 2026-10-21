@@ -468,8 +468,12 @@ class BacktestEngine:
             "win_rate": round(win_rate, 6) if win_rate is not None else None,
         }
 
+        # cr.md 8.63: the result copies the config's `price_source_binding` verbatim,
+        # so its contract version follows the config's -- a v2 config produces a v2
+        # result, whose schema accepts the partition-set shape the copy just made.
+        contract_version = int(config.get("contract_version", 1) or 1)
         manifest = {
-            "contract_version": 1,
+            "contract_version": contract_version,
             "schema_version": "1.0.0",
             "backtest_config_generation_id": config["generation_id"],
             "portfolio_definition_generation_id": portfolio_definition["generation_id"],
@@ -545,8 +549,14 @@ class BacktestResultStore:
         quality_decision: dict[str, Any],
         target_weight_generations: list[dict[str, str]],
     ) -> Path:
-        """Publish backtest result partition atomically."""
+        """Publish backtest result partition atomically.
+
+        The manifest arrives from ``BacktestEngine.run`` already stamped with the
+        contract version -- the result copies the config's ``price_source_binding``
+        verbatim, so its version follows the config's (cr.md 8.63).
+        """
         manifest["target_weight_bindings"] = target_weight_generations
+        contract_version = int(manifest.get("contract_version", 1) or 1)
 
         artifact_files = {
             "equity_curve": manifest["equity_curve_artifact"],
@@ -564,10 +574,11 @@ class BacktestResultStore:
             serialized[key] = data
             meta["checksum_sha256"] = checksum
 
+        schema_name = "backtest_result_v2" if contract_version >= 2 else "backtest_result"
         provisional_gen, _ = model_manifest_identities(
             {**manifest, "quality_report_checksum_sha256": "0" * 64,
              "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
-            schema_name="backtest_result",
+            schema_name=schema_name,
         )
 
         quality_decision = resolve_subject_quality_decision(
@@ -582,11 +593,11 @@ class BacktestResultStore:
 
         final_gen, digest = model_manifest_identities(
             {**manifest, "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
-            schema_name="backtest_result",
+            schema_name=schema_name,
         )
         manifest["generation_id"] = final_gen
         manifest["manifest_digest_sha256"] = digest
-        ModelContractLoader.validate("backtest_result", manifest)
+        ModelContractLoader.validate(schema_name, manifest)
 
         partition = self.results_dir / f"result={final_gen}"
         if partition.exists():
@@ -624,7 +635,13 @@ class BacktestResultStore:
         except json.JSONDecodeError as exc:
             raise ContractError("malformed backtest result manifest") from exc
 
-        ModelContractLoader.validate("backtest_result", manifest)
+        # cr.md 8.63: validate against the manifest's own version -- the result
+        # copies the config's `price_source_binding`, so a v2 config's result
+        # carries the partition-set shape the v1 schema rejects.
+        ModelContractLoader.validate(
+            "backtest_result_v2" if manifest.get("contract_version") == 2 else "backtest_result",
+            manifest,
+        )
         if manifest["generation_id"] != result_generation_id:
             raise ContractError("backtest result generation mismatch on read")
 
@@ -651,10 +668,14 @@ class BacktestResultStore:
         if report.get("status") not in reviewed_allowed_statuses("backtest_result_v1"):
             raise ContractError("quality report rejects read")
 
+        # cr.md 8.63: a result's contract version follows the config it reports on,
+        # so validation and identity follow the manifest's own `contract_version`.
+        manifest_version = 2 if manifest.get("contract_version") == 2 else 1
+        schema_name = "backtest_result_v2" if manifest_version == 2 else "backtest_result"
         prov_gen, _ = model_manifest_identities(
             {**manifest, "quality_report_checksum_sha256": "0" * 64,
              "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
-            schema_name="backtest_result",
+            schema_name=schema_name,
         )
         if report.get("bound_generation_id") != prov_gen:
             raise ContractError("quality report does not bind this generation")

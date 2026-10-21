@@ -34,6 +34,8 @@ _SCHEMA_NAMES = {
     "portfolio_definition",
     "target_weights",
     "backtest_config",
+    "backtest_config_v2",
+    "backtest_result_v2",
     "backtest_result",
     "execution_config",
     "order_plan",
@@ -302,6 +304,10 @@ def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
         validate_contract("model_quality_report.v2.json", payload)
     elif schema_name == "paper_execution_template_v2":
         validate_contract("paper_execution_template_v2.json", payload)
+    elif schema_name == "backtest_config_v2":
+        validate_contract("backtest_config.v2.json", payload)
+    elif schema_name == "backtest_result_v2":
+        validate_contract("backtest_result.v2.json", payload)
     elif schema_name in _SCHEMA_NAMES:
         validate_contract(f"{schema_name}.v1.json", payload)
     else:
@@ -735,7 +741,7 @@ class ModelContractLoader:
                     raise ContractError("model quality report checksum mismatch")
                 verify_reviewed_quality_report_signature(payload)
             return
-        if schema_name in ("portfolio_definition", "target_weights", "backtest_config", "backtest_result"):
+        if schema_name in ("portfolio_definition", "target_weights", "backtest_config", "backtest_config_v2", "backtest_result", "backtest_result_v2"):
             exclude_fields = set()
         else:
             exclude_fields = _QUALITY_BOUND_FIELDS.get(schema_name, {"quality_report_checksum_sha256"}).copy()

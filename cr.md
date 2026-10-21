@@ -2795,3 +2795,74 @@ store 拒空帧,故发布一条显式 `suspended=False` 标记行:"无停牌"是
 feature preprocessing、backtest_config(含其引用的三族市场输入)。
 仍缺:`adjusted_price` 的**窗口级**发布器(其 `expected_restated` 独立复权源亦未接线)。
 **端到端仍未重跑**,不声称链路已通。
+
+### 8.63 `backtest_config.v2`：`price_source_binding` 改用 partition_set（2026-10-21）
+
+接 §8.62 续五。这是多轮查证后收敛出的唯一改动点,授权后落地。
+
+#### A. 为什么是它,不是 `partition_date`
+
+`partition_date: date` **不是卡点**,它从 v1 继承且从未被独立论证,但单日粒度是
+**对**的:复权线的三条不变量(`adj_factor` 为正、复权价等于厂商值、与前一分区跳变一致)
+全部定义在**相邻分区之间**,跳变校验要求每个会话有前一会话的帧。所以发布粒度保持按日。
+
+卡点在引用方:`backtest_config.v1` 的 `price_source_binding` 是单个
+`{dataset_generation_id, data_checksum_sha256}`,**只能说"一个"**,而回测需要 N 个会话。
+断点在绑定形状,不在 canonical 地基。
+
+#### B. 落地(五项)
+
+1. **新契约** `config/schemas/contracts/backtest_config.v2.json` = v1 逐字,
+   仅 `contract_version` 1→2、`price_source_binding` 改为
+   `{family: bars_adjusted_adjusted_v2, window_start, window_end, set_digest_sha256, member_count}`。
+   v1 一字节未动(仓库"语义/单位变更开新版本"规则)。
+2. **集合枚举** `AdjustedPriceDatasetStore.list_partitions()` / `read_partition_frames()`。
+   集合读**不需要 store 侧新机制**——`build_label_sets.py:186` 早就是"调用方按会话循环
+   + 自己 concat"的既有实践。拼接在**读时**做,所以不存在"同一数据的第二种表示"可漂移。
+3. **回测读侧** `adapters.py` 按 `contract_version` 分派:v2 走
+   `verify_partition_set_binding` + `read_partition_frames`,v1 路径原样保留。
+4. **发布器** `scripts/publish_backtest_config.py` 改发 v2:按窗口从 store 枚举分区、
+   算 `set_digest_sha256`,删掉已无意义的 `--adjusted-price-generation`。
+5. **锁** `tests/test_backtest_config_v2_price_set.py` 6 例;既有
+   `tests/test_publish_backtest_config.py` 同步到 v2 形状。
+
+#### C. 连带发现(契约层自己挡下的,不是测试先发现的)
+
+`backtest_result.v1` 的 `price_source_binding` 是 v1 闭形状,而
+`engine.py:477` **逐字抄** config 的该字段——所以 v2 config 一进回测,
+result 校验就炸。由此追加:`backtest_result.v2`(`price_source_binding` 用 `oneOf`
+接受两种形状;`sharpe_ratio` 放宽为 `number|null`,因为零波动窗口的引擎输出 null,
+v1 契约会拒掉一份**合法**的结果)。
+
+连带修正三处读侧:`resolver._data_checksum_for` 与 `runner._readback`
+原来取 `.data_checksum_sha256`,v2 上取不到会让 config **无法 resolve**
+(`lineage_mismatch: owning manifest has no data checksum`);`engine.read` 与
+`BacktestResultStore.publish` 原来硬编码 v1 schema,会让 v2 制品**不可读**。
+
+#### D. 诚实记录
+
+- **我自己引入并当场修掉的缺陷**:`Sequence` 未导入(注解测试抓住);
+  `runner.py` 把循环变量 `binding` 用 price-binding dict 覆盖,导致回读
+  `AttributeError`(phase5 端到端抓住);`BacktestResultStore.publish` 里
+  `contract_version` 未定义(NameError)。
+- **变异 G 一度存活**:删掉 `verify_partition_set_binding` 调用,全套 1222 绿——
+  即"绑定被校验"这件事当时**没有锁**。补了
+  `test_the_backtest_refuses_a_price_binding_whose_digest_is_wrong`
+  (篡改的绑定必须**发布**进 store 才有效,因为 adapter 是从 store 回读 config 的,
+  改内存里的副本证明不了任何事)。复测变异 → 红。
+- **测试侧我写错三次**:先断言 `member_count == 3`,但该 fixture 只发 1 个跨窗口分区
+  (正确的是"与 store 枚举数一致");断言 `final_status` 这个 result manifest 上
+  不存在的键;断言扩展窗口会被拒,实际它会发布一个更小的集合——后者才是正确行为,
+  已改为断言集合自洽 + 窗外成员被具名拒绝。
+
+#### E. 验证
+
+`.venv` **1223 passed / 26 skipped**、`.venv-qlib` **1249 passed / 0 skipped**、
+`run_gate.sh` 通过、`validate_lesson_promotions.py` 通过(父 1222/26、1248/0,净 +1 +1)。
+证据索引三条(model_layer / resolver / runner)按原形状重钉。
+
+#### F. 仍未决
+
+① 整条 v5 execute **仍未在真实全 A 窗口端到端重跑**(本轮只把回测这条链的形状改对);
+② `adjusted_price` 的 `expected_restated` 独立复权源仍未接线;
+③ 冒烟根 `/tmp/uq-run4` 里的单窗口分区是当初手搓的,v2 跑真实数据需要按会话重新发布。

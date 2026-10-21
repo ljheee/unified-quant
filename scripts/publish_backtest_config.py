@@ -19,11 +19,12 @@ The four bindings:
   * `universe_binding.snapshot_generation_id`     -- one published
     `universe_snapshot.v1` generation (a snapshot is PIT-scoped by
     `valid_from`/`valid_to`, so exactly one applies to a window).
-  * `price_source_binding.{dataset_generation_id, data_checksum_sha256}` -- one
-    published `bars_adjusted/adjusted-v2` partition generation and its checksum.
-    The backtest needs a frame covering every date it trades, so a window-spanning
-    adjusted-price artifact is required; a single-session binding will be refused
-    at the backtest stage (see `docs/subsystems/research-chain.md`).
+  * `price_source_binding` -- the **partition set** of published
+    `bars_adjusted/adjusted-v2` partitions inside `--start/--end`, as
+    `{family, window_start, window_end, set_digest_sha256, member_count}`
+    (cr.md 8.63).  The set digest is computed from the store's own enumeration, so
+    the binding names exactly the partitions the backtest will read and
+    concatenate -- no merged window artifact exists to drift.
   * `calendar_binding` / `suspension_binding` / `corporate_action_binding` --
     the three window-level artifacts published by
     `scripts/publish_backtest_market_data.py`.
@@ -33,7 +34,6 @@ Usage:
       --data-root data/research-root \
       --universe-root data/research-root \
       --universe-id csi-all --universe-snapshot <generation-id> \
-      --adjusted-price-generation <generation-id> \
       --market-inputs evidence/.../backtest-market-inputs.json \
       --start 2025-09-09 --end 2025-09-30 \
       --backtest-name research-baseline \
@@ -52,6 +52,7 @@ from pathlib import Path
 from typing import Any
 
 from uq.errors import ContractError
+from uq.execution.set_binding_resolver import set_digest_sha256, verify_partition_set_binding
 from uq.research_chain.owning_contracts import (
     AdjustedPriceDatasetStore,
     BacktestConfigStore,
@@ -138,8 +139,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--universe-id", required=True)
     parser.add_argument("--universe-snapshot", required=True,
                         help="the published universe_snapshot.v1 generation for this window")
-    parser.add_argument("--adjusted-price-generation", required=True,
-                        help="the published bars_adjusted/adjusted-v2 generation for this window")
     parser.add_argument("--market-inputs", type=Path, required=True,
                         help="JSON report from scripts/publish_backtest_market_data.py")
     parser.add_argument("--start", type=dt.date.fromisoformat, required=True)
@@ -164,13 +163,20 @@ def main(argv: list[str] | None = None) -> int:
     # manifest's checksum, so a name that does not resolve -- or a partition whose
     # bytes drifted -- is refused here rather than baked into the config.
     price_store = AdjustedPriceDatasetStore(args.data_root)
-    price_manifest = price_store.read_manifest(args.adjusted_price_generation)
-    price_frame = price_store.read_frame(args.adjusted_price_generation)
-
+    price_triples = [
+        triple for triple in price_store.list_partitions()
+        if args.start.isoformat() <= str(triple["session_or_decision_date"]) <= args.end.isoformat()
+    ]
+    if not price_triples:
+        raise SystemExit(
+            f"no published adjusted-v2 partitions in {args.start}..{args.end}; "
+            "run scripts/publish_adjusted_window.py first"
+        )
     # cr.md 8.62: the backtest derives its calendar from the price panel and asserts
     # `set(price_dates) == set(calendar_dates)`, so a binding that does not cover the
     # whole window fails at the backtest stage with a message that names neither the
     # window nor the binding.  Refuse here, where the operator can still fix it.
+    price_frame = price_store.read_partition_frames(price_triples)
     import pandas as pd
 
     session_column = "session_date" if "session_date" in price_frame.columns else "datetime"
@@ -185,6 +191,13 @@ def main(argv: list[str] | None = None) -> int:
             "adjusted price frame covers sessions outside the requested window: "
             + ", ".join(outside[:5])
         )
+    price_source_binding = {
+        "family": "bars_adjusted_adjusted_v2",
+        "window_start": args.start.isoformat(),
+        "window_end": args.end.isoformat(),
+        "set_digest_sha256": set_digest_sha256(price_triples),
+        "member_count": len(price_triples),
+    }
 
     market_store = BacktestMarketDatasetStore(args.data_root)
     for name, dataset_type in (
@@ -201,7 +214,10 @@ def main(argv: list[str] | None = None) -> int:
         market_store.read_frame(generation, checksum, dataset_type=dataset_type)
 
     manifest = {
-        "contract_version": 1,
+        # cr.md 8.63: v2 names the window's partition set instead of one
+        # partition, because the per-session line's invariants are between
+        # adjacent partitions and must not be merged away.
+        "contract_version": 2,
         "schema_version": "1.0.0",
         "backtest_name": args.backtest_name,
         "start_date": args.start.isoformat(),
@@ -229,10 +245,7 @@ def main(argv: list[str] | None = None) -> int:
             "generation_id": market["calendar_binding"]["generation_id"],
             "checksum_sha256": market["calendar_binding"]["checksum_sha256"],
         },
-        "price_source_binding": {
-            "dataset_generation_id": args.adjusted_price_generation,
-            "data_checksum_sha256": price_manifest["data_checksum_sha256"],
-        },
+        "price_source_binding": price_source_binding,
         "universe_binding": {"snapshot_generation_id": args.universe_snapshot},
         "initial_capital": args.initial_capital,
         # cr.md 8.61: neither run_id nor created_at participates in this family's

@@ -7,7 +7,7 @@ import shutil
 import uuid
 from datetime import date
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Sequence, Mapping
 
 import pandas as pd
 
@@ -107,6 +107,87 @@ class AdjustedPriceDatasetStore:
     def data_path(self, generation_id: str) -> Path:
         _, directory = self._read_verified_directory(generation_id)
         return directory / "data.parquet"
+
+    def list_partitions(self) -> list[dict[str, Any]]:
+        """Every published adjusted-v2 partition as an ordered set triple.
+
+        ``AdjustedPriceDatasetStore`` has always been single-partition, because
+        the per-session invariants that make the line meaningful (`adj_factor`
+        positive, restatement equals the vendor value, jump agreement with the
+        prior partition) are all *between* adjacent partitions -- cr.md 8.63 keeps
+        that publish granularity.  This method adds nothing but enumeration, so a
+        `backtest_config.v2` `price_source_binding` can name the whole window
+        without either merging partitions into a second representation of the
+        same bytes or loosening `canonical_v2`'s `partition_date: date`.
+
+        The triples are the same `{session_or_decision_date, generation_id,
+        data_checksum_sha256}` shape `set_digest_sha256` and
+        `verify_partition_set_binding` consume for factor partitions and paper
+        bindings, so the digest convention is shared rather than re-invented.
+        """
+        base = self.root / "canonical" / "bars_adjusted" / "adjusted-v2"
+        if not base.is_dir():
+            return []
+        triples: list[dict[str, Any]] = []
+        for child in sorted(base.iterdir()):
+            if not child.is_dir() or not child.name.startswith("date="):
+                continue
+            manifest_path = child / "manifest.json"
+            if not manifest_path.is_file():
+                continue
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            triples.append({
+                "session_or_decision_date": child.name.split("=", 1)[1],
+                "generation_id": manifest.get("generation_id"),
+                "data_checksum_sha256": manifest.get("data_checksum_sha256"),
+            })
+        return sorted(triples, key=lambda item: str(item["session_or_decision_date"]))
+
+    def read_partition_frames(
+        self, triples: Sequence[Mapping[str, Any]]
+    ) -> pd.DataFrame:
+        """Read a partition set into one frame, verifying each member's bytes.
+
+        The join is the only place a window frame exists, and it is derived at read
+        time from the very partitions the binding names -- so there is no second
+        stored representation to drift.  Three invariants are enforced, because a
+        backtest derives its calendar from this frame:
+
+        * every triple must resolve through `read_frame`, which re-verifies the
+          bytes against the partition's manifest, so a tampered member is refused
+          rather than concatenated;
+        * the row count must equal the sum of the members' -- a duplicate or lost
+          member cannot pass silently;
+        * `(instrument, session_date)` must be unique -- a repeated key would
+          double-count an instrument's exposure in the mark-to-market pass.
+        """
+        if not triples:
+            raise ContractError("adjusted price partition set is empty")
+        frames: list[pd.DataFrame] = []
+        expected_rows = 0
+        for triple in triples:
+            frame = self.read_frame(str(triple["generation_id"]))
+            expected_rows += len(frame)
+            frames.append(frame)
+        joined = pd.concat(frames, ignore_index=True)
+        if len(joined) != expected_rows:
+            raise ContractError(
+                f"adjusted price row count drifted across partitions: {len(joined)} != {expected_rows}"
+            )
+        session_column = "session_date" if "session_date" in joined.columns else "datetime"
+        if joined.duplicated(subset=["instrument", session_column]).any():
+            duplicates = joined.loc[
+                joined.duplicated(subset=["instrument", session_column]),
+                ["instrument", session_column],
+            ].head(5)
+            raise ContractError(
+                "duplicate (instrument, session) keys across adjusted price partitions: "
+                + duplicates.to_json(orient="records")
+            )
+        return joined
 
     def _read_verified_directory(self, generation_id: str) -> tuple[dict[str, Any], Path]:
         _validate_generation_id(generation_id, "adjusted price")
@@ -461,6 +542,13 @@ class BacktestConfigStore:
     generation without the review checksum, bind the reviewed quality decision to
     it, then re-derive the final identity *with* the checksum participating, so the
     review attests the exact content that gets published.
+
+    ``contract_version`` selects the contract variant: 1 (default) keeps the
+    original single-generation ``price_source_binding``; 2 uses the partition-set
+    form (cr.md 8.63).  The *review binding type* stays ``backtest_config_v1`` for
+    both, because it names the reviewer's registered policy for this family rather
+    than the manifest's shape -- the operator's quality-decision document is
+    therefore the same for either version.
     """
 
     def __init__(self, root: Path | str) -> None:
@@ -489,10 +577,24 @@ class BacktestConfigStore:
         payload = {key: value for key, value in manifest.items()
                    if key not in {"generation_id", "manifest_digest_sha256"}}
 
+        # cr.md 8.63: v2 changes `price_source_binding` from a single generation to
+        # a partition set.  The version comes from the payload, so a caller
+        # publishing the old shape keeps the old contract verbatim -- v1 is never
+        # edited in place, which is the repo's semantic/unit rule.
+        contract_version = payload.get("contract_version")
+        if contract_version in (None, 1):
+            schema_name = "backtest_config"
+        elif contract_version == 2:
+            schema_name = "backtest_config_v2"
+        else:
+            raise ContractError(
+                f"unsupported backtest_config contract_version: {contract_version}"
+            )
+
         provisional, _ = model_manifest_identities(
             {**payload, "quality_report_checksum_sha256": "0" * 64,
              "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
-            schema_name="backtest_config",
+            schema_name=schema_name,
         )
         # The subject content digest is the provisional generation id itself: this
         # family has no data partition, so the manifest *is* the artifact, and the
@@ -512,11 +614,11 @@ class BacktestConfigStore:
         payload["quality_report_checksum_sha256"] = report_checksum
         final, digest = model_manifest_identities(
             {**payload, "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
-            schema_name="backtest_config",
+            schema_name=schema_name,
         )
         payload["generation_id"] = final
         payload["manifest_digest_sha256"] = digest
-        ModelContractLoader.validate("backtest_config", payload)
+        ModelContractLoader.validate(schema_name, payload)
 
         directory = self.root / "backtest_configs" / f"generation={final}"
         if directory.exists():
@@ -546,7 +648,15 @@ class BacktestConfigStore:
         for path in candidates:
             try:
                 manifest = json.loads(path.read_text(encoding="utf-8"))
-                ModelContractLoader.validate("backtest_config", manifest)
+                # cr.md 8.63: the family now has two manifest shapes -- v1's single
+                # `price_source_binding` generation and v2's partition set.  The
+                # manifest names its own `contract_version`, so validation follows
+                # it; hardcoding one schema made a published v2 config unreadable.
+                ModelContractLoader.validate(
+                    "backtest_config_v2" if manifest.get("contract_version") == 2
+                    else "backtest_config",
+                    manifest,
+                )
             except (OSError, json.JSONDecodeError, ContractError):
                 continue
             if manifest.get("generation_id") == generation_id:

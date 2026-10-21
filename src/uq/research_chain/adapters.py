@@ -30,6 +30,7 @@ from ..models.feature_preprocessing import FeaturePreprocessorBuilder, complete_
 from ..models.features import FeatureSchemaBuilder, FeatureSchemaValidator
 from ..portfolio.builder import PortfolioBuilder, PortfolioDefinitionBinding, TargetWeightStore
 from .contracts import PublishedState
+from ..execution.set_binding_resolver import verify_partition_set_binding
 from .membership_input import filtered_factor_frame, verify_request_input_sets
 from .owning_contracts import (
     AdjustedPriceDatasetStore,
@@ -1097,10 +1098,20 @@ class BacktestStageAdapter:
         adjusted_binding = _stage_binding(
             plan, stage="dataset_preparation", output_family="adjusted_price_dataset"
         )
-        if price_binding["dataset_generation_id"] != adjusted_binding.generation_id:
-            raise ContractError("backtest price binding mismatch")
-        adjusted_manifest = self.adjusted_price_store.read_manifest(price_binding["dataset_generation_id"])
-        price_frame = self.adjusted_price_store.read_frame(price_binding["dataset_generation_id"])
+        if config.get("contract_version", 1) >= 2:
+            # cr.md 8.63: `price_source_binding` names the window's partition set.
+            # A per-session line stays per-session (its invariants -- positive
+            # `adj_factor`, restatement equals the vendor value, jump agreement with
+            # the prior partition -- are all *between* adjacent partitions), so the
+            # window frame is assembled here at read time rather than stored as a
+            # second representation of the same bytes.
+            price_triples = self.adjusted_price_store.list_partitions()
+            verify_partition_set_binding(price_binding, price_triples, family="bars_adjusted_adjusted_v2")
+            price_frame = self.adjusted_price_store.read_partition_frames(price_triples)
+        else:
+            if price_binding["dataset_generation_id"] != adjusted_binding.generation_id:
+                raise ContractError("backtest price binding mismatch")
+            price_frame = self.adjusted_price_store.read_frame(price_binding["dataset_generation_id"])
         # cr.md 8.62 F: `bars_daily/v2` renames the session key `datetime` to
         # `session_date` (config/schemas/bars_daily.v2.yaml migration), and the
         # published adjusted-price partitions key on whichever the source schema
@@ -1113,7 +1124,7 @@ class BacktestStageAdapter:
         }
         if not required_price_columns.issubset(price_frame.columns):
             raise ContractError("backtest price dataset is missing required columns")
-        if file_sha256_bytes(
+        if config.get("contract_version", 1) < 2 and file_sha256_bytes(
             self.adjusted_price_store.data_path(price_binding["dataset_generation_id"]).read_bytes()
         ) != price_binding["data_checksum_sha256"]:
             raise ContractError("backtest price data checksum mismatch")

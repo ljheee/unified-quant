@@ -844,7 +844,11 @@ def _data_checksum_for(output_family: str, manifest: Mapping[str, Any]) -> str |
     if output_family == "feature_preprocessing":
         return manifest.get("output_frame_sha256")
     if output_family == "backtest_config":
-        return manifest.get("price_source_binding", {}).get("data_checksum_sha256")
+        binding = manifest.get("price_source_binding", {})
+        # cr.md 8.63: v1 names one partition, v2 names the window's partition set;
+        # either way the value is the one the family binds, so a v2 config resolves
+        # instead of failing as "no data checksum".
+        return binding.get("data_checksum_sha256") or binding.get("set_digest_sha256")
     return None
 
 

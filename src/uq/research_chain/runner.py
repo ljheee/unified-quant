@@ -1567,7 +1567,12 @@ class ResearchChainRunner:
         elif family == "backtest_result":
             expected_checksum = manifest.get("equity_curve_artifact", {}).get("checksum_sha256")
         elif family == "backtest_config":
-            expected_checksum = manifest.get("price_source_binding", {}).get("data_checksum_sha256")
+            price_binding = manifest.get("price_source_binding", {})
+            # cr.md 8.63: v1 names one partition, v2 names the window's set
+            expected_checksum = (
+                price_binding.get("data_checksum_sha256")
+                or price_binding.get("set_digest_sha256")
+            )
         elif family == "target_weights":
             expected_checksum = manifest.get("weights_checksum_sha256")
         elif family == "model_artifact":
