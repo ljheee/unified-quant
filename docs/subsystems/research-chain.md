@@ -112,3 +112,46 @@ frame-local. `drop_unlabelled_factor_rows` now compares key sets with `pandas`
 
 - `UNKNOWN`: a complete `execute` run from a clean data root in this worktree. Six upstream binding families must be published first; only four have production entry points (`docs/user-guide.md` §7). No `--data-root` was prepared or run during this bootstrap, and no credentials were used.
 - `UNKNOWN`: end-to-end v5 execute coverage. The chain's v5 dry-run and the paper stage are tested, but `ResearchChainRunner.execute` has no v5 end-to-end test in `tests/` — the repository records this gap in `cr.md` rather than closing it.
+
+## `adjusted_price_binding`: one partition per session, not a window artifact
+
+`adjusted_price_binding` (schema `config/schemas/contracts/research_run_request_v5.json`) is
+`{generation_id, data_checksum_sha256}` with no window field, and
+`scripts/publish_adjusted_window.py` publishes **one `canonical/bars_adjusted/adjusted-v2`
+partition per session**, each with its own generation id. So a request binds one
+session's partition — the schema has never expressed a window-level price artifact, and
+no publisher creates one.
+
+This is a real binding constraint, not an oversight to paper over: the **backtest stage**
+needs a frame covering every date it trades, because it derives the governed calendar from
+the price panel and asserts `set(price_dates) == set(calendar_dates)` plus
+`set(decision_dates) ⊆ set(calendar_dates)`
+(`src/uq/research_chain/adapters.py:1128-1134`). A request that binds a single-session
+partition while its window spans many sessions therefore fails at the backtest stage,
+which is exactly what stopped the first full-A v5 execute (cr.md §8.62 续三).
+
+Two consequences, locked rather than assumed:
+
+- **The failure belongs at the backtest stage.** Adding a window-coverage check at the
+  dataset stage would turn "the window-level publisher is missing" into "the data is
+  wrong", so the coverage invariant stays where it already is and is now tested
+  behaviourally (`test_the_backtest_stage_refuses_a_calendar_that_does_not_cover_the_decision_dates`
+  plus its positive control).
+- **The price frame's own session key is used.** `bars_daily/v2` renames `datetime` to
+  `session_date` (`config/schemas/bars_daily.v2.yaml` migration), and the published
+  partitions key on whichever the source schema declares, so the backtest reads the
+  column the frame carries instead of hardcoding `datetime`.
+
+## Two market-data stores, two layouts, not one
+
+`BacktestMarketDatasetStore` and `MarketDatasetPublisher` are **not** interchangeable:
+
+| | layout | calendar column | consumer |
+|---|---|---|---|
+| `BacktestMarketDatasetStore` (`src/uq/research_chain/owning_contracts.py:175`) | `backtest_market_data/dataset=<generation>` | `date` | the backtest stage's calendar/suspension/corporate inputs |
+| `MarketDatasetPublisher` (`src/uq/execution/market_dataset_publisher.py:29`) | `<family>/<partition_date>` under `market-datasets/` | `session_date` | paper-execution bindings and the governed-calendar path |
+
+`scripts/publish_market_datasets.py` produces the second; the first is only written by
+test helpers. A full-A run needs **both** roots populated, so the divergence is asserted
+rather than left to be rediscovered
+(`test_backtest_market_data_root_is_not_the_market_dataset_publisher_root`).

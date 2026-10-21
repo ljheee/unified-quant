@@ -1000,3 +1000,172 @@ class TestBacktestConfigWriteSide:
             store.publish(self._config(), quality_decision=_config_decision())
         # and the first manifest is still the one on disk, unmodified
         assert store.read_manifest(first["generation_id"]) == first
+
+
+def test_backtest_market_data_root_is_not_the_market_dataset_publisher_root(tmp_path: Path):
+    """cr.md 8.62 / review question 2: the two stores read different layouts.
+
+    `BacktestMarketDatasetStore` reads `backtest_market_data/dataset=<generation>`,
+    while `MarketDatasetPublisher` publishes `<family>/<partition_date>`.  They are
+    *not* interchangeable: the publisher's own families live under
+    `market-datasets/` and are consumed by the paper-execution bindings and the
+    governed-calendar path, whereas the backtest's calendar/suspension/corporate
+    inputs are only ever produced by test helpers.  Asserting the divergence keeps
+    the two from being silently conflated (which is what the full-A smoke did when
+    it hand-built `backtest_market_data` next to a real `market-datasets` root).
+    """
+    from uq.execution.market_dataset_publisher import MarketDatasetPublisher
+    from uq.research_chain.owning_contracts import BacktestMarketDatasetStore
+
+    release = pd.Timestamp("2026-01-30").date()
+    publisher = MarketDatasetPublisher(tmp_path / "market-datasets")
+    calendar = publisher.publish_calendar_snapshot(
+        partition_date=release, window_start=release, window_end=release,
+        sessions=[release], primary_source="primary:calendar",
+        independent_source="independent:calendar", cross_check_result="agreement",
+    )
+
+    # 1) the publisher writes its family directory and the backtest store cannot read it
+    assert (tmp_path / "market-datasets" / "trading_calendar_snapshot_v1").is_dir()
+    backtest_store = BacktestMarketDatasetStore(tmp_path)
+    with pytest.raises(ContractError, match="unpublished calendar dataset"):
+        backtest_store.read_frame(
+            calendar["generation_id"], calendar["data_checksum_sha256"],
+            dataset_type="calendar", required_columns={"date"},
+        )
+
+    # 2) a backtest_store-shaped artifact is invisible to the publisher's readers
+    generation = "9" * 64
+    directory = tmp_path / "backtest_market_data" / f"dataset={generation}"
+    directory.mkdir(parents=True)
+    (directory / "manifest.json").write_text(
+        json.dumps({"generation_id": generation, "dataset_type": "calendar", "columns": ["date"],
+                    "row_count": 1, "data_checksum_sha256": "0" * 64})
+    )
+    # 2) The publisher's own reader finds its partition but not the backtest shape:
+    #    it keys the calendar frame on `session_date`, while `BacktestMarketDatasetStore`
+    #    requires `date`.  Same conceptual artifact, two incompatible published shapes.
+    with pytest.raises(ContractError, match="missing required columns"):
+        publisher.read_partition_frame(
+            "trading_calendar_snapshot_v1", release, required_columns={"date"}
+        )
+    _, publisher_frame = publisher.read_partition_frame("trading_calendar_snapshot_v1", release)
+    assert list(publisher_frame.columns) == ["session_date"]
+    assert "date" not in publisher_frame.columns
+
+
+def _shorten_calendar(tmp_path: Path, config: dict, plan) -> object:
+    """Publish a calendar missing the last priced session and re-plan the config.
+
+    Returns the new plan.  The two-step re-derivation is required because the
+    config identity covers the recorded review checksum (cr.md U9).
+    """
+    price_binding = next(
+        b for b in plan.stage_bindings if b.output_family == "adjusted_price_dataset"
+    )
+    price_frame = dataset_price_store(tmp_path).read_frame(price_binding.generation_id)
+    # `_publish_market_inputs` derives the calendar from `price_frame["datetime"]`, so
+    # this fixture's price frame is v1-shaped; use the same key it uses.
+    sessions = sorted(pd.to_datetime(price_frame["datetime"]).dt.strftime("%Y-%m-%d").unique())
+    assert sessions, "the fixture must publish at least one priced session"
+    shortened = _publish_market_data(
+        tmp_path, "calendar",
+        _market_frame("calendar", [{"date": session} for session in sessions[:-1]]),
+    )
+    config["calendar_binding"] = {
+        "generation_id": shortened["generation_id"],
+        "checksum_sha256": shortened["data_checksum_sha256"],
+    }
+    # cr.md U9, in the publisher's exact order: the review attests the *provisional*
+    # generation (recorded review checksum zeroed), then the final identity is
+    # re-derived from the recorded checksum.  Zeroing it first is what makes the
+    # provisional generation the subject the reviewer signs.
+    config["quality_report_checksum_sha256"] = "0" * 64
+    provisional, _ = model_manifest_identities(config, schema_name="backtest_config")
+    _, report_checksum = bind_reviewed_quality_decision(
+        _config_decision()(provisional),
+        binding_type="backtest_config_v1", subject_generation_id=provisional,
+    )
+    config["quality_report_checksum_sha256"] = report_checksum
+    config["generation_id"], config["manifest_digest_sha256"] = model_manifest_identities(
+        config, schema_name="backtest_config"
+    )
+    directory = tmp_path / "backtest_configs" / f"generation={config['generation_id']}"
+    directory.mkdir(parents=True)
+    (directory / "manifest.json").write_text(json.dumps(config, sort_keys=True))
+    return dataclasses.replace(
+        plan,
+        stage_bindings=tuple(
+            ResolvedStageBinding(
+                stage=b.stage, output_family=b.output_family,
+                # The config identity covers the recorded review checksum, so the
+                # shortened calendar changes it: bind the *new* generation, not the
+                # binding's old one.
+                generation_id=config["generation_id"],
+                manifest_digest_sha256=config["manifest_digest_sha256"],
+                data_checksum_sha256=b.data_checksum_sha256,
+            ) if b.output_family == "backtest_config" else b
+            for b in plan.stage_bindings
+        ),
+    )
+
+
+def test_the_backtest_stage_refuses_a_calendar_that_does_not_cover_the_decision_dates(tmp_path: Path):
+    """cr.md 8.62: the price panel and the governed calendar must cover the same dates.
+
+    A request whose `adjusted_price_binding` names fewer sessions than its window
+    reaches the backtest stage, where the calendar derived from the price panel is
+    compared against the config's governed calendar.  This drives the *real* stage
+    code with the *real* store classes — the boundary the earlier source-text
+    assertion in `tests/test_research_chain_phase5.py` could not reach — so the
+    invariant is locked behaviourally rather than textually.
+    """
+    plan, portfolio, portfolio_result, config = _prepare_portfolio(tmp_path)
+    backtest = BacktestStageAdapter(
+        backtest_engine=BacktestEngine(tmp_path),
+        backtest_result_store=BacktestResultStore(tmp_path),
+        backtest_config_store=BacktestConfigStore(tmp_path), run_store=portfolio.run_store,
+        adjusted_price_store=dataset_price_store(tmp_path),
+        market_dataset_store=BacktestMarketDatasetStore(tmp_path),
+    )
+    # A calendar missing one priced session breaks the price/calendar equality that
+    # this stage enforces, which is the same invariant that stopped the full-A run
+    # (there the request bound a single-session price partition while the window
+    # spanned 16 sessions, so the derived calendar was one day and the decision
+    # dates were many).  Which of the two clauses fires depends on the fixture's
+    # decision dates, so assert that *one* of them does, by name.
+    shortened = _shorten_calendar(tmp_path, config, plan)
+    with pytest.raises(ContractError, match=(
+        "backtest price dates do not match governed calendar"
+        "|portfolio decision dates are not in the governed calendar"
+    )):
+        backtest.run(
+            shortened, portfolio_stage_result=portfolio_result,
+            quality_decision=_result_decision(), config_quality_decision=_config_decision(),
+            runner_identity=RUNNER,
+        )
+
+
+def test_the_backtest_stage_publishes_a_calendar_that_covers_every_decision_date(tmp_path: Path):
+    """The positive control for the refusal above.
+
+    Same fixture, unshortened calendar: the stage must publish rather than refuse,
+    which is what makes the previous test's refusal specific to the calendar
+    instead of incidental to the wiring.
+    """
+    plan, portfolio, portfolio_result, config = _prepare_portfolio(tmp_path)
+    backtest = BacktestStageAdapter(
+        backtest_engine=BacktestEngine(tmp_path),
+        backtest_result_store=BacktestResultStore(tmp_path),
+        backtest_config_store=BacktestConfigStore(tmp_path), run_store=portfolio.run_store,
+        adjusted_price_store=dataset_price_store(tmp_path),
+        market_dataset_store=BacktestMarketDatasetStore(tmp_path),
+    )
+    baseline = backtest.run(
+        plan, portfolio_stage_result=portfolio_result,
+        quality_decision=_result_decision(), config_quality_decision=_config_decision(),
+        runner_identity=RUNNER,
+    )
+    assert set(baseline.result_artifacts) == {"equity_curve", "daily_metrics", "fills"}
+    assert baseline.result_manifest["backtest_config_generation_id"] == config["generation_id"]
+    assert baseline.published_state.manifest_path.is_file()
