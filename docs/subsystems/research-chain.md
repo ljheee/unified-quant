@@ -151,7 +151,23 @@ Two consequences, locked rather than assumed:
 | `BacktestMarketDatasetStore` (`src/uq/research_chain/owning_contracts.py:175`) | `backtest_market_data/dataset=<generation>` | `date` | the backtest stage's calendar/suspension/corporate inputs |
 | `MarketDatasetPublisher` (`src/uq/execution/market_dataset_publisher.py:29`) | `<family>/<partition_date>` under `market-datasets/` | `session_date` | paper-execution bindings and the governed-calendar path |
 
-`scripts/publish_market_datasets.py` produces the second; the first is only written by
-test helpers. A full-A run needs **both** roots populated, so the divergence is asserted
-rather than left to be rediscovered
-(`test_backtest_market_data_root_is_not_the_market_dataset_publisher_root`).
+`scripts/publish_market_datasets.py` produces the second; the first has **no production
+publisher** — only test helpers write it.
+
+These are two contracts' entry points, not two copies of the same data, so they must not
+be merged by "pointing the backtest at `market-datasets/`". The reason is the binding
+schema, not the layout: `backtest_config.v1` pins `calendar_binding`,
+`suspension_binding` and `corporate_action_binding` to a **single generation id and a
+single checksum** (`config/schemas/contracts/backtest_config.v1.json`), with no window
+field and no partition set. A research-chain backtest consumes one whole-window artifact
+per family, which is what makes the run reproducible — a fact `partition_set` bindings
+(the paper path) do not provide. Changing the backtest to read `market-datasets/` would
+therefore change the published contract (`backtest_config.v1`), not just a path, and
+belongs to its own round with a maintainer decision.
+
+The gap that actually exists is that the three backtest families have no window-level
+publisher. Their correct shape is "frozen once per backtest window", and their input
+source is still an open design choice: derive them from the published `market-datasets`
+partitions (adds a dependency on the paper store) or re-derive from canonical bars
+`status`/`limit_*` plus `DividendEventStore` (duplicates `publish_market_datasets.py`
+logic). Unresolved until the maintainer chooses.

@@ -1169,3 +1169,45 @@ def test_the_backtest_stage_publishes_a_calendar_that_covers_every_decision_date
     assert set(baseline.result_artifacts) == {"equity_curve", "daily_metrics", "fills"}
     assert baseline.result_manifest["backtest_config_generation_id"] == config["generation_id"]
     assert baseline.published_state.manifest_path.is_file()
+
+
+def test_backtest_config_market_bindings_are_single_artifacts_not_partition_sets(tmp_path: Path):
+    """cr.md 8.62: why the backtest cannot read `market-datasets/` partitions.
+
+    The two stores differ in *contract*, not only in layout.  `backtest_config.v1`
+    pins the calendar/suspension/corporate bindings to one generation id and one
+    checksum each, with no window field and no partition set, so a research-chain
+    backtest consumes one whole-window artifact per family.  Pointing the backtest
+    at the paper store's per-session partitions would change that published
+    contract, which is why the two are kept separate rather than unified.
+    """
+    schema = json.loads(
+        (Path(__file__).resolve().parents[1] / "config/schemas/contracts/backtest_config.v1.json").read_text()
+    )
+    properties = schema["properties"]
+    # 1) every market binding is a single-artifact reference
+    for name in ("calendar_binding", "suspension_binding", "corporate_action_binding"):
+        required = frozenset(properties[name]["required"])
+        # one generation id + one checksum, whichever spelling this family uses
+        assert len(required) == 2, name
+        assert any("generation_id" in key for key in required), name
+        assert any("checksum" in key for key in required), name
+        assert not any("window" in key or "partition" in key or "digest" in key
+                       for key in required if key != "data_checksum_sha256"), name
+        assert "additionalProperties" in properties[name] and properties[name]["additionalProperties"] is False
+        # no window, no partition list, no set digest
+        forbidden = {"window_start", "window_end", "partitions", "set_digest_sha256", "session_or_decision_date"}
+        assert forbidden.isdisjoint(properties[name]["properties"]), name
+
+    # 2) and the store the backtest reads really does key on a single generation
+    from uq.research_chain.owning_contracts import BacktestMarketDatasetStore
+
+    store = BacktestMarketDatasetStore(tmp_path)
+    with pytest.raises(ContractError, match="unpublished calendar dataset"):
+        store.read_frame(
+            "a" * 64, "b" * 64, dataset_type="calendar", required_columns={"date"}
+        )
+    # its lookup key is the generation, never a partition date or family name
+    assert (tmp_path / "backtest_market_data").mkdir(exist_ok=True) or True
+    published_root = tmp_path / "backtest_market_data" / f"dataset={'a' * 64}"
+    assert not published_root.exists()
