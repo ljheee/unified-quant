@@ -104,17 +104,36 @@ def _suspension_frame(data_root: Path, sessions: list[dt.date]) -> pd.DataFrame:
     `status` is the primary source; anything that is not `trading` (including
     `delisted` and `unknown`) is recorded as suspended so the backtest cannot
     trade it, which is the conservative direction.
+
+    A name the universe carries but the session's panel does not carry at all is
+    recorded as suspended too.  The bars partitions are per-session and only
+    contain rows the vendor returned, so a genuinely suspended or otherwise
+    absent name simply has no row -- and a `status`-only read is blind to it.
+    Without this the backtest marks to market a holding it has no price for and
+    refuses the whole run at the last stage.
     """
     rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for session in sessions:
         frame = _canonical_frame(data_root, session)
         status = frame["status"].astype(str) if "status" in frame else None
         if status is None:
             raise SystemExit(f"canonical bars partition {session} has no status column")
+        present = set(frame["instrument"].astype(str))
+        seen |= present
         suspended = frame.loc[status != "trading", ["instrument"]].copy()
         suspended["date"] = session.isoformat()
         suspended["suspended"] = True
         rows.extend(suspended.to_dict(orient="records"))
+    # Absent-for-the-whole-window names are not part of this universe and are not
+    # recorded: only names the panel carries on *some* session can be held, so
+    # only those need an explicit absence row for the sessions they miss.
+    for session in sessions:
+        frame = _canonical_frame(data_root, session)
+        present = set(frame["instrument"].astype(str))
+        for instrument in sorted(seen - present):
+            rows.append({"date": session.isoformat(), "instrument": instrument,
+                         "suspended": True})
     frame = pd.DataFrame(rows, columns=["date", "instrument", "suspended"])
     if frame.empty:
         # The store refuses an empty frame, and an all-trading window is a real

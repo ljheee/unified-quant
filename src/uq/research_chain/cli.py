@@ -12,7 +12,7 @@ import pandas as pd
 
 from ..contracts.factor_governance import FactorRegistry
 from ..contracts.gate_contracts import validate_contract
-from ..contracts.model_layer import ModelContractLoader
+from ..contracts.model_layer import ModelContractLoader, bind_reviewed_quality_decision
 from ..backtest.engine import BacktestEngine, BacktestResultStore
 from ..contracts.artifacts import UniverseSnapshotStore
 from ..factors.store import FactorStore
@@ -238,6 +238,233 @@ class _CommandDecisionProvider:
         return decision
 
 
+class _EnvelopeDecisionProvider:
+    """Wrap a raw reviewer decision in the quality-decision envelope.
+
+    The external provider protocol returns the signed reviewer decision, but the
+    research resolver and every stage consume the owning-layer envelope
+    (``quality_decision.v1``): ``owning_report`` plus the bound subject.  The
+    two shapes were being conflated, so provider mode validated raw decisions
+    against the envelope schema and failed before any stage ran.
+    """
+
+    def __init__(self, provider: Any, *, data_root: Path | None = None) -> None:
+        self.provider = provider
+        self.provider_config_ref = getattr(provider, "provider_config_ref", "research-cli")
+        self.data_root = data_root
+
+    def envelope_for(
+        self,
+        *,
+        binding_type: str,
+        subject_generation_id: str,
+        subject_manifest_digest_sha256: str | None,
+    ) -> Mapping[str, Any]:
+        """The `quality_decision` envelope the request resolver validates.
+
+        The resolver's schema requires `owning_report` plus the bound subject, so
+        a raw reviewer decision cannot be passed to it directly.
+        """
+        decision = self.provider.resolve(
+            binding_type=binding_type,
+            subject_generation_id=subject_generation_id,
+            subject_manifest_digest_sha256=subject_manifest_digest_sha256,
+            output_family="",
+            provider_config_ref=self.provider_config_ref,
+        )
+        if isinstance(decision, Mapping) and "owning_report" in decision:
+            return decision
+        if binding_type == "factor_v1":
+            raise ContractError(
+                "factor quality provider must return the owning report envelope"
+            )
+        if not isinstance(decision, Mapping):
+            raise ContractError("external quality decision must be an object")
+        signed_digest = decision.get("subject_content_sha256")
+        content_sha256 = signed_digest or subject_manifest_digest_sha256 or subject_generation_id
+        expected = _published_quality_checksum(
+            binding_type, subject_generation_id, data_root=self.data_root
+        )
+        if expected is not None:
+            stored = self._stored_review(expected)
+            if stored is None:
+                raise ContractError(
+                    "published artifact records a review that is not available in the "
+                    f"external review store: {expected}"
+                )
+            return {
+                "contract_version": 1, "schema_version": "1.0.0",
+                "binding_type": binding_type,
+                "subject_generation_id": subject_generation_id,
+                "subject_manifest_digest_sha256": content_sha256,
+                "owning_report": stored,
+                "decision_checksum_sha256": expected,
+                "provider_id": "external-model-quality-reviewer-v1",
+                "trust_anchor_id": stored["key_id"],
+            }
+        report, checksum = bind_reviewed_quality_decision(
+            dict(decision),
+            binding_type=binding_type,
+            subject_generation_id=subject_generation_id,
+            subject_content_sha256=content_sha256,
+        )
+        return {
+            "contract_version": 1, "schema_version": "1.0.0",
+            "binding_type": binding_type,
+            "subject_generation_id": subject_generation_id,
+            "subject_manifest_digest_sha256": content_sha256,
+            "owning_report": report,
+            "decision_checksum_sha256": checksum,
+            "provider_id": "external-model-quality-reviewer-v1",
+            "trust_anchor_id": report["key_id"],
+        }
+
+    def resolve(
+        self,
+        *,
+        binding_type: str,
+        subject_generation_id: str,
+        subject_manifest_digest_sha256: str | None,
+        output_family: str,
+        provider_config_ref: str,
+    ) -> Mapping[str, Any]:
+        """What the *stage flows* consume.
+
+        Two shapes are needed and they are not interchangeable:
+
+        * the request resolver validates a `quality_decision` envelope, so it
+          calls `envelope_for`;
+        * the stage flows receive the decision unresolved (cr.md U14) and bind
+          it themselves, reading `checks` off the *raw* signed decision --
+          `PredictionBuilder` requires exactly one `eligibility_coverage` entry,
+          which an envelope does not carry at all.
+
+        Where the artifact already records a review checksum, the stored review is
+        returned: an external reviewer signs per invocation, so a fresh signature
+        has a different checksum and every stage compares against the published
+        one.
+        """
+        expected = _published_quality_checksum(
+            binding_type, subject_generation_id, data_root=self.data_root
+        )
+        if expected is not None:
+            stored = self._stored_review(expected)
+            if stored is None:
+                raise ContractError(
+                    "published artifact records a review that is not available in the "
+                    f"external review store: {expected}"
+                )
+            return {
+                "contract_version": 1, "schema_version": "1.0.0",
+                "binding_type": binding_type,
+                "subject_generation_id": subject_generation_id,
+                "subject_manifest_digest_sha256": (
+                    subject_manifest_digest_sha256 or subject_generation_id
+                ),
+                "owning_report": stored,
+                "decision_checksum_sha256": expected,
+                "provider_id": "external-model-quality-reviewer-v1",
+                "trust_anchor_id": stored["key_id"],
+            }
+        decision = self.provider.resolve(
+            binding_type=binding_type,
+            subject_generation_id=subject_generation_id,
+            subject_manifest_digest_sha256=subject_manifest_digest_sha256,
+            output_family=output_family,
+            provider_config_ref=provider_config_ref,
+        )
+        if binding_type == "factor_v1":
+            # Factor reviews are already owning reports in the factor store's
+            # `quality_report.v1` shape; the provider returns that report
+            # directly and it must not be wrapped again.
+            if isinstance(decision, Mapping) and "owning_report" in decision:
+                return decision
+            raise ContractError(
+                "factor quality provider must return the owning report envelope"
+            )
+        if not isinstance(decision, Mapping):
+            raise ContractError("external quality decision must be an object")
+        return dict(decision)
+
+    def _stored_review(self, checksum: str) -> Mapping[str, Any] | None:
+        if self.data_root is None:
+            return None
+        path = self.data_root / "external_quality_reviews" / f"{checksum}.json"
+        if not path.is_file():
+            return None
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return document if isinstance(document, Mapping) else None
+
+
+def _published_quality_checksum(
+    binding_type: str, subject_generation_id: str, *, data_root: Path | None
+) -> str | None:
+    """The review checksum an already-published artifact records, if readable.
+
+    The external provider is re-invoked at execute time, so its signature is
+    fresh; the artifact, however, was published with one specific review.  A
+    mismatch is a governance failure (the review does not describe the bytes on
+    disk), not a reason to re-sign.  Unknown families return ``None`` and are
+    left to the owning stage's own verification.
+    """
+    from .owning_contracts import (
+        BacktestConfigStore,
+        FeaturePreprocessingStore,
+        LabelStore,
+    )
+
+    if data_root is None:
+        return None
+    try:
+        if binding_type == "label_set_v1":
+            # `label_set.v1` is an owning document with no quality field; its
+            # `data_checksum_sha256` is the label-row checksum, not a review
+            # checksum.  Returning it here made every valid label set look as
+            # though it had a review that could not be found.  The label stage
+            # verifies its decision itself, so there is nothing to recover.
+            return None
+        if binding_type == "feature_preprocessing_v1":
+            return FeaturePreprocessingStore(data_root / "governed").read_manifest(
+                subject_generation_id
+            )["quality_report_checksum_sha256"]
+        if binding_type == "backtest_config_v1":
+            # The config's review subject is its *provisional* generation, not
+            # the final generation id the request binds.  The resolver only has
+            # the latter, so it cannot look the review up by that key; the
+            # backtest stage re-derives the provisional subject and verifies the
+            # recorded checksum itself.
+            return None
+    except (ContractError, KeyError, TypeError):
+        return None
+    return None
+
+
+def _envelope_decision_for_family(provider: Any, output_family: str):
+    """The resolver-facing per-family decision callable.
+
+    `ResearchChainRequestResolver` validates each binding against the
+    `quality_decision` envelope schema, which needs `owning_report`; the raw
+    reviewer decision does not satisfy it.  This adapter hands the provider the
+    binding type so it can build (or recover) the envelope.
+    """
+    binding_type = _BINDING_TYPE_BY_FAMILY[output_family]
+
+    def resolve(
+        subject_generation_id: str,
+        subject_manifest_digest_sha256: str | None = None,
+    ) -> Mapping[str, Any]:
+        return provider.envelope_for(
+            binding_type=binding_type,
+            subject_generation_id=subject_generation_id,
+            subject_manifest_digest_sha256=subject_manifest_digest_sha256,
+        )
+
+    return resolve
+
+
 def _decision_provider_for_family(provider: Any, output_family: str):
     binding_type = _BINDING_TYPE_BY_FAMILY[output_family]
 
@@ -369,6 +596,12 @@ def _build_runner(
             target_weight_store=TargetWeightStore(data_root),
             run_store=run_store,
             prediction_builder=prediction_builder,
+            # specs/layers/portfolio-backtest-layer-spec.md 6.1: the
+            # corporate-action exclusion happens at universe filtering time, so
+            # the portfolio stage needs the same two stores the backtest stage
+            # reads its exclusion set from.
+            backtest_config_store=BacktestConfigStore(data_root),
+            market_dataset_store=BacktestMarketDatasetStore(data_root),
         ),
         backtest_adapter=BacktestStageAdapter(
             backtest_engine=BacktestEngine(data_root),
@@ -404,12 +637,36 @@ def _execute(
             raise ContractError("decision provider document requires provider_command")
         if provider_document.get("provider_id") != "external-model-quality-reviewer-v1":
             raise ContractError("unsupported decision provider identity")
-        provider = _CommandDecisionProvider(
+        command_provider = _CommandDecisionProvider(
             command=command,
             provider_config_ref=provider_document.get("provider_config_ref", "research-cli"),
         )
+        # The external reviewer returns the raw signed decision.  Its two
+        # consumers need two different shapes, and conflating them is what made
+        # provider mode fail before any stage ran:
+        #   * the request resolver validates the `quality_decision` envelope
+        #     (`owning_report` plus the bound subject), so it needs the wrapped
+        #     form;
+        #   * the stage flows receive the decision unresolved (cr.md U14) and
+        #     bind it themselves, reading `checks` off the *raw* decision --
+        #     `PredictionBuilder` requires exactly one `eligibility_coverage`
+        #     entry, which an envelope does not carry at all.
+        # The runner's decisions must resolve to the review the artifact was
+        # *published* with, not a fresh signature.  An external reviewer signs
+        # per invocation, so its checksum changes every call; the owning store
+        # records the one it was published with and every stage compares against
+        # that.  `_EnvelopeDecisionProvider` performs that recovery for the
+        # families that record a review checksum, and passes the raw decision
+        # through for the stage-owned families that bind it themselves.
         decisions = {
-            family: _decision_provider_for_family(provider, family)
+            family: _decision_provider_for_family(
+                _EnvelopeDecisionProvider(command_provider, data_root=data_root), family
+            )
+            for family in _BINDING_TYPE_BY_FAMILY
+        }
+        envelope_provider = _EnvelopeDecisionProvider(command_provider, data_root=data_root)
+        envelope_decisions = {
+            family: _envelope_decision_for_family(envelope_provider, family)
             for family in _BINDING_TYPE_BY_FAMILY
         }
     scores = _load_scores(scores_document)
@@ -479,7 +736,7 @@ def _execute(
     try:
         plan = resolver.resolve(
             request,
-            quality_provider=_MappingDecisionProvider(decisions),
+            quality_provider=_MappingDecisionProvider(envelope_decisions),
             provider_config_ref="research-cli",
         )
     except Exception as exc:

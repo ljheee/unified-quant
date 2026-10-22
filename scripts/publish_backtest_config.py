@@ -163,10 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     # manifest's checksum, so a name that does not resolve -- or a partition whose
     # bytes drifted -- is refused here rather than baked into the config.
     price_store = AdjustedPriceDatasetStore(args.data_root)
-    price_triples = [
-        triple for triple in price_store.list_partitions()
-        if args.start.isoformat() <= str(triple["session_or_decision_date"]) <= args.end.isoformat()
-    ]
+    price_triples = price_store.list_partitions_in_window(args.start, args.end)
     if not price_triples:
         raise SystemExit(
             f"no published adjusted-v2 partitions in {args.start}..{args.end}; "

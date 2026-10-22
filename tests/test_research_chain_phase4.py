@@ -524,6 +524,106 @@ def test_portfolio_stage_binds_prediction_and_universe(tmp_path: Path) -> None:
     assert len(portfolio_result.target_weight_frames["2026-01-05"]) == 2
 
 
+def test_the_portfolio_stage_excludes_corporate_action_instruments(tmp_path: Path) -> None:
+    """specs/layers/portfolio-backtest-layer-spec.md 6.1.
+
+    The first release supports only instruments with no corporate-action event
+    in the period, and the spec says the exclusion happens "at universe
+    filtering time".  The portfolio stage is the only place the tradeable
+    universe is resolved, so this is where the filter belongs -- otherwise the
+    backtest engine's fail-closed guard refuses the whole run at the last stage,
+    after every upstream artifact is already published.
+    """
+    from uq.contracts.model_layer import (
+        bind_reviewed_quality_decision,
+        model_manifest_identities,
+    )
+    from uq.models.predictions import PredictionBuilder
+    from uq.portfolio.builder import PortfolioBuilder
+    from uq.portfolio.builder import TargetWeightStore
+    from uq.research_chain.adapters import PortfolioStageAdapter
+    from uq.research_chain.owning_contracts import (
+        BacktestConfigStore,
+        BacktestMarketDatasetStore,
+    )
+
+    plan, portfolio, portfolio_result, config = _prepare_portfolio(tmp_path)
+    ca_frame = _market_frame("corporate_action", [{"date": DATES[0], "instrument": "INST0"}])
+    ca_manifest = _publish_market_data(tmp_path, "corporate_action", ca_frame)
+    payload = {
+        key: value for key, value in config.items()
+        if key not in {"generation_id", "manifest_digest_sha256",
+                       "quality_report_checksum_sha256"}
+    }
+    payload["corporate_action_binding"] = {
+        "dataset_generation_id": ca_manifest["generation_id"],
+        "data_checksum_sha256": ca_manifest["data_checksum_sha256"],
+    }
+    provisional, _ = model_manifest_identities(
+        {**payload, "quality_report_checksum_sha256": "0" * 64,
+         "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
+        schema_name="backtest_config",
+    )
+    _, report_checksum = bind_reviewed_quality_decision(
+        _config_decision()(provisional), binding_type="backtest_config_v1",
+        subject_generation_id=provisional,
+    )
+    payload["quality_report_checksum_sha256"] = report_checksum
+    generation, digest = model_manifest_identities(
+        {**payload, "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
+        schema_name="backtest_config",
+    )
+    payload["generation_id"] = generation
+    payload["manifest_digest_sha256"] = digest
+    directory = tmp_path / "backtest_configs" / f"generation={generation}"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "manifest.json").write_text(json.dumps(payload, sort_keys=True))
+    plan = _replace_backtest_config(plan, payload)
+
+    # Re-run the portfolio stage against the re-published config: the fixture's
+    # first run used a config whose corporate-action set was empty.
+    prediction_generation = first_prediction_generation(plan)
+    prediction_manifest, prediction_frame = PredictionBuilder(tmp_path).read(
+        prediction_generation, DATES[0]
+    )
+    first_result = PredictionStageResult(
+        manifest=prediction_manifest,
+        frame=prediction_frame,
+        published_state=PublishedState(Path("unused"), prediction_manifest["manifest_digest_sha256"]),
+    )
+    definition_generation = _definition_generation(
+        plan,
+        config["universe_binding"]["snapshot_generation_id"],
+        prediction_generation,
+    )
+    # A fresh weights root: the fixture's first run already published this date's
+    # weights, and every writer here is immutable.
+    rerun_root = tmp_path / "rerun"
+    rerun_portfolio = PortfolioStageAdapter(
+        universe_store=portfolio.universe_store,
+        portfolio_builder=PortfolioBuilder(rerun_root),
+        target_weight_store=TargetWeightStore(rerun_root),
+        run_store=portfolio.run_store,
+        prediction_builder=PredictionBuilder(tmp_path),
+        backtest_config_store=BacktestConfigStore(tmp_path),
+        market_dataset_store=BacktestMarketDatasetStore(tmp_path),
+    )
+    rerun = rerun_portfolio.run(
+        plan, prediction_stage_result=first_result,
+        decision_dates=[DATES[0]],
+        definition_quality_decision=_definition_decision(definition_generation),
+        weights_quality_decision=_weights_decision(), runner_identity=RUNNER,
+        created_at="2026-01-30T07:00:00+00:00",
+    )
+    weights = rerun.target_weight_frames[DATES[0]]
+    assert "INST0" not in set(weights["instrument"]), (
+        "a corporate-action instrument must be excluded at universe filtering time"
+    )
+    assert "INST0" not in set(weights["instrument"])
+    # The universe is INST0/INST1/INST2, so only the corporate-action name leaves.
+    assert set(weights["instrument"]) == {"INST1", "INST2"}
+
+
 def test_portfolio_stage_refuses_a_snapshot_outside_the_request_window(tmp_path: Path) -> None:
     """cr.md N1: the portfolio stage must prove the request window is inside the
     universe snapshot's PIT validity, exactly as the dataset stage does.  Before

@@ -316,3 +316,56 @@ def test_an_all_trading_window_publishes_an_explicit_negative_row(tmp_path: Path
     # and the backtest's own derivation of suspended names yields the empty set
     suspended = suspension.loc[suspension["suspended"].astype(bool)]
     assert set(suspended["instrument"]) == set()
+
+
+def test_an_instrument_absent_from_a_session_is_recorded_as_suspended(tmp_path: Path) -> None:
+    """A name with no row on a session has no `status` to read.
+
+    The bars partitions are per-session and only carry rows the vendor returned,
+    so a genuinely suspended name simply has no row.  A `status`-only read is
+    blind to it, the suspension family then omits it, and the backtest marks to
+    market a holding it has no price for -- refusing the whole run at the last
+    stage.  Recording absence explicitly is the conservative direction.
+    """
+    import hashlib
+
+    from uq.contracts.canonical_v2 import file_sha256_bytes
+
+    def _publish(session: dt.date, instruments: list[str]) -> None:
+        directory = tmp_path / "canonical" / "bars_daily" / "v2" / f"date={session.isoformat()}"
+        directory.mkdir(parents=True, exist_ok=True)
+        frame = pd.DataFrame(
+            [{"instrument": name, "session_date": session, "open": 10.0,
+              "high": 10.5, "low": 9.5, "close": 10.0, "volume": 1000.0,
+              "amount": 10000.0, "status": "trading"}
+             for name in instruments]
+        )
+        data_path = directory / "data.parquet"
+        frame.to_parquet(data_path, index=False)
+        (directory / "manifest.json").write_text(json.dumps({
+            "manifest_version": 1, "dataset": "bars_daily", "schema_version": "v2",
+            "partition_date": session.isoformat(),
+            "generation_id": hashlib.sha256(session.isoformat().encode()).hexdigest(),
+            "row_count": len(frame),
+            "data_checksum_sha256": file_sha256_bytes(data_path.read_bytes()),
+            "columns": list(frame.columns), "quality_report_checksum": "0" * 64,
+        }))
+
+    # 000001.XSHE trades on the first session and is absent from the second.
+    _publish(SESSIONS[0], ["600000.XSHG", "000001.XSHE"])
+    _publish(SESSIONS[1], ["600000.XSHG"])
+    _dividend_store(tmp_path / "dividend-store", dt.date(2026, 1, 2))
+    report = _run(tmp_path, tmp_path / "dividend-store", start=SESSIONS[0], end=SESSIONS[1])
+    store = BacktestMarketDatasetStore(tmp_path)
+    suspension = store.read_frame(
+        report["bindings"]["suspension_binding"]["dataset_generation_id"],
+        report["bindings"]["suspension_binding"]["data_checksum_sha256"],
+        dataset_type="suspension", required_columns={"date", "instrument", "suspended"},
+    )
+    absent = suspension[
+        (suspension["instrument"] == "000001.XSHE")
+        & (suspension["suspended"].astype(bool))
+    ]
+    assert set(absent["date"]) == {SESSIONS[1].isoformat()}
+    # the session it does trade on is not marked
+    assert SESSIONS[0].isoformat() not in set(absent["date"])

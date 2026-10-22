@@ -828,17 +828,69 @@ class PortfolioStageAdapter:
         target_weight_store: TargetWeightStore,
         run_store: FileResearchRunStore,
         prediction_builder: PredictionBuilder,
+        backtest_config_store: BacktestConfigStore | None = None,
+        market_dataset_store: BacktestMarketDatasetStore | None = None,
     ) -> None:
         self.universe_store = universe_store
         self.portfolio_builder = portfolio_builder
         self.target_weight_store = target_weight_store
         self.run_store = run_store
         self.prediction_builder = prediction_builder
+        # Both are read only to reproduce the backtest's corporate-action
+        # exclusion at universe-filtering time (spec 6.1).  They are optional so
+        # callers that build weights for a non-backtest context are unaffected.
+        self.backtest_config_store = backtest_config_store
+        self.market_dataset_store = market_dataset_store
         # A resumed run skips this stage, so nothing assigns this attribute
         # in-process. Declaring it here turns a silent AttributeError into an
         # explicit "unavailable" that the runner can recover from by reading the
         # published artifact back.
         self.last_result: Any = None
+
+    def _exclude_corporate_actions(
+        self, plan: ResolvedExecutionPlan, universe_instruments: list[str]
+    ) -> list[str]:
+        """Drop instruments with a corporate action in the backtest period.
+
+        specs/layers/portfolio-backtest-layer-spec.md 6.1 restricts the first
+        release to instruments with no corporate-action events during the
+        period and says the exclusion happens "at universe filtering time".
+        The backtest engine already enforces it fail-closed against the weight
+        partitions, so without this filter a run that holds a dividend-paying
+        name is refused at the last stage rather than never holding it.
+
+        The exclusion set is read from the *published* corporate-action family the
+        backtest config binds, so the weights and the engine's own check see the
+        same set.  It is intentionally not date-scoped per decision date: the
+        engine's guard is a period-wide set, so matching it here is what makes the
+        two agree.  A run whose config binds no corporate-action family is left
+        untouched rather than silently dropping everything.
+        """
+        try:
+            config_binding = _stage_binding(
+                plan, stage="backtest_execution", output_family="backtest_config"
+            )
+        except ContractError:
+            return universe_instruments
+        if self.backtest_config_store is None or self.market_dataset_store is None:
+            return universe_instruments
+        config = self.backtest_config_store.read_manifest(config_binding.generation_id)
+        binding = config.get("corporate_action_binding")
+        if not isinstance(binding, dict):
+            return universe_instruments
+        generation_id = binding.get("dataset_generation_id")
+        checksum = binding.get("data_checksum_sha256")
+        if not generation_id or not checksum:
+            return universe_instruments
+        frame = self.market_dataset_store.read_frame(
+            generation_id, checksum,
+            dataset_type="corporate_action",
+            required_columns={"date", "instrument"},
+        )
+        if frame.empty:
+            return universe_instruments
+        excluded = set(frame["instrument"].astype(str).unique().tolist())
+        return [name for name in universe_instruments if name not in excluded]
 
     def run(
         self,
@@ -908,6 +960,15 @@ class PortfolioStageAdapter:
             requested_valid_to=date.fromisoformat(plan.request["window_end_date"]),
         )
         universe_instruments = members["instrument"].astype(str).tolist()
+        # specs/layers/portfolio-backtest-layer-spec.md 6.1: "Instruments with
+        # dividends, splits, or rights issues within the period are excluded at
+        # universe filtering time."  The exclusion has to happen here -- the
+        # portfolio stage is the only place the tradeable universe is resolved --
+        # because the backtest engine enforces the same rule fail-closed and would
+        # otherwise refuse a run whose weights carry a corporate-action name.
+        universe_instruments = self._exclude_corporate_actions(
+            plan, universe_instruments
+        )
 
         target_manifests: dict[str, dict[str, Any]] = {}
         target_frames: dict[str, pd.DataFrame] = {}
@@ -1032,10 +1093,18 @@ class BacktestStageAdapter:
         # backtest_config identity covers that recorded checksum, so the review
         # attests the provisional generation (checksum zeroed): re-derive it
         # before binding, aligned with TargetWeightStore.read.
+        # cr.md 8.63: the v2 config has a different contract (partition-set
+        # price binding), so the provisional identity must be derived under the
+        # same schema the config was published with. Hardcoding the v1 schema
+        # made a valid v2 config look as though its review did not match.
+        config_schema_name = (
+            "backtest_config_v2" if config.get("contract_version") == 2
+            else "backtest_config"
+        )
         provisional_config_generation, _ = model_manifest_identities(
             {**config, "quality_report_checksum_sha256": "0" * 64,
              "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
-            schema_name="backtest_config",
+            schema_name=config_schema_name,
         )
         resolved_config_decision = (
             resolve_subject_quality_decision(
@@ -1105,7 +1174,9 @@ class BacktestStageAdapter:
             # the prior partition -- are all *between* adjacent partitions), so the
             # window frame is assembled here at read time rather than stored as a
             # second representation of the same bytes.
-            price_triples = self.adjusted_price_store.list_partitions()
+            price_triples = self.adjusted_price_store.list_partitions_in_window(
+                price_binding["window_start"], price_binding["window_end"]
+            )
             verify_partition_set_binding(price_binding, price_triples, family="bars_adjusted_adjusted_v2")
             price_frame = self.adjusted_price_store.read_partition_frames(price_triples)
         else:
@@ -1259,6 +1330,25 @@ class QlibExportStageAdapter:
         self.dataset_writer = dataset_writer
         self.run_store = run_store
 
+    def _read_back_published_export(
+        self, refusal: ContractError, dataset_name: str, *, provider_uri: str
+    ) -> dict[str, Any]:
+        """Recover an export published by an attempt that failed after the write.
+
+        A stage is resumable only from a *passed* state snapshot.  If the export
+        was written and the process then failed before the stage state was
+        published, the retry reaches the immutable writer again.  The writer must
+        keep refusing overwrites; the caller recovers the already-published
+        artifact through the same full ``read`` gate (including provider URI and
+        every file checksum) and records that exact artifact in the retry's state.
+        """
+        match = re.search(r"generation=([0-9a-f]{64})", str(refusal))
+        if match is None:
+            raise refusal
+        return self.exporter.read(
+            dataset_name, match.group(1), provider_uri=provider_uri
+        )[0]
+
     def run(
         self,
         plan: ResolvedExecutionPlan,
@@ -1298,18 +1388,25 @@ class QlibExportStageAdapter:
         numeric_columns = [*feature_columns, label_column]
         if export_frame[numeric_columns].isna().any().any():
             raise ContractError("Qlib export cannot contain missing governed dataset values")
-        export_manifest = self.exporter.export(
-            dataset_name=dataset_manifest["dataset_name"],
-            generation_id=dataset_generation_id,
-            frame=export_frame,
-            feature_mapping=feature_mapping,
-            label_column=label_column,
-            label_mapping=label_column.upper(),
-            calendar_dates=calendar_dates,
-            instruments=instruments,
-            provider_uri=provider_uri,
-            quality_decision=_decision_payload(export_quality_decision),
-        )
+        try:
+            export_manifest = self.exporter.export(
+                dataset_name=dataset_manifest["dataset_name"],
+                generation_id=dataset_generation_id,
+                frame=export_frame,
+                feature_mapping=feature_mapping,
+                label_column=label_column,
+                label_mapping=label_column.upper(),
+                calendar_dates=calendar_dates,
+                instruments=instruments,
+                provider_uri=provider_uri,
+                quality_decision=_decision_payload(export_quality_decision),
+            )
+        except ContractError as exc:
+            if "already exists" not in str(exc):
+                raise
+            export_manifest = self._read_back_published_export(
+                exc, dataset_manifest["dataset_name"], provider_uri=provider_uri,
+            )
         verified_export = self.exporter.read(dataset_manifest["dataset_name"], export_manifest["generation_id"])
         if verified_export[0]["generation_id"] != export_manifest["generation_id"]:
             raise ContractError("Qlib export readback identity mismatch")

@@ -190,7 +190,7 @@ def test_a_v2_config_binds_the_whole_window_as_a_partition_set(tmp_path: Path) -
 
     # the bound set digest is recomputable from the store, and it matches
     store = AdjustedPriceDatasetStore(tmp_path)
-    triples = store.list_partitions()
+    triples = store.list_partitions_in_window(START, END)
     assert set_digest_sha256(triples) == binding["set_digest_sha256"]
     verify_partition_set_binding(binding, triples, family=FAMILY)
 
@@ -240,9 +240,57 @@ def test_the_backtest_stage_assembles_the_window_frame_at_read_time(tmp_path: Pa
 
     # and the window frame is three sessions x two instruments, keys unique
     store = AdjustedPriceDatasetStore(v2_root)
-    frame = store.read_partition_frames(store.list_partitions())
+    frame = store.read_partition_frames(store.list_partitions_in_window(START, END))
     assert len(frame) == len(SESSIONS) * 2
     assert not frame.duplicated(subset=["instrument", "session_date"]).any()
+
+
+def test_a_v2_config_review_is_reverified_under_the_v2_contract(tmp_path: Path) -> None:
+    """The config review's subject must be derived under the config's own schema.
+
+    A v2 config is a different contract from v1 (partition-set price binding), so
+    its provisional review subject is a different content hash.  Deriving that
+    subject with the v1 schema made the stage reject a config whose review was
+    valid -- and the test suite had only exercised the publisher, not the stage
+    readback, with a v2 config.
+    """
+    from tests.test_research_chain_phase4 import (
+        _config_decision, _prepare_portfolio, _result_decision,
+    )
+
+    from uq.backtest.engine import BacktestEngine, BacktestResultStore
+    from uq.research_chain import BacktestStageAdapter
+
+    plan, portfolio, portfolio_result, _ = _prepare_portfolio(tmp_path)
+    universe = portfolio_result.definition_manifest["universe_snapshot_generation_id"]
+    v2_root = tmp_path / "v2-inputs"
+    v2_root.mkdir()
+    _prepare(v2_root)
+    report = _execute(v2_root, universe)
+    config = BacktestConfigStore(v2_root).read_manifest(report["generation_id"])
+    assert config["contract_version"] == 2
+
+    adapter = BacktestStageAdapter(
+        backtest_engine=BacktestEngine(tmp_path),
+        backtest_result_store=BacktestResultStore(tmp_path),
+        backtest_config_store=BacktestConfigStore(v2_root), run_store=portfolio.run_store,
+        adjusted_price_store=AdjustedPriceDatasetStore(v2_root),
+        market_dataset_store=BacktestMarketDatasetStore(v2_root),
+    )
+    # The stage's own v2 review check is the behaviour under test; reaching it
+    # without a schema-mismatch failure is the assertion.
+    result = adapter.run(
+        _plan_with_config(plan, config),
+        portfolio_stage_result=portfolio_result,
+        quality_decision=_result_decision(),
+        config_quality_decision=_config_decision(),
+        runner_identity={
+            "code_fingerprint": "0" * 64,
+            "environment_profile": "locked-test",
+            "lock_digest_sha256": "0" * 64,
+        },
+    )
+    assert result.result_manifest["contract_version"] == 2
 
 
 def _plan_with_config(plan, config):
@@ -310,10 +358,7 @@ def test_a_window_reaching_past_the_published_partitions_yields_a_smaller_set(tm
     manifest = BacktestConfigStore(tmp_path).read_manifest(report["generation_id"])
     binding = manifest["price_source_binding"]
     # member_count still matches the partitions that exist and are in the window
-    triples = [
-        triple for triple in AdjustedPriceDatasetStore(tmp_path).list_partitions()
-        if START <= dt.date.fromisoformat(str(triple["session_or_decision_date"])) <= wider
-    ]
+    triples = AdjustedPriceDatasetStore(tmp_path).list_partitions_in_window(START, wider)
     assert binding["member_count"] == len(triples) == len(SESSIONS)
     verify_partition_set_binding(binding, triples, family=FAMILY)
     assert set_digest_sha256(triples) == binding["set_digest_sha256"]
@@ -325,6 +370,34 @@ def test_a_window_reaching_past_the_published_partitions_yields_a_smaller_set(tm
             [*triples, dict(triples[0], session_or_decision_date="1999-01-01")],
             family=FAMILY,
         )
+
+
+def test_a_published_history_outside_the_bound_window_is_not_in_the_set(tmp_path: Path) -> None:
+    """A store's history must not widen the set a config binds.
+
+    The real adjusted store keeps a jump-baseline session (and any earlier
+    publications) beside the sessions a backtest trades.  Enumerating every
+    partition made a config built for ``[START, END]`` fail its own member-count
+    check as soon as the store held one extra session.  The window filter is the
+    definition shared by the publisher and the backtest readback.
+    """
+    universe, _market = _prepare(tmp_path)
+    report = _execute(tmp_path, universe)
+    config = BacktestConfigStore(tmp_path).read_manifest(report["generation_id"])
+    binding = config["price_source_binding"]
+
+    # Publish one more adjusted session before the bound window.
+    earlier = START - dt.timedelta(days=1)
+    _publish_adjusted(tmp_path, [earlier])
+    store = AdjustedPriceDatasetStore(tmp_path)
+    assert len(store.list_partitions()) == len(SESSIONS) + 1
+
+    triples = store.list_partitions_in_window(START, END)
+    assert [item["session_or_decision_date"] for item in triples] == [
+        session.isoformat() for session in SESSIONS
+    ]
+    verify_partition_set_binding(binding, triples, family=FAMILY)
+    assert set_digest_sha256(triples) == binding["set_digest_sha256"]
 
 
 def test_the_backtest_refuses_a_price_binding_whose_digest_is_wrong(tmp_path: Path) -> None:

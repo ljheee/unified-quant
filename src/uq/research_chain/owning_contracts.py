@@ -146,6 +146,27 @@ class AdjustedPriceDatasetStore:
             })
         return sorted(triples, key=lambda item: str(item["session_or_decision_date"]))
 
+    def list_partitions_in_window(
+        self, window_start: date | str, window_end: date | str
+    ) -> list[dict[str, Any]]:
+        """The published partitions whose session falls inside the bound window.
+
+        A store is expected to retain history: a backtest config names the
+        sessions it will trade, not every session that happens to be published
+        under the same root.  Filtering here (rather than at each caller) keeps
+        the publisher's set digest and the backtest's readback on the same
+        definition -- otherwise a config built for ``[start, end]`` would be
+        rejected as soon as the store also held an earlier baseline partition.
+        """
+        start = window_start if isinstance(window_start, date) else date.fromisoformat(str(window_start))
+        end = window_end if isinstance(window_end, date) else date.fromisoformat(str(window_end))
+        if end < start:
+            raise ContractError("adjusted price window end precedes start")
+        return [
+            triple for triple in self.list_partitions()
+            if start <= date.fromisoformat(str(triple["session_or_decision_date"])) <= end
+        ]
+
     def read_partition_frames(
         self, triples: Sequence[Mapping[str, Any]]
     ) -> pd.DataFrame:

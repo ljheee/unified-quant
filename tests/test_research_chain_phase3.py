@@ -325,6 +325,78 @@ def test_tampered_artifact_rejects_read(tmp_path: Path):
         store.read("0" * 64, "a" * 64)
 
 
+def _export_stage(tmp_path: Path):
+    """A dataset plus a wired export stage, ready to run twice."""
+    pytest.importorskip("qlib")
+    from uq.models.dataset_writer import DatasetWriter
+    from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
+    from uq.research_chain.adapters import QlibExportStageAdapter
+    from uq.research_chain.resolver import FileResearchRunStore
+
+    plan, dataset_result, dataset_generation_id, _frame, _adapter = _prepare_model_stage(tmp_path)
+    writer = DatasetWriter(tmp_path)
+    exporter = QlibDatasetExporter(tmp_path / "qlib_exports")
+    run_store = FileResearchRunStore(tmp_path)
+    stage = QlibExportStageAdapter(
+        exporter=exporter, receipt_builder=QlibInitReceiptBuilder(),
+        dataset_writer=writer, run_store=run_store,
+    )
+    kwargs = dict(
+        dataset_generation_id=dataset_generation_id,
+        dataset_manifest_digest_sha256=dataset_result.manifest["manifest_digest_sha256"],
+        feature_columns=list(dataset_result.manifest["ordered_features"]),
+        label_column="label",
+        provider_uri="file:///research-exports",
+        qlib_import_path="qlib", qlib_version="0.9.7",
+        cache_root=str(tmp_path / ".cache"),
+        cache_files_before=set(), cache_files_after=set(),
+        export_quality_decision=export_decision(),
+        receipt_quality_decision=receipt_decision(),
+        runner_identity={"code_fingerprint": "a" * 64, "environment_profile": "locked-test",
+                         "lock_digest_sha256": "a" * 64},
+    )
+    return stage, plan, kwargs
+
+
+def test_an_export_written_before_a_failed_state_is_reused_on_retry(tmp_path: Path):
+    """A crash after the export write but before its state snapshot is retryable.
+
+    Resume skips only *passed* stages.  The export's identity is content-derived,
+    so the retry hits the writer's immutability guard.  The caller must recover
+    that exact artifact through the full read gate rather than failing the run.
+    """
+    stage, plan, kwargs = _export_stage(tmp_path)
+    first = stage.run(plan, **kwargs)
+
+    # Simulate the crash window: the artifact exists, the stage state does not.
+    state_path = (
+        tmp_path / "research_runs" / "states"
+        / f"request={plan.request['request_content_generation_id']}"
+        / f"run={plan.request['run_id']}" / "stage=03" / "manifest.json"
+    )
+    import shutil
+    shutil.rmtree(state_path.parent)
+
+    second = stage.run(plan, **kwargs)
+    assert second.export_manifest["generation_id"] == first.export_manifest["generation_id"]
+    assert second.manifest["export_generation_id"] == first.export_manifest["generation_id"]
+
+
+def test_a_published_export_for_another_uri_is_not_reused(tmp_path: Path):
+    """Recovery re-reads the artifact under this run's provider URI."""
+    stage, plan, kwargs = _export_stage(tmp_path)
+    stage.run(plan, **kwargs)
+    state_path = (
+        tmp_path / "research_runs" / "states"
+        / f"request={plan.request['request_content_generation_id']}"
+        / f"run={plan.request['run_id']}" / "stage=03" / "manifest.json"
+    )
+    import shutil
+    shutil.rmtree(state_path.parent)
+    with pytest.raises(ContractError, match="different provider URI"):
+        stage.run(plan, **dict(kwargs, provider_uri="file:///somewhere-else"))
+
+
 def test_model_stage_reads_every_partition_the_dataset_declared(tmp_path: Path):
     """cr.md 8.62: a multi-partition dataset must be read as a set, not one row.
 
