@@ -2956,3 +2956,9 @@ prediction_publication / portfolio_construction），stage 07 `backtest_executio
 ① stage 07 之后的 paper_execution / result_reconciliation 未在真实全 A 上跑到；
 ② `adjusted_price` 的 `expected_restated` 独立复权源仍未接线；
 ③ 本轮修复只覆盖"持着停牌过去"，未覆盖"停牌期间想买入"之外的其他无价形态。
+④ **"停牌后不再返回"的形态未区分**(自 CR 发现，未修)：按最后收盘价估值对
+   窗口末尾缺席、窗口外仍交易的 300692/688585 是对的；但对 605255.XSHG（09-23 后
+   从面板彻底消失，窗口内再无该行）会按陈旧价格无限期估值。本轮**不构成缺陷**——
+   这三个名字在窗口内任何一天的权重表里都不存在，从未进入 holdings，回退不会触发。
+   但若将来持仓真跨过"停牌即退市"，equity 曲线会静默留一个陈旧价，届时要按
+   lifecycle（`delisted`）显式处理，而不是继续沿用 last close。
