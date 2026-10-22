@@ -1,0 +1,49 @@
+{
+  "producer": "scripts/publish_backtest_market_data.py",
+  "window_start": "2025-08-29",
+  "window_end": "2025-09-30",
+  "sessions": [
+    "2025-08-29",
+    "2025-09-01",
+    "2025-09-02",
+    "2025-09-03",
+    "2025-09-04",
+    "2025-09-05",
+    "2025-09-08",
+    "2025-09-09",
+    "2025-09-10",
+    "2025-09-11",
+    "2025-09-12",
+    "2025-09-15",
+    "2025-09-16",
+    "2025-09-17",
+    "2025-09-18",
+    "2025-09-19",
+    "2025-09-22",
+    "2025-09-23",
+    "2025-09-24",
+    "2025-09-25",
+    "2025-09-26",
+    "2025-09-29",
+    "2025-09-30"
+  ],
+  "bindings": {
+    "calendar_binding": {
+      "generation_id": "bef1f33412d712727fcfcf9036b5298525ca00c794254a8f0fb86790c5a586c9",
+      "checksum_sha256": "a195dec8e83b3f77261af0e43b606fc4e5faca0e49951c4a3f9fe2245bd045d1"
+    },
+    "suspension_binding": {
+      "dataset_generation_id": "496b85269b40fbbcd6f7b786a4714d907df38513cc63ad26cb08b3ca378ca765",
+      "data_checksum_sha256": "1cd0ec3f55d9d66faad0bb4862a05ab10ed97fc9fba8f57c6789ddf1a17ad15f"
+    },
+    "corporate_action_binding": {
+      "dataset_generation_id": "e14a988c40c2b1f0db05aee050af522bdcb4dae107427d0caf70c71423adf349",
+      "data_checksum_sha256": "3d24ebf488978fb995b5ba498a2f95dc798ef08d4687ad9a2b125abf3ef4d3c9"
+    }
+  },
+  "row_counts": {
+    "calendar": 23,
+    "suspension": 1,
+    "corporate_action": 315
+  }
+}

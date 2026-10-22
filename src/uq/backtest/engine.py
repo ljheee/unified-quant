@@ -118,6 +118,13 @@ class BacktestEngine:
         cash = initial_capital
         holdings: dict[str, int] = {}  # instrument -> total shares held
         prev_close_prices: dict[str, float] = {}
+        # cr.md 8.64: the last close each instrument actually printed, kept apart
+        # from `prev_close_prices`.  The two answer different questions -- the
+        # former is "what is this holding worth today", the latter is "what does
+        # the next session's limit test compare against" (cr.md FC-M7) -- and a
+        # per-session panel legitimately omits a suspended name, so the valuation
+        # has to be able to say "unchanged since it last traded".
+        last_close_prices: dict[str, float] = {}
         fills_rows: list[dict[str, Any]] = []
         equity_rows: list[dict[str, Any]] = []
         metrics_rows: list[dict[str, Any]] = []
@@ -125,6 +132,16 @@ class BacktestEngine:
 
         for i, date in enumerate(trading_dates):
             day_data = price_panel.loc[date]
+
+            # cr.md 8.64: record what the panel actually carries this session, so
+            # the valuation below can tell "suspended today" (carried before, absent
+            # now) from "never existed" (a weight against a price that is not in
+            # the panel at all).  This runs *before* the valuation, so the fallback
+            # only ever sees prices from strictly earlier sessions.
+            for inst in day_data.index:
+                cp = day_data.loc[inst, "close"]
+                if not pd.isna(cp) and cp > 0:
+                    last_close_prices[inst] = float(cp)
 
             # --- Mark to market at close ---
             total_holdings_value = 0.0
@@ -135,7 +152,23 @@ class BacktestEngine:
                         raise ContractError(f"missing or invalid close price for {inst} on {date}")
                     total_holdings_value += shares * float(close_price)
                 else:
-                    raise ContractError(f"price data missing for held instrument {inst} on {date}")
+                    # cr.md 8.64: a name the panel carries on *some* session but not
+                    # on this one is suspended, not missing -- the execution branch
+                    # below records `skipped_suspended` for exactly this shape and
+                    # keeps holding it.  Refusing the whole run here contradicted
+                    # that: one multi-session suspension (300948.XSHE over
+                    # 2025-09-22..09-26) killed the full-A backtest at the last
+                    # stage.  Value the position at its last traded close so the
+                    # equity curve stays continuous, which is what "the session had
+                    # no trade" means for a portfolio.
+                    #
+                    # A name the panel *never* carries is a different failure: the
+                    # weights were built against a price that does not exist, so it
+                    # still fails closed.
+                    last_close = last_close_prices.get(inst)
+                    if last_close is None:
+                        raise ContractError(f"price data missing for held instrument {inst} on {date}")
+                    total_holdings_value += shares * last_close
             nav = cash + total_holdings_value
 
             equity_rows.append({

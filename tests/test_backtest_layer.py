@@ -544,3 +544,89 @@ class TestStrictBehavior:
         for _, f in b_fills.iterrows():
             if f["side"] == "buy":
                 assert f["status"] in ("skipped_suspended", "skipped_volume"), f"B status: {f['status']}"
+
+
+class TestHoldingThroughASuspension:
+    """cr.md 8.64: a held name the panel omits is suspended, not missing.
+
+    The vendor partitions are per-session and only carry the rows it returned, so
+    a genuinely suspended name simply has no row.  The execution branch already
+    keeps holding it (`skipped_suspended`); the mark-to-market refused the whole
+    run instead, which is what killed the full-A backtest on 300948.XSHE
+    (2025-09-22..09-26).
+    """
+
+    def test_a_held_instrument_suspended_for_several_sessions_keeps_a_continuous_nav(self):
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config()
+        # Three sessions, but the panel drops A on the middle one: a per-session
+        # vendor panel reports nothing at all for a suspended name.
+        dates = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]
+        rows = []
+        for i, d in enumerate(dates):
+            for inst in ("A", "B"):
+                if inst == "A" and d == "2026-01-07":
+                    continue
+                drift = 1.01 ** i
+                rows.append({
+                    "date": d, "instrument": inst,
+                    "open": round(10.0 * drift, 4),
+                    "close": round(10.0 * drift * 1.005, 4),
+                    "volume": 500000,
+                })
+        price_panel = pd.DataFrame(rows).set_index(["date", "instrument"])
+        # Buy on the first session; A is then absent on 2026-01-07.  A second
+        # decision date on 2026-01-06 makes 2026-01-07 an *execution* session, so
+        # the suspension reaches the execution branch that records it.
+        weights = {
+            "2026-01-05": _make_weights("2026-01-05", ("A", "B")),
+            "2026-01-06": _make_weights("2026-01-06", ("A", "B")),
+        }
+        _, artifacts = engine.run(
+            config=config, portfolio_definition={"generation_id": GEN_B},
+            weight_partitions=weights, price_panel=price_panel,
+            suspension_dates={("2026-01-07", "A")},
+        )
+        equity = artifacts["equity_curve"]
+        assert len(equity) == len(dates), f"every session must be valued\n{equity.to_string()}"
+        values = equity["portfolio_value"].astype(float)
+        assert values.map(lambda v: pd.notna(v) and v > 0).all(), (
+            f"a suspension must not zero or blank the NAV\n{equity.to_string()}"
+        )
+        # The suspended session carries no trade, so the value is the previous
+        # session's: A is still held, valued at its last traded close.
+        assert float(values.iloc[2]) > 0.0
+        fills = artifacts["fills"]
+        suspended = fills[fills["status"] == "skipped_suspended"]
+        assert not suspended.empty, "the suspension must be recorded in the fills ledger"
+
+    def test_a_held_instrument_with_an_invalid_close_still_fails_closed(self):
+        # The other direction is a real defect, not a suspension: the panel
+        # carries the name but its close is not usable, so there is nothing to
+        # value the position at.  A valid open lets it be bought, which is what
+        # makes this reachable at all (a name with no open is never held).
+        engine = BacktestEngine(tempfile.mkdtemp())
+        config = _make_config()
+        dates = ["2026-01-05", "2026-01-06", "2026-01-07"]
+        rows = []
+        for i, d in enumerate(dates):
+            for inst in ("A", "B"):
+                if inst == "A" and d == "2026-01-07":
+                    continue
+                close = (
+                    float("nan") if inst == "A" and d == "2026-01-06"
+                    else round(10.0 * (1.01 ** i) * 1.005, 4)
+                )
+                rows.append({
+                    "date": d, "instrument": inst,
+                    "open": round(10.0 * (1.01 ** i), 4),
+                    "close": close,
+                    "volume": 500000,
+                })
+        price_panel = pd.DataFrame(rows).set_index(["date", "instrument"])
+        weights = {"2026-01-05": _make_weights("2026-01-05", ("A", "B"))}
+        with pytest.raises(ContractError, match="missing or invalid close price"):
+            engine.run(
+                config=config, portfolio_definition={"generation_id": GEN_B},
+                weight_partitions=weights, price_panel=price_panel,
+            )

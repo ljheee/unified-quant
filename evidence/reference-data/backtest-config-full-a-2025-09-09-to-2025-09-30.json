@@ -1,0 +1,16 @@
+{
+  "producer": "scripts/publish_backtest_config.py",
+  "generation_id": "56bdb00b0e6b16b667221e42599272370fba3e536902376fbb4eef1c53ba4d51",
+  "manifest_digest_sha256": "118d9e2f7c625a4f5470a276e9b227a65066a4b5cc5ee97025eb851989194f36",
+  "request_binding": {
+    "family": "backtest_config",
+    "generation_id": "56bdb00b0e6b16b667221e42599272370fba3e536902376fbb4eef1c53ba4d51",
+    "manifest_digest_sha256": "118d9e2f7c625a4f5470a276e9b227a65066a4b5cc5ee97025eb851989194f36"
+  },
+  "window": {
+    "start_date": "2025-09-09",
+    "end_date": "2025-09-30"
+  },
+  "universe_id": "csi-all",
+  "universe_snapshot_generation_id": "46edd3681419bea8c2ba7ddc6468af090d47e9b50d1174b2269a3a2373023cb0"
+}

@@ -2866,3 +2866,93 @@ v1 契约会拒掉一份**合法**的结果)。
 ① 整条 v5 execute **仍未在真实全 A 窗口端到端重跑**(本轮只把回测这条链的形状改对);
 ② `adjusted_price` 的 `expected_restated` 独立复权源仍未接线;
 ③ 冒烟根 `/tmp/uq-run4` 里的单窗口分区是当初手搓的,v2 跑真实数据需要按会话重新发布。
+
+### 8.64 全 A v5 execute 首次跑到 stage 07：持仓跨停牌被 mark-to-market fail-closed 拦死（2026-10-22）
+
+接 §8.63 F①。用 `/tmp/uq-final-full`（全 A，`csi-all` 5068 成员，窗口 2025-09-09..09-30，
+16 会话）以固定 run id `...0009` 重跑，**stage 00–06 全部 passed**（resolve_request /
+factor_computation / dataset_preparation / qlib_export / model_training /
+prediction_publication / portfolio_construction），stage 07 `backtest_execution` 失败。
+
+#### A. 失败点（真实数据第一次把它激活）
+
+引擎报 `price data missing for held instrument 300948.XSHE on 2025-09-22`，
+即 `engine.py:138` 的 mark-to-market fail-closed。
+
+事实链：300948.XSHE 于 09-17/18/19 连续三天进入 top-20 权重 →
+09-22..09-26 供应商面板**整只无行**（`canonical/bars_daily/v2/date=2025-09-22` 5057 行里
+没有它，`status` 列也查不到）→ 09-29 复牌回到权重表。
+同期同形态的还有 300366 / 600624 / 603517 / 688053（09-19 在面板、09-22 不在）。
+
+#### B. 这是设计缺口，不是数据缺陷
+
+三条证据：
+
+1. **执行路径本来就会"持着停牌过去"**：`engine.py:303-322` 的 `is_suspended` 分支会记
+   `skipped_suspended` 的 sell 行并 `continue`——即引擎设计上允许一个持仓在停牌日继续存在。
+   mark-to-market 却是"没有 close 就整轮崩"，与同一个 run 里的执行语义**自相矛盾**。
+2. **停牌源与面板同源同商**：`publish_backtest_market_data.py` 的 suspension 族主源就是
+   bars 的 `status` 列，而"整只无行"时 `status` 无从读起——所以这不是"漏配停牌数据"，
+   而是"用 per-session 面板表达停牌"这个表示法的固有盲区。
+3. **规格没有要求崩**：`portfolio-backtest-layer-spec.md` §6.5 要求"每日收盘估值"，
+   §6.3 只规定"不能交易停牌标的"，没有任何一条说持仓市值缺失时必须中止；
+   反倒是 §6.1 明写未成交差额记入 fills 台账、现金闲置。
+
+#### C. 修法：按 suspension 语义估值，而不是崩
+
+`engine.py` mark-to-market 对**当日无有效收盘的持仓**分两类：
+
+- 该 `(date, instrument)` 在 `suspension_dates` 里，或该 instrument 在窗口内
+  **曾经出现过**（说明它是"中间停牌"而不是"数据从一开始就缺"）→
+  用**该标的最近一个有效收盘**估值，`holdings_value` 照常累计，NAV 连续；
+- 否则（从未出现过的持仓，即上游给了权重却没有价格）→ 保持 fail-closed。
+
+实现上引入 `last_close_prices`（每会话用当日有效 close 更新），与既有的
+`prev_close_prices` 分离：后者是**下一执行日涨跌停判定**的参考价（FC-M7 刚修过它的
+陈旧问题），语义不能混。新增 `unpriced_holdings` 计数写进 equity 行的诊断列前先不加——
+`backtest_result` 的 artifact `columns` 是闭清单，加列要动契约，本轮只让 NAV 连续。
+
+#### D. 测试锁与变异（一枚被杀，一枚如实登记为不可达）
+
+`tests/test_backtest_layer.py` 新增两例：
+
+- `test_a_held_instrument_suspended_for_several_sessions_keeps_a_continuous_nav`：
+  面板故意缺 D3 一天、`suspension_dates` 声明该日停牌；断言 equity 每个会话都在、
+  逐日有限且为正、fills 里留下 `skipped_suspended`。（第二版才写对：第一版只有
+  一个决策日，停牌日不是**执行**日，根本没进执行分支，fills 是空的。）
+- `test_a_held_instrument_with_an_invalid_close_still_fails_closed`：
+  面板带该标的但收盘价不可用 → 仍必须 `ContractError`。
+
+**变异 1（删掉 suspension fallback，改回 raise）**：第一例 FAIL
+（`price data missing for held instrument A on 2026-01-07`）→ **已杀死**。
+这就是本次修复的锁。
+
+**变异 2（把 fail-closed 守卫 `last_close is None` 换成编造价格 1.0）**：
+**全套 25 例全绿，即变异存活。** 我没有就此收手，而是去证明它为什么存活：
+用真实全 A 面板逐会话核对，145 个持有标的**全部**有有效收盘价
+（"可用开盘但收盘不可用" 0 例、"缺席且此前无有效收盘" 0 例）。
+推导原因：持仓只可能来自一次成交，而成交需要执行日有有效开盘价；
+若同一会话还有效收盘价，`last_close_prices` 就已写入。
+所以该分支是**防御性**的，`run()` 到不了它，任何变异都杀不死。
+如实登记：**这条守卫没有测试锁定，也不可锁定**；它不是本次修复的锁。
+
+**我为此付出的无效代价**：一开始想用暴力枚举（2^16 掩码 × NaN 模式 × 决策日）
+"证明"可达性，规模是几十亿次回测，纯属浪费；且连开多个后台轮询 shell 干等，
+空转了十几轮。正确做法就是上面那段推导 + 一次真实数据核对。教训与
+§8.56"只找支持自己假设的证据"同源：**该先问"这个分支可达吗"，再决定要不要为它写锁**。
+
+#### E. 验证
+
+- `.venv/bin/python -m pytest tests/ -o addopts='' -q -p no:cacheprovider`
+  → **1229 passed / 28 skipped**（父 1227/28，净 +2 +0）
+- `.venv-qlib/bin/python -m pytest tests/ -o addopts='' -q -p no:cacheprovider`
+  → **1257 passed / 0 skipped**（父 1255/0，净 +2 +0）
+- 变异 1 必红（见 D）；变异 2 存活及其原因已登记。
+- 本轮**未**重跑 stage 07：需要重新 resume 真实全 A 根，属下一步。
+
+
+#### F. 仍未决
+
+① stage 07 之后的 paper_execution / result_reconciliation 未在真实全 A 上跑到；
+② `adjusted_price` 的 `expected_restated` 独立复权源仍未接线；
+③ 本轮修复只覆盖"持着停牌过去"，未覆盖"停牌期间想买入"之外的其他无价形态。
