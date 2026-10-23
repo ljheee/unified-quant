@@ -506,6 +506,105 @@ def test_dataset_stage_binds_reviewed_policy_and_verified_inputs(tmp_path: Path)
     assert binding["physical_path"].startswith("datasets/")
 
 
+def test_the_refusal_parser_names_the_right_generation() -> None:
+    """cr.md 8.65: the parser must not read `run_generation=` as the artifact id.
+
+    The model path's refusal carries both ids, and an early version of the
+    pattern matched the first `generation=` it saw -- which is the *run* id.  The
+    identity check at the call site is what caught it, so both halves are locked
+    here: every writer's message shape resolves to the id that writer published.
+    """
+    from uq.research_chain.adapters import _generation_from_refusal
+    from uq.errors import ContractError
+
+    run_id, artifact_id = "5" * 64, "7" * 64
+    cases = {
+        f"immutable artifact already exists: /m/models/run_generation={run_id}"
+        f"/artifact_generation={artifact_id}": artifact_id,
+        f"immutable dataset already exists: /m/datasets/dataset=a/version=1.0.0"
+        f"/generation={'9' * 64}": "9" * 64,
+        f"target-weight partition already exists: /m/target_weights/date=2025-01-01"
+        f"/generation={'3' * 64}": "3" * 64,
+        f"backtest result already exists: /m/backtest_results/result={'1' * 64}": "1" * 64,
+        f"immutable prediction already exists: /m/predictions/prediction_set={'2' * 64}"
+        f"/date=2025-01-01": "2" * 64,
+    }
+    for message, expected in cases.items():
+        assert _generation_from_refusal(ContractError(message)) == expected, message
+
+    # A refusal that names no generation is a different failure, not a retry.
+    with pytest.raises(ContractError, match="no generation here"):
+        _generation_from_refusal(ContractError("refused: no generation here"))
+
+
+def test_dataset_stage_reuses_a_dataset_an_earlier_attempt_published(tmp_path: Path) -> None:
+    """cr.md 8.65: the caller owns idempotence, so a re-run recovers the artifact.
+
+    A run is only resumable from a *passed* state snapshot.  If the writer
+    published the dataset and the process then failed before the state was
+    written, the retry reaches the immutable writer again.  The writer must keep
+    refusing an overwrite; the stage recovers the published bytes through the
+    same full `read` gate and records that identity in the retry's state.
+
+    Stage 03 (qlib export) got this recovery in cr.md 8.60 but it was never
+    locked, and no other stage got it -- which is exactly why a full-A re-run
+    died here with "immutable dataset already exists" one stage later.
+    """
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+    runner_identity = {
+        "code_fingerprint": "0" * 64, "environment_profile": "locked-test",
+        "lock_digest_sha256": "0" * 64,
+    }
+    first = adapter.run(
+        plan, runner_identity=runner_identity, **_execute_decisions(plan),
+        created_at="2026-01-30T07:00:00+00:00",
+    )
+    second = adapter.run(
+        plan, runner_identity=runner_identity, **_execute_decisions(plan),
+        created_at="2026-01-30T08:00:00+00:00",
+    )
+    # Same content, so the same identity -- the recovery must not mint a second
+    # generation for bytes that are already on disk.
+    assert second.manifest["generation_id"] == first.manifest["generation_id"]
+    assert second.manifest["manifest_digest_sha256"] == first.manifest["manifest_digest_sha256"]
+    state = FileResearchRunStore(tmp_path).read_state(
+        plan.request["request_content_generation_id"], RUN_ID, "dataset_preparation",
+        second.published_state.manifest_digest_sha256,
+    )
+    binding = state["stage_records"][-1]["output_bindings"][0]
+    assert binding["generation_id"] == first.manifest["generation_id"]
+
+
+def test_dataset_stage_still_refuses_an_unrelated_published_dataset(tmp_path: Path) -> None:
+    """The recovery must not swallow a real refusal.
+
+    Only an "already exists" for *this* generation is recoverable.  A refusal
+    about anything else still propagates, so a genuine write failure cannot be
+    papered over as a retry.
+    """
+    adapter, plan, _ = _prepare_dataset_store(tmp_path)
+
+    class ExplodingWriter:
+        def write(self, *args, **kwargs):
+            raise ContractError("immutable dataset already exists: /somewhere/else")
+
+    original = adapter.dataset_writer
+    try:
+        adapter.dataset_writer = ExplodingWriter()
+        with pytest.raises(ContractError, match="already exists"):
+            adapter.run(
+                plan,
+                runner_identity={
+                    "code_fingerprint": "0" * 64, "environment_profile": "locked-test",
+                    "lock_digest_sha256": "0" * 64,
+                },
+                **_execute_decisions(plan),
+                created_at="2026-01-30T07:00:00+00:00",
+            )
+    finally:
+        adapter.dataset_writer = original
+
+
 def test_dataset_stage_rejects_wrong_reviewed_quality_decision(tmp_path: Path) -> None:
     adapter, plan, _ = _prepare_dataset_store(tmp_path)
     decisions = _execute_decisions(plan)

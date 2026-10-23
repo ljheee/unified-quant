@@ -94,6 +94,40 @@ def _stage_binding(plan: ResolvedExecutionPlan, *, stage: str, output_family: st
     return matches[0]
 
 
+def _generation_from_refusal(refusal: ContractError) -> str:
+    """The content-derived generation id named by an ``already exists`` refusal.
+
+    Every immutable writer in this chain refuses an overwrite with a message that
+    ends in ``.../generation=<id>`` (or ``artifact_generation=<id>``), and that id
+    is derived from the content -- which is why the same inputs reproduce it.  A
+    retry can therefore read the artifact back by that id.  A refusal that names no
+    generation is not this failure mode and is re-raised untouched.
+    """
+    # The writers name the identity differently: `generation=` for datasets,
+    # `artifact_generation=` for model artifacts, `prediction_set=` for the
+    # per-date prediction family, `result=` for backtest results.  `run_generation=`
+    # must NOT match -- the model path carries both a run and an artifact
+    # generation, and taking the first hit silently recovered the wrong id (the
+    # identity check at the call site is what caught it).
+    match = re.search(
+        r"(?<![A-Za-z0-9_])(?:artifact_generation|generation|prediction_set|result)=([0-9a-f]{64})",
+        str(refusal),
+    )
+    if match is None:
+        raise refusal
+    return match.group(1)
+
+
+def _is_already_published(exc: ContractError) -> bool:
+    """True when a refusal is an immutable writer's overwrite guard.
+
+    Anything else -- a checksum mismatch, an unpublished parent, a schema
+    rejection -- is a real failure and must propagate, so a genuine write error can
+    never be papered over as a retry.
+    """
+    return "already exists" in str(exc)
+
+
 def _decision_payload(decision: Any) -> Any:
     """Pass provider callables through; copy concrete decisions (cr.md U14).
 
@@ -391,6 +425,30 @@ class DatasetStageAdapter:
             trading_days=self.trading_calendar,
         ).factor_partition_set
 
+    def _read_back_published_dataset(
+        self, refusal: ContractError, manifest: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Recover a dataset an earlier attempt published before it failed.
+
+        The refusal names the partition, whose last path segment is the
+        content-derived ``generation=<id>``.  Reading it back runs the writer's
+        full gate -- schema, bound review, manifest digest, stable generation and
+        the data checksum sidecar -- so a retry either names the same bytes or is
+        refused.  The manifest handed back is the one on disk, not the in-memory
+        draft, because only the published one carries the identity the rest of the
+        stage and the state snapshot record.
+        """
+        match = re.search(r"generation=([0-9a-f]{64})", str(refusal))
+        if match is None:
+            raise refusal
+        generation_id = match.group(1)
+        published, _ = self.dataset_writer.read(
+            manifest["dataset_name"], manifest["semantic_version"], generation_id
+        )
+        if published["generation_id"] != generation_id:
+            raise ContractError("dataset readback identity mismatch on retry")
+        return published
+
     def run(
         self,
         plan: ResolvedExecutionPlan,
@@ -610,21 +668,33 @@ class DatasetStageAdapter:
             input_feature_schema=input_schema,
             row_count=len(dataset_frame),
         )
-        self.dataset_writer.write(
-            manifest,
-            dataset_frame,
-            feature_schema=output_schema,
-            # cr.md U14: the dataset generation is derived inside the writer,
-            # so a per-subject provider must pass through untouched; static
-            # decisions keep the historical defensive copy.
-            quality_report=quality_decision if callable(quality_decision) else dict(quality_decision),
-            preprocessing_manifest=dict(preprocessing),
-            preprocessing_input_frame=factor_frame,
-            preprocessing_frame=preprocessed_frame,
-            preprocessing_input_feature_schema=input_schema,
-            preprocessing_quality_report=dict(preprocessing_quality_decision),
-        )
-        published_manifest = self.dataset_writer.last_published_manifest
+        try:
+            self.dataset_writer.write(
+                manifest,
+                dataset_frame,
+                feature_schema=output_schema,
+                # cr.md U14: the dataset generation is derived inside the writer,
+                # so a per-subject provider must pass through untouched; static
+                # decisions keep the historical defensive copy.
+                quality_report=quality_decision if callable(quality_decision) else dict(quality_decision),
+                preprocessing_manifest=dict(preprocessing),
+                preprocessing_input_frame=factor_frame,
+                preprocessing_frame=preprocessed_frame,
+                preprocessing_input_feature_schema=input_schema,
+                preprocessing_quality_report=dict(preprocessing_quality_decision),
+            )
+        except ContractError as exc:
+            # cr.md 8.60: idempotence belongs to the caller.  The writer stays
+            # immutable and refuses an overwrite; the stage recovers the artifact
+            # an earlier attempt already published by reading it back through the
+            # same gate, so the retry's state names the same bytes.  This is the
+            # same shape as the qlib-export recovery below -- only stage 03 had
+            # it, which is why a re-run still died here (cr.md 8.65).
+            if "already exists" not in str(exc):
+                raise
+            published_manifest = self._read_back_published_dataset(exc, manifest)
+        else:
+            published_manifest = self.dataset_writer.last_published_manifest
         _, readback_frame = self.dataset_writer.read(
             published_manifest["dataset_name"],
             published_manifest["semantic_version"],
@@ -1003,12 +1073,19 @@ class PortfolioStageAdapter:
                 initial_state=previous_frame is None,
                 quality_decision=None,
             )
-            self.target_weight_store.publish(
-                manifest,
-                frame,
-                quality_decision=_decision_payload(weights_quality_decision),
-                previous_target_weights_generation_id=previous_generation,
-            )
+            # cr.md 8.65: per-decision-date family, so a mid-loop interruption
+            # leaves earlier dates on disk.  Recover them through the readback
+            # below rather than aborting the whole stage.
+            try:
+                self.target_weight_store.publish(
+                    manifest,
+                    frame,
+                    quality_decision=_decision_payload(weights_quality_decision),
+                    previous_target_weights_generation_id=previous_generation,
+                )
+            except ContractError as exc:
+                if not _is_already_published(exc) or _generation_from_refusal(exc) != manifest["generation_id"]:
+                    raise
             readback_manifest, readback_frame = self.target_weight_store.read(
                 manifest["generation_id"], decision_date
             )
@@ -1267,12 +1344,19 @@ class BacktestStageAdapter:
             corporate_action_instruments=corporate_action_instruments,
             quality_decision=_decision_payload(quality_decision),
         )
-        self.backtest_result_store.publish(
-            manifest,
-            artifacts,
-            quality_decision=_decision_payload(quality_decision),
-            target_weight_generations=target_weight_generations,
-        )
+        # cr.md 8.65: the result generation is derived from the content, so a retry
+        # of a stage that published before it failed names the same bytes.  Recover
+        # them through the readback below rather than aborting.
+        try:
+            self.backtest_result_store.publish(
+                manifest,
+                artifacts,
+                quality_decision=_decision_payload(quality_decision),
+                target_weight_generations=target_weight_generations,
+            )
+        except ContractError as exc:
+            if not _is_already_published(exc) or _generation_from_refusal(exc) != manifest["generation_id"]:
+                raise
         readback_manifest, readback_artifacts = self.backtest_result_store.read(
             manifest["generation_id"]
         )
@@ -1645,14 +1729,26 @@ class ModelStageAdapter:
             exclude_fields={"quality_report_checksum_sha256"},
         )[0]
         artifact_manifest["generation_id"] = artifact_generation
-        self.artifact_store.publish(
-            artifact_manifest,
-            artifact_bytes,
-            quality_report=self._bound_artifact_report(
-                artifact_quality_decision_provider(artifact_generation),
-                artifact_generation,
-            ),
-        )
+        # cr.md 8.65: idempotence belongs to the caller (cr.md 8.60).  The writer
+        # refuses an overwrite, so a retry of a stage that published before it
+        # failed recovers the published bytes instead of aborting.  The readback
+        # below is the same full gate either way.
+        try:
+            self.artifact_store.publish(
+                artifact_manifest,
+                artifact_bytes,
+                quality_report=self._bound_artifact_report(
+                    artifact_quality_decision_provider(artifact_generation),
+                    artifact_generation,
+                ),
+            )
+        except ContractError as exc:
+            if not _is_already_published(exc):
+                raise
+            # The refusal must name the generation this very content derived, or
+            # the bytes on disk are somebody else's.
+            if _generation_from_refusal(exc) != artifact_generation:
+                raise
         artifact_readback, _ = self.artifact_store.read(
             run_manifest["run_content_generation_id"], artifact_generation,
         )
@@ -1778,7 +1874,15 @@ class PredictionStageAdapter:
                 eligibility_status=eligibility_status,
                 quality_decision=_decision_payload(quality_decision),
             )
-            self.prediction_builder.publish(manifest, artifact)
+            # cr.md 8.65: this family is published per decision date, so a
+            # mid-loop interruption leaves earlier dates already on disk.  The
+            # writer refuses an overwrite; the stage recovers what is there and
+            # the readback below re-verifies it either way.
+            try:
+                self.prediction_builder.publish(manifest, artifact)
+            except ContractError as exc:
+                if not _is_already_published(exc) or _generation_from_refusal(exc) != manifest["generation_id"]:
+                    raise
             readback_manifest, frame = self.prediction_builder.read(
                 manifest["generation_id"], decision_date,
             )

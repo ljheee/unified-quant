@@ -797,6 +797,15 @@ def test_portfolio_universe_binding_mismatch_fails(tmp_path: Path) -> None:
 
 
 def test_portfolio_weight_overwrite_fails(tmp_path: Path) -> None:
+    """The writer still refuses an overwrite, and the stage recovers it.
+
+    cr.md 8.65 moved idempotence into the stage (cr.md 8.60: it belongs to the
+    caller), so this test used to assert that a second run raises.  The writer's
+    guard is unchanged and is what makes the recovery meaningful -- without it a
+    retry could silently replace published bytes -- so the two halves are locked
+    together: the store refuses, and the stage turns that refusal into a readback
+    of the same generation instead of minting a second one.
+    """
     plan, portfolio, result, _ = _prepare_portfolio(tmp_path)
     definition_generation = result.definition_manifest["generation_id"]
     prediction_manifest, _ = PredictionBuilder(tmp_path).read(
@@ -807,13 +816,39 @@ def test_portfolio_weight_overwrite_fails(tmp_path: Path) -> None:
         frame=pd.DataFrame({"instrument": INSTRUMENTS, "score": [0.9, 0.5, 0.1]}),
         published_state=result.published_state,
     )
+    first = portfolio.run(
+        plan, prediction_stage_result=prediction_result, decision_dates=["2026-01-05"],
+        definition_quality_decision=_definition_decision(definition_generation),
+        weights_quality_decision=_weights_decision(), runner_identity=RUNNER,
+        created_at="2026-01-30T07:00:00+00:00",
+    )
+    # The writer itself still refuses a direct second publish of the same content.
     with pytest.raises(ContractError, match="target-weight partition already exists"):
-        portfolio.run(
-            plan, prediction_stage_result=prediction_result, decision_dates=["2026-01-05"],
-            definition_quality_decision=_definition_decision(definition_generation),
-            weights_quality_decision=_weights_decision(), runner_identity=RUNNER,
-            created_at="2026-01-30T07:00:00+00:00",
+        portfolio.target_weight_store.publish(
+            first.target_weight_manifests["2026-01-05"],
+            first.target_weight_frames["2026-01-05"],
+            quality_decision=_weights_decision(),
         )
+    # But the *stage* recovers: the retry names the generation already on disk.
+    rerun_root = tmp_path / "rerun"
+    rerun_root.mkdir(parents=True, exist_ok=True)
+    retrying = PortfolioStageAdapter(
+        universe_store=portfolio.universe_store,
+        portfolio_builder=PortfolioBuilder(rerun_root),
+        target_weight_store=portfolio.target_weight_store,
+        run_store=FileResearchRunStore(rerun_root),
+        prediction_builder=PredictionBuilder(tmp_path),
+    )
+    second = retrying.run(
+        plan, prediction_stage_result=prediction_result, decision_dates=["2026-01-05"],
+        definition_quality_decision=_definition_decision(definition_generation),
+        weights_quality_decision=_weights_decision(), runner_identity=RUNNER,
+        created_at="2026-01-30T08:00:00+00:00",
+    )
+    assert (
+        second.target_weight_manifests["2026-01-05"]["generation_id"]
+        == first.target_weight_manifests["2026-01-05"]["generation_id"]
+    )
 
 
 def test_wrong_portfolio_quality_decision_fails(tmp_path: Path) -> None:
