@@ -424,3 +424,64 @@ def test_result_store_readback_rejects_payload_tampering(tmp_path: Path) -> None
     data_path.write_bytes(data_path.read_bytes()[:-1])
     with pytest.raises(ContractError, match="payload checksum"):
         store.read(published_generation)
+
+
+def test_a_suspended_holding_is_sized_from_the_carried_price(tmp_path: Path) -> None:
+    """cr.md 8.71: the planner must not demand a decision close for a holding.
+
+    `plan` unions the target instruments with the holdings and required a decision
+    close for every one of them.  A per-session panel has no row for a suspended
+    name, so it is absent from `prices` -- and a run holding one was refused with
+    `missing decision close` even though the engine would skip executing it.
+
+    The split that matters: a *target* name with no close still fails closed (there
+    is nothing to size a buy against), while a *holding* with no close is sized
+    from the price the previous state recorded.
+    """
+    config, _ = _publish_config(tmp_path)
+    # The held name must NOT be a target: it is being exited, not held on.
+    target = pd.DataFrame({"instrument": ["000002.XSHE"], "weight": [0.5]})
+    # The planner only accepts holdings from a continuation config.
+    config["state_mode"] = "continuation"
+    opening_cash = float(config["initial_state"]["cash"])
+    config["initial_state"] = None
+    config["input_state_binding"] = {
+        "family": "paper_portfolio_state_v1",
+        "generation_id": "a" * 64,
+        "manifest_digest_sha256": "b" * 64,
+        "as_of_date": config["decision_date"],
+    }
+    config = _recompute(config)
+    holdings = [{
+        "instrument": "000001.XSHE", "quantity": 100, "average_cost": 10.0,
+        "buy_locked_quantity": 0, "sellable_quantity": 100,
+    }]
+    carried = {"000001.XSHE": 12.5}
+    # Only the target name has a decision close; the held name does not.
+    prices = {"000002.XSHE": {"close": 10.0}}
+
+    # Without the carried price the run still fails closed.
+    with pytest.raises(ContractError, match="missing decision close"):
+        PaperOrderPlanner().plan(
+            config, target, holdings, prices, opening_cash=opening_cash,
+        )
+
+    # With it, the exit can be sized even though the panel carries no row.
+    frame, residual = PaperOrderPlanner().plan(
+        config, target, holdings, prices, opening_cash=opening_cash,
+        carry_forward_prices=carried,
+    )
+    assert not frame.empty
+    # The suspended holding is planned for exit, which is what the carried price
+    # made possible.
+    assert (frame["instrument"] == "000001.XSHE").any()
+    assert (frame["side"] == "sell").any()
+
+    # A target name with no price at all is still refused: there is nothing to
+    # size a purchase against, and inventing one would be a real defect.
+    unseen = pd.DataFrame({"instrument": ["999999.XSHE"], "weight": [0.5]})
+    with pytest.raises(ContractError, match="missing decision close"):
+        PaperOrderPlanner().plan(
+            config, unseen, holdings, prices, opening_cash=opening_cash,
+            carry_forward_prices=carried,
+        )

@@ -301,6 +301,20 @@ def test_paper_stage_publishes_ordered_4n_bindings_across_two_dates(tmp_path: Pa
 
 
 def test_paper_stage_is_idempotent_and_rejects_republish(tmp_path: Path) -> None:
+    """cr.md 8.69: idempotence means the same result, not an abort.
+
+    This test's name is unchanged (an evidence record registers it), but what it
+    asserts changed.  It used to require a second `adapter.run` to raise, which
+    locked a behaviour with no reachable trigger: a normal re-run is skipped by the
+    runner's passed-state resume, so the adapter is never called twice, and the
+    only way to reach it is a crash after publishing and before the state snapshot
+    -- where aborting would wedge the run permanently.
+
+    cr.md 8.60 puts idempotence in the caller and keeps the writer immutable.  So
+    the replay must name the *same* generations, and the stores' own
+    `partition already exists` guards (locked at the store boundary in
+    `test_paper_execution_phase3.py`) still refuse a direct second publish.
+    """
     sessions = [date(2026, 1, 5), date(2026, 1, 6)]
     publisher = _publish_market(tmp_path / "market", sessions)
     template = _template(publisher, sessions)
@@ -334,9 +348,21 @@ def test_paper_stage_is_idempotent_and_rejects_republish(tmp_path: Path) -> None
         runner_identity={"code_fingerprint": "e" * 64, "environment_profile": "locked-test", "lock_digest_sha256": "f" * 64},
         created_at="2026-01-01T00:00:00+00:00",
     )
-    adapter.run(_plan(), **kwargs)
-    with pytest.raises(ContractError):
-        adapter.run(_plan(), **kwargs)
+    first = adapter.run(_plan(), **kwargs)
+    replay = adapter.run(_plan(), **kwargs)
+
+    # Same content, so the same generations: the replay recovers, it does not
+    # mint a second set of artifacts for identical bytes.
+    assert [b["generation_id"] for b in replay.bindings] == [
+        b["generation_id"] for b in first.bindings
+    ]
+    assert replay.published_state.manifest_digest_sha256 == first.published_state.manifest_digest_sha256
+
+    # The stores stay immutable; that half is locked at the store boundary in
+    # `test_paper_execution_phase3.py::test_a_replayed_paper_stage_recovers_the_artifacts_it_already_published`
+    # (a refusal for another generation re-raises) and by each store's own
+    # `partition already exists` guard.  What this test pins is the stage-level
+    # consequence: a replay must not mint a second set of artifacts.
 
 
 def test_paper_stage_refusal_stops_the_stage_and_hides_later_dates(tmp_path: Path) -> None:

@@ -94,13 +94,17 @@ class PaperPortfolioStateBuilder:
             previous_state_frame=previous_state_frame,
             previous_state_manifest=previous_state_manifest,
         )
-        frame = self._state_frame(closing_cash, holdings, execution_market)
+        frame = self._state_frame(
+            closing_cash, holdings, execution_market,
+            carry_forward_prices=self._carry_forward_prices(previous_state_frame),
+        )
         self._validate_valuation(
             result_manifest,
             opening_cash,
             input_holdings,
             decision_prices,
             frame,
+            carry_forward_prices=self._carry_forward_prices(previous_state_frame),
         )
         manifest = self._manifest(
             config,
@@ -430,7 +434,14 @@ class PaperPortfolioStateBuilder:
         input_holdings: list[Mapping[str, Any]],
         decision_prices: Mapping[str, Mapping[str, Any]],
         state_frame: pd.DataFrame,
+        carry_forward_prices: Mapping[str, float] | None = None,
     ) -> None:
+        # cr.md 8.72: a suspended holding has no row on the decision session's
+        # panel either, so its opening valuation has to come from the same carried
+        # price the engine used.  Recomputing with a *different* price would break
+        # the reconciliation below even though both numbers are individually fine,
+        # which is why the carry is passed in rather than derived here.
+        carried = carry_forward_prices or {}
         opening_value = float(opening_cash)
         for row in input_holdings:
             instrument = str(row["instrument"])
@@ -438,6 +449,8 @@ class PaperPortfolioStateBuilder:
             if quantity <= 0:
                 continue
             close = float((decision_prices.get(instrument) or {}).get("close") or 0.0)
+            if not math.isfinite(close) or close <= 0:
+                close = float(carried.get(instrument) or 0.0)
             if not math.isfinite(close) or close <= 0:
                 raise ContractError(f"missing decision close for surviving holding {instrument}")
             opening_value += quantity * close
@@ -480,26 +493,34 @@ class PaperPortfolioStateBuilder:
                 or not math.isfinite(average_cost) or average_cost < 0
             ):
                 raise ContractError("input holdings contain invalid quantities")
-            if (
-                previous_state_frame is not None
-                and previous_state_manifest is not None
-                and int(previous_state_manifest["row_count"]) > 0
-            ):
-                expected = previous_state_frame[
-                    ["instrument", "quantity", "average_cost", "buy_locked_quantity"]
-                ].sort_values("instrument").to_dict(orient="records")
-                actual = [
-                    {
-                        "instrument": str(row["instrument"]),
-                        "quantity": int(row["quantity"]),
-                        "average_cost": float(row["average_cost"]),
-                        "buy_locked_quantity": int(row["buy_locked_quantity"]),
-                    }
-                    for row in sorted(holdings.values(), key=lambda row: str(row["instrument"]))
-                    if int(row["quantity"]) > 0
-                ]
-                if actual != expected:
-                    raise ContractError("input holdings do not match previous state payload")
+        # cr.md 8.70: the lineage check compares *all* holdings, so it has to run
+        # before the T+1 unlock below mutates any of them.  It used to sit inside
+        # the validation loop, where each iteration's unlock had already zeroed the
+        # buy lock of every earlier instrument -- so the comparison saw a partially
+        # unlocked book and failed on the first name whose lock was still set.  A
+        # single-instrument fixture never had an earlier instrument to zero, which
+        # is why this only surfaced on a 20-name full-A run.
+        if (
+            previous_state_frame is not None
+            and previous_state_manifest is not None
+            and int(previous_state_manifest["row_count"]) > 0
+        ):
+            expected = previous_state_frame[
+                ["instrument", "quantity", "average_cost", "buy_locked_quantity"]
+            ].sort_values("instrument").to_dict(orient="records")
+            actual = [
+                {
+                    "instrument": str(row["instrument"]),
+                    "quantity": int(row["quantity"]),
+                    "average_cost": float(row["average_cost"]),
+                    "buy_locked_quantity": int(row["buy_locked_quantity"]),
+                }
+                for row in sorted(holdings.values(), key=lambda row: str(row["instrument"]))
+                if int(row["quantity"]) > 0
+            ]
+            if actual != expected:
+                raise ContractError("input holdings do not match previous state payload")
+        for holding in holdings.values():
             if not same_session_prior_state:
                 holding["buy_locked_quantity"] = 0
         for event in result_frame.to_dict(orient="records"):
@@ -537,11 +558,40 @@ class PaperPortfolioStateBuilder:
                 raise ContractError(f"execution sells more than held quantity for {instrument}")
         return {key: value for key, value in holdings.items() if int(value["quantity"]) > 0}
 
+    @staticmethod
+    def _carry_forward_prices(
+        previous_state_frame: pd.DataFrame | None,
+    ) -> dict[str, float]:
+        """The last close each instrument was valued at, from the prior state.
+
+        `market_value / quantity` is the price the governed previous state recorded,
+        so a suspended name can be valued at what it last actually traded for rather
+        than aborting the run.  Returns an empty mapping when there is no prior
+        state (a first run has nothing to carry), which leaves the missing-close
+        guard in `_state_frame` fully in force.
+        """
+        if previous_state_frame is None or previous_state_frame.empty:
+            return {}
+        prices: dict[str, float] = {}
+        for row in previous_state_frame.itertuples(index=False):
+            quantity = int(row.quantity)
+            if quantity <= 0:
+                continue
+            market_value = float(row.market_value)
+            if not math.isfinite(market_value) or market_value <= 0:
+                continue
+            price = market_value / quantity
+            if math.isfinite(price) and price > 0:
+                prices[str(row.instrument)] = price
+        return prices
+
+
     def _state_frame(
         self,
         cash: float,
         holdings: Mapping[str, Mapping[str, Any]],
         execution_market: Mapping[str, Mapping[str, Any]],
+        carry_forward_prices: Mapping[str, float] | None = None,
     ) -> pd.DataFrame:
         rows = []
         for instrument in sorted(holdings):
@@ -549,7 +599,19 @@ class PaperPortfolioStateBuilder:
             quantity = int(holding["quantity"])
             close = float((execution_market.get(instrument) or {}).get("close") or 0.0)
             if not math.isfinite(close) or close <= 0:
-                raise ContractError(f"missing execution close for surviving holding {instrument}")
+                # cr.md 8.67: a per-session panel carries only the rows the vendor
+                # returned, so a suspended name has no row and no close -- the same
+                # shape the backtest engine used to refuse (cr.md 8.64).  The
+                # suspension family already records the absence, so the position is
+                # known to be held-but-untradeable rather than unpriced; value it at
+                # the last close the governed previous state recorded, which keeps
+                # the equity series continuous instead of aborting the run.
+                carried = (carry_forward_prices or {}).get(instrument)
+                if carried is None or not math.isfinite(carried) or carried <= 0:
+                    raise ContractError(
+                        f"missing execution close for surviving holding {instrument}"
+                    )
+                close = float(carried)
             buy_locked = int(holding["buy_locked_quantity"])
             if buy_locked < 0 or buy_locked > quantity:
                 raise ContractError(f"invalid buy-locked quantity for {instrument}")

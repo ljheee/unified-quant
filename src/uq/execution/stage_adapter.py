@@ -23,7 +23,11 @@ from ..contracts.model_layer import (
 from ..errors import ContractError
 from ..risk.contracts import risk_contract_identities
 from ..risk.publication import ConfigPublicationBinding
-from ..research_chain.adapters import build_stage_state
+from ..research_chain.adapters import (
+    _generation_from_refusal,
+    _is_already_published,
+    build_stage_state,
+)
 from .engine import PaperExecutionEngine
 from .planner import PaperOrderPlanner
 from .state import PaperPortfolioStateBuilder
@@ -35,6 +39,37 @@ def _binding(value: Mapping[str, Any]) -> dict[str, Any]:
         "generation_id": value["generation_id"],
         "manifest_digest_sha256": value["manifest_digest_sha256"],
     }
+
+
+def _publish_once(
+    publish: Callable[[], Any], *, expected_generation: str | None = None
+) -> str | None:
+    """Publish, tolerating the immutable writer's overwrite guard.
+
+    cr.md 8.60: the writer stays immutable and refuses an overwrite; idempotence
+    belongs to the caller.  cr.md 8.65 applied that to the research stages, and
+    cr.md 8.68 extends it here: a paper stage that published before it failed is
+    retried against stores that already hold the same content-derived artifact.
+
+    ``expected_generation`` is for stores whose identity the caller already knows
+    (it derives it before publishing).  When it is ``None`` the store derives the
+    identity *inside* publish, so the caller cannot compare -- the manifest's
+    placeholder is all zeros -- and the caller must verify the readback instead.
+    Passing a placeholder would silently reject every recovery, which is exactly
+    what happened to the order-plan store before this argument became optional.
+    """
+    try:
+        publish()
+    except ContractError as exc:
+        if not _is_already_published(exc):
+            raise
+        recovered = _generation_from_refusal(exc)
+        if expected_generation is not None and recovered != expected_generation:
+            # Recovering somebody else's artifact would attach this run's lineage
+            # to another run's bytes.
+            raise
+        return recovered
+    return None
 
 
 def _restate_family(binding: Mapping[str, Any], family: str) -> dict[str, Any]:
@@ -112,10 +147,12 @@ class PaperExecutionStageAdapter:
         decision_prices: Mapping[str, Mapping[str, float]],
         *,
         opening_cash: float,
+        carry_forward_prices: Mapping[str, float] | None = None,
     ) -> tuple[pd.DataFrame, list[int]]:
         return self.planner.plan(
             config, target_weights_frame, input_holdings, decision_prices,
             opening_cash=opening_cash,
+            carry_forward_prices=carry_forward_prices,
         )
 
     def execute_date(
@@ -131,6 +168,7 @@ class PaperExecutionStageAdapter:
         opening_cash: float,
         suspended_instruments: set[str] | None = None,
         corporate_action_excluded: set[str] | None = None,
+        carry_forward_prices: Mapping[str, float] | None = None,
     ) -> tuple[pd.DataFrame, Mapping[str, Any]]:
         return self.engine.execute(
             config, plan_manifest, plan_frame, target_weights_frame,
@@ -138,6 +176,7 @@ class PaperExecutionStageAdapter:
             opening_cash=opening_cash,
             suspended_instruments=suspended_instruments or set(),
             corporate_action_excluded=corporate_action_excluded or set(),
+            carry_forward_prices=carry_forward_prices,
         )
 
     def run(
@@ -190,6 +229,14 @@ class PaperExecutionStageAdapter:
                 raise ContractError(f"portfolio stage has no target weights for {decision_date}")
 
             state_mode = "initial" if position == 0 else "continuation"
+            # A suspended name has no row on either the decision or the execution
+            # session's panel, so the planner (sizing an exit) and the engine
+            # (valuing the closing book) both need the price the previous state
+            # recorded.  Empty on the first date, which is correct: there is no
+            # prior state to carry and both paths stay fail-closed.
+            carry_forward_prices = PaperPortfolioStateBuilder._carry_forward_prices(
+                previous_state_frame
+            )
             if state_mode == "initial":
                 if previous_state_manifest is not None:
                     raise ContractError("paper stage initial date already consumed a prior state")
@@ -271,18 +318,23 @@ class PaperExecutionStageAdapter:
             # itself governed evidence and must already be durable in the risk
             # decision store when that abort fires.
             if self.risk_decision_store is not None:
-                self.risk_decision_store.publish(risk_decision, {
-                    "action": risk_decision["action"],
-                    "constraints": risk_decision["constraints"],
-                    "decision_digest": risk_decision["decision_digest"],
-                    "findings": risk_decision["findings"],
-                })
-            self.config_store.publish(
-                config,
-                quality_decision=quality_decisions["execution_config"],
-                risk_decision=risk_decision,
-                config_publication=ConfigPublicationBinding(
-                    decision=risk_decision, config_generation_id=config["generation_id"]
+                _publish_once(
+                    lambda: self.risk_decision_store.publish(risk_decision, {
+                        "action": risk_decision["action"],
+                        "constraints": risk_decision["constraints"],
+                        "decision_digest": risk_decision["decision_digest"],
+                        "findings": risk_decision["findings"],
+                    }),
+                    expected_generation=risk_decision["generation_id"],
+                )
+            _publish_once(
+                lambda: self.config_store.publish(
+                    config,
+                    quality_decision=quality_decisions["execution_config"],
+                    risk_decision=risk_decision,
+                    config_publication=ConfigPublicationBinding(
+                        decision=risk_decision, config_generation_id=config["generation_id"]
+                    ),
                 ),
             )
             published_config = self.config_store.read(config["generation_id"])
@@ -303,25 +355,43 @@ class PaperExecutionStageAdapter:
                 None if state_mode == "initial" else input_holdings,
                 decision_prices,
                 opening_cash=opening_cash,
+                # A suspended holding has no row on the session's panel, so the
+                # planner needs the previous state's price to size its exit
+                # (cr.md 8.71).
+                carry_forward_prices=carry_forward_prices,
             )
             plan_manifest = _plan_manifest(config=published_config, frame=plan_frame, residual=residual)
-            self.plan_store.publish(
-                plan_manifest, plan_frame,
-                quality_decision=quality_decisions["order_plan"],
-                risk_decision=risk_decision,
+            # The order-plan store derives its identity inside publish, so the
+            # manifest here still carries the all-zero placeholder: pass no
+            # expected generation and let the readback below be the check.
+            recovered_plan_generation = _publish_once(
+                lambda: self.plan_store.publish(
+                    plan_manifest, plan_frame,
+                    quality_decision=quality_decisions["order_plan"],
+                    risk_decision=risk_decision,
+                ),
             )
+            if recovered_plan_generation is not None:
+                plan_manifest = dict(plan_manifest)
+                plan_manifest["generation_id"] = recovered_plan_generation
             plan_manifest, plan_frame = self.plan_store.read(plan_manifest["generation_id"])
 
+            # The planner sizes exits and the engine values the closing book
+            # against the session's panel; a suspended name has no row there, so
+            # both need the prices the previous state recorded (cr.md 8.67, 8.71).
             result_frame, result_manifest = self.execute_date(
                 published_config, plan_manifest, plan_frame, target_frame, input_holdings,
                 execution_market, decision_prices,
                 opening_cash=opening_cash,
                 suspended_instruments=suspended,
                 corporate_action_excluded=corporate_excluded,
+                carry_forward_prices=carry_forward_prices,
             )
-            self.result_store.publish(
-                result_manifest, result_frame,
-                quality_decision=quality_decisions["execution_result"],
+            _publish_once(
+                lambda: self.result_store.publish(
+                    result_manifest, result_frame,
+                    quality_decision=quality_decisions["execution_result"],
+                ),
             )
             result_manifest, result_frame = self.result_store.read(result_manifest["generation_id"])
 
@@ -340,10 +410,15 @@ class PaperExecutionStageAdapter:
                 previous_state_manifest=previous_state_manifest,
                 previous_state_frame=previous_state_frame,
             )
-            self.state_store.publish(
-                state_manifest, state_frame,
-                quality_decision=quality_decisions["paper_portfolio_state"],
+            recovered_state_generation = _publish_once(
+                lambda: self.state_store.publish(
+                    state_manifest, state_frame,
+                    quality_decision=quality_decisions["paper_portfolio_state"],
+                ),
             )
+            if recovered_state_generation is not None:
+                state_manifest = dict(state_manifest)
+                state_manifest["generation_id"] = recovered_state_generation
             state_manifest, state_frame = self.state_store.read(state_manifest["generation_id"])
 
             bindings.extend(self._bindings_for_date(

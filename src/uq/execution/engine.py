@@ -56,6 +56,7 @@ class PaperExecutionEngine:
         opening_cash: float,
         suspended_instruments: Collection[str] = (),
         corporate_action_excluded: Collection[str] = (),
+        carry_forward_prices: Mapping[str, float] | None = None,
     ) -> tuple[pd.DataFrame, dict[str, Any]]:
         self._validate_config(config)
         self._validate_target_weights(target_weights)
@@ -69,7 +70,13 @@ class PaperExecutionEngine:
             raise ContractError(f"instruments have overlapping risk exclusions: {sorted(overlap)}")
 
         holdings = self._holdings_by_instrument(input_holdings)
-        decision_nav = self._decision_nav(opening_cash, holdings, decision_prices)
+        # cr.md 8.72: the decision session's panel has no row for a suspended
+        # holding, so the decision NAV needs the same carried price the state
+        # builder recomputes with.  Without this the run died here while the state
+        # side already accepted the very same book.
+        decision_nav = self._decision_nav(
+            opening_cash, holdings, decision_prices, carry_forward_prices=carry_forward_prices
+        )
         events = self._execute_orders(
             config, plan_frame, execution_market, suspended, corporate_excluded, opening_cash
         )
@@ -83,11 +90,21 @@ class PaperExecutionEngine:
         closing_cash = opening_cash + sum(float(row["net_amount"]) for row in events)
         if closing_cash < -1e-9:
             raise ContractError("execution creates negative closing cash")
+        # cr.md 8.67: a per-session panel carries no row for a suspended name, so
+        # the execution-basis valuation has no close for it.  The caller supplies
+        # the price the governed previous state recorded; without one this stays
+        # fail-closed.
+        # cr.md 8.72: the decision session's panel has no row for a suspended
+        # holding either, so the opening valuation uses the same carried price the
+        # state builder will recompute with -- otherwise the reconciliation between
+        # the two fails on a number that is individually correct.
         opening_value = self._portfolio_value(
-            opening_cash, holdings, decision_prices, "decision", require_positive_price=True
+            opening_cash, holdings, decision_prices, "decision",
+            require_positive_price=True, carry_forward_prices=carry_forward_prices,
         )
         closing_value = self._portfolio_value(
-            closing_cash, closing_holdings, execution_market, "execution", require_positive_price=True
+            closing_cash, closing_holdings, execution_market, "execution",
+            require_positive_price=True, carry_forward_prices=carry_forward_prices,
         )
         frame = pd.DataFrame(events, columns=self.COLUMNS).astype(self.DTYPES)
         aggregate = self._aggregate_reconciliation(
@@ -453,8 +470,12 @@ class PaperExecutionEngine:
         opening_cash: float,
         holdings: Mapping[str, Mapping[str, Any]],
         decision_prices: Mapping[str, Mapping[str, float]],
+        carry_forward_prices: Mapping[str, float] | None = None,
     ) -> float:
-        return self._portfolio_value(opening_cash, holdings, decision_prices, "decision", require_positive_price=True)
+        return self._portfolio_value(
+            opening_cash, holdings, decision_prices, "decision",
+            require_positive_price=True, carry_forward_prices=carry_forward_prices,
+        )
 
     def _portfolio_value(
         self,
@@ -464,6 +485,7 @@ class PaperExecutionEngine:
         basis: str,
         *,
         require_positive_price: bool,
+        carry_forward_prices: Mapping[str, float] | None = None,
     ) -> float:
         value = float(cash)
         for instrument, holding in holdings.items():
@@ -473,6 +495,10 @@ class PaperExecutionEngine:
             market = prices.get(instrument)
             close, valid = self._numeric((market or {}).get("close"))
             if not valid or close <= 0:
+                carried, carried_valid = self._numeric((carry_forward_prices or {}).get(instrument))
+                if carried_valid and carried > 0:
+                    value += quantity * carried
+                    continue
                 if require_positive_price:
                     raise ContractError(f"missing {basis} close for surviving holding {instrument}")
                 value += 0.0

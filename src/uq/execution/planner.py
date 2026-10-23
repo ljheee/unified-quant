@@ -35,6 +35,7 @@ class PaperOrderPlanner:
         prices: Mapping[str, Mapping[str, float]],
         *,
         opening_cash: float,
+        carry_forward_prices: Mapping[str, float] | None = None,
     ) -> tuple[pd.DataFrame, list[int]]:
         ModelContractLoader.validate("execution_config", config)
         required = {"instrument", "weight"}
@@ -81,13 +82,33 @@ class PaperOrderPlanner:
                     holding["sellable_quantity"] = quantity
             elif int(holding["sellable_quantity"]) != quantity - buy_locked:
                 raise ContractError("initial holding sellable quantity does not reconcile")
-        instruments = sorted(set(target_weights["instrument"].map(str)) | set(by_instrument))
+        target_instruments = set(target_weights["instrument"].map(str))
+        instruments = sorted(target_instruments | set(by_instrument))
+        carried = carry_forward_prices or {}
+        # cr.md 8.71: a suspended name has no row on the session's panel, so it is
+        # absent from `prices` rather than marked non-trading.  For a *target* name
+        # that is a real failure -- there is nothing to size a purchase against --
+        # so it stays fail-closed.  For a name that is only held, the price the
+        # previous state recorded is enough to size the exit, so it is folded into a
+        # local view rather than inventing a panel row: every downstream read
+        # (`prices[instrument]["close"]`) then works unchanged, and the engine still
+        # refuses to execute the order because the execution session has no row.
+        effective_prices = dict(prices)
         for instrument in instruments:
-            if instrument not in prices:
+            if instrument in prices:
+                close = prices[instrument].get("close")
+                if close is None or not math.isfinite(float(close)) or float(close) <= 0:
+                    raise ContractError(f"invalid decision close for {instrument}")
+                continue
+            carried_close = carried.get(instrument)
+            carried_valid = (
+                carried_close is not None
+                and math.isfinite(float(carried_close))
+                and float(carried_close) > 0
+            )
+            if instrument in target_instruments or not carried_valid:
                 raise ContractError(f"missing decision close for {instrument}")
-            close = prices[instrument].get("close")
-            if close is None or not math.isfinite(float(close)) or close <= 0:
-                raise ContractError(f"invalid decision close for {instrument}")
+            effective_prices[instrument] = {"close": float(carried_close)}
         fees = config["fee_policy"]
         precision = int(fees["currency_precision"])
 
@@ -106,7 +127,7 @@ class PaperOrderPlanner:
         sequence = 1
         reject_insufficient_cash = config["quantity_policy"]["insufficient_cash_policy"] == "reject"
         for instrument in sorted(instruments):
-            market = prices[instrument]
+            market = effective_prices[instrument]
             close = float(market["close"])
             basis = config["price_policy"]["order_pricing_basis"]
             limit_price = close if basis == "decision_close_estimate" else market.get("open")
@@ -118,7 +139,7 @@ class PaperOrderPlanner:
             target_row = target_weights.loc[target_weights["instrument"] == instrument]
             target_weight = float(target_row.iloc[0]["weight"]) if not target_row.empty else 0.0
             decision_nav = float(opening_cash) + sum(
-                int(item["quantity"]) * float(prices[item["instrument"]]["close"])
+                int(item["quantity"]) * float(effective_prices[item["instrument"]]["close"])
                 for item in by_instrument.values()
             )
             target_quantity = int(math.floor(target_weight * decision_nav / close))

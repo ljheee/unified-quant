@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -196,6 +197,7 @@ def _publish_initial_state(
     tmp_path: Path,
     *,
     target: pd.DataFrame | None = None,
+    execution_market: dict | None = None,
 ) -> tuple[dict, pd.DataFrame, dict, dict, pd.DataFrame, dict]:
     root = tmp_path / "initial"
     root.mkdir()
@@ -209,7 +211,7 @@ def _publish_initial_state(
         plan_frame,
         target,
         config["initial_state"]["holdings"],
-        _execution_market(),
+        _execution_market() if execution_market is None else execution_market,
         _decision_prices(),
         opening_cash=config["initial_state"]["cash"],
     )
@@ -233,7 +235,7 @@ def _publish_initial_state(
         plan_frame=plan_frame,
         target_weights_manifest=target_manifest,
         target_weights_frame=target,
-        execution_market=_execution_market(),
+        execution_market=_execution_market() if execution_market is None else execution_market,
         decision_prices=_decision_prices(),
         input_holdings=config["initial_state"]["holdings"],
         opening_cash=config["initial_state"]["cash"],
@@ -588,3 +590,379 @@ def test_state_requires_execution_close_for_surviving_holding(tmp_path: Path) ->
             input_holdings=config["initial_state"]["holdings"],
             opening_cash=config["initial_state"]["cash"],
         )
+
+
+def test_a_suspended_holding_is_valued_at_the_previous_states_close(tmp_path: Path) -> None:
+    """cr.md 8.67: a per-session panel has no row for a suspended name.
+
+    The vendor partitions carry only the rows the vendor returned, so a genuinely
+    suspended instrument is absent rather than marked non-trading -- the same shape
+    the backtest engine used to refuse (cr.md 8.64).  A real full-A run hit this on
+    605255.XSHG: held from 09-09, last carried on 09-23, then gone from the panel
+    for the rest of the window while the suspension family correctly recorded it.
+
+    The governed previous state already recorded what the position was worth, so
+    the state builder carries that price forward instead of aborting the run.
+    """
+    config, prior_frame, previous_state_manifest, _, _, result_manifest, result = _publish_initial_state(tmp_path)
+    continuation_root = tmp_path / "continuation"
+    continuation_root.mkdir()
+    target = _target()
+    continuation_config, target_manifest = _publish_continuation_config(
+        continuation_root, previous_state_manifest, target
+    )
+    plan_manifest, plan_frame = _publish_continuation_plan(
+        continuation_root,
+        continuation_config,
+        target,
+        prior_frame.to_dict(orient="records"),
+        opening_cash=CONTINUATION_OPENING_CASH,
+    )
+    next_result, next_result_manifest = PaperExecutionEngine().execute(
+        continuation_config,
+        plan_manifest,
+        plan_frame,
+        target,
+        prior_frame.to_dict(orient="records"),
+        _execution_market(),
+        _decision_prices(),
+        opening_cash=CONTINUATION_OPENING_CASH,
+    )
+    next_result_store = ExecutionResultStore(continuation_root)
+
+    def next_result_quality(subject_generation_id: str) -> dict:
+        return _decision_for_review(
+            _unsigned("execution_result_v1", subject_generation_id),
+            "execution_result_v1", subject_generation_id,
+        )
+
+    next_partition = next_result_store.publish(
+        next_result_manifest, next_result, quality_decision=next_result_quality
+    )
+    next_generation = json.loads((next_partition / "manifest.json").read_text())["generation_id"]
+    next_result_manifest, next_result = next_result_store.read(next_generation)
+
+    # The execution session carries no row at all for the held instrument.
+    suspended_market = _execution_market()
+    del suspended_market["000001.XSHE"]
+
+    state_frame, _next_state = PaperPortfolioStateBuilder().build(
+        continuation_config,
+        result_manifest=next_result_manifest,
+        result_frame=next_result,
+        plan_manifest=plan_manifest,
+        plan_frame=plan_frame,
+        target_weights_manifest=target_manifest,
+        target_weights_frame=target,
+        execution_market=suspended_market,
+        decision_prices=_decision_prices(),
+        input_holdings=prior_frame.to_dict(orient="records"),
+        opening_cash=CONTINUATION_OPENING_CASH,
+        previous_state_manifest=previous_state_manifest,
+        previous_state_frame=prior_frame,
+    )
+    held = state_frame[state_frame["instrument"] == "000001.XSHE"]
+    assert not held.empty, "a suspended position must survive into the next state"
+    quantity = int(held["quantity"].iloc[0])
+    prior = prior_frame[prior_frame["instrument"] == "000001.XSHE"].iloc[0]
+    expected_close = float(prior["market_value"]) / float(prior["quantity"])
+    assert math.isclose(
+        float(held["market_value"].iloc[0]), quantity * expected_close, rel_tol=0.0, abs_tol=1e-6
+    ), "the position must be carried at the price the previous state recorded"
+
+
+def test_a_suspended_holding_with_no_prior_state_still_fails_closed(tmp_path: Path) -> None:
+    """The carry-forward must not become "invent a price".
+
+    A first run has no previous state, so there is nothing to carry and the
+    missing-close guard stays fully in force.
+    """
+    config, _frame, _manifest, plan_manifest, plan_frame, result_manifest, result = _publish_initial_state(tmp_path)
+    market = _execution_market()
+    del market["000001.XSHE"]
+    with pytest.raises(ContractError, match="missing execution close"):
+        PaperPortfolioStateBuilder().build(
+            config,
+            result_manifest=result_manifest,
+            result_frame=result,
+            plan_manifest=plan_manifest,
+            plan_frame=plan_frame,
+            target_weights_manifest=_target_manifest(_target(), config),
+            target_weights_frame=_target(),
+            execution_market=market,
+            decision_prices=_decision_prices(),
+            input_holdings=config["initial_state"]["holdings"],
+            opening_cash=config["initial_state"]["cash"],
+        )
+
+
+def test_a_replayed_paper_stage_recovers_the_artifacts_it_already_published() -> None:
+    """cr.md 8.68: the same caller-owns-idempotence rule, applied to paper stores.
+
+    The paper stage publishes five artifacts per decision date (risk decision,
+    execution config, order plan, execution result, next state).  A run that fails
+    after publishing one of them retries against stores that already hold the
+    same content-derived artifact; the stores keep refusing overwrites, and the
+    stage turns that refusal into a readback of the same generation.  Without this
+    a full-A run died on `risk decision partition already exists`.
+
+    Locked at the helper boundary because the five call sites all go through it:
+    a refusal naming *this* generation is recovered, and a refusal naming another
+    one is re-raised so this run's lineage cannot attach to another run's bytes.
+    """
+    from uq.execution.stage_adapter import _publish_once
+
+    generation = "a" * 64
+    calls = {"n": 0}
+
+    def publish() -> None:
+        calls["n"] += 1
+        raise ContractError(f"paper execution_result partition already exists: /x/generation={generation}")
+
+    recovered = _publish_once(publish, expected_generation=generation)
+    assert recovered == generation
+    assert calls["n"] == 1, "the refusal must be tolerated, not retried blindly"
+
+    # When the store derives the identity inside publish, the caller cannot know
+    # it beforehand -- its manifest still holds the all-zero placeholder.  Passing
+    # no expectation must still recover, and must report the id it found, or every
+    # store-derived family (config, order plan, result, state) stays broken.
+    store_derived = "c" * 64
+    recovered_derived = _publish_once(
+        lambda: (_ for _ in ()).throw(
+            ContractError(f"paper order_plan partition already exists: /x/2025-09-10/generation={store_derived}")
+        ),
+    )
+    assert recovered_derived == store_derived
+
+    # A refusal for a different generation is somebody else's artifact.
+    with pytest.raises(ContractError, match="already exists"):
+        _publish_once(
+            lambda: (_ for _ in ()).throw(
+                ContractError(f"paper state partition already exists: /x/generation={'b' * 64}")
+            ),
+            expected_generation=generation,
+        )
+
+    # Any other refusal is a real failure.
+    with pytest.raises(ContractError, match="tampered"):
+        _publish_once(
+            lambda: (_ for _ in ()).throw(ContractError("tampered execution result")),
+            expected_generation=generation,
+        )
+
+
+def test_the_engine_values_a_suspended_holding_from_the_carried_price(tmp_path: Path) -> None:
+    """cr.md 8.67: the engine's closing-book valuation is the other half.
+
+    `_state_frame` and `ExecutionEngine._portfolio_value` both refuse a surviving
+    holding with no close, and a suspended name has no row on the execution
+    session.  Fixing only the state builder still left the run dying here -- the
+    error text is identical, which is why the first diagnosis pointed at the wrong
+    file.  The carried price must reach the engine too.
+    """
+    from uq.execution.engine import PaperExecutionEngine
+
+    config, prior_frame, previous_state_manifest, _, _, result_manifest, result = _publish_initial_state(tmp_path)
+    continuation_root = tmp_path / "continuation"
+    continuation_root.mkdir()
+    target = _target()
+    continuation_config, target_manifest = _publish_continuation_config(
+        continuation_root, previous_state_manifest, target
+    )
+    plan_manifest, plan_frame = _publish_continuation_plan(
+        continuation_root,
+        continuation_config,
+        target,
+        prior_frame.to_dict(orient="records"),
+        opening_cash=CONTINUATION_OPENING_CASH,
+    )
+    suspended_market = _execution_market()
+    del suspended_market["000001.XSHE"]
+
+    carried = {"000001.XSHE": 12.345}
+    # Without the carried price the closing book cannot be valued.
+    with pytest.raises(ContractError, match="missing execution close"):
+        PaperExecutionEngine().execute(
+            continuation_config, plan_manifest, plan_frame, target,
+            prior_frame.to_dict(orient="records"), suspended_market, _decision_prices(),
+            opening_cash=CONTINUATION_OPENING_CASH,
+        )
+    # With it, the run completes and the held quantity is valued at that price.
+    _result, result_manifest = PaperExecutionEngine().execute(
+        continuation_config, plan_manifest, plan_frame, target,
+        prior_frame.to_dict(orient="records"), suspended_market, _decision_prices(),
+        opening_cash=CONTINUATION_OPENING_CASH,
+        carry_forward_prices=carried,
+    )
+    held_quantity = int(prior_frame[prior_frame["instrument"] == "000001.XSHE"]["quantity"].iloc[0])
+    assert result_manifest["closing_portfolio_value"] >= held_quantity * 12.345 - 1e-6
+
+
+def test_the_lineage_check_runs_before_the_t1_unlock() -> None:
+    """cr.md 8.70: the check compares the whole book, so it must run first.
+
+    The lineage comparison used to sit inside the per-holding validation loop,
+    below the T+1 unlock that zeroes `buy_locked_quantity`.  On the second
+    iteration every earlier instrument had already been unlocked, so the comparison
+    saw a partially unlocked book and failed on the first name whose lock was still
+    set -- `input holdings do not match previous state payload` on a name that
+    matches perfectly.  A one-instrument fixture has no earlier instrument to
+    unlock, which is why only the 20-name full-A run surfaced it.
+
+    Driven at `_closing_holdings` because that is where the ordering lives; the
+    full continuation chain adds nothing the ordering needs.
+    """
+    # Two instruments, both still carrying yesterday's buy lock.
+    holdings = [
+        {
+            "instrument": "000001.XSHE", "quantity": 100, "average_cost": 10.0,
+            "buy_locked_quantity": 100, "sellable_quantity": 0,
+        },
+        {
+            "instrument": "000002.XSHE", "quantity": 200, "average_cost": 20.0,
+            "buy_locked_quantity": 200, "sellable_quantity": 0,
+        },
+    ]
+    # The previous state is exactly the same book, so the check must pass.
+    previous = pd.DataFrame([
+        {
+            "instrument": "000001.XSHE", "quantity": 100, "average_cost": 10.0,
+            "buy_locked_quantity": 100, "sellable_quantity": 0, "market_value": 1000.0,
+        },
+        {
+            "instrument": "000002.XSHE", "quantity": 200, "average_cost": 20.0,
+            "buy_locked_quantity": 200, "sellable_quantity": 0, "market_value": 4000.0,
+        },
+    ]).astype(PaperPortfolioStateBuilder.DTYPES)
+
+    closed = PaperPortfolioStateBuilder()._closing_holdings(
+        [dict(row) for row in holdings],
+        pd.DataFrame(columns=PaperOrderPlanner.COLUMNS),
+        same_session_prior_state=False,
+        previous_state_frame=previous,
+        previous_state_manifest={"row_count": 2},
+    )
+    # The unlock still happens -- it just no longer corrupts the check.
+    assert all(int(row["buy_locked_quantity"]) == 0 for row in closed.values())
+    assert {k: int(v["quantity"]) for k, v in closed.items()} == {
+        "000001.XSHE": 100, "000002.XSHE": 200,
+    }
+
+
+
+
+def test_the_opening_valuation_uses_the_carried_price_and_still_reconciles() -> None:
+    """cr.md 8.72: the opening valuation is reconciled, so both sides must agree.
+
+    `_validate_valuation` recomputes the opening book value and compares it with
+    the execution result's `opening_portfolio_value`.  A suspended holding has no
+    row on the *decision* session's panel, so each side needs the same carried
+    price; recomputing with a different one fails the reconciliation on a number
+    that is individually fine.  With no carry at all it still fails closed.
+    """
+    from uq.execution.state import PaperPortfolioStateBuilder
+
+    carried = {"000001.XSHE": 12.5}
+    holdings = [{
+        "instrument": "000001.XSHE", "quantity": 100, "average_cost": 10.0,
+        "buy_locked_quantity": 0, "sellable_quantity": 100,
+    }]
+    # The closing half of the reconciliation reads `market_value`, so the state
+    # frame has to carry a real value for it.
+    state_frame = pd.DataFrame({
+        "instrument": ["000001.XSHE"], "quantity": [100], "average_cost": [10.0],
+        "buy_locked_quantity": [0], "sellable_quantity": [100], "market_value": [1250.0],
+    }).astype(PaperPortfolioStateBuilder.DTYPES)
+    # The result claims the opening book was valued with the carried price.
+    result_manifest = {
+        "opening_portfolio_value": 1250.0,
+        "closing_cash": 0.0,
+        "closing_portfolio_value": 1250.0,
+    }
+
+    # Agreeing prices reconcile.
+    PaperPortfolioStateBuilder()._validate_valuation(
+        result_manifest, opening_cash=0.0, input_holdings=holdings,
+        decision_prices={}, state_frame=state_frame,
+        carry_forward_prices=carried,
+    )
+
+    # A result that valued the holding differently does not reconcile.
+    with pytest.raises(ContractError, match="does not reconcile"):
+        PaperPortfolioStateBuilder()._validate_valuation(
+            {**result_manifest, "opening_portfolio_value": 999.0},
+            opening_cash=0.0, input_holdings=holdings,
+            decision_prices={}, state_frame=state_frame,
+            carry_forward_prices=carried,
+        )
+
+    # No carry and no panel row: still fail closed, no invented price.
+    with pytest.raises(ContractError, match="missing decision close"):
+        PaperPortfolioStateBuilder()._validate_valuation(
+            result_manifest, opening_cash=0.0, input_holdings=holdings,
+            decision_prices={}, state_frame=state_frame,
+        )
+
+
+def test_the_decision_nav_uses_the_carried_price(tmp_path: Path) -> None:
+    """cr.md 8.72: `_decision_nav` was the fourth place with the same gap.
+
+    The engine values the opening book three times -- decision NAV, opening
+    portfolio value, closing portfolio value -- and only two of them took the
+    carried price.  The decision NAV is computed first, so it was where the run
+    actually died, while the state side had already accepted the same book.  The
+    error text is byte-identical to the state builder's, which is why the first
+    diagnosis pointed at the wrong file.
+    """
+    from uq.execution.engine import PaperExecutionEngine
+
+    holdings = {
+        "000001.XSHE": {
+            "instrument": "000001.XSHE", "quantity": 100, "average_cost": 10.0,
+            "buy_locked_quantity": 0, "sellable_quantity": 100,
+        }
+    }
+    carried = {"000001.XSHE": 12.5}
+
+    with pytest.raises(ContractError, match="missing decision close"):
+        PaperExecutionEngine()._decision_nav(0.0, holdings, {})
+
+    nav = PaperExecutionEngine()._decision_nav(
+        0.0, holdings, {}, carry_forward_prices=carried
+    )
+    assert nav == 1250.0
+
+    # And `execute` must actually pass it: driving the helper directly proves the
+    # fallback works, not that the caller uses it.  Mutation of the call site kept
+    # the suite green until this second half was added.
+    config, prior_frame, previous_state_manifest, _, _, _, _ = _publish_initial_state(tmp_path)
+    continuation_root = tmp_path / "continuation"
+    continuation_root.mkdir()
+    target = _target()
+    continuation_config, target_manifest = _publish_continuation_config(
+        continuation_root, previous_state_manifest, target
+    )
+    plan_manifest, plan_frame = _publish_continuation_plan(
+        continuation_root,
+        continuation_config,
+        target,
+        prior_frame.to_dict(orient="records"),
+        opening_cash=CONTINUATION_OPENING_CASH,
+    )
+    suspended_market = _execution_market()
+    del suspended_market["000001.XSHE"]
+    # The decision session's panel has no row either, so the decision NAV has to
+    # come from the carry as well.
+    _result, result_manifest = PaperExecutionEngine().execute(
+        continuation_config,
+        plan_manifest,
+        plan_frame,
+        target,
+        prior_frame.to_dict(orient="records"),
+        suspended_market,
+        {},
+        opening_cash=CONTINUATION_OPENING_CASH,
+        carry_forward_prices={"000001.XSHE": 12.5},
+    )
+    assert result_manifest["opening_portfolio_value"] > 0
