@@ -193,6 +193,120 @@ def _evaluate(**overrides):
     )
 
 
+def test_a_multi_date_run_is_not_refused_for_its_prediction_lineage():
+    """cr.md 8.65 B: the definition's prediction field is a representative.
+
+    `portfolio_definition.v1` declares `prediction_set_generation_id` as a single
+    required value, while a research run publishes one prediction per decision
+    date.  The runner can only put one of them in the definition (the last, as
+    the hand-off representative), so requiring every date's weight partition to
+    name that same generation refused every multi-date run -- and no single-date
+    fixture could surface it.
+
+    The per-date lineage is still enforced, by the portfolio stage, which reads
+    each date's prediction binding and verifies its digest against the plan.
+    """
+    definition = _definition()
+    universe = _universe()
+    later_prediction = "f" * 64
+    assert later_prediction != definition["prediction_set_generation_id"]
+    weights, frame = _target_weights(definition, universe)
+    weights = dict(weights)
+    weights["prediction_set_generation_id"] = later_prediction
+    weights["generation_id"], weights["manifest_digest_sha256"] = model_manifest_identities(
+        weights, schema_name="target_weights"
+    )
+    decision = _evaluate(definition=definition, universe=universe,
+                         target_weights=(weights, frame))
+    assert decision["action"] in {"allow", "warn", "block"}
+
+
+def test_the_weights_to_definition_lineage_is_still_enforced():
+    """Dropping the prediction comparison must not loosen the real lineage.
+
+    `weights -> definition` is single-valued on both sides and is the check that
+    actually pins a partition to the portfolio it belongs to, so it stays.  This
+    is the regression guard for the cr.md 8.65 relaxation.
+    """
+    definition = _definition()
+    universe = _universe()
+    weights, frame = _target_weights(definition, universe)
+    weights = dict(weights)
+    weights["portfolio_definition_generation_id"] = "e" * 64
+    weights["generation_id"], weights["manifest_digest_sha256"] = model_manifest_identities(
+        weights, schema_name="target_weights"
+    )
+    with pytest.raises(ContractError, match="risk portfolio definition lineage mismatch"):
+        _evaluate(definition=definition, universe=universe,
+                  target_weights=(weights, frame))
+
+
+def test_an_equal_weight_portfolio_at_its_exposure_limit_is_not_blocked():
+    """cr.md 8.66: the risk layer must use the project's shared weight tolerance.
+
+    `portfolio-backtest-layer-spec.md` 6.6 fixes the absolute tolerance at 1e-8 and
+    says it is shared across the portfolio and backtest layers and must not be
+    overridden per call site.  The risk engine carried its own 1e-12, so a
+    portfolio built to exactly the limit failed its own rule: 20 names at 0.045
+    sum to 0.90000001 in binary floating point, which is inside 1e-8 of the 0.9
+    threshold and outside 1e-12.  A real full-A run was refused by the paper stage
+    for precisely this, with the portfolio builder having accepted the same frame.
+    """
+    policy = _policy()
+    policy["rules"] = [{
+        **policy["rules"][0],
+        "threshold": 0.9,
+    }]
+    review = _policy_review(policy)
+    definition = _definition()
+    universe = _universe()
+    # The weights come from the builder's own arithmetic, not a clean literal:
+    # 1/20 capped, then scaled by max_allowed/total, which is what produces the
+    # 0.045000000500000005 that sums to 0.90000001.  Writing 0.045 by hand would
+    # sum to 0.8999999999999999 -- below the threshold -- and the test would pass
+    # under any tolerance, locking nothing.
+    names = [f"I{index:02d}" for index in range(20)]
+    capped = 1.0 / len(names)
+    capped *= (1.0 - 0.10 + 1e-8) / (capped * len(names))
+    frame = pd.DataFrame({"instrument": names, "weight": [capped] * len(names)})
+    weights = {
+        "contract_version": 1,
+        "schema_version": "1.0.0",
+        "decision_date": "2026-01-05",
+        "portfolio_definition_generation_id": definition["generation_id"],
+        "prediction_set_generation_id": definition["prediction_set_generation_id"],
+        "universe_snapshot_generation_id": universe["generation_id"],
+        "instrument_count": len(names),
+        "total_stock_weight": round(float(frame["weight"].sum()), 12),
+        "cash_reserve": 0.10,
+        "weights_file": "data.parquet",
+        "weights_checksum_sha256": hashlib.sha256(b"test").hexdigest(),
+        "columns": ["instrument", "weight"],
+        "dtypes": {"instrument": "string", "weight": "float64"},
+        "row_count": len(names),
+        "key_uniqueness": "instrument",
+        "serialization_profile_id": "parquet-v1",
+        "run_id": "00000000-0000-0000-0000-000000000001",
+        "created_at": "1970-01-01T00:00:00+00:00",
+        "quality_report_checksum_sha256": "0" * 64,
+        "manifest_digest_sha256": "0" * 64,
+        "generation_id": "0" * 64,
+        "previous_target_weights_generation_id": None,
+    }
+    weights["logical_fingerprint"] = sha256_json({
+        "instruments": sorted(frame["instrument"].astype(str).tolist()),
+        "weights": [round(float(value), 12) for value in frame.sort_values("instrument")["weight"].tolist()],
+    })
+    weights["generation_id"], weights["manifest_digest_sha256"] = model_manifest_identities(
+        weights, schema_name="target_weights"
+    )
+    decision = _evaluate(policy=policy, policy_review=review, definition=definition,
+                         universe=universe, target_weights=(weights, frame))
+    assert decision["action"] != "block", (
+        f"a portfolio at its declared limit must not be blocked\n{decision['findings']}"
+    )
+
+
 def test_risk_portfolio_decision_is_deterministic():
     first = _evaluate()
     second = _evaluate()

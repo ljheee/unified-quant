@@ -22,7 +22,13 @@ from .contracts import (
 )
 from .stores import make_binding
 
-_WEIGHT_TOLERANCE = 1e-12
+# specs/layers/portfolio-backtest-layer-spec.md 6.6: the absolute tolerance is
+# 1e-8 and "this tolerance constant is shared across portfolio and backtest layers
+# and must not be overridden per call site".  A local 1e-12 made an equal-weight
+# portfolio fail its own exposure limit: 20 x 0.045 sums to 0.90000001 in binary
+# floating point, which is inside 1e-8 of the 0.9 threshold and outside 1e-12
+# (cr.md 8.66).
+_WEIGHT_TOLERANCE = 1e-8
 _CODE_FINGERPRINT = hashlib.sha256(b"uq/risk/portfolio-evaluation-v1").hexdigest()
 _RUN_ID = "00000000-0000-0000-0000-000000000001"
 _ACTION_RANK = {
@@ -158,8 +164,23 @@ def _validate_definition_binding(
         raise ContractError("risk portfolio definition identity mismatch")
     if target_weights["portfolio_definition_generation_id"] != definition["generation_id"]:
         raise ContractError("risk portfolio definition lineage mismatch")
-    if target_weights["prediction_set_generation_id"] != definition.get("prediction_set_generation_id"):
-        raise ContractError("risk prediction lineage mismatch")
+    # cr.md 8.65 B: this used to require the weight partition's prediction
+    # generation to equal the definition's.  `portfolio_definition.v1` declares
+    # `prediction_set_generation_id` as a *single* required value, but a research
+    # run publishes one prediction per decision date, so a multi-date run's
+    # definition can name only one of them (the runner names the last, as the
+    # hand-off representative -- cr.md 8.62 C).  Comparing a per-date value
+    # against a whole-run representative made every multi-date run fail here,
+    # which no single-date fixture could surface.
+    #
+    # The definition's field is therefore a representative, not a constraint, and
+    # the comparison is dropped rather than replaced with a weaker one: a missing
+    # field cannot reach here, because `target_weights.v1` requires it, and the
+    # lineage that *is* checkable per partition -- weights -> definition ->
+    # universe -- is still enforced above and below.  The prediction lineage is
+    # enforced where it is actually single-valued, by the portfolio stage, which
+    # reads each date's prediction binding and verifies its digest against the
+    # resolved plan (`adapters.py`, portfolio stage).
 
 
 def _validate_universe_binding(
