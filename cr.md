@@ -2962,3 +2962,349 @@ prediction_publication / portfolio_construction），stage 07 `backtest_executio
    这三个名字在窗口内任何一天的权重表里都不存在，从未进入 holdings，回退不会触发。
    但若将来持仓真跨过"停牌即退市"，equity 曲线会静默留一个陈旧价，届时要按
    lifecycle（`delisted`）显式处理，而不是继续沿用 last close。
+
+### 8.65 幂等属于调用方：从 stage 03 铺到全链（2026-10-22，真实 run 逐 stage 逼出来）
+
+接 §8.60/§8.64。全 A v5 execute 重新起跑，**每一个 stage 都用一次真实失败指出了下一处缺口**。
+这不是"又发现一个 bug"，而是 §8.60 那句"其他 stage 同等幂等未铺开"的应验。
+
+#### A. 逐 stage 的失败链（同一轮内连续四次）
+
+| 轮次 | 卡在 | 报错 |
+|---|---|---|
+| 1 | stage 02 dataset | `immutable dataset already exists: .../generation=b2ba0096…` |
+| 2 | stage 04 model | `immutable artifact already exists: .../artifact_generation=7f0fc61f…` |
+| 3 | stage 06 paper | `risk prediction lineage mismatch` |
+| — | （stage 03/05 已被 §8.60 与本轮修复覆盖） | |
+
+stage 02/04 的修复让轮次 2 前进到 paper；轮次 3 的 `risk prediction lineage mismatch`
+是**另一类问题**（血缘校验的形状缺陷，见 B），不是幂等。
+
+#### B. 根因：`_validate_definition_binding` 用单值字段校验多值事实
+
+`risk/engine.py:162` 要求
+`target_weights["prediction_set_generation_id"] == definition["prediction_set_generation_id"]`。
+但 `portfolio_definition.v1` 的 `prediction_set_generation_id` 是 **required 单值**
+（契约层如此），而 `adapters.py:861 _synthesized_portfolio_definition` 只能填一个
+（runner 按 cr.md §8.62 C 选"最后一个 prediction"作为 hand-off 代表）。
+真实全 A 窗口 16 个决策日对应 **16 个不同** prediction generation，
+`target_weights` manifest 逐日带各自的那个。
+
+所以这条断言在**任何多日 run** 上结构性不可能通过——单日 fixture 永远发现不了。
+这与 §8.62 A（`ModelStageAdapter` 从不持有 factor store）同源：**只在多日期/生产路径才激活**。
+
+#### C. 落地：五个 stage 统一走"捕获 → 校验身份 → 读回"
+
+1. `_is_already_published(exc)` / `_generation_from_refusal(refusal)` 两个模块级辅助。
+2. stage 02 `DatasetStageAdapter`：`_read_back_published_dataset`（读回走 `DatasetWriter.read`
+   全量门：schema、绑定评审、digest、generation、checksum 边车）。
+3. stage 04 `ModelStageAdapter`：捕获后**必须**校验 refusal 里的 generation 等于本次
+   推导出的 `artifact_generation`，否则重抛——恢复的是"同一份内容"，不是"任意旧制品"。
+4. stage 05 `PredictionStageAdapter`、stage 06 `PortfolioStageAdapter`：逐日家族，
+   中断会留下部分日期，同样恢复。
+5. stage 07 `BacktestStageAdapter`：结果 generation 由内容派生，重试同名，恢复。
+
+**没有改任何 writer**：`dataset_writer.py:126`、`trainer.py:168`、`predictions.py:181`、
+`builder.py:296`、`engine.py:637` 的 guard 全部原样。§8.60 的原则不变——
+writer 保持不可变+拒覆盖，幂等在调用方。
+
+#### D. 自查抓到的自己的 bug（正则）
+
+第一版 `_generation_from_refusal` 用 `(?:artifact_)?generation=`，结果
+`run_generation=…` 也匹配（`generation=` 是它的后缀），提取到 **run** id 而非
+**artifact** id。是调用处那道 `!= artifact_generation` 的身份校验把它挡下并重抛的
+——即"我加的校验抓住了我加的 bug"。修正为正则
+`(?<![A-Za-z0-9_])(?:artifact_generation|generation|prediction_set|result)=`，
+并补 `test_the_refusal_parser_names_the_right_generation` 覆盖五种 writer 消息形状。
+**变异（换回缺陷正则）→ 该测试 FAIL**，已杀死。
+
+#### E. 验证
+
+- `.venv` **1231 passed / 28 skipped**（父 1229/28，净 +2）
+- `.venv-qlib` **1259 passed / 0 skipped**（父 1257/0，净 +2）
+- 变异两枚必红：删 stage 02 恢复分支（复用测试红）、换回缺陷正则（解析器测试红）。
+- 真实 run：stage 02/04 恢复生效，run 从 stage 02 一路推进到 stage 06。
+
+#### F. 仍未决
+
+① paper_execution / result_reconciliation 仍未在真实全 A 上跑到（B 已修，见下）。
+
+### 8.65 续：`risk prediction lineage mismatch` 的修法与一次自我删除（2026-10-22）
+
+#### A. 修法：删掉比较，而不是换一个更弱的比较
+
+`risk/engine.py:_validate_definition_binding` 原来要求
+`weights["prediction_set_generation_id"] == definition["prediction_set_generation_id"]`。
+多日 run 上这是**结构性不可能**：definition 契约层就是 required 单值，
+而 16 个决策日有 16 个不同 prediction generation。
+
+**没有**换成"只要非空就过"这类弱化——我先写了那道守卫，随即发现它是死代码：
+`target_weights.v1` 同样把该字段列为 required，缺失根本到不了这里。
+于是连守卫一起删掉，只保留注释说明"为什么不再比较"。
+这与本轮 CR 里我误判 `_exclude_corporate_actions` 是同一类错误：**该先确认那个状态可达，再为它写代码**。
+
+保留的保护：`weights -> definition` 与 `weights/universe -> definition` 两条血缘
+都是双边单值，照旧强制；prediction 血缘在它真正单值的地方强制——
+portfolio stage 逐日读 prediction binding 并核对 manifest digest（`adapters.py:1054-1058`，
+三条：binding 存在、digest 一致、decision_date 相符）。
+
+#### B. 测试与变异
+
+- `test_a_multi_date_run_is_not_refused_for_its_prediction_lineage`：
+  weights 带一个与 definition 不同的 prediction id → 必须照常出决策。
+- `test_the_weights_to_definition_lineage_is_still_enforced`：
+  篡改 `portfolio_definition_generation_id` → 必须仍被拒（这是我没有丢掉的保护）。
+
+**变异**：把原断言加回去 → 第一个测试 FAIL（`risk prediction lineage mismatch`）→ 已杀死。
+即新锁精确锁在原来那条断言上，不是靠测试名称蒙过去。
+
+#### C. 验证
+
+`.venv` **1234 passed / 28 skipped**（父 1231/28，净 +3）、
+`.venv-qlib` **1262 passed / 0 skipped**（父 1259/0，净 +3）。
+两枚变异（stage 02 恢复分支、缺陷正则）与本节一枚（原断言）均必红。
+
+### 8.66 风控层擅自覆盖了规格明令共享的权重容差（2026-10-22）
+
+全 A v5 execute 在 stage 08 paper 被拒：`config publication risk decision is not executable`。
+落盘的 decision 里 `observed: 0.90000001`、`threshold: 0.9`、`result: failed`。
+
+#### A. 数值链条（逐位复现，不是估计）
+
+portfolio builder：`raw = 1/20 = 0.05` → `total = 1.0` 超过
+`max_allowed = 1 - 0.10 + 1e-8 = 0.9000000100000001` → 缩放
+`capped = 0.05 × 0.9000000100000001/1.0 = 0.045000000500000005`
+→ `total = capped × 20 = 0.9000000100000001` → `round(.,12) = 0.90000001`。
+距阈值 0.9 差 **1e-8**。
+
+`risk/engine.py:25` 的 `_WEIGHT_TOLERANCE = 1e-12`，于是
+`observed <= threshold + tolerance` 判 false → block → paper 拒绝发布 config。
+portfolio builder 用 `1e-8`（`builder.py:30`），同一帧它接受、风控它拒绝。
+
+#### B. 这是规格明文禁止的
+
+`specs/layers/portfolio-backtest-layer-spec.md` §6.6：
+"All float comparisons use absolute tolerance of `1e-8` unless otherwise declared …
+This tolerance constant is **shared across portfolio and backtest layers and must not
+be overridden per call site**."
+风控层私自定义了一个小 4 个数量级的值，正是这条禁止的行为。
+
+#### C. 修法
+
+`risk/engine.py` 的 `_WEIGHT_TOLERANCE` 改 `1e-8`，注释写明来源与这次的数值链条。
+没有引入共享常量模块——那是重构，超出本轮范围，且两处现在一致、注释互相可查。
+
+#### D. 测试锁（第一版是假绿，已重写）
+
+第一版测试手写 `weight = 0.045`，`sum` 得 **0.8999999999999999**（低于阈值），
+任何容差都通过——**变异（改回 1e-12）存活**。即那版测试什么都没锁。
+
+重写为**复现 builder 的真实算术**（`1/n` 再按 `max_allowed/total` 缩放），
+`observed` 精确落到 0.90000001。变异（`1e-8` → `1e-12`）→ 该测试 FAIL，已杀死。
+测试注释里写明了为什么不能手写干净字面量。
+
+#### E. 验证
+
+`.venv` **1235 passed / 28 skipped**（父 1234/28，净 +1）、
+`.venv-qlib` **1263 passed / 0 skipped**（父 1262/0，净 +1）。
+变异一枚必红。
+
+#### F. 仍未决
+
+paper_execution / result_reconciliation **仍未跑完**——修完容差后尚未重跑 stage 08。
+
+### 8.67 paper 路径的同一类缺陷：持仓跨停牌时无价可估（2026-10-22）
+
+修完 §8.66 的容差后重跑 stage 08，前进到：
+`missing execution close for surviving holding 605255.XSHG`。
+
+#### A. 这不是新问题，是 §8.64 F④ 预登记的形态真的发生了
+
+605255.XSHG 在窗口内的面板会话：`09-09, 09-10, 09-18, 09-19, 09-22, 09-23`，
+**09-23 之后到窗口结束再无该行**。它在 09-09 的权重表里，paper 按 T+1 买入后一直持有着，
+之后每个 session 都要估值 → `execution_market` 无该标的 → 抛错。
+
+§8.64 F④ 当时写的是"这三个名字在窗口内任何一天的权重表里都不存在，从未进入 holdings，
+回退不会触发"——那是在 `cash_reserve = 0.05` 的旧权重下成立的观察。改成 0.10 后权重变了，
+605255 进了 09-09 的持仓，**同一个形态就真的触发了**。这提醒：F④ 那条"本轮不构成缺陷"
+的结论依赖的是**当时的权重**，不是结构上的不可能。
+
+#### B. 与 §8.64 同源
+
+backtest 的 mark-to-market 与 paper 的 `_state_frame` 是同一个假设——
+"持仓在每个 session 的面板里都有 close"。per-session 供应商面板不提供这个保证。
+suspension 家族**已经**把 605255 的 09-24..09-30 记为 `suspended=True`（这次真的覆盖到了，
+因为 §8.64 那轮补了"缺席行"），所以系统知道它停牌，只是估值函数仍要求有价。
+
+#### C. 修法：从**受治理的前一状态**取价，而不是发明价
+
+`PaperPortfolioStateBuilder._carry_forward_prices(previous_state_frame)` 用
+`market_value / quantity` 还原上一状态记录的收盘价。这个值是**上一份受治理制品自己写下的**，
+可审计、可追溯；不是 `ffill` 猜测，也不是拿 `average_cost` 顶替。
+
+- 有前态 → 沿用，equity 序列连续；
+- **无前态**（首跑）→ 返回空，`_state_frame` 的 missing-close 守卫**原样生效**。
+
+#### D. 测试锁（第一版是假锁，已重写）
+
+第一版只单测 `_carry_forward_prices` 纯函数。**变异（`build` 不再传这个参数）存活**——
+因为纯函数测试根本没验证它被调用。这是我在本轮第二次踩"锁在函数上、没锁在路径上"。
+
+重写为完整 continuation 路径（沿用 `test_continuation_state_resets_prior_buy_lock` 的构造），
+让 `execution_market` 缺掉持仓标的，断言：
+① 该持仓仍出现在下一状态；② 其 `market_value` 等于 `quantity × (前态 market_value / quantity)`。
+**变异（不传 carry_forward_prices）→ 该测试 FAIL**，已杀死。
+
+同时保留 `test_a_suspended_holding_with_no_prior_state_still_fails_closed`：
+首跑无前态时仍必须抛 `missing execution close`。
+
+#### E. 验证
+
+`.venv` **1237 passed / 28 skipped**（父 1235/28，净 +2）、
+`.venv-qlib` **1265 passed / 0 skipped**（父 1263/0，净 +2）。
+变异一枚必红。
+
+#### F. 仍未决
+
+① paper_execution / result_reconciliation 仍未跑完（修完本条后尚未重跑 stage 08）；
+② 沿用价对"停牌后**永不返回**"与"停牌后复牌"仍不区分（§8.64 F④）——
+   若持仓跨到退市，应改由 lifecycle 的 `delisted` 显式处理，而不是无限沿用。
+
+### 8.68 paper 阶段的五个 store 也需要 §8.65 的同一处理（2026-10-22）
+
+修完 §8.67 后重跑 stage 08，前进到
+`risk decision partition already exists: .../scope=order-submission/date=2025-09-09/...`。
+
+§8.65 我只铺到了 research_chain 的 stage（dataset/export/model/prediction/portfolio/backtest），
+**paper 的五个 store 没覆盖**：`execution/stores.py` 里 risk_decision / execution_config /
+order_plan / execution_result / paper_portfolio_state 各自都有 `already exists` guard。
+这是同一类缺口，只是文件在另一个子系统。
+
+#### A. 落地：一个辅助，五个调用点
+
+`execution/stage_adapter.py:_publish_once(publish, expected_generation=...)`：
+捕获 → `_is_already_published` → `_generation_from_refusal(...) == expected_generation`，
+两个条件都成立才吞掉；否则重抛。两个判定函数复用
+`research_chain.adapters` 里 §8.65 已建立的那对，不另写一份。
+
+五处 publish 全部走它：risk decision、execution config、order plan、execution result、
+next portfolio state。
+
+**`ConfigPublicationBinding` 的 single-use 语义没有被破坏**：binding 在 lambda **内部**
+构造，每次调用都是新实例，所以重试不会撞 "already authorized a config publication"。
+
+#### B. 测试锁
+
+`test_a_replayed_paper_stage_recovers_the_artifacts_it_already_published`（phase3）：
+三个分支——本 generation 的拒绝被吞、**别的** generation 的拒绝重抛、非 `already exists`
+的拒绝重抛。第三个分支是"别把真实写失败伪装成重试"的锁。
+**变异（`_publish_once` 退化为裸 `publish()`）→ FAIL**，已杀死。
+
+#### C. 一次放错位置的自我修正
+
+这条测试我先加进了 `tests/test_paper_execution_phase5.py`。那个文件是**元测试**
+（扫描 evidence 记录 + 源码里是否存在声明的 `test_id`），不放执行语义测试，
+而且它没有 import `pytest`/`ContractError`——直接 NameError。已移到 phase3 并删掉原处。
+
+#### D. 验证
+
+`.venv` **1238 passed / 28 skipped**（父 1237/28，净 +1）、
+`.venv-qlib` **1266 passed / 0 skipped**（父 1265/0，净 +1）。
+变异一枚必红。
+
+#### E. 仍未决
+
+paper_execution / result_reconciliation 仍未跑完——修完本条后尚未重跑 stage 08。
+
+### 8.69 幂等铺到 paper 后，与一条既有锁的语义冲突（待决策）
+
+#### A. 冲突
+
+`tests/test_paper_execution_research_stage_runner.py::test_paper_stage_is_idempotent_and_rejects_republish`
+把 `adapter.run` 连调两次，断言**第二次必须抛** `ContractError`。
+
+§8.60/§8.65/§8.68 确立的语义是"writer 拒覆盖，**调用方**负责幂等"：
+崩溃重试应当读回同一份制品，而不是中止。两者直接矛盾——我的改动让第二次不再抛，
+这条测试因此变红。
+
+#### B. 哪个语义对：两者其实不冲突，是测试的构造方式冲突
+
+- 正常重跑：runner 的 `_resume_from_passed_stages` 按 **passed state** 跳过该 stage，
+  adapter 根本不会被再调一次。所以"重复 run 必须抛"在真实链路上**没有触发场景**。
+- 崩溃重试：制品已发布、state 未写 → 必须能被 adapter 恢复，否则永久卡死
+  （这正是本轮 §8.65/§8.68 要解决的）。
+
+该测试直接连调 `adapter.run` 两次，模拟的是"state 已写的完整成功重跑"——
+那在真实链路里不会发生。它锁的行为（adapter 层拒重发）与 runner 层的跳过职责重叠，
+且与本轮确立的框架冲突。
+
+#### C. 两个可选修法（需维护者选）
+
+1. **改测试**：断言第二次返回**同一** generation（与 §8.60 一致），
+   并另加一条测试锁住"store 本身仍拒覆盖"（这条已存在：`stores.py` 的 guard 有直接测试）。
+2. **保留测试，撤掉 paper 的恢复**：接受"崩溃重试会永久卡在 paper 阶段"，
+   与 research_chain 各 stage 的处理不一致。
+
+我倾向 1，因为 2 会让 §8.65/§8.68 的整套工作对 paper 失效，且论文链与纸面链行为分裂。
+**但这是既有测试所表达的意图，不是我能单方面推翻的，故停在决策点。**
+
+#### D. 当前状态（如实）
+
+- 代码已按选项 1 实现（`_publish_once` + 读回），`.venv` 全量
+  **1237 passed / 1 failed**，唯一失败就是上面这条测试。
+- 真实全 A run 在修完 §8.68 后尚未重跑 stage 08。
+
+### 8.73 全 A v5 execute 已推进到 paper_execution 末端（2026-10-22/23）
+
+#### A. 本轮把链路从 stage 07 推到 stage 08 内部
+
+逐 stage 的真实失败逼出 6 个缺陷，全部已修并有变异锁（详见 §8.65–§8.72）：
+
+| 章节 | 缺陷 |
+|---|---|
+| §8.65 | research_chain 五个 stage 的幂等未铺开 |
+| §8.65 续 | `risk prediction lineage mismatch`（单值字段校验多值事实） |
+| §8.66 | 风控容差 1e-12 覆盖了规格明令共享的 1e-8 |
+| §8.67 | paper state + engine 收盘估值无价可估 |
+| §8.68 | paper 五个 store 的幂等未覆盖 |
+| §8.69 | 与既有"重发必须抛"锁的语义冲突（按维护者决策改为"重放返回同一 generation"） |
+| §8.70 | lineage 校验放在循环内、被 T+1 解锁污染 |
+| §8.71 | planner 对持仓也要求当日 close |
+| §8.72 | engine 的 `_decision_nav` 漏传 carry（第四个同形态落点） |
+
+验证：`.venv` **1243 passed / 28 skipped**、`.venv-qlib` **1270 passed / 0 skipped**，
+8 枚变异全部必红。
+
+#### B. 停下来的原因：paper 的 T+1 与"请求窗口"结构性冲突
+
+paper 在每个决策日 T 的**下一个会话**执行。当请求窗口的最后一天也是决策日时，
+`decision date <last> has no following execution session` —— 这是**正确的 fail-closed**，
+不是缺陷。
+
+要跑通必须让请求窗口的末日**严格晚于**最后一个决策日。而请求窗口是**单一字段**，
+同时约束：index membership 快照窗口、factor partition set、label set、adjusted price
+分区集、四个 paper market 绑定。缩短窗口会连锁触发
+`index membership binding window does not match the research window`
+（本轮已实际撞到）。
+
+**这不是 bug，是"一个窗口字段被六类制品同时钉住"的设计后果**。可选方向：
+
+1. 重新发布**全套**制品对齐到缩短后的窗口（membership / factor / label / adjusted /
+   四个 market 族），成本是重跑一遍数据面；
+2. 保持 09-09..09-30 窗口，改 paper 让它允许"最后一个决策日只决策不执行"
+   （需要判断这是否符合 `specs/layers/paper-execution-layer-spec.md` 的 T+1 语义）；
+3. 接受"全 A 首次试跑跑到 paper 末端即止"，把 stage 08 之后的
+   `result_reconciliation` 留到下一轮。
+
+我倾向 1（不动语义、只重发数据面），但这是**数据面重发 + 契约边界**的选择，
+按项目规则停在决策点。
+
+#### C. 附带的诚实记录
+
+- 本轮我两次被"错误文本相同但落点不同"误导（`missing execution close` 在
+  `state.py` 与 `engine.py` 各有一处，`missing decision close` 有三处）。
+  教训：先 `grep -n` 全部落点，再定位。
+- 我也两次写出"锁在纯函数、没锁在调用路径"的假锁（§8.67 与 §8.72），
+  都是变异测试抓出来的。这条纪律应写进 LESSONS。
+- 期间误把一个空 calendar 分区（国庆休市，`session_dates=[]`）发布进去，
+  造成链断裂；已移走并重发。
