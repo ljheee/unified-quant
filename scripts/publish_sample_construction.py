@@ -15,6 +15,7 @@ Usage:
       --factor-root data/bars-csiall-store \
       --label-root data/bars-csiall-store \
       --universe-root data/bars-csiall-store \
+      --sample-construction-root data/bars-csiall-store/governed \
       --membership-root data/csi-all-store \
       --market-dataset-root data/market-datasets-0930 \
       --factor-partition-set evidence/.../factor-partition-set.json \
@@ -92,6 +93,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--factor-root", type=Path, required=True)
     parser.add_argument("--label-root", type=Path, required=True)
     parser.add_argument("--universe-root", type=Path, required=True)
+    parser.add_argument(
+        "--sample-construction-root",
+        type=Path,
+        required=True,
+        help=(
+            "governed store that holds sample_construction/. This is NOT the factor "
+            "root: the research chain builds `SampleConstructionStore` under "
+            "`<data-root>/governed`, so publishing beside the factor partitions would "
+            "write an artifact the v6 dataset stage can never resolve."
+        ),
+    )
     parser.add_argument("--membership-root", type=Path, required=True)
     parser.add_argument("--market-dataset-root", type=Path, required=True)
     parser.add_argument("--factor-partition-set", type=Path, required=True)
@@ -225,12 +237,12 @@ def main(argv: list[str] | None = None) -> int:
     except ContractError as exc:
         return _refuse(str(exc))
     try:
-        published = SampleConstructionStore(args.factor_root).publish(
+        published = SampleConstructionStore(args.sample_construction_root).publish(
             manifest, sample_frame, quality_decision=decision
         )
     except ContractError as exc:
         if "already published" in str(exc):
-            published = SampleConstructionStore(args.factor_root).read_manifest(
+            published = SampleConstructionStore(args.sample_construction_root).read_manifest(
                 manifest["generation_id"]
             )
         else:
@@ -264,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
             "factor_root": str(args.factor_root),
             "label_root": str(args.label_root),
             "universe_root": str(args.universe_root),
+            "sample_construction_root": str(args.sample_construction_root),
             "membership_root": str(args.membership_root),
             "tracked": False,
         },

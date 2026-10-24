@@ -1,0 +1,20 @@
+{
+  "already_published": [],
+  "failed": [],
+  "limitation": "limitation: monthly approximation, not strict daily PIT; intra-month index adjustments cannot be distinguished because the source publishes no announcement or effective date",
+  "pit_precision": "monthly_approximation",
+  "published": [
+    {
+      "generation_id": "46edd3681419bea8c2ba7ddc6468af090d47e9b50d1174b2269a3a2373023cb0",
+      "instrument_count": 5068,
+      "members_checksum_sha256": "c1c605e727ba7df75595a3ac3f0cea8d2496859f0c81176f47cf385d2525b077",
+      "open_ended": false,
+      "valid_from": "2025-09-08",
+      "valid_to": "2025-10-15"
+    }
+  ],
+  "snapshots_available": 21,
+  "snapshots_selected": 1,
+  "status": "published",
+  "universe_id": "csi-all"
+}

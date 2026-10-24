@@ -1,0 +1,48 @@
+{
+ "quality_decisions": {
+  "sample_construction": {
+   "binding_type": "sample_construction_v1",
+   "checks": [
+    {
+     "name": "key_reconciliation",
+     "threshold": 0,
+     "observed": 0,
+     "level": "error",
+     "result": "passed"
+    },
+    {
+     "name": "label_join_reconciliation",
+     "threshold": 0,
+     "observed": 0,
+     "level": "error",
+     "result": "passed"
+    },
+    {
+     "name": "row_selection_reconciliation",
+     "threshold": 0,
+     "observed": 0,
+     "level": "error",
+     "result": "passed"
+    },
+    {
+     "name": "output_readback",
+     "threshold": 0,
+     "observed": 0,
+     "level": "error",
+     "result": "passed"
+    }
+   ],
+   "errors": [],
+   "key_id": "model-quality-reviewer-v1-2026-09",
+   "policy": "pit_label_join_v1",
+   "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+   "reviewer": "external-model-quality-reviewer-v1",
+   "status": "passed",
+   "subject_generation_id": "f5de2912718d1ebbc7c36a38adedca647a71b95ff7b37ad9ae33a5a3af8feb1c",
+   "subject_content_sha256": "f5de2912718d1ebbc7c36a38adedca647a71b95ff7b37ad9ae33a5a3af8feb1c",
+   "warnings": [],
+   "report_version": 2,
+   "review_signature_sha256": "eedfee0426daaa748f9f07952e24d03da884cf69f5e194b3e1137e29684cc8d1bd823269700fc25f19f93c34f2195ee29358a654b2669ce9cbb33cd8e0b5d304"
+  }
+ }
+}

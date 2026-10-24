@@ -1,0 +1,48 @@
+{
+  "record_version": 1,
+  "kind": "sample_construction_publication",
+  "window": {
+    "start": "2025-09-10",
+    "end": "2025-09-30"
+  },
+  "sample_name": "full-a-2025-09",
+  "semantic_version": "1.0.0",
+  "missing_policy": "drop_unlabeled_rows",
+  "rows_before_selection": 75910,
+  "rows_after_selection": 50354,
+  "instruments": 5050,
+  "dropped_rows": {
+    "rows": 337,
+    "instruments_fully_dropped": 9,
+    "per_feature": {
+      "close_location_1d": 67,
+      "amount_20d": 294,
+      "volume_ratio_20d": 294
+    }
+  },
+  "dropped_labels": {
+    "rows": 25219,
+    "instruments": 5052,
+    "null_labels": 25219,
+    "absent_keys": 0
+  },
+  "generation_id": "f5de2912718d1ebbc7c36a38adedca647a71b95ff7b37ad9ae33a5a3af8feb1c",
+  "manifest_digest_sha256": "1911402a0ee9422379f130810341467383b62cba145da3e1e1ce5353063375d1",
+  "binding": {
+    "family": "sample_construction",
+    "generation_id": "f5de2912718d1ebbc7c36a38adedca647a71b95ff7b37ad9ae33a5a3af8feb1c",
+    "manifest_digest_sha256": "1911402a0ee9422379f130810341467383b62cba145da3e1e1ce5353063375d1"
+  },
+  "review": {
+    "source": "evidence/csi-all-pilot/2026-10-24-full-a/sample-decisions.json",
+    "status": "passed",
+    "signed_by_script": false
+  },
+  "stores": {
+    "factor_root": "data/factors-csiall-store",
+    "label_root": "data/labels-csiall-store",
+    "universe_root": "data/bars-csiall-store",
+    "membership_root": "data/csi-all-store",
+    "tracked": false
+  }
+}

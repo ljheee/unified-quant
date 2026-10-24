@@ -1,0 +1,296 @@
+{
+ "adjusted_price_binding": {
+  "generation_id": "2c47229a3b806c288f77797a62a0e70989b989702155aac96e18b14d1cededcd",
+  "data_checksum_sha256": "5a572c8a788eedd0da91b093fed99a3acea9cf3427d0ee4b09d2c27d680b782d"
+ },
+ "backtest_config_binding": {
+  "family": "backtest_config",
+  "generation_id": "1d4265f9421fa193a75869605a029438eb3d8f928b96aa358041ef892d460d44",
+  "manifest_digest_sha256": "e555f25fb0198cfb853f8107f1be51e708f7fa6a0584fe791011a3cd6889cb42"
+ },
+ "contract_version": 6,
+ "created_at": "2026-01-30T07:00:00+00:00",
+ "dataset_policy_template": {
+  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "contract_version": 1,
+  "dataset_name": "research_baseline",
+  "missing_policy": "drop_unlabeled_rows",
+  "semantic_version": "1.0.0",
+  "split_policy": {
+   "purge_trading_days": 5,
+   "embargo_trading_days": 2,
+   "splits": [
+    {
+     "name": "train",
+     "start_date": "2025-09-10",
+     "end_date": "2025-09-10"
+    },
+    {
+     "name": "validation",
+     "start_date": "2025-09-22",
+     "end_date": "2025-09-23"
+    }
+   ]
+  },
+  "status": "reviewed",
+  "template_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "template_manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "template_version": "1.0.0"
+ },
+ "decision_timezone": "Asia/Shanghai",
+ "environment": {
+  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "environment_lock_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "seed": 7,
+  "serialization_profile_id": "uq-parquet-v1",
+  "thread_count": 1
+ },
+ "execution_mode": "full_research_run",
+ "factor_binding": {
+  "family": "factor_partition",
+  "generation_id": "e6baa37dc1d3447cce2c8aa49ce19a0f05c64fbcf1943e331ccdc3bc18ac38f5",
+  "manifest_digest_sha256": "f28d4d620736052b4e9b93cf03a7c2ba318b22657e79effe709c65354b3fa63d"
+ },
+ "feature_preprocessing_binding": {
+  "family": "feature_preprocessing",
+  "generation_id": "ca7633fc13ecafb9176fd03f02d26d4c832faf3dd296c90f50ab559ee45e24f5",
+  "manifest_digest_sha256": "aabf6429e4dac5a0ba00b8a58fe16cb96785b20d8ddffbd2c28fd6dcdb0f5131"
+ },
+ "label_binding": {
+  "family": "label_set",
+  "generation_id": "291de4e061023f3ddc92394da2c00fe69608ec6210e54358b67490b3add99b3e",
+  "manifest_digest_sha256": "33fa8212e6a8b3f8cfe956589224dd11ff62ac7a5bf6747466aa9eb4d6722cb0"
+ },
+ "manifest_digest_sha256": "8958a95bd25784056b87fa807728f941113cad16794f27954bb4c278f8794891",
+ "model_definition_template": {
+  "algorithm": "qlib_linear",
+  "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "compatible_dataset_versions": [
+   "1.0.0"
+  ],
+  "contract_version": 1,
+  "hyperparameters": {
+   "alpha": 0.5
+  },
+  "metrics": [
+   {
+    "direction": "maximize",
+    "name": "ic"
+   }
+  ],
+  "model_set": "baseline",
+  "model_version": "1.0.0",
+  "quality_policy": "reject_all",
+  "seed_policy": {
+   "base_seed": 7,
+   "derivation": "fixed"
+  },
+  "selection_rule": "maximum validation ic",
+  "serializer_version": "json-numpy-v1",
+  "status": "reviewed",
+  "template_generation_id": "1ebc548c2702a1cf941a4d5673ed582e7d94a5c2be6fd76e4d4cebec17c9233d",
+  "template_manifest_digest_sha256": "0231f1c3fc612e38eeb9eeaede55e70ad34bfafadcf168dfa973277f5380484c",
+  "template_version": "1.0.0"
+ },
+ "portfolio_definition_template": {
+  "constraints": {
+   "cash_reserve": 0.05,
+   "max_industry_weight": null,
+   "max_single_weight": 0.1,
+   "max_turnover": null
+  },
+  "contract_version": 1,
+  "industry_source_binding": null,
+  "portfolio_name": "top20",
+  "rebalance_schedule": "daily",
+  "scheme_parameters": {
+   "n": 20
+  },
+  "score_policy": {
+   "direction": "descending",
+   "nan_policy": "exclude",
+   "tie_policy": "first_by_instrument_id"
+  },
+  "status": "reviewed",
+  "template_generation_id": "6d72056d696c3d1c51c6303a65814027a046c4f5be32ea8216c6ec4b73512519",
+  "template_manifest_digest_sha256": "71c354dfa1dc8424800de5b25ee491d686e85984cb16014a86978b83a1d847fa",
+  "template_version": "1.0.0",
+  "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "weight_scheme": "top_n_equal_weight"
+ },
+ "request_content_generation_id": "4928a68bd1102bbd55c383187f7ce821d2d3cf437e8fb6c4b2b9c6cc0404d87f",
+ "research_name": "full-a-2025-09-v6",
+ "run_id": "00000000-0000-4000-8000-000000000001",
+ "run_visible_cutoff": "2025-09-30T15:00:00+08:00",
+ "schema_version": "6.0.0",
+ "stage_plan_sha256": "163f9aec63c14db929a7d1f305872bf5d93f85c8f77bb6b78971c36f4c692cb8",
+ "universe_snapshot_binding": {
+  "family": "universe_snapshot",
+  "generation_id": "46edd3681419bea8c2ba7ddc6468af090d47e9b50d1174b2269a3a2373023cb0",
+  "manifest_digest_sha256": "46edd3681419bea8c2ba7ddc6468af090d47e9b50d1174b2269a3a2373023cb0"
+ },
+ "window_end_date": "2025-09-30",
+ "window_start_date": "2025-09-10",
+ "risk_binding": {
+  "policy_binding": {
+   "family": "risk_policy_v1",
+   "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+   "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "policy_review_binding": {
+   "family": "risk_review_decision_v1",
+   "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+   "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8"
+  },
+  "state_binding": {
+   "family": "risk_state_v1",
+   "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+   "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "run_binding": {
+   "family": "risk_run_v1",
+   "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+   "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "decision_binding": {
+   "family": "risk_decision_v1",
+   "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+   "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "action": "allow",
+   "decision_scope": "portfolio_publication",
+   "decision_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "event_bindings": [
+   {
+    "family": "risk_event_v1",
+    "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+   }
+  ]
+ },
+ "policy_review": {
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "review_type": "risk_policy_activation",
+  "subject_generation_id": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+  "subject_manifest_digest_sha256": "cfd9c82fa8e34fdd350d7673093966cea54a728b827e7381a4f35f3ed625fa72",
+  "subject_content_sha256": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+  "review_status": "approved",
+  "reviewer": "repository-owner",
+  "key_id": "risk-reviewer-v1-2026-09",
+  "policy": "reject_all",
+  "reviewed_at_utc": "2026-09-06T00:00:00Z",
+  "errors": [],
+  "warnings": [],
+  "review_signature_sha256": "7c11a845148bf9ade37547e0366a76a09a9073878382f536d2c65c65e48b2cc6c3a809b2f6b2c85a3ea12fd94075918af99bbe088a958697d54ed64d542b020e",
+  "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+  "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8"
+ },
+ "stage_plan_review": {
+  "review_type": "research_stage_plan_v6_activation",
+  "subject_generation_id": "163f9aec63c14db929a7d1f305872bf5d93f85c8f77bb6b78971c36f4c692cb8",
+  "subject_manifest_digest_sha256": "163f9aec63c14db929a7d1f305872bf5d93f85c8f77bb6b78971c36f4c692cb8",
+  "review_status": "approved",
+  "reviewer": "repository-owner",
+  "key_id": "research-stage-plan-reviewer-v6-test-2026-10",
+  "review_signature_sha256": "3905efaf9a29f5cf3f100a4ea96eee88eafeb43d41b504cada88ae6cea661946196c92a8a837a419cab88cb581c2f3d2f1136531736891e98ce4fede784d4704"
+ },
+ "paper_execution_template": {
+  "template_version": "2.0.0",
+  "status": "reviewed",
+  "mode": "paper",
+  "market": "cn_a",
+  "state_mode_policy": "initial_then_continuation",
+  "lot_size": 100,
+  "quantity_policy": {
+   "board_lot": 100,
+   "minimum_order_quantity": 100,
+   "partial_fills": false,
+   "sell_before_buy": true,
+   "enforce_t1": true,
+   "minimum_holding_rule": "preserve_one_lot",
+   "insufficient_cash_policy": "round_down_to_lot"
+  },
+  "fee_policy": {
+   "buy_commission_rate": 0.0003,
+   "sell_commission_rate": 0.0003,
+   "sell_stamp_tax_rate": 0.001,
+   "transfer_fee_rate": 1e-05,
+   "minimum_commission": 5.0,
+   "currency_precision": 2
+  },
+  "price_policy": {
+   "order_pricing_basis": "decision_close_estimate",
+   "limit_tolerance_absolute": 0.01,
+   "limit_tolerance_relative": 0.001,
+   "execution_window": "open"
+  },
+  "initial_state": {
+   "cash": 1000000.0,
+   "holdings": [],
+   "valuation_price_basis": "decision_close_estimate"
+  },
+  "market_data_binding": {
+   "family": "bars_daily_v2",
+   "window_start": "2025-09-10",
+   "window_end": "2025-09-30",
+   "set_digest_sha256": "8843e9f25cd7cdb6f19278510b147ad83caf9491d3738d31ea9e10351c635ae2",
+   "member_count": 15
+  },
+  "calendar_binding": {
+   "family": "trading_calendar_snapshot_v1",
+   "window_start": "2025-09-10",
+   "window_end": "2025-09-30",
+   "set_digest_sha256": "4e44d1bc85754188f63955e0d31723fd9e3daaa21722d5a450e5b49708b16a0a",
+   "member_count": 1
+  },
+  "suspension_binding": {
+   "family": "suspension_snapshot_v1",
+   "window_start": "2025-09-10",
+   "window_end": "2025-09-30",
+   "set_digest_sha256": "25fe2288985e5b40cbac3763a06a86ef2d64ad571acbaf54799398d2047d7a00",
+   "member_count": 15
+  },
+  "corporate_action_binding": {
+   "family": "dividend_event_v1",
+   "window_start": "2025-09-10",
+   "window_end": "2025-09-30",
+   "set_digest_sha256": "e4b60c487c6efbb829abd25964849cbce649861c082fc06a1e1732f6b8bc6d27",
+   "member_count": 15
+  },
+  "risk_policy_binding": {
+   "family": "risk_policy_v1",
+   "generation_id": "2a9d232834b46fab1cded7a4fe2bf7b142222d49dd110c7f0e0edf2799e69751",
+   "manifest_digest_sha256": "4172bdcbac5db0d0b6965b3440cd8da4e99082ae64770c130534dc442d1cd804"
+  },
+  "data_delay_policy": "delayed_replay",
+  "data_delay_reason": "T+1 execution on open",
+  "serialization_profiles": {
+   "manifest": "json-canonical-v1",
+   "payload": "parquet-v1"
+  }
+ },
+ "index_membership_binding": {
+  "binding_type": "index_membership_set",
+  "universe_id": "csi-all",
+  "index_code": "000985.CSI",
+  "window_start": "2025-09-10",
+  "window_end": "2025-09-30",
+  "set_digest_sha256": "3d54901dc81552ca91197090d1b8bacbeb31e1ef8a0241241b0b0771a2e5afcd"
+ },
+ "factor_partition_set_binding": {
+  "binding_type": "factor_partition_set",
+  "input_dataset": "bars_daily",
+  "input_schema_version": "v2",
+  "factor_set": "basic",
+  "factor_version": "2.0.0",
+  "window_start": "2025-09-10",
+  "window_end": "2025-09-30",
+  "set_digest_sha256": "9f8f0fb850b923ebaf799df1d5f8ffb02362e310ab55a4a026330ed8bc1f4d7f"
+ },
+ "sample_construction_binding": {
+  "family": "sample_construction",
+  "generation_id": "f5de2912718d1ebbc7c36a38adedca647a71b95ff7b37ad9ae33a5a3af8feb1c",
+  "manifest_digest_sha256": "1911402a0ee9422379f130810341467383b62cba145da3e1e1ce5353063375d1"
+ }
+}

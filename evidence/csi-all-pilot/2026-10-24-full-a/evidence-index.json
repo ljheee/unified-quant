@@ -1,0 +1,29 @@
+{
+  "record_version": 1,
+  "kind": "full_a_v6_execute_smoke",
+  "status": "passed",
+  "run_at_utc": "2026-10-24T12:00:00Z",
+  "window": {"start": "2025-09-10", "end": "2025-09-30"},
+  "result_generation_id": "731eb47b8812642aade43c237c958b9a244a2110d7fa63035420ce03316f5f3a",
+  "decision_dates": 10,
+  "stages_passed": 10,
+  "notes": [
+    "All quality decisions were signed with the repository TEST key; this proves the chain runs, not a research result.",
+    "Scores are deterministic placeholders keyed on the instrument id, not model predictions.",
+    "The store roots live under data/ (gitignored); this index carries the generator outputs and bindings only."
+  ],
+  "artifacts": [
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/ingest-window.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/factor-partition-set.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/adjusted-window.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/label-set.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/universe-snapshots.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/market-datasets.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/backtest-market-data.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/sample-construction.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/feature-preprocessing.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/backtest-config.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/request-v6.json"},
+    {"path": "evidence/csi-all-pilot/2026-10-24-full-a/scores.json"}
+  ]
+}

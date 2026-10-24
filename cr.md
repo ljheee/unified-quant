@@ -3364,3 +3364,125 @@ factor partitions + label set + universe + membership
 - `tests/test_research_chain_v6_sample_stage.py`：v6 dataset stage 真正消费
   sample construction 的筛选后帧，并把 sample binding 写入 stage state。
 - 全量：`.venv` **1265 passed / 28 skipped**、`.venv-qlib` **1293 passed / 0 skipped**。
+
+### 8.75 全 A v6 execute 端到端跑通：选项 4 + 五个真实缺陷（2026-10-24）
+
+**触发**：用户"按选项 4 重铺数据面跑真实 execute"。选项 4 是：不动窗口、不动
+paper 语义，只让 `--scores-json` 的最后一个决策日不出现在决策日集合里
+（`cli.py` 本来就是 `decision_dates=sorted(scores)`）。
+
+#### A. 为什么选项 4 成立（先纠正上一轮的三处判断）
+
+上一轮我说过三件后来被证伪的话，如实登记：
+
+1. "同日执行不需要改规格"——**错**。`paper-execution-layer-spec.md` §2.2 把
+   "Changing the historical backtest layer's accepted simulation semantics" 列为
+   出界项；同日执行属于改语义，需要新 schema 版本 + 迁移证据。
+2. "第 2 个选项（改 paper 允许最后一日只决策不执行）也不成立"——**对**，理由同上。
+3. "T+1 只有实盘才用得到"这个前提——**错**。训练层根本没有执行日概念
+   （`qlib_runtime.py` 只 `fit`，`decision_date` 只作为特征日期与 label horizon）；
+   回测是 `backtest_config.v2.json:50` 的 `"type": {"const": "daily_t1_open"}`
+   硬编码 T+1 开盘；paper 是 `stage_adapter.py:221` 的 `+1`。
+
+因此真正可行的只剩"决策日集合不包含窗口末日"。它的代价只是少一个决策日，
+不动任何契约、制品或语义。
+
+#### B. 数据面重铺（全部落在仓库内 `data/`，不是 `/tmp`）
+
+`data/` 被 `.gitignore:12` 忽略，但**不在** `/tmp` 下，重启不清理。本轮：
+
+| 步骤 | 结果 |
+|---|---|
+| canonical bars | 37 个会话（2025-08-11..09-30），Tushare v2，Sina 独立日历 16/16 会话一致 |
+| adjusted price | 15 个会话（09-10..09-30）；09-09 因"无更早分区作跳变基线"被拒，属设计行为 |
+| factor `basic/2.0.0` | 15 个分区（09-10..09-30），lookback 20 日由前推的 22 个会话满足 |
+| label set（combined） | 1 份，75910 行，25335 个尾段 null |
+| universe snapshot | `46edd368…`，5068 只，valid 09-08..10-15 |
+| market datasets 四族 | 15 会话各一份 |
+| backtest market data 三族 | calendar 15 / suspension 95 / corporate_action 305 |
+| sample construction | `f5de2912…`，50354 行 / 5050 只（丢 337 特征空 + 25219 尾段 label 空） |
+| feature preprocessing | `ca7633fc…`，50354 行，与 sample construction 逐位一致 |
+| backtest config | `1d4265f9…` |
+
+**过程中的限流与超时**：Tushare 300 次/分钟，单会话约 104 次请求，连跑 3 个会话
+必超；`api.waditu.com` 还出现过 read timeout。解法是把会话间隔提到 45s 并单会话重试，
+全部会话最终都落盘（每次失败都记在 `ingest-window.json` 的 `failed[]` 里，没有静默重试）。
+
+#### C. 五个真实缺陷（都是本轮跑真实链路才激活的）
+
+**C1. `publish_sample_construction.py` 把制品发到 `--factor-root`**
+（我上一轮引入的缺陷）
+研究链在 `cli.py:570` 用 `feature_store_root = data_root / "governed"` 构造
+`SampleConstructionStore`，而发布器写的是 `args.factor_root`。结果是制品发得成功、
+链路永远读不到。修法：新增必填 `--sample-construction-root`，并在 help 里写明
+它不是 factor root。
+
+**C2. `_readback` 的 `qlib_dataset_export` 分支读内存属性**（`runner.py`）
+```python
+self.dataset_adapter.dataset_writer.last_published_manifest["dataset_name"]
+```
+`last_published_manifest` 只在本进程跑过 dataset 阶段时才有值。任何 resume
+（后面某个 stage 失败后重试，这是正常路径）都会得到
+`no dataset has been published by this writer`。修法：从
+`run_store.last_plan.request["dataset_policy_template"]` 取 `dataset_name`，
+与同文件 `model_dataset` 分支完全一致。
+
+**C3. `_reconcile_paper_bindings` 依赖内存 `paper_adapter.last_result`**
+（`runner.py`）
+resume 时 `paper_execution` 已 passed 被跳过，`last_result` 为空，reconcile 直接抛
+`paper stage result is unavailable for reconciliation`。修法：内存为空时从已发布的
+`execution_config` 逐条读回 `decision_date` 重建决策日序列，并用绑定本身作为
+tampering 比对的 `published` 侧。
+
+**C4. `_reconcile` 要求 `research_run_result` 的 decision 是 envelope，但 provider 给的是 raw**
+（`runner.py`）
+`_decision()` 对 callable 返回裸签名决策（stage flows 需要这个形状，因为
+`PredictionBuilder` 要读 `checks`）。但 `_reconcile` 是唯一一处需要
+`quality_decision` envelope 的调用点，于是 provider 模式下必然
+`quality_decision.v1.json validation failed: owning_report is a required property`。
+修法：只在该调用点把 raw decision 包成 envelope，不动共享的 `_decision` 契约。
+
+**C5. `read_result` 的 stage 闭合校验硬编码 V1 顺序**（`resolver.py`）
+```python
+expected_runtime_stages = list(stage_plan_for_request({"contract_version": 1}))[1:-1]
+```
+注释写着"V3 paper runtime 是 disabled，所以不存在合法 V3 result"。但 v5 早已可执行，
+v6 更是本轮的主体：任何 v5/v6 result 都带 `paper_execution`，与 V1 列表永远不等，
+于是**每一份 v5/v6 result 都无法读回**——这解释了为什么此前从未有 v5 result 通过
+`read_result`。修法：`stage_plan_for_request(result)`（它本身对未知版本 fail-closed，
+所以不会放松校验）。
+
+#### D. 端到端结果
+
+```
+result_generation: 731eb47b8812642aade43c237c958b9a244a2110d7fa63035420ce03316f5f3a
+final_status: passed
+resolve_request            passed   1 binding
+factor_computation         passed   2 bindings
+dataset_preparation        passed   5 bindings
+qlib_export                passed   2 bindings
+model_training             passed   2 bindings
+prediction_publication     passed  10 bindings
+portfolio_construction     passed  10 bindings
+backtest_execution         passed   2 bindings
+paper_execution            passed  40 bindings
+result_reconciliation      passed   1 binding
+```
+
+10 个决策日（09-10..09-29，共 14 个会话里的 10 个有分数；09-30 按选项 4 不给分数）。
+`read_result` 在修复后能读回同一份 result（`final_status=passed`）。
+
+#### E. 验证
+
+- `.venv` **1265 passed / 28 skipped**；`.venv-qlib` **1293 passed / 0 skipped**。
+- 两个 evidence-index 因 `runner.py`/`resolver.py` 变更重钉（phase-0 索引 2 条）。
+- 本轮 5 个缺陷中 C2/C3/C5 是**只有真实 resume 路径才暴露**的；C1/C4 是 provider
+  模式的形状不一致。没有一条是测试先发现的。
+
+#### F. 诚实边界
+
+- 本轮所有质量决策使用**仓库测试评审密钥**（`tests/review_key.py`），制品只证明链路
+  可运行，**不构成研究结论**。
+- 分数是确定性占位（按 instrument 字符串哈希），不是模型预测。
+- `backtest` 与 `paper` 的数值结果未做人工复核；本轮只验证链路闭合与 fail-closed 行为。
+- 数据面落在 `data/`（gitignored），evidence 目录只存生成器输出与绑定，不含 parquet。

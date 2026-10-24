@@ -1,0 +1,132 @@
+{
+  "binding_type": "factor_partition_set",
+  "factor_set": "basic",
+  "factor_version": "2.0.0",
+  "input_dataset": "bars_daily",
+  "input_schema_version": "v2",
+  "partitions": [
+    {
+      "data_checksum_sha256": "fd247da7e9281c7d9580af65bffcabbc04d5ce2f233cda5be1ffd0f4a1aeb43c",
+      "decision_time": "2025-09-10T15:00:00+08:00",
+      "generation_id": "e6baa37dc1d3447cce2c8aa49ce19a0f05c64fbcf1943e331ccdc3bc18ac38f5",
+      "manifest_digest_sha256": "f28d4d620736052b4e9b93cf03a7c2ba318b22657e79effe709c65354b3fa63d",
+      "partition_date": "2025-09-10",
+      "run_visible_cutoff": "2025-09-10T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "4c6298485078510e5285d59519544128aca2b4095399be3d7650ae68a239f4e7",
+      "decision_time": "2025-09-11T15:00:00+08:00",
+      "generation_id": "26d17e4fa9384f1422030016f6a8160401a357601e51f4800e7c8ef25c0fb476",
+      "manifest_digest_sha256": "56aaf789395e8d149307a808eaf380d8e537e91ab10aa709c659f81d1896fd57",
+      "partition_date": "2025-09-11",
+      "run_visible_cutoff": "2025-09-11T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "f64fd1e21d1bf48cf4fce990a22bf5d2cbecd2329ba6a1cb22b2de34d696e9fc",
+      "decision_time": "2025-09-12T15:00:00+08:00",
+      "generation_id": "7115499ee0b4d04eef722f150bdd5f81442954d395c3e848764fe25c6b25ea83",
+      "manifest_digest_sha256": "20a4e3df3b11c52d495b04c60dd2926f55e8ee35657ecf548a825dee9e60cd7b",
+      "partition_date": "2025-09-12",
+      "run_visible_cutoff": "2025-09-12T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "3e1bc16797f12076c474e8ffeb79b031d4ae9df06d23d7139bfea7fa0b6a62aa",
+      "decision_time": "2025-09-15T15:00:00+08:00",
+      "generation_id": "65bd7aed83a5f622a543fb05b67b8559a657121e868e21e1f157952bfbbf318a",
+      "manifest_digest_sha256": "c1b2229135e10231629cd7f38f1dd2feb0629779e78292a7f05539b57a559d5a",
+      "partition_date": "2025-09-15",
+      "run_visible_cutoff": "2025-09-15T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "f2c43e76385f5804eff082ce84c622ab0885f8a667efafc9c8474bb8efe20d73",
+      "decision_time": "2025-09-16T15:00:00+08:00",
+      "generation_id": "89de50cc0edb4ee6ef3597f1cdaf311856a67cbc8775e754ef58af9938c767de",
+      "manifest_digest_sha256": "4e14c24a5074cda045e6a57699c65852a674b2b1622f545101fff58adb7a0109",
+      "partition_date": "2025-09-16",
+      "run_visible_cutoff": "2025-09-16T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "971741d2b80ed76c282505408b9f955f97143199dcbc4d42f1774564208769de",
+      "decision_time": "2025-09-17T15:00:00+08:00",
+      "generation_id": "96c0d0f2941523a5379f4ef2b41b94ebb8a6dd42939ab8dbf6460416fd640ed0",
+      "manifest_digest_sha256": "2d5d88a06c290f4bd233a553a9fcd25f78679c91236e5cbbe1f456821a239a44",
+      "partition_date": "2025-09-17",
+      "run_visible_cutoff": "2025-09-17T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "6dcd8cfa6e787dae1e19205ae828aae9540f6bf2eb11893d08c4c458b74befab",
+      "decision_time": "2025-09-18T15:00:00+08:00",
+      "generation_id": "0d44c44e51de03beb1f547ba5fe53d87232f14b2a1dbfe5ca129f16ccdb3ae0e",
+      "manifest_digest_sha256": "fa341371cf111259d558276758b2f492c2da03ec058f23a9f60d21dae2f12b11",
+      "partition_date": "2025-09-18",
+      "run_visible_cutoff": "2025-09-18T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "ee77bf2a98ba68717effdfc7901dbbfeca5cc14c98d4ad6501e6f6932b8e27af",
+      "decision_time": "2025-09-19T15:00:00+08:00",
+      "generation_id": "0cba645f2379232458d82a6a800b1b780ba092af72233d52b7431cbf8ff9c190",
+      "manifest_digest_sha256": "9385253d02d9b37c84cae55a99d38545c65e2d594938739c447673e27d5d51f8",
+      "partition_date": "2025-09-19",
+      "run_visible_cutoff": "2025-09-19T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "e4b86ae288aee38f6c3c6dad77d7d373f5b8e2524e6dc785c35b221a94fbeced",
+      "decision_time": "2025-09-22T15:00:00+08:00",
+      "generation_id": "6a636ef7f476af9219fd42f0fd1a65883073a87fa2344792e0deabb880fd4db5",
+      "manifest_digest_sha256": "146a95c647b1e6e177cd97ee61016ad0e85ff264b8c0c29977318a004719b402",
+      "partition_date": "2025-09-22",
+      "run_visible_cutoff": "2025-09-22T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "a0f45b2d659a046b5975220286ac62d16b637f727137615fe254b9f64a781ae5",
+      "decision_time": "2025-09-23T15:00:00+08:00",
+      "generation_id": "057f18910290d529ad796176bcf58c1d962ad4cd68b6fa59ad59ef1fa7c196df",
+      "manifest_digest_sha256": "32de8bdc7dcaf3e4e768ba0893fb2b70c55c9d11f3791fa6bb36395380916849",
+      "partition_date": "2025-09-23",
+      "run_visible_cutoff": "2025-09-23T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "2f7b975bfdde2532b4cfb67186f2cb73c60089effdb1487c5a63ca67f81a0a47",
+      "decision_time": "2025-09-24T15:00:00+08:00",
+      "generation_id": "2504ce27a9adf3c1cf79733d49cd99517cd7a8c5123b98a9cd47dbea48c05b3c",
+      "manifest_digest_sha256": "ce01728ac77ec7415ba5b183b817ce87822aa5f710b6deec733edfc42f899c48",
+      "partition_date": "2025-09-24",
+      "run_visible_cutoff": "2025-09-24T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "d4f354e2efa0b951adfdcffa3dc2f5efbfb81660408e5d4d6bc81066b94c5358",
+      "decision_time": "2025-09-25T15:00:00+08:00",
+      "generation_id": "20d5c2812a7ef2d2062a280d77ba8ab71e66100238232d9828880f5563264fe9",
+      "manifest_digest_sha256": "5fafc8d45c7271d1f73f69161fd8ee3eb1ef5a5d12361402ab1a6952f730ed55",
+      "partition_date": "2025-09-25",
+      "run_visible_cutoff": "2025-09-25T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "9a85eabe202ab061c09de99d8ad379afd482118f147af4990e8283a32f9bab64",
+      "decision_time": "2025-09-26T15:00:00+08:00",
+      "generation_id": "db29f699b8d76456c3d5c8b1db8be3f9f74568f559ae40bd971a04c4c7b909f0",
+      "manifest_digest_sha256": "df509b9054c356ec62a91c7f8fb6cf2c47e3b9a6565861cde652b7b60a47afe5",
+      "partition_date": "2025-09-26",
+      "run_visible_cutoff": "2025-09-26T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "3f41f79d2a094ac420ef8555ba0f1dae089aa5ea30548ed4152729b997cf0eb2",
+      "decision_time": "2025-09-29T15:00:00+08:00",
+      "generation_id": "c7a70e09b96b729580cdd576d2e6ad761065f7b6033f1f4ee9fed92c9cc1ff8a",
+      "manifest_digest_sha256": "33cbf4dfde86fbe1870f97d8feffc2c81e0b121e6a277b20b4e257f5af9912e0",
+      "partition_date": "2025-09-29",
+      "run_visible_cutoff": "2025-09-29T15:00:00+08:00"
+    },
+    {
+      "data_checksum_sha256": "816fe283a5813c6138e2191c2f76bd3ab7947d98e1a58ee4ea6e38418bb0c297",
+      "decision_time": "2025-09-30T15:00:00+08:00",
+      "generation_id": "5ade63f0c63d92a61868698d423997e610a4fe851de6a1a8c9414bead72c1049",
+      "manifest_digest_sha256": "28c4adc9119baaf3c7f0887a45e74b7a66b24037e8c56898858a428ab7a3a6ac",
+      "partition_date": "2025-09-30",
+      "run_visible_cutoff": "2025-09-30T15:00:00+08:00"
+    }
+  ],
+  "set_digest_sha256": "9f8f0fb850b923ebaf799df1d5f8ffb02362e310ab55a4a026330ed8bc1f4d7f",
+  "window_end": "2025-09-30",
+  "window_start": "2025-09-10"
+}

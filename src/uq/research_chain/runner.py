@@ -876,9 +876,23 @@ class ResearchChainRunner:
             verify_paper_binding_tampering,
         )
 
-        if self.paper_adapter is None or getattr(self.paper_adapter, "last_result", None) is None:
+        if self.paper_adapter is None:
             raise ContractError("paper stage result is unavailable for reconciliation")
-        decision_dates = list(self.paper_adapter.last_result.decision_dates)
+        # A resumed run skips `paper_execution` (already `passed`), so
+        # `paper_adapter.last_result` is empty exactly on the normal retry path.
+        # Recover the decision dates from the published execution configs: each
+        # one records its own `decision_date`, and the bindings are ordered 4N.
+        in_memory = getattr(self.paper_adapter, "last_result", None)
+        if in_memory is not None:
+            decision_dates = list(in_memory.decision_dates)
+        else:
+            decision_dates = [
+                str(self.paper_adapter.config_store.read(binding.generation_id)["decision_date"])
+                for binding in bindings
+                if binding.output_family == "execution_config"
+            ]
+        if not decision_dates:
+            raise ContractError("paper stage result is unavailable for reconciliation")
         derived: list[dict[str, Any]] = []
         for index, binding in enumerate(bindings):
             decision_date = decision_dates[index // 4] if index // 4 < len(decision_dates) else None
@@ -897,7 +911,20 @@ class ResearchChainRunner:
         # The reconciled bindings are read back from the published stage state,
         # so they must still match the authoritative in-memory stage result;
         # a tampered state file fails closed here.
-        published = list(self.paper_adapter.last_result.bindings)
+        published = (
+            list(in_memory.bindings)
+            if in_memory is not None
+            else [
+                {
+                    "output_family": binding.output_family,
+                    "generation_id": binding.generation_id,
+                    "manifest_digest_sha256": binding.manifest_digest_sha256,
+                    "data_checksum_sha256": binding.data_checksum_sha256,
+                    "physical_path": binding.physical_path,
+                }
+                for binding in bindings
+            ]
+        )
         if len(published) != len(derived):
             raise ContractError("paper stage result bindings do not match the reconciled set")
         for item, expected in zip(derived, published):
@@ -1061,6 +1088,31 @@ class ResearchChainRunner:
         decision = self._decision(
             quality_decisions, "research_run_result", generation
         )
+        if "owning_report" not in decision:
+            # Provider mode hands the runner a *raw* signed decision (the stage
+            # flows bind it themselves), but this is the one call site that
+            # needs the `quality_decision` envelope: it re-reads the published
+            # report and compares its checksum to the result identity. Wrap it
+            # here rather than changing the shared `_decision` contract, which
+            # every stage flow depends on.
+            from ..contracts.model_layer import bind_reviewed_quality_decision
+
+            report, checksum = bind_reviewed_quality_decision(
+                dict(decision),
+                binding_type="research_run_result_v1",
+                subject_generation_id=generation,
+                subject_content_sha256=generation,
+            )
+            decision = {
+                "contract_version": 1, "schema_version": "1.0.0",
+                "binding_type": "research_run_result_v1",
+                "subject_generation_id": generation,
+                "subject_manifest_digest_sha256": generation,
+                "owning_report": report,
+                "decision_checksum_sha256": checksum,
+                "provider_id": "external-model-quality-reviewer-v1",
+                "trust_anchor_id": report["key_id"],
+            }
         ModelContractLoader.validate("quality_decision", dict(decision))
         owning_report = dict(decision["owning_report"])
         if (
@@ -1526,8 +1578,17 @@ class ResearchChainRunner:
                 generation_id,
             )[0]
         elif family == "qlib_dataset_export":
+            # The dataset name is a property of the request's template, not of
+            # whatever this process happened to publish. Reading it off
+            # `dataset_writer.last_published_manifest` made reconciliation work
+            # only in the same process that ran the dataset stage: a resumed run
+            # (the normal retry path after any later stage fails) has an empty
+            # writer and died here with "no dataset has been published by this
+            # writer". `model_dataset` above already resolves the same name from
+            # the template; this branch now does the same.
+            template = self.run_store.last_plan.request["dataset_policy_template"]
             manifest = self.export_adapter.exporter.read(
-                self.dataset_adapter.dataset_writer.last_published_manifest["dataset_name"],
+                template["dataset_name"],
                 generation_id,
             )[0]
         elif family == "qlib_init_receipt":

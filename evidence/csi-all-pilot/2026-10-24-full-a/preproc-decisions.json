@@ -1,0 +1,48 @@
+{
+ "quality_decisions": {
+  "feature_preprocessing": {
+   "binding_type": "feature_preprocessing_v1",
+   "checks": [
+    {
+     "name": "key_reconciliation",
+     "threshold": 0,
+     "observed": 0,
+     "level": "error",
+     "result": "passed"
+    },
+    {
+     "name": "row_count_reconciliation",
+     "threshold": 0,
+     "observed": 0,
+     "level": "error",
+     "result": "passed"
+    },
+    {
+     "name": "output_readback",
+     "threshold": 0,
+     "observed": 0,
+     "level": "error",
+     "result": "passed"
+    },
+    {
+     "name": "null_rate",
+     "threshold": 0,
+     "observed": 0,
+     "level": "error",
+     "result": "passed"
+    }
+   ],
+   "errors": [],
+   "key_id": "model-quality-reviewer-v1-2026-09",
+   "policy": "cross_sectional_stateless_v1",
+   "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+   "reviewer": "external-model-quality-reviewer-v1",
+   "status": "passed",
+   "subject_generation_id": "ca7633fc13ecafb9176fd03f02d26d4c832faf3dd296c90f50ab559ee45e24f5",
+   "subject_content_sha256": "ca7633fc13ecafb9176fd03f02d26d4c832faf3dd296c90f50ab559ee45e24f5",
+   "warnings": [],
+   "report_version": 2,
+   "review_signature_sha256": "3a5796140beb8878fe3d3e1672a4ebd4725d9e235508233a9171f630e1f1c84bde19d483ac7d4cd17af7b9ef71710675ff98f69e3b0cf4eef931099425f6200f"
+  }
+ }
+}

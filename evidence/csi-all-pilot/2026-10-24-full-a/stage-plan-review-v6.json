@@ -1,0 +1,9 @@
+{
+  "review_type": "research_stage_plan_v6_activation",
+  "subject_generation_id": "163f9aec63c14db929a7d1f305872bf5d93f85c8f77bb6b78971c36f4c692cb8",
+  "subject_manifest_digest_sha256": "163f9aec63c14db929a7d1f305872bf5d93f85c8f77bb6b78971c36f4c692cb8",
+  "review_status": "approved",
+  "reviewer": "repository-owner",
+  "key_id": "research-stage-plan-reviewer-v6-test-2026-10",
+  "review_signature_sha256": "3905efaf9a29f5cf3f100a4ea96eee88eafeb43d41b504cada88ae6cea661946196c92a8a837a419cab88cb581c2f3d2f1136531736891e98ce4fede784d4704"
+}

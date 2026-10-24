@@ -1,0 +1,60 @@
+{
+ "policy": {
+  "activation_status": "approved",
+  "approval_binding": {
+   "family": "risk_review_decision_v1",
+   "review_generation_id": "45ffe6ecd5c9992431cf7caac55f193571af0a03565f65269e967aad0089e1ff",
+   "review_manifest_digest_sha256": "88ccf8c7694aecf4a6f33f6053e31bffa292c07d8173b191ae8000711bbb06b0"
+  },
+  "contract_version": 1,
+  "effective_from": "2025-01-01",
+  "effective_to": null,
+  "generation_id": "2a9d232834b46fab1cded7a4fe2bf7b142222d49dd110c7f0e0edf2799e69751",
+  "industry_membership_binding": null,
+  "manifest_digest_sha256": "4172bdcbac5db0d0b6965b3440cd8da4e99082ae64770c130534dc442d1cd804",
+  "policy_id": "research-policy",
+  "policy_scope": "portfolio",
+  "policy_version": "1.0.0",
+  "producer": {
+   "created_at": "2026-09-06T00:00:00Z",
+   "producer_code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+   "run_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "rules": [
+   {
+    "action": "resize",
+    "cooldown_days": 0,
+    "hysteresis_exit_threshold": null,
+    "metric": "gross_stock_exposure",
+    "operator": "greater_than",
+    "priority": 10,
+    "rule_id": "portfolio_gross_exposure_limit",
+    "rule_scope": "portfolio",
+    "severity": "critical",
+    "state_required": false,
+    "state_window_days": 0,
+    "threshold": 0.95
+   }
+  ],
+  "schema_version": "1.0.0",
+  "serialization_profile": "json-canonical-v1"
+ },
+ "policy_review": {
+  "contract_version": 1,
+  "schema_version": "1.0.0",
+  "review_type": "risk_policy_activation",
+  "subject_generation_id": "8fe5fbb1b9c61ad3361c9645a15b00444fccd07bc4bce48c31f15e42fe993acf",
+  "subject_manifest_digest_sha256": "24cb8723e774e066ba0cf27200a108d537b6c474fafb7ebdf0aedc5870ca3823",
+  "subject_content_sha256": "8fe5fbb1b9c61ad3361c9645a15b00444fccd07bc4bce48c31f15e42fe993acf",
+  "review_status": "approved",
+  "reviewer": "repository-owner",
+  "key_id": "risk-reviewer-v1-2026-09",
+  "policy": "reject_all",
+  "reviewed_at_utc": "2026-09-06T00:00:00Z",
+  "errors": [],
+  "warnings": [],
+  "review_signature_sha256": "c2b78ce7b26184f0cc2f13d0aee9961fa475d2132907c667be0f1690b8a889116e606cffc15bb388f7df9ecb7e8dfa5ea37a0153c9757d1f9e3782b94df00b0e",
+  "generation_id": "45ffe6ecd5c9992431cf7caac55f193571af0a03565f65269e967aad0089e1ff",
+  "manifest_digest_sha256": "88ccf8c7694aecf4a6f33f6053e31bffa292c07d8173b191ae8000711bbb06b0"
+ }
+}

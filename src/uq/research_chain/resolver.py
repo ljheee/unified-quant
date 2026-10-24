@@ -727,11 +727,14 @@ class FileResearchRunStore:
         if result_binding["manifest_digest_sha256"] != manifest_digest_sha256:
             raise ContractError("research result reconciliation digest mismatch")
         runtime_stage_records = result["stage_records"][1:-1]
-        # Deliberately the V1 order, not the payload's: the V3 paper-
-        # execution runtime is disabled (runner._validate_plan), so no
-        # legitimate V3 result can exist — deriving from the payload would
-        # only loosen the closure check for forged documents.
-        expected_runtime_stages = list(stage_plan_for_request({"contract_version": 1}))[1:-1]
+        # The expected runtime stages are the request's own plan. This used to
+        # hardcode V1 "because the V3 paper-execution runtime is disabled", but
+        # v5 has been executable since then: a v5/v6 result legitimately carries
+        # `paper_execution`, so the V1 list could never match and *every* v5/v6
+        # result failed this closure check on read. `stage_plan_for_request`
+        # refuses an unsupported version, so deriving from the payload does not
+        # loosen the check — the version still selects exactly one legal order.
+        expected_runtime_stages = list(stage_plan_for_request(result))[1:-1]
         if [record.get("stage") for record in runtime_stage_records] != expected_runtime_stages:
             raise ContractError("research result stage closure is incomplete")
         if any(record.get("status") != "passed" for record in runtime_stage_records):
