@@ -104,7 +104,10 @@ class TestDropUnlabelledFactorRows:
         # would be empty and the caller would have to notice downstream.
         labels = _labels_for({})
         labels["label"] = None
-        with pytest.raises(ContractError, match="no labeled rows"):
+        # The refusal now comes from the single implementation in
+        # `models/sample_construction.py`, so the wording is that one's. It is the
+        # same guard -- an all-null label set cannot yield a trainable frame.
+        with pytest.raises(ContractError, match="no training rows"):
             drop_unlabelled_factor_rows(_frame_for(), labels)
 
     def test_nothing_to_drop_returns_the_frame_untouched(self):
@@ -210,3 +213,46 @@ def test_an_all_labelled_frame_returns_no_keys_and_a_single_null_returns_one():
     assert len(unlabeled_keys(frame)) == 3
     frame["label"] = frame["label"].fillna(0.0)
     assert unlabeled_keys(frame).empty
+
+
+class TestTheTwoImplementationsAgree:
+    """`drop_unlabelled_factor_rows` must stay an adapter, not a second rule.
+
+    The v5 stage filters inside the stage; v6 publishes `sample_construction.v1`
+    from `select_training_sample`. These used to be two independent copies of the
+    label-side rule and had already drifted in strictness (the v5 copy accepted
+    duplicate factor keys and a mismatched column set). The cross-check below is
+    the lock that keeps them from drifting again: the same input must select the
+    same rows and report the same counters through both entry points.
+    """
+
+    def test_both_entry_points_select_the_same_rows(self):
+        from uq.models.sample_construction import select_training_sample
+
+        frame = _frame_for()
+        labels = _labels_for({"A": [WINDOW[0], WINDOW[2]]})
+        ordered = [
+            column for column in frame.columns
+            if column not in {"instrument", "datetime"}
+        ]
+
+        stage_kept, stage_audit = drop_unlabelled_factor_rows(frame, labels)
+        sample_kept, _, sample_labels = select_training_sample(
+            frame, labels, ordered_features=ordered,
+            missing_policy="drop_unlabeled_rows",
+        )
+
+        keys = lambda df: set(
+            zip(
+                df["instrument"].astype(str),
+                pd.to_datetime(df["datetime"]).dt.strftime("%Y-%m-%d"),
+            )
+        )
+        assert keys(stage_kept) == keys(sample_kept)
+        # The stage's audit spells out both counters even at zero; the sample
+        # artifact only records what it removed. They must agree on the removal.
+        for counter in ("rows", "null_labels", "absent_keys"):
+            assert stage_audit[counter] == sample_labels.get(counter, 0), counter
+        # ...and the stage's filtered frame is the preprocessing *input*, so it
+        # must not carry the label column the sample artifact publishes.
+        assert list(stage_kept.columns) == ["instrument", "datetime", *ordered]

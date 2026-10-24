@@ -3486,3 +3486,58 @@ result_reconciliation      passed   1 binding
 - 分数是确定性占位（按 instrument 字符串哈希），不是模型预测。
 - `backtest` 与 `paper` 的数值结果未做人工复核；本轮只验证链路闭合与 fail-closed 行为。
 - 数据面落在 `data/`（gitignored），evidence 目录只存生成器输出与绑定，不含 parquet。
+
+### 8.76 收敛 v5/v6 重复的 label 选择实现（2026-10-24）
+
+**触发**：用户自审选项 1 后授权"都做"（薄封装收敛 + 给 v5 路径补输入契约）。
+
+#### A. 先证伪再动手
+
+实测确认"同语义两次实现"不是推断。在完全相同的输入（全 A feature-complete 帧
+75573 行 + label 75910 行）上：
+
+```
+v5 drop_unlabelled_factor_rows: 50354 rows  {'rows': 25219, 'instruments': 5052, 'null_labels': 25219, 'absent_keys': 0, 'note': ...}
+v6 select_training_sample:       50354 rows  {'rows': 25219, 'instruments': 5052, 'null_labels': 25219, 'absent_keys': 0}
+identical keep set? True  | only-v5: 0  only-v6: 0
+```
+
+#### B. 落地：`drop_unlabelled_factor_rows` 变成薄封装
+
+`select_training_sample` 是单一实现，v5 侧固定 `missing_policy="drop_unlabeled_rows"`。
+删掉的是约 30 行重复的 merge/indicator 逻辑。
+
+**自审时发现并修掉的两个真差异**（都是"把 v5 换成 v6 会引入的"）：
+
+1. **返回帧多了一列 `label`**。`select_training_sample` 返回的是**训练帧**
+   （键 + 特征 + label），因为那是 `sample_construction.v1` 发布的东西；而 v5 stage
+   需要的是 **preprocessing 输入**，其列集必须恰好是
+   `["instrument","datetime",*features]`——`_prepare_preprocessed_frame` 拿它比对
+   `preprocessing["ordered_features"]`，且 `frame_fingerprint` 覆盖 label。直接替换
+   会让真实 v5 run 在 fingerprint 校验处崩。封装里显式剥掉 label 列并注释原因。
+2. **"什么都没丢"时审计变成空 dict**。旧实现无论是否丢弃都报
+   `rows/null_labels/absent_keys`（可以区分"检查过但没丢"与"没检查"）；
+   `select_training_sample` 只在有丢弃时填 `dropped_labels`。v5 的审计是人工读的
+   诊断，所以在封装里把三个计数显式补零。
+
+**有意的行为收紧（第二步，已授权）**：v5 现在也获得 `select_training_sample` 的
+两道前置拒绝——重复 `(instrument, datetime)` 键、列集与声明特征不符。全 A 真实
+数据实测：75910 行 0 重复、列集一致，**不会误伤现有数据面**。
+
+#### C. 测试
+
+- `tests/test_drop_unlabeled_rows.py` 新增 `TestTheTwoImplementationsAgree`：
+  同输入两入口必须选出同一批键、同一组计数，且 stage 侧帧不得携带 label 列。
+  这是防再次漂移的锁——此前没有任何测试横跨这两个实现。
+- 一条既有断言随收紧改写：全 null 的 label 集，报错文本从 v5 的
+  `no labeled rows` 变为单一实现的 `no training rows`（同一个守卫，措辞归一）。
+- 变异（禁用 `absent_key` 检测）→ 2 红，新锁与既有锁均存活有效。
+- 全量：`.venv` **1265 passed / 28 skipped**、`.venv-qlib` **1293 passed / 0 skipped**。
+- 收敛后重跑等价性探针：keep set 仍逐键相同（50354 / 5050 只）。
+
+#### D. `unlabeled_keys` 的处置（如实登记）
+
+它的 docstring 原本声称"抽出来是为了发布侧与阶段不会分歧"。**这个防漂移措施从来
+没有保护过跨侧一致性**——`scripts/publish_feature_preprocessing.py` 根本不调用它，
+只有 stage 调。本轮保留该函数（有测试直接锁它，且报告侧仍需要"键集"而非"过滤后
+的帧"），但把 docstring 改成如实描述，不再声称它防跨侧漂移。

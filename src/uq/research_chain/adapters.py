@@ -28,6 +28,7 @@ from ..models.trainer import ModelRunBuilder
 from ..models.dataset_writer import DatasetWriter
 from ..models.feature_preprocessing import FeaturePreprocessorBuilder, complete_rows
 from ..models.features import FeatureSchemaBuilder, FeatureSchemaValidator
+from ..models.sample_construction import select_training_sample
 from ..portfolio.builder import PortfolioBuilder, PortfolioDefinitionBinding, TargetWeightStore
 from .contracts import PublishedState
 from ..execution.set_binding_resolver import verify_partition_set_binding
@@ -289,11 +290,10 @@ def _prepare_preprocessed_frame(
 def unlabeled_keys(label_frame: pd.DataFrame) -> pd.DataFrame:
     """The `(instrument, decision_date)` pairs whose label is null.
 
-    Extracted so the publisher and the stage cannot disagree about which rows are
-    unlabelled -- the publisher must review the preprocessing artifact over the
-    frame that survives this filter, and the stage must drop exactly those rows.
-    Two copies of the rule would drift the way `label_row_checksum` once did
-    (cr.md OBS-F).
+    Kept as a named helper for callers that only need the *set* of unlabelled
+    keys (the report and the review), rather than a filtered frame. The dropping
+    rule itself lives in `models/sample_construction.py` -- see
+    `drop_unlabelled_factor_rows` below for why this is no longer a second copy.
     """
     keys = label_frame[["instrument", "decision_date"]].copy()
     return keys[label_frame["label"].isna()]
@@ -309,47 +309,52 @@ def drop_unlabelled_factor_rows(
     the published frame and the preprocessing output to carry the same rows. The
     filter is applied to the preprocessing *input* instead and the transform re-run.
 
-    Two shapes are removed, and both must be, because only one of them is visible to
-    a value test. A label that is *present but null* leaves a row in ``label_frame``
-    that ``unlabeled_keys`` can name. A label whose key is *absent* leaves no row at
-    all, so no value test can see it -- yet a later left join turns it into a NaN that
-    reaches the published dataset. That asymmetry is exactly why the two sibling
-    policies (which assert on the merged frame) caught both shapes while this one
-    caught only the first: the check was frame-local. The key-set comparison below is
-    total instead. pandas documents ``indicator`` specifically for "the merge key only
-    appears in one frame"; no ``validate=`` value detects it, because those guard key
-    *uniqueness* (``merge.py``'s ``_ValidateOperation``).
+    This used to be a second, independent implementation of the label-side
+    selection -- the v5 stage needed it inside the stage, while v6 publishes it as
+    `sample_construction.v1`. Two copies of one rule drift, and this one had
+    already drifted in strictness: `select_training_sample` refuses duplicate
+    factor keys and a column set that does not match the declared features, while
+    this function accepted both. It is now a thin adapter over the single
+    implementation, so a v5 run and a v6 run select exactly the same rows.
+
+    The `note` key is retained because the v5 audit is read as a diagnostic on the
+    stage result; `sample_construction.v1` does not carry it.
     """
-    dropped_keys = unlabeled_keys(label_frame)
-    present_keys = label_frame[["instrument", "decision_date"]].drop_duplicates()
-    null_label = factor_frame.merge(
-        dropped_keys.drop_duplicates(),
-        how="left", left_on=["instrument", "datetime"],
-        right_on=["instrument", "decision_date"], indicator="null_label",
+    ordered_features = [
+        column for column in factor_frame.columns
+        if column not in {"instrument", "datetime"}
+    ]
+    selected, _, dropped_labels = select_training_sample(
+        factor_frame,
+        label_frame,
+        ordered_features=ordered_features,
+        missing_policy="drop_unlabeled_rows",
     )
-    key_present = factor_frame.merge(
-        present_keys,
-        how="left", left_on=["instrument", "datetime"],
-        right_on=["instrument", "decision_date"], indicator="key_present",
-    )
-    keep_mask = (
-        (null_label["null_label"] == "left_only").to_numpy()
-        & (key_present["key_present"] == "both").to_numpy()
-    )
-    if not keep_mask.any():
-        raise ContractError("drop_unlabeled_rows left no labeled rows")
-    kept = factor_frame.loc[keep_mask].reset_index(drop=True)
+    # `select_training_sample` returns the *training frame*, which carries the
+    # label column -- that is what `sample_construction.v1` publishes. This stage
+    # needs the filtered *preprocessing input*, whose column set must stay
+    # exactly `instrument, datetime, <features>`: `_prepare_preprocessed_frame`
+    # compares it against `preprocessing["ordered_features"]` and
+    # `frame_fingerprint` covers the label too, so keeping it here would change
+    # both the fingerprint and the transform input.
+    filtered = selected[["instrument", "datetime", *ordered_features]]
+    # `select_training_sample` leaves the audit empty when nothing was removed,
+    # which cannot distinguish "nothing to drop" from "nothing was checked". The
+    # v5 diagnostic is read by hand, so spell out both counters even at zero.
     audit = {
-        "rows": int((~keep_mask).sum()),
-        "instruments": int(factor_frame.loc[~keep_mask, "instrument"].nunique()),
-        "null_labels": int((null_label["null_label"] == "both").sum()),
-        "absent_keys": int((key_present["key_present"] == "left_only").sum()),
-        "note": (
-            "label is the target: these rows cannot be trained on but may still be "
-            "scored at inference; see missing_policy drop_unlabeled_rows"
-        ),
+        "rows": int(dropped_labels.get("rows", 0)),
+        "instruments": int(dropped_labels.get("instruments", 0)),
+        "null_labels": int(dropped_labels.get("null_labels", 0)),
+        "absent_keys": int(dropped_labels.get("absent_keys", 0)),
+        "note": _UNLABELLED_NOTE,
     }
-    return kept, audit
+    return filtered, audit
+
+
+_UNLABELLED_NOTE = (
+    "label is the target: these rows cannot be trained on but may still be "
+    "scored at inference; see missing_policy drop_unlabeled_rows"
+)
 
 
 class DatasetStageAdapter:
