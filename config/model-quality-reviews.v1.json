@@ -35,6 +35,18 @@
       ],
       "policy": "cross_sectional_stateless_v1"
     },
+    "sample_construction_v1": {
+      "allowed_checks": [
+        "key_reconciliation",
+        "label_join_reconciliation",
+        "row_selection_reconciliation",
+        "output_readback"
+      ],
+      "allowed_statuses": [
+        "passed"
+      ],
+      "policy": "pit_label_join_v1"
+    },
     "label_set_v1": {
       "allowed_checks": [
         "key_uniqueness",

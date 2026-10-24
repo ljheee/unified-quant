@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
+import socket
 import urllib.parse
 import urllib.request
 
@@ -168,6 +169,22 @@ class EastMoneySessionProvider:
 
     @staticmethod
     def _open_url(url: str, timeout: float, user_agent: str) -> bytes:
-        request = urllib.request.Request(url, headers={"User-Agent": user_agent})
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.read()
+        # Pin IPv4.  Measured 2026-10-23 on a healthy link (ping 0% loss, 62ms):
+        # the host's AAAA record completes the TLS handshake and then closes with
+        # no HTTP response, so urllib -- which prefers the first getaddrinfo
+        # result, the v6 address -- raised RemoteDisconnected 15/15 while the same
+        # URL over IPv4 returned 200 with real klines.  This changes the transport
+        # path only; the payload, the self-certifying coverage window and every
+        # fail-closed guard are untouched.
+        original_getaddrinfo = socket.getaddrinfo
+
+        def ipv4_only(host, port, family=0, type=0, proto=0, flags=0):
+            return original_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+
+        socket.getaddrinfo = ipv4_only
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": user_agent})
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.read()
+        finally:
+            socket.getaddrinfo = original_getaddrinfo

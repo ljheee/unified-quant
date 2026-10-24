@@ -108,3 +108,43 @@ def test_calendar_wiring_uses_the_provider_provenance():
     calendar = TradingCalendar(provider=provider, provenance=provider.provenance)
     assert calendar.provenance == "eastmoney_index_kline_v1"
     assert calendar.between(date(2025, 9, 1), date(2025, 9, 1)) == {date(2025, 9, 1)}
+
+
+def test_the_real_opener_resolves_ipv4_only(monkeypatch):
+    """2026-10-23: the host's IPv6 path drops the connection after the handshake.
+
+    Measured on a healthy link (ping 0% loss, 62ms): the AAAA record completes
+    the TLS handshake and then closes with no HTTP response, so urllib -- which
+    prefers the first getaddrinfo result, the v6 address -- raised
+    RemoteDisconnected on every attempt, while `curl -4` against the same URL
+    returned 200 with real klines.
+
+    The test patches `socket.socket.connect` rather than
+    `socket.create_connection`: replacing the latter skips the resolution it
+    performs internally, so the spy would record nothing and the test would pass
+    vacuously.
+    """
+    import socket
+
+    from uq.adapters.eastmoney import KLINE_URL, EastMoneySessionProvider
+
+    asked: list[int] = []
+    original_getaddrinfo = socket.getaddrinfo
+
+    def spy_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        asked.append(family)
+        return original_getaddrinfo(host, port, family, type, proto, flags)
+
+    def no_connect(self, address):  # noqa: ARG001
+        raise OSError("no network in this test")
+
+    monkeypatch.setattr(socket, "getaddrinfo", spy_getaddrinfo)
+    monkeypatch.setattr(socket.socket, "connect", no_connect)
+
+    with pytest.raises(Exception):
+        EastMoneySessionProvider._open_url(KLINE_URL, 5.0, "test")
+
+    assert asked, "the opener must resolve the host"
+    assert set(asked) == {socket.AF_INET}, (
+        f"the opener must ask for IPv4 only, got {sorted(set(asked))}"
+    )

@@ -249,7 +249,17 @@ def main() -> int:
     parser.add_argument(
         "--skip-independent-calendar",
         action="store_true",
-        help="do not cross-check sessions against the EastMoney index series (offline runs)",
+        help="do not cross-check sessions against an independent index series (offline runs)",
+    )
+    parser.add_argument(
+        "--independent-calendar-source",
+        choices=("eastmoney", "sina"),
+        default="eastmoney",
+        help=(
+            "independent calendar vendor for the session cross-check. sina exists "
+            "because push2his.eastmoney.com was measured 2026-10-23 answering every "
+            "request with an empty reply while quote/push2 returned 200."
+        ),
     )
     parser.add_argument("--bindings-out", type=Path, default=None)
     args = parser.parse_args()
@@ -288,8 +298,16 @@ def main() -> int:
     adapter = Tushare2kAdapter()
     sessions = sorted(adapter.trade_dates(start.isoformat(), end.isoformat()))
     independent: set[dt.date] | None = None
+    independent_source = "not_checked"
     if not args.skip_independent_calendar:
-        independent = EastMoneySessionProvider().between(start, end)
+        if args.independent_calendar_source == "sina":
+            from uq.adapters.sina import SinaSessionProvider
+
+            independent = SinaSessionProvider().between(start, end)
+            independent_source = "sina_index_kline_v1"
+        else:
+            independent = EastMoneySessionProvider().between(start, end)
+            independent_source = "eastmoney_index_kline_v1"
         independent = {day for day in independent if start <= day <= end}
     canonical_sessions = [
         session for session in sessions
@@ -304,7 +322,7 @@ def main() -> int:
             lambda: _publish_calendar(
                 publisher, start=start, end=end,
                 primary_source="tushare:trade_cal",
-                independent_source=("eastmoney_index_kline_v1" if independent is not None else "not_checked"),
+                independent_source=independent_source,
                 sessions=set(sessions), independent_sessions=independent,
             ),
             published=published_log, skipped=skipped_log, label="trading_calendar_snapshot_v1",

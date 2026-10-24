@@ -55,8 +55,9 @@ def test_v4_and_v3_share_the_stage_order_and_unknown_versions_fail_closed():
     assert stage_plan_for_request({}) == stage_plan_for_request({"contract_version": 1})
     assert stage_plan_for_request({"contract_version": 2}) == stage_plan_for_request({})
     assert stage_plan_for_request({"contract_version": 5}) == stage_plan_for_request({"contract_version": 4})
+    assert stage_plan_for_request({"contract_version": 6}) == stage_plan_for_request({"contract_version": 4})
     with pytest.raises(ContractError, match="contract version"):
-        stage_plan_for_request({"contract_version": 6})
+        stage_plan_for_request({"contract_version": 7})
 
 
 def test_v3_and_v4_execution_are_refused_until_the_paper_runtime_lands():

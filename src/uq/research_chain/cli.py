@@ -28,6 +28,7 @@ from .owning_contracts import (
     FeaturePreprocessingStore,
     FeatureSchemaStore,
     LabelStore,
+    SampleConstructionStore,
 )
 from .adapters import (
     BacktestStageAdapter,
@@ -84,19 +85,19 @@ def uq_research_run(argv: list[str] | None = None) -> int:
         "--membership-root",
         type=Path,
         default=None,
-        help="index membership store root; enables the v5 PIT membership-filtered dataset stage",
+        help="index membership store root; enables the PIT membership-filtered dataset stage",
     )
     parser.add_argument(
         "--paper-risk-documents-json",
         type=Path,
         default=None,
-        help="governed risk documents (policy/policy_review/state/state_payload) for v5 paper execution",
+        help="governed risk documents (policy/policy_review/state/state_payload) for paper execution",
     )
     parser.add_argument(
         "--market-dataset-root",
         type=Path,
         default=None,
-        help="MarketDatasetPublisher root; supplies the governed trading calendar and v5 paper inputs",
+        help="MarketDatasetPublisher root; supplies the governed trading calendar and paper inputs",
     )
     args = parser.parse_args(argv)
 
@@ -138,7 +139,7 @@ def uq_research_run(argv: list[str] | None = None) -> int:
 
 
 def _dry_run(request: dict[str, Any], *, data_root: Path) -> dict[str, Any]:
-    # Route by contract version: a v2..v5 request has its own schema name, and
+    # Route by contract version: a v2..v6 request has its own schema name, and
     # hardcoding the v1 schema rejected every later version at the CLI boundary
     # even though the runner's dry-run path is version-aware.
     ModelContractLoader.validate(research_request_schema_name(request), request)
@@ -389,14 +390,24 @@ class _EnvelopeDecisionProvider:
     def _stored_review(self, checksum: str) -> Mapping[str, Any] | None:
         if self.data_root is None:
             return None
-        path = self.data_root / "external_quality_reviews" / f"{checksum}.json"
-        if not path.is_file():
-            return None
-        try:
-            document = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
-        return document if isinstance(document, Mapping) else None
+        # The review store root follows the owning store, not one fixed directory.
+        # `FeaturePreprocessingStore` and `BacktestConfigStore` are constructed
+        # under `<data-root>/governed` by `_build_runner`, and their publishers
+        # write their review copies beside that store.  Looking only at
+        # `<data-root>/external_quality_reviews` made a correctly published
+        # preprocessing artifact unresolvable at execute time: the manifest named
+        # its review checksum, but the only copy was under `governed/`.
+        for root in (self.data_root, self.data_root / "governed"):
+            path = root / "external_quality_reviews" / f"{checksum}.json"
+            if not path.is_file():
+                continue
+            try:
+                document = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(document, Mapping):
+                return document
+        return None
 
 
 def _published_quality_checksum(
@@ -414,6 +425,7 @@ def _published_quality_checksum(
         BacktestConfigStore,
         FeaturePreprocessingStore,
         LabelStore,
+        SampleConstructionStore,
     )
 
     if data_root is None:
@@ -428,6 +440,10 @@ def _published_quality_checksum(
             return None
         if binding_type == "feature_preprocessing_v1":
             return FeaturePreprocessingStore(data_root / "governed").read_manifest(
+                subject_generation_id
+            )["quality_report_checksum_sha256"]
+        if binding_type == "sample_construction_v1":
+            return SampleConstructionStore(data_root / "governed").read_manifest(
                 subject_generation_id
             )["quality_report_checksum_sha256"]
         if binding_type == "backtest_config_v1":
@@ -492,6 +508,7 @@ _BINDING_TYPE_BY_FAMILY = {
     "factor_partition": "factor_v1",
     "label_set": "label_set_v1",
     "feature_preprocessing": "feature_preprocessing_v1",
+    "sample_construction": "sample_construction_v1",
     "model_dataset": "model_dataset_v1",
     "qlib_dataset_export": "qlib_dataset_export_v1",
     "qlib_init_receipt": "qlib_init_receipt_v1",
@@ -559,6 +576,7 @@ def _build_runner(
         universe_store=universe_store,
         feature_schema_store=FeatureSchemaStore(feature_store_root),
         preprocessing_store=FeaturePreprocessingStore(feature_store_root),
+        sample_construction_store=SampleConstructionStore(feature_store_root),
         dataset_writer=DatasetWriter(data_root),
         run_store=run_store,
         membership_store=membership_store,
@@ -628,9 +646,18 @@ def _execute(
     market_dataset_root: Path | None = None,
     paper_risk_documents_path: Path | None = None,
 ) -> dict[str, Any]:
-    if not isinstance(decisions_document.get("quality_decisions"), dict):
-        raise ContractError("quality decisions document requires quality_decisions")
-    decisions = decisions_document["quality_decisions"]
+    # `--decision-provider-json` is the production shape: every family is
+    # resolved by an external reviewer for the subject the stage derives, so a
+    # static `quality_decisions` mapping is neither required nor used.  The
+    # entry point used to demand one unconditionally and then overwrite it with
+    # the provider mapping, which made provider-only invocation impossible even
+    # though the resolver and runner support it.
+    if provider_document is None:
+        if not isinstance(decisions_document.get("quality_decisions"), dict):
+            raise ContractError("quality decisions document requires quality_decisions")
+        decisions = decisions_document["quality_decisions"]
+    else:
+        decisions = {}
     if provider_document is not None:
         command = provider_document.get("provider_command")
         if not isinstance(command, list) or not command or not all(isinstance(item, str) and item for item in command):
@@ -685,11 +712,15 @@ def _execute(
         trading_calendar = None
     paper_adapter = None
     paper_risk_source = None
-    if request.get("contract_version") == 5:
+    if request.get("contract_version") in {5, 6}:
         if market_publisher is None:
-            raise ContractError("research request v5 requires --market-dataset-root")
+            raise ContractError(
+                f"research request v{request.get('contract_version')} requires --market-dataset-root"
+            )
         if paper_risk_documents_path is None:
-            raise ContractError("research request v5 requires --paper-risk-documents-json")
+            raise ContractError(
+                f"research request v{request.get('contract_version')} requires --paper-risk-documents-json"
+            )
         paper_root = data_root / "paper-execution"
         market = PublishedPaperMarketData(
             market_publisher,
@@ -727,6 +758,9 @@ def _execute(
             "adjusted_price_dataset": runner.dataset_adapter.adjusted_price_store,
             "label_set": runner.dataset_adapter.label_store,
             "feature_preprocessing": runner.dataset_adapter.preprocessing_store,
+            "sample_construction": getattr(
+                runner.dataset_adapter, "sample_construction_store", None
+            ),
             "backtest_config": runner.backtest_adapter.backtest_config_store,
         },
         membership_store=membership_store,

@@ -287,11 +287,12 @@ execute 的命令形状如下，仅作结构说明：
 | `factor_binding` / `factor_partition_set_binding` | `uq.factors.store.FactorStore` | 是:`scripts/publish_factor_partitions.py`(读 canonical bars → 投影 → 算 → 发布,并输出 `factor_partition_set` 绑定) |
 | `universe_snapshot_binding` | `uq.contracts.artifacts.UniverseSnapshotStore` | 是:`scripts/publish_universe_snapshots.py`(把 `scripts/fetch_index_membership.py` 的 PIT 成分快照铺成 `[visible_from, 下一 visible_from)` 区间) |
 | `adjusted_price_binding` | `src/uq/research_chain/owning_contracts.py:89` `AdjustedPriceDatasetStore` | 否:只读 |
-| `feature_preprocessing_binding` | 同文件 `FeatureSchemaStore` + `FeaturePreprocessingStore` | 是:`scripts/publish_feature_preprocessing.py`(读 factor 分区 → 按 `--drop-incomplete-rows` 丢行 → 截面标准化 → 绑定**外部签发**的评审 → 发布) |
+| `sample_construction_binding` (v6) | 同文件 `SampleConstructionStore` | 是:`scripts/publish_sample_construction.py`(factor + label + universe + membership → 按 reviewed 行策略筛选 → 绑定**外部签发**的评审 → 发布最终训练样本) |
+| `feature_preprocessing_binding` | 同文件 `FeatureSchemaStore` + `FeaturePreprocessingStore` | 是:`scripts/publish_feature_preprocessing.py`(读 factor 分区或已评审 sample_construction → 截面变换 → 绑定**外部签发**的评审 → 发布) |
 | `label_binding` | 同文件 `LabelStore` | 是:`scripts/build_label_sets.py`(默认逐标的发布;`--combined` 发布**一份覆盖全部标的**的集合——研究请求只绑一份,所以跑 execute 要用这个开关) |
 | `backtest_config_binding` | 同文件 `BacktestConfigStore` | 否:只读 |
 
-v5 请求额外要求的两类绑定**有**随仓库提供的生产者:
+v5/v6 请求额外要求的两类绑定**有**随仓库提供的生产者:
 
 - `index_membership_binding`:`scripts/fetch_index_membership.py`。
 - `paper_execution_template` 的市场数据四族:`scripts/publish_market_datasets.py`。
@@ -301,11 +302,11 @@ v5 请求额外要求的两类绑定**有**随仓库提供的生产者:
 两点提醒:
 
 - §6 的 dry-run 只校验请求本身并写 request/state manifest,**不会**去解析上面这些 store;绑定是到 execute 阶段才逐个读取校验的,所以 dry-run 通过不代表可以 execute。
-- 因此"一条命令从零跑到回测"按现有代码还做不到:上面六类要先产出并落到同一个 `--data-root`。已有生产入口的是六类:因子(`scripts/publish_factor_partitions.py`)、universe snapshot(`scripts/publish_universe_snapshots.py`)、label set(`scripts/build_label_sets.py`)、feature preprocessing(`scripts/publish_feature_preprocessing.py`)、回测市场输入三族(`scripts/publish_backtest_market_data.py`)与 backtest_config 本身(`scripts/publish_backtest_config.py`,评审以 `--quality-decisions-json` 传入,脚本从不自己签);其余一类(`adjusted_price`)的写侧虽已在 `src/uq/research_chain/owning_contracts.py` 提供,但仍只有测试里的 helper 会实际调用它——且回测需要的是**覆盖整个窗口**的复权帧,不是按日分区。
+- 因此"一条命令从零跑到回测"按现有代码还做不到:上面这些类要先产出并落到同一个 `--data-root`。已有生产入口的是:因子(`scripts/publish_factor_partitions.py`)、universe snapshot(`scripts/publish_universe_snapshots.py`)、label set(`scripts/build_label_sets.py`)、sample construction(`scripts/publish_sample_construction.py`,v6)、feature preprocessing(`scripts/publish_feature_preprocessing.py`)、回测市场输入三族(`scripts/publish_backtest_market_data.py`)与 backtest_config 本身(`scripts/publish_backtest_config.py`,评审以 `--quality-decisions-json` 传入,脚本从不自己签);`adjusted_price` 的写侧虽已在 `src/uq/research_chain/owning_contracts.py` 提供,但回测需要的是**覆盖整个窗口**的复权帧,不是按日分区。
 
-### 论文执行(v5 请求)的两个额外参数
+### 论文执行(v5/v6 请求)的两个额外参数
 
-`contract_version: 5` 的请求(带 `paper_execution_template`)额外要求两个治理输入,必须成对提供:
+`contract_version: 5` 或 `6` 的请求(带 `paper_execution_template`)额外要求两个治理输入,必须成对提供:
 
 ```bash
 .venv/bin/uq-research-run \
@@ -319,7 +320,7 @@ v5 请求额外要求的两类绑定**有**随仓库提供的生产者:
   --market-dataset-root "$DATA_ROOT/market-datasets"
 ```
 
-- `--membership-root`:已发布的指数成分快照 store(v5 数据集阶段按"当日可见成员"过滤因子,缺它直接报错,不会静默退回原始因子分区)。
+- `--membership-root`:已发布的指数成分快照 store(数据集阶段按"当日可见成员"过滤因子,缺它直接报错,不会静默退回原始因子分区)。
 - `--market-dataset-root`:Phase 0.5 的 `MarketDatasetPublisher` store。研究窗口的交易日历由此处的 `trading_calendar_snapshot_v1` 家族导出;窗口没有覆盖到的日历快照会 fail-closed。
 
 只提供其中一个会报 `--membership-root and --market-dataset-root must be provided together`。

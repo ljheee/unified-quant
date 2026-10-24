@@ -224,6 +224,13 @@ winsorization bounds, neutralization, or online scaling) requires a new contract
 version with explicit fit-window bindings, state storage, refresh policy, and
 leakage tests.
 
+Label-aware row selection is a separate `sample_construction.v1` artifact, not a
+preprocessing policy. It binds the factor partitions, label set, universe and
+index-membership set, records the selection audit, and publishes the exact
+training frame. `feature_preprocessing.v1` consumes that frame and remains
+stateless, cross-sectional and label-agnostic. v6 requests bind sample
+construction explicitly; v5 requests keep their prior semantics.
+
 ## 7. Qlib Runtime Boundary
 
 Qlib is the selected training engine, not a governance layer.

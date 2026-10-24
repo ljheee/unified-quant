@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import sys
 from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
@@ -629,3 +630,88 @@ def test_mapping_decision_provider_invokes_callable_per_subject() -> None:
     bad = _MappingDecisionProvider({"label_set": lambda subject: ["not-a-mapping"]})
     with pytest.raises(ContractError, match="invalid research chain quality decision"):
         bad.resolve(output_family="label_set", subject_generation_id="b" * 64)
+
+
+def test_provider_only_execute_does_not_require_a_static_decision_mapping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The documented provider mode must be reachable without a static mapping.
+
+    `--decision-provider-json` replaces every family's decision with a provider
+    callable, so the static document's `quality_decisions` entry is unused.  The
+    CLI nevertheless required it before looking at the provider document, which
+    made the production shape impossible to invoke.  This locks the entry-point
+    contract without running the whole chain: the resolver is replaced by a
+    sentinel so the test fails if the request is not even accepted.
+    """
+    from types import SimpleNamespace
+
+    from uq.research_chain import cli
+    from uq.research_chain.resolver import ResearchResolutionError
+
+    request = _request(_upstream_manifests())
+    scores = {
+        "contract_version": 1,
+        "schema_version": "1.0.0",
+        "scores_by_decision_date": {"2026-01-05": [{"instrument": "000001.XSHE", "score": 1.0}]},
+    }
+    provider = {
+        "provider_id": "external-model-quality-reviewer-v1",
+        "provider_command": [sys.executable, str(tmp_path / "reviewer.py")],
+    }
+
+    reached = {"resolve": False}
+
+    class _SentinelResolver:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def resolve(self, *args, **kwargs):
+            reached["resolve"] = True
+            raise ResearchResolutionError("input_unresolved", "sentinel")
+
+    store = SimpleNamespace()
+    runner = SimpleNamespace(
+        factor_adapter=SimpleNamespace(store=store),
+        dataset_adapter=SimpleNamespace(
+            universe_store=store,
+            adjusted_price_store=store,
+            label_store=store,
+            preprocessing_store=store,
+        ),
+        backtest_adapter=SimpleNamespace(backtest_config_store=store),
+    )
+    monkeypatch.setattr(cli, "_build_runner", lambda **kwargs: runner)
+    monkeypatch.setattr(cli, "ResearchChainRequestResolver", _SentinelResolver)
+
+    with pytest.raises(ContractError, match="sentinel"):
+        cli._execute(
+            request,
+            decisions_document={"provider_id": "external-model-quality-reviewer-v1"},
+            scores_document=scores,
+            project_root=ROOT,
+            data_root=tmp_path / "data",
+            provider_document=provider,
+        )
+    assert reached["resolve"] is True
+
+
+def test_provider_review_recovery_reads_the_governed_store_root(tmp_path: Path) -> None:
+    """A published preprocessing review is stored beside its owning store.
+
+    `_build_runner` constructs `FeaturePreprocessingStore(data_root / "governed")`,
+    and its publisher writes the review copy under that same root.  Provider
+    recovery only searched `<data_root>/external_quality_reviews`, so a valid
+    artifact looked unreviewed at execute time.  Both locations are accepted;
+    the governed one is the production path.
+    """
+    from uq.research_chain.cli import _EnvelopeDecisionProvider
+
+    checksum = "a" * 64
+    report = {"report_version": 2, "binding_type": "feature_preprocessing_v1"}
+    path = tmp_path / "governed" / "external_quality_reviews" / f"{checksum}.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(report), encoding="utf-8")
+
+    provider = _EnvelopeDecisionProvider(object(), data_root=tmp_path)
+    assert provider._stored_review(checksum) == report

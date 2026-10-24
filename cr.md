@@ -3308,3 +3308,59 @@ paper 在每个决策日 T 的**下一个会话**执行。当请求窗口的最�
   都是变异测试抓出来的。这条纪律应写进 LESSONS。
 - 期间误把一个空 calendar 分区（国庆休市，`session_dates=[]`）发布进去，
   造成链断裂；已移走并重发。
+
+### 8.74 方案 B 落地：独立 sample construction 制品（2026-10-24）
+
+**触发**：用户确认采用方案 B（独立样本构建制品），而非给
+`feature_preprocessing.v1` 增加 label 输入。
+
+#### A. 设计定论
+
+旧设计已经明确 preprocessing 是无状态、同日截面、label-agnostic 的变换
+（`specs/architecture.md` §11.4、`specs/layers/model-layer-spec.md`）。业界也没有
+把 label-null 筛选放进共享预处理制品的标准做法：Qlib 用 learn-only 的
+`DropnaLabel`，sklearn 把 X 与 y 的校验分开，Alphalens 在因子分析前显式清洗样本。
+
+因此落地为：
+
+```text
+factor partitions + label set + universe + membership
+  -> sample_construction.v1（决定哪些行可训练）
+  -> feature_preprocessing.v1（只做无状态截面变换）
+  -> model dataset
+```
+
+#### B. 落地内容
+
+- 新增 `config/schemas/contracts/sample_construction.v1.json` 与
+  `src/uq/models/sample_construction.py`：选择策略显式记录 feature-null、
+  label-null、absent-label-key 三个动作，并保存选择前后行数与逐项丢弃审计。
+- 新增 `SampleConstructionStore`（`src/uq/research_chain/owning_contracts.py`）：
+  发布、读回、评审绑定和篡改检查都在同一 store 内完成。
+- 新增生产入口 `scripts/publish_sample_construction.py`：从已发布 factor/label/
+  universe/membership 输入生成最终训练帧。
+- 新增 `research_run_request_v6`：只比 v5 多一个
+  `sample_construction_binding`，阶段顺序不变，stage-plan digest 独立。
+- v6 dataset stage 强制读取并核对 sample construction 的 factor/label/universe/
+  membership 血缘与行键；`feature_preprocessing` 仍只接收筛选后的特征帧。
+- `scripts/publish_feature_preprocessing.py` 新增
+  `--sample-construction-root/--sample-construction-generation`，从已评审的样本
+  制品取输入；v1 preprocessing 的语义未改变。
+
+#### C. 兼容性
+
+- v5 请求 schema、stage plan 和旧路径原样保留，不能借新增字段获得 v6 语义。
+- `feature_preprocessing.v1` 没有新增字段；label-aware 行筛选只存在于新族
+  `sample_construction.v1`。
+- 旧的 `drop_unlabelled_factor_rows` 仍保留给 v5 兼容路径；v6 不再调用它，
+  而是核对 sample construction 的输出。
+
+#### D. 测试
+
+- `tests/test_sample_construction.py`：null label / null feature / absent key 的
+  选择、发布读回、篡改拒绝。
+- `tests/test_research_v6_sample_binding.py`：v6 路由、必填绑定、v5 不能夹带
+  v6 字段、阶段计划 digest 独立。
+- `tests/test_research_chain_v6_sample_stage.py`：v6 dataset stage 真正消费
+  sample construction 的筛选后帧，并把 sample binding 写入 stage state。
+- 全量：`.venv` **1265 passed / 28 skipped**、`.venv-qlib` **1293 passed / 0 skipped**。

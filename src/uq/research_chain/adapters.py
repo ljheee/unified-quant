@@ -39,6 +39,7 @@ from .owning_contracts import (
     FeaturePreprocessingStore,
     FeatureSchemaStore,
     LabelStore,
+    SampleConstructionStore,
 )
 from .resolver import FileResearchRunStore, ResolvedExecutionPlan, stage_plan_for_request
 
@@ -365,6 +366,7 @@ class DatasetStageAdapter:
         preprocessing_store: FeaturePreprocessingStore,
         dataset_writer: DatasetWriter,
         run_store: FileResearchRunStore,
+        sample_construction_store: SampleConstructionStore | None = None,
         membership_store: Any | None = None,
         trading_calendar: Sequence[date] | None = None,
     ) -> None:
@@ -374,6 +376,7 @@ class DatasetStageAdapter:
         self.universe_store = universe_store
         self.feature_schema_store = feature_schema_store
         self.preprocessing_store = preprocessing_store
+        self.sample_construction_store = sample_construction_store
         self.dataset_writer = dataset_writer
         self.run_store = run_store
         self.membership_store = membership_store
@@ -382,15 +385,15 @@ class DatasetStageAdapter:
     def _read_factor_frame(self, plan: ResolvedExecutionPlan, factor_binding) -> pd.DataFrame:
         """Select the factor frame the dataset stage is allowed to consume.
 
-        v4/v5 requests declare an `index_membership_binding`, so their dataset must be
+        v4/v5/v6 requests declare an `index_membership_binding`, so their dataset must be
         built from the per-day visible-member intersection; a missing governed
         membership store is a hard failure rather than a silent fallback to the raw
         partition, which would admit members that were not in the index on that day.
         """
-        if plan.request.get("contract_version") in {4, 5}:
+        if plan.request.get("contract_version") in {4, 5, 6}:
             if self.membership_store is None or self.trading_calendar is None:
                 raise ContractError(
-                    "v4/v5 dataset stage requires a governed membership store and trading calendar"
+                    "v4/v5/v6 dataset stage requires a governed membership store and trading calendar"
                 )
             return filtered_factor_frame(
                 plan.request,
@@ -405,18 +408,18 @@ class DatasetStageAdapter:
         """Rebuild the request's factor partition set from its owning store.
 
         The request carries only the set's digest, so the partitions have to be
-        re-derived. v4/v5 already do this inside `filtered_factor_frame`; the
+        re-derived. v4/v5/v6 already do this inside `filtered_factor_frame`; the
         preprocessing binding check needs the same list, and re-deriving it is what
         keeps that check anchored to the store rather than to the request's claim.
         """
-        if plan.request.get("contract_version") not in {4, 5}:
+        if plan.request.get("contract_version") not in {4, 5, 6}:
             raise ContractError(
-                "factor partition set resolution requires a v4/v5 request; earlier "
+                "factor partition set resolution requires a v4/v5/v6 request; earlier "
                 "contracts bind a single factor partition and carry no set"
             )
         if self.membership_store is None or self.trading_calendar is None:
             raise ContractError(
-                "v4/v5 dataset stage requires a governed membership store and trading calendar"
+                "v4/v5/v6 dataset stage requires a governed membership store and trading calendar"
             )
         return verify_request_input_sets(
             plan.request,
@@ -457,6 +460,7 @@ class DatasetStageAdapter:
         quality_decision: Mapping[str, Any],
         preprocessing_quality_decision: Mapping[str, Any],
         label_quality_decision: Mapping[str, Any],
+        sample_construction_quality_decision: Mapping[str, Any] | None = None,
         created_at: str | None = None,
     ) -> DatasetStageResult:
         template = plan.request.get("dataset_policy_template")
@@ -536,10 +540,12 @@ class DatasetStageAdapter:
         # has always declared this field as an array (`minItems: 1`). Compare against
         # the resolved partition set instead, which is stricter than the old
         # equality -- a set built for a different window or ordering is refused.
-        if plan.request.get("contract_version") in {4, 5}:
+        expected_factor_partition_set: dict[str, Any] | None = None
+        if plan.request.get("contract_version") in {4, 5, 6}:
+            expected_factor_partition_set = self._factor_partition_set(plan)
             expected_factor_generations = [
                 entry["generation_id"]
-                for entry in self._factor_partition_set(plan)["partitions"]
+                for entry in expected_factor_partition_set["partitions"]
             ]
         else:
             # v1-v3 bind exactly one factor partition and carry no set, so the
@@ -554,6 +560,71 @@ class DatasetStageAdapter:
         input_schema = self.feature_schema_store.read_schema(preprocessing["input_feature_schema_generation_id"])
         output_schema = self.feature_schema_store.read_schema(preprocessing["output_feature_schema_generation_id"])
 
+        if plan.request.get("contract_version") == 6:
+            if self.sample_construction_store is None:
+                raise ContractError(
+                    "v6 dataset stage requires a governed sample-construction store"
+                )
+            sample_binding = _stage_binding(
+                plan, stage="dataset_preparation", output_family="sample_construction"
+            )
+            sample_manifest, sample_frame = self.sample_construction_store.read_frame(
+                sample_binding.generation_id
+            )
+            if sample_construction_quality_decision is None:
+                raise ContractError("v6 dataset stage requires the sample-construction review")
+            _, sample_review_checksum = bind_reviewed_quality_decision(
+                dict(sample_construction_quality_decision),
+                binding_type="sample_construction_v1",
+                subject_generation_id=sample_manifest["generation_id"],
+                subject_content_sha256=sample_manifest["generation_id"],
+            )
+            if sample_review_checksum != sample_manifest["quality_report_checksum_sha256"]:
+                raise ContractError("sample construction quality decision checksum mismatch")
+            if sample_manifest["manifest_digest_sha256"] != sample_binding.manifest_digest_sha256:
+                raise ContractError("sample construction binding manifest digest mismatch")
+            if sample_manifest["source_factor_generation_ids"] != expected_factor_generations:
+                raise ContractError("sample construction factor generation mismatch")
+            expected_factor_set_digest = (
+                None
+                if expected_factor_partition_set is None
+                else expected_factor_partition_set["set_digest_sha256"]
+            )
+            if expected_factor_set_digest is not None and (
+                sample_manifest["source_factor_partition_set_digest_sha256"]
+                != expected_factor_set_digest
+            ):
+                raise ContractError("sample construction factor partition set digest mismatch")
+            if sample_manifest["source_label_generation_id"] != label_binding.generation_id:
+                raise ContractError("sample construction label generation mismatch")
+            if sample_manifest["source_label_manifest_digest_sha256"] != label_manifest["manifest_digest_sha256"]:
+                raise ContractError("sample construction label manifest digest mismatch")
+            if sample_manifest["source_label_data_checksum_sha256"] != label_manifest["data_checksum_sha256"]:
+                raise ContractError("sample construction label data checksum mismatch")
+            if sample_manifest["source_universe_snapshot_generation_id"] != universe_binding.generation_id:
+                raise ContractError("sample construction universe generation mismatch")
+            if sample_manifest["source_index_membership_set_digest_sha256"] != plan.request[
+                "index_membership_binding"
+            ]["set_digest_sha256"]:
+                raise ContractError("sample construction membership set digest mismatch")
+            if sample_manifest["source_factor_set"] != factor_manifest["factor_set"]:
+                raise ContractError("sample construction factor set mismatch")
+            if sample_manifest["source_factor_version"] != factor_manifest["factor_version"]:
+                raise ContractError("sample construction factor version mismatch")
+            if sample_manifest["ordered_features"] != list(preprocessing["ordered_features"]):
+                raise ContractError("sample construction feature order does not match preprocessing")
+            if sample_frame[["instrument", "datetime"]].duplicated().any():
+                raise ContractError("sample construction contains duplicate keys")
+            factor_frame = sample_frame[
+                ["instrument", "datetime", *sample_manifest["ordered_features"]]
+            ].copy()
+            label_frame = sample_frame[
+                ["instrument", "datetime", "label"]
+            ].rename(columns={"datetime": "decision_date"})
+        else:
+            sample_manifest = None
+            sample_frame = None
+
         # `drop_incomplete_rows` has to act *here*, before preprocessing, not after
         # the label merge. `DatasetWriter` requires the published frame and the
         # preprocessing output to have the same rows, and re-derives
@@ -565,9 +636,13 @@ class DatasetStageAdapter:
         # Both policies drop feature-null rows here. A null *label* is handled
         # separately below, because it is a different defect with a different remedy.
         # Only *feature* incompleteness means "this row cannot be computed".
-        dropped_rows: dict[str, Any] = {}
-        dropped_labels: dict[str, Any] = {}
-        if template["missing_policy"] in ("drop_incomplete_rows", "drop_unlabeled_rows"):
+        dropped_rows: dict[str, Any] = (
+            {} if sample_manifest is None else dict(sample_manifest["dropped_rows"])
+        )
+        dropped_labels: dict[str, Any] = (
+            {} if sample_manifest is None else dict(sample_manifest["dropped_labels"])
+        )
+        if sample_manifest is None and template["missing_policy"] in ("drop_incomplete_rows", "drop_unlabeled_rows"):
             feature_columns = list(preprocessing["ordered_features"])
             incomplete = factor_frame[feature_columns].isna().any(axis=1)
             if incomplete.any():
@@ -589,7 +664,7 @@ class DatasetStageAdapter:
                         "drop_incomplete_rows left no usable factor rows: "
                         f"{dropped_rows}"
                     )
-        if template["missing_policy"] == "drop_unlabeled_rows":
+        if sample_manifest is None and template["missing_policy"] == "drop_unlabeled_rows":
             # A null label is a different defect from a null feature, so it gets its
             # own policy rather than being folded into `drop_incomplete_rows`.
             # Qlib makes the same split: `DropnaLabel` is a separate processor from
@@ -625,12 +700,24 @@ class DatasetStageAdapter:
             label_frame,
             label_generation_id=label_binding.generation_id,
         )
-        if template["missing_policy"] == "fail_closed":
+        if sample_manifest is not None:
+            expected_rows = sample_manifest["row_count"]
+            if len(dataset_frame) != expected_rows:
+                raise ContractError(
+                    "sample construction row count does not match the preprocessed dataset"
+                )
+            if not dataset_frame[["instrument", "datetime"]].reset_index(drop=True).equals(
+                sample_frame[["instrument", "datetime"]].reset_index(drop=True)
+            ):
+                raise ContractError(
+                    "sample construction keys do not match the preprocessed dataset"
+                )
+        if sample_manifest is None and template["missing_policy"] == "fail_closed":
             null_columns = [*preprocessing["ordered_features"], "label"]
             null_counts = dataset_frame[null_columns].isna().sum()
             if (null_counts > 0).any():
                 raise ContractError(f"fail_closed dataset contains null values: {null_counts[null_counts > 0].to_dict()}")
-        if template["missing_policy"] == "drop_incomplete_rows":
+        if sample_manifest is None and template["missing_policy"] == "drop_incomplete_rows":
             # Features were filtered above; a surviving null can only be a label.
             # That is a target-definition gap, not feature noise, so it stays
             # fail-closed rather than being silently dropped.
@@ -716,10 +803,26 @@ class DatasetStageAdapter:
             "quality_decision_checksum_sha256": published_manifest["quality_report_checksum_sha256"],
             "failure_reason": None,
         }
+        output_bindings = [output_binding]
+        if sample_manifest is not None:
+            output_bindings.append({
+                "output_family": "sample_construction",
+                "generation_id": sample_manifest["generation_id"],
+                "manifest_digest_sha256": sample_manifest["manifest_digest_sha256"],
+                "data_checksum_sha256": sample_manifest["data_checksum_sha256"],
+                "physical_path": (
+                    f"sample_construction/generation={sample_manifest['generation_id']}"
+                    "/manifest.json"
+                ),
+                "quality_decision_checksum_sha256": sample_manifest[
+                    "quality_report_checksum_sha256"
+                ],
+                "failure_reason": None,
+            })
         state = build_stage_state(
             plan,
             stage="dataset_preparation",
-            output_bindings=[output_binding],
+            output_bindings=output_bindings,
             runner_identity=runner_identity,
             created_at=created_at,
         )

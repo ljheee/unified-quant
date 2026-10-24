@@ -18,7 +18,7 @@
     },
     {
       "path": "scripts/ingest_window.py",
-      "sha256": "f99745857e1521ba9b65f3516c96468029f840971b4e9d05280d7989d73c4852"
+      "sha256": "3e0ab8e257019b6b7d1e04c3c3ccaca4736e20bdeba9f1b261aef33e7934b4a5"
     },
     {
       "path": "scripts/validate_training_readiness.py",

@@ -74,7 +74,7 @@
     },
     {
       "path": "specs/architecture.md",
-      "sha256": "42a6b63c1256352e2e0e6627c9e423ac493fd1a8e287e39149ec11e5d1c424c1"
+      "sha256": "49648b8a85b166e481d6dc7ff00c2415066cf838eee5a61511a98552038c1315"
     },
     {
       "path": "specs/layers/paper-execution-layer-spec.md",

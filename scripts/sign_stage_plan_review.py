@@ -11,17 +11,20 @@ from uq.contracts.model_layer import (
     research_stage_plan_v3_sha256,
     research_stage_plan_v4_sha256,
     research_stage_plan_v5_sha256,
+    research_stage_plan_v6_sha256,
 )
 
 _SIGNERS = {
     3: ("research_stage_plan_v3_activation", "research-stage-plan-reviewer-v3-test-2026-10"),
     4: ("research_stage_plan_v4_activation", "research-stage-plan-reviewer-v4-test-2026-10"),
     5: ("research_stage_plan_v5_activation", "research-stage-plan-reviewer-v5-test-2026-10"),
+    6: ("research_stage_plan_v6_activation", "research-stage-plan-reviewer-v6-test-2026-10"),
 }
 _DIGESTS = {
     3: research_stage_plan_v3_sha256,
     4: research_stage_plan_v4_sha256,
     5: research_stage_plan_v5_sha256,
+    6: research_stage_plan_v6_sha256,
 }
 TEST_SEED_HEX = "02" * 32
 
@@ -42,7 +45,7 @@ def build_review(stage_plan_sha256: str, reviewer: str, seed_hex: str, version: 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="sign a stage-plan activation review (test seed only)")
-    parser.add_argument("--version", type=int, default=5, choices=[3, 4, 5])
+    parser.add_argument("--version", type=int, default=6, choices=[3, 4, 5, 6])
     parser.add_argument("--reviewer", default="repository-owner")
     parser.add_argument("--output", type=Path, help="write review JSON to this path instead of stdout")
     args = parser.parse_args()

@@ -20,10 +20,10 @@ It does **not** own any of those layers, does not create or sign quality decisio
 | Stage adapters and cross-stage hand-offs | `src/uq/research_chain/adapters.py`, `src/uq/execution/stage_adapter.py:61` |
 | Read-side stores for chain-bound families | `src/uq/research_chain/owning_contracts.py` |
 | PIT membership filtering of factor frames | `src/uq/research_chain/membership_input.py:47` `verify_request_input_sets`, `:142` `filtered_factor_frame` |
-| Stage-plan trust anchors | `config/research-stage-plan-review-anchor.v1.json`, `config/research-stage-plan-review-anchor.v3.json`, `config/research-stage-plan-review-anchor.v4.json`, `config/research-stage-plan-review-anchor.v5.json` |
+| Stage-plan trust anchors | `config/research-stage-plan-review-anchor.v1.json`, `config/research-stage-plan-review-anchor.v3.json`, `config/research-stage-plan-review-anchor.v4.json`, `config/research-stage-plan-review-anchor.v5.json`, `config/research-stage-plan-review-anchor.v6.json` |
 | Signed stage-plan builder for reviews | `scripts/sign_stage_plan_review.py` |
 
-Stage order for v1/v2 is `resolve_request → factor_computation → dataset_preparation → qlib_export → model_training → prediction_publication → portfolio_construction → backtest_execution → result_reconciliation`. v3/v4/v5 insert `paper_execution` before `result_reconciliation`; v3/v4 are refused at runtime while v5 is the executable paper line.
+Stage order for v1/v2 is `resolve_request → factor_computation → dataset_preparation → qlib_export → model_training → prediction_publication → portfolio_construction → backtest_execution → result_reconciliation`. v3/v4/v5/v6 insert `paper_execution` before `result_reconciliation`; v3/v4 are refused at runtime while v5/v6 are executable. v6 adds `sample_construction_binding` without changing the stage order.
 
 ## Primary Runtime Paths
 
@@ -31,9 +31,9 @@ Entry point is the console script `uq-research-run` (`uq.research_chain.cli:uq_r
 
 **dry-run** validates the request against its schema, verifies the signed stage-plan review, matches `stage_plan_sha256` to the contract version's expected digest, recomputes the request identity, and publishes a request manifest plus a `stage=00` state manifest. It does **not** read any bound store, so a green dry-run is not evidence that execute can run.
 
-**execute** requires `--quality-decisions-json` and `--scores-json`; v5 additionally requires `--membership-root` and `--market-dataset-root` together (one without the other is refused). The runner then:
+**execute** requires `--quality-decisions-json` and `--scores-json`; v5/v6 additionally require `--membership-root` and `--market-dataset-root` together (one without the other is refused). The runner then:
 
-1. validates the plan (`_validate_plan`), refusing contract versions 3/4 and verifying the stage-plan review for v2–v5;
+1. validates the plan (`_validate_plan`), refusing contract versions 3/4 and verifying the stage-plan review for v2–v6;
 2. publishes the request and resolution state;
 3. **resumes** from stages already recorded `passed` (`src/uq/research_chain/runner.py:992` `_resume_from_passed_stages`), folding each stage's output bindings into the plan so a failure anywhere is retryable without hand-moving directories;
 4. re-hydrates the one hand-off that has no read-back path (`model_training` → `model_run`/`model_artifact`) from the published manifests, so a resumed run consumes the same bytes it published;
@@ -43,9 +43,9 @@ Cancellation/failure writes a failed state on the way out, which is what makes r
 
 ## Multiple Implementations / Entry Points
 
-- **Contract versions 1–5** select different schemas, stage plans and stage-plan digests. `contract_version` 3 and 4 are intentionally not executable (`research request v3/v4 paper-execution runtime is not enabled`) — a fail-closed behaviour lock registered by a test, not an unfinished wire-up. v5 is the executable paper line.
+- **Contract versions 1–6** select different schemas, stage plans and stage-plan digests. `contract_version` 3 and 4 are intentionally not executable (`research request v3/v4 paper-execution runtime is not enabled`) — a fail-closed behaviour lock registered by a test, not an unfinished wire-up. v5 and v6 are executable; v6 adds the sample-construction binding.
 - **Decision providers.** The runner resolves quality decisions through a pluggable `QualityDecisionProvider` (`src/uq/research_chain/cli.py:183` mapping provider, `:201` command provider, or a JSON document). Implementations never sign; they return an immutable owning-layer decision for verification.
-- **Membership filtering.** v5 dataset preparation filters factors by *that day's* visible index members; a missing membership store is a hard error rather than a silent fall back to the unfiltered partition (`src/uq/research_chain/membership_input.py`).
+- **Membership filtering.** v5/v6 dataset preparation filters factors by *that day's* visible index members; a missing membership store is a hard error rather than a silent fall back to the unfiltered partition (`src/uq/research_chain/membership_input.py`).
 - **Paper market inputs.** `MarketDatasetPublisher` supplies the governed trading calendar for the research window; a window not covered by a calendar snapshot fails closed rather than being widened.
 
 ## State and Data Contracts
@@ -81,8 +81,11 @@ pd.NA values", while `_assert_all_finite(y)` is unconditional. Qlib separates th
 Dropping happens **before** the preprocessing transform, not after the label merge:
 `DatasetWriter` requires the published frame and the preprocessing output to carry the
 same rows and re-derives `output_frame_sha256` from the dataset frame on both publish and
-read. A null label is only knowable post-merge, so `drop_unlabelled_factor_rows` filters the
-preprocessing *input* and the transform is re-run.
+read. A null label is only knowable after the factor/label join, so v6 requests bind a
+separate `sample_construction.v1` artifact. Its selected frame is the preprocessing input;
+preprocessing itself remains label-agnostic and stateless. v5 requests retain their legacy
+stage-local path, but cannot acquire sample-construction semantics without a new request
+version.
 
 **Two shapes of a missing label, and why both must be dropped.** A label that is *present
 but null* leaves a row in `label_frame` that `unlabeled_keys` can name. A label whose key is
@@ -97,12 +100,12 @@ frame-local. `drop_unlabelled_factor_rows` now compares key sets with `pandas`
 
 - Failure reasons are a closed set (`src/uq/research_chain/resolver.py:43`): `request_invalid`, `input_unresolved`, `input_tampered`, `lineage_mismatch`, `quality_decision_missing`, `quality_decision_rejected`, `stage_failed`, `store_read_failed`, `overwrite_conflict`, `reproducibility_failed`, `result_reconciliation_failed`. Each maps to a CLI exit code.
 - Execute is deliberately not zero-input: it requires already-published governed upstream artifacts, an externally signed stage-plan review, external quality decisions and external scores. This is a design choice to stop unreviewed models or ungoverned data entering results (`docs/layer-architecture.md` §3).
-- The v1 dry-run CLI path uses the v1 example request; copying a v3/v5 fixture into it will not be routed as v3/v5.
+- The v1 dry-run CLI path uses the v1 example request; copying a v3/v5/v6 fixture into it will not be routed as that version.
 - Trust material: `require_production_review_key` refuses repository test-mode Ed25519 anchors when `UQ_RUNTIME_MODE=production` (`src/uq/runtime.py:34`), so a test-signed review cannot authorize a production run.
 
 ## Verification Evidence
 
-- `.venv/bin/python -m pytest` → `1188 passed, 25 skipped`; `.venv-qlib/bin/python -m pytest` → `1213 passed, 0 skipped` (the 25 `.venv` skips are Qlib-gated research-chain tests). Counts updated by the change that adds the missing-data-policy section above.
+- `.venv/bin/python -m pytest` → `1265 passed, 28 skipped`; `.venv-qlib/bin/python -m pytest` → `1293 passed, 0 skipped` (the 28 `.venv` skips are Qlib-gated tests). Counts updated by the v6 sample-construction change.
 - Research-chain suites: `tests/test_research_chain_phase0.py`–`phase5.py`, `tests/test_research_chain_release_evidence.py`, `tests/test_research_v4_contract.py`, `tests/test_research_membership_input.py`.
 - Paper-stage integration: `tests/test_paper_execution_research_stage_runner.py` and `tests/test_paper_execution_research_integration_phase*.py`.
 - CLI dry-run smoke with the shipped fixture: `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` (documented in `docs/user-guide.md` §6).
@@ -111,7 +114,7 @@ frame-local. `drop_unlabelled_factor_rows` now compares key sets with `pandas`
 ## Unknowns and Pending Confirmation
 
 - `UNKNOWN`: a complete `execute` run from a clean data root in this worktree. Six upstream binding families must be published first; only four have production entry points (`docs/user-guide.md` §7). No `--data-root` was prepared or run during this bootstrap, and no credentials were used.
-- `UNKNOWN`: end-to-end v5 execute coverage. The chain's v5 dry-run and the paper stage are tested, but `ResearchChainRunner.execute` has no v5 end-to-end test in `tests/` — the repository records this gap in `cr.md` rather than closing it.
+- `UNKNOWN`: end-to-end v5/v6 execute coverage. The chain's v5 dry-run and the paper stage are tested, but `ResearchChainRunner.execute` has no v5/v6 end-to-end test in `tests/` — the repository records this gap in `cr.md` rather than closing it.
 
 ## `adjusted_price_binding`: one partition per session, not a window artifact
 

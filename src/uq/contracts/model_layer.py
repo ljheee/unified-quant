@@ -31,6 +31,7 @@ _SCHEMA_NAMES = {
     "prediction_set",
     "feature_schema",
     "feature_preprocessing",
+    "sample_construction",
     "portfolio_definition",
     "target_weights",
     "backtest_config",
@@ -49,6 +50,7 @@ _RUN_LOCAL_FIELDS = {"run_id", "created_at"}
 _QUALITY_BOUND_FIELDS = {
     "model_dataset": {"quality_report_checksum_sha256", "logical_fingerprint", "input_feature_schema_manifest_digest_sha256"},
     "feature_preprocessing": {"quality_report_checksum_sha256", "input_feature_schema_manifest_digest_sha256"},
+    "sample_construction": {"quality_report_checksum_sha256"},
     "model_definition": {"quality_report_checksum_sha256", "model_run_content_generation_id"},
     "model_run": {"quality_report_checksum_sha256"},
     "qlib_dataset_export": {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
@@ -62,6 +64,7 @@ _RESEARCH_SCHEMA_NAMES = {
     "research_run_request_v3",
     "research_run_request_v4",
     "research_run_request_v5",
+    "research_run_request_v6",
 
     "research_run_state",
     "research_run_result",
@@ -79,6 +82,7 @@ _RESEARCH_IDENTITY_EXCLUDED_FIELDS = {
     "research_run_request_v3": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
     "research_run_request_v4": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
     "research_run_request_v5": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
+    "research_run_request_v6": {"request_content_generation_id", "manifest_digest_sha256", *_RUN_LOCAL_FIELDS},
     "research_run_state": {"state_content_generation_id", "manifest_digest_sha256"},
     "research_run_result": {
         "result_content_generation_id", "manifest_digest_sha256",
@@ -297,6 +301,9 @@ def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
     if schema_name == "model_dataset":
         validate_contract("model_dataset.v1.json", payload)
         return
+    if schema_name == "sample_construction":
+        validate_contract("sample_construction.v1.json", payload)
+        return
     if schema_name in {"qlib_dataset_export", "qlib_init_receipt"} and payload.get("contract_version") == 2:
         validate_contract(f"{schema_name}.v2.json", payload)
         return
@@ -407,6 +414,30 @@ def research_stage_plan_v5_sha256() -> str:
     })
 
 
+def research_stage_plan_v6_sha256() -> str:
+    """Return the externally reviewed Research Chain stage-plan v6 digest.
+
+    v6 adds the sample-construction binding to the dataset stage but does not
+    change the stage order. Keeping the digest versioned means a v5 request can
+    never silently acquire v6 semantics.
+    """
+    return sha256_json({
+        "schema_version": "v6",
+        "stage_plan": [
+            "resolve_request",
+            "factor_computation",
+            "dataset_preparation",
+            "qlib_export",
+            "model_training",
+            "prediction_publication",
+            "portfolio_construction",
+            "backtest_execution",
+            "paper_execution",
+            "result_reconciliation",
+        ],
+    })
+
+
 def _without_physical_path(value: Any) -> Any:
     if isinstance(value, list):
         return [_without_physical_path(item) for item in value]
@@ -451,7 +482,7 @@ def research_contract_identities(
         content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
     elif schema_name == "portfolio_definition_template":
         content_field, digest_field = "template_generation_id", "template_manifest_digest_sha256"
-    elif schema_name in {"research_run_request", "research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5"}:
+    elif schema_name in {"research_run_request", "research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "research_run_request_v6"}:
         content_field, digest_field = "request_content_generation_id", "manifest_digest_sha256"
     elif schema_name == "research_run_state":
         content_field, digest_field = "state_content_generation_id", "manifest_digest_sha256"
@@ -503,7 +534,7 @@ def _validate_stage_record_order(
     # any v4/v5 state with a paper_execution record was rejected.
     stage_order = (
         _RESEARCH_STAGE_ORDER_V3
-        if payload.get("contract_version") in {3, 4, 5}
+        if payload.get("contract_version") in {3, 4, 5, 6}
         else _RESEARCH_STAGE_ORDER_V1
     )
     stages_seen: list[str] = []
@@ -639,7 +670,7 @@ class ModelContractLoader:
         if schema_name in _RESEARCH_SCHEMA_NAMES:
             _reject_non_finite(payload)
             validate_contract(
-                f"{schema_name}.json" if schema_name in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "paper_execution_template_v2"}
+                f"{schema_name}.json" if schema_name in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "research_run_request_v6", "paper_execution_template_v2"}
                 else f"{schema_name}.v1.json", payload
             )
             if schema_name == "research_run_result":
@@ -658,6 +689,7 @@ class ModelContractLoader:
                 "research_run_request_v3": "request_content_generation_id",
                 "research_run_request_v4": "request_content_generation_id",
                 "research_run_request_v5": "request_content_generation_id",
+                "research_run_request_v6": "request_content_generation_id",
                 "research_run_state": "state_content_generation_id",
                 "research_run_result": "result_content_generation_id",
                 "quality_decision": "decision_checksum_sha256",
@@ -696,6 +728,7 @@ class ModelContractLoader:
                 "research_run_request_v3": "manifest_digest_sha256",
                 "research_run_request_v4": "manifest_digest_sha256",
                 "research_run_request_v5": "manifest_digest_sha256",
+                "research_run_request_v6": "manifest_digest_sha256",
                 "research_run_state": "manifest_digest_sha256",
                 "research_run_result": "manifest_digest_sha256",
             }[schema_name]

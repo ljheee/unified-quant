@@ -14,7 +14,7 @@ from ..runtime import require_production_review_key
 
 _QUALITY_BINDING_TYPES = {
     "label_set_v1", "model_dataset_v1", "model_definition_v1", "model_run_v1",
-    "model_artifact_v1", "feature_preprocessing_v1", "qlib_dataset_export_v1",
+    "model_artifact_v1", "feature_preprocessing_v1", "sample_construction_v1", "qlib_dataset_export_v1",
     "qlib_init_receipt_v1", "prediction_set_v1", "portfolio_definition_v1",
     "target_weights_v1", "backtest_config_v1", "backtest_result_v1", "factor_v1",
     "research_run_request_v1", "research_run_state_v1", "research_run_result_v1",
@@ -251,6 +251,7 @@ _STAGE_PLAN_REVIEW_TYPES = {
     "research_stage_plan_v3_activation",
     "research_stage_plan_v4_activation",
     "research_stage_plan_v5_activation",
+    "research_stage_plan_v6_activation",
 }
 
 
@@ -273,6 +274,7 @@ def verify_stage_plan_review(review: Mapping[str, Any], *, stage_plan_sha256: st
         "research_stage_plan_v3_activation": "v3",
         "research_stage_plan_v4_activation": "v4",
         "research_stage_plan_v5_activation": "v5",
+        "research_stage_plan_v6_activation": "v6",
     }.get(review["review_type"], "v1")
     anchor_path = Path(__file__).parents[3] / f"config/research-stage-plan-review-anchor.{anchor_suffix}.json"
     anchor = json.loads(anchor_path.read_text(encoding="utf-8"))
@@ -304,4 +306,6 @@ def research_request_schema_name(request: Mapping[str, Any]) -> str:
         return "research_run_request_v4"
     if version == 5:
         return "research_run_request_v5"
+    if version == 6:
+        return "research_run_request_v6"
     raise ContractError(f"unsupported research request contract version: {version}")

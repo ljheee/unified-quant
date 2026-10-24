@@ -19,6 +19,7 @@ from ..contracts.model_layer import (
     research_stage_plan_v3_sha256,
     research_stage_plan_v4_sha256,
     research_stage_plan_v5_sha256,
+    research_stage_plan_v6_sha256,
     sha256_json,
 )
 from ..errors import ContractError
@@ -69,7 +70,7 @@ def stage_plan_for_request(request: Mapping[str, Any]) -> tuple[str, ...]:
     version = request.get("contract_version", 1)
     if version in {1, 2}:
         return tuple(_STAGE_PLAN)
-    if version in {3, 4, 5}:
+    if version in {3, 4, 5, 6}:
         return tuple(_STAGE_PLAN_V3)
     raise ContractError(f"unsupported research request contract version: {version!r}")
 _DEFAULT_STAGE_PLAN = tuple(_STAGE_PLAN)
@@ -155,7 +156,7 @@ class ResearchChainRequestResolver:
             candidate = dict(request)
             request_schema = research_request_schema_name(candidate)
             ModelContractLoader.validate(request_schema, candidate)
-            if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5"}:
+            if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "research_run_request_v6"}:
                 verify_stage_plan_review(
                     candidate["stage_plan_review"],
                     stage_plan_sha256=candidate["stage_plan_sha256"],
@@ -170,6 +171,8 @@ class ResearchChainRequestResolver:
                 else research_stage_plan_v4_sha256()
                 if request_schema == "research_run_request_v4"
                 else research_stage_plan_v5_sha256()
+                if request_schema == "research_run_request_v5"
+                else research_stage_plan_v6_sha256()
             )
             if candidate["stage_plan_sha256"] != expected_stage_plan_sha256:
                 raise ResearchResolutionError(
@@ -280,6 +283,58 @@ class ResearchChainRequestResolver:
                 generation_id=generation_id,
                 manifest_digest_sha256=manifest.get("manifest_digest_sha256", generation_id),
                 data_checksum_sha256=data_checksum,
+                quality_decision_checksum_sha256=manifest.get(
+                    "quality_report_checksum_sha256"
+                ),
+            ))
+
+        if request_schema == "research_run_request_v6":
+            sample_binding = candidate["sample_construction_binding"]
+            if sample_binding.get("family") not in {None, "sample_construction"}:
+                raise ResearchResolutionError(
+                    "request_invalid",
+                    f"binding family {sample_binding.get('family')} is not supported by "
+                    "output family sample_construction",
+                )
+            store = self.stores_by_output_family.get("sample_construction")
+            if store is None:
+                raise ResearchResolutionError(
+                    "request_invalid",
+                    "no owning store is registered for output family sample_construction",
+                )
+            try:
+                manifest = store.read_manifest(sample_binding["generation_id"])
+            except ContractError as exc:
+                detail = str(exc)
+                if "tampered" in detail or "identity mismatch" in detail:
+                    raise ResearchResolutionError("input_tampered", detail) from exc
+                if "malformed" in detail or "ambiguous" in detail:
+                    raise ResearchResolutionError("store_read_failed", detail) from exc
+                raise ResearchResolutionError("input_unresolved", detail) from exc
+            if manifest.get("manifest_digest_sha256") != sample_binding.get("manifest_digest_sha256"):
+                raise ResearchResolutionError(
+                    "input_tampered", "sample construction manifest digest mismatch"
+                )
+            _resolve_quality_decision(
+                quality_provider=quality_provider,
+                provider_config_ref=provider_config_ref,
+                binding_type="sample_construction_v1",
+                subject_generation_id=sample_binding["generation_id"],
+                subject_manifest_digest_sha256=sample_binding["generation_id"],
+                output_family="sample_construction",
+            )
+            stage_bindings.append(ResolvedStageBinding(
+                stage="dataset_preparation",
+                output_family="sample_construction",
+                generation_id=manifest["generation_id"],
+                manifest_digest_sha256=manifest["manifest_digest_sha256"],
+                data_checksum_sha256=manifest["data_checksum_sha256"],
+                physical_path=(
+                    f"sample_construction/generation={manifest['generation_id']}/manifest.json"
+                ),
+                quality_decision_checksum_sha256=manifest.get(
+                    "quality_report_checksum_sha256"
+                ),
             ))
 
         self._verify_contract_version_inputs(request_schema, candidate)
@@ -317,9 +372,9 @@ class ResearchChainRequestResolver:
         to their owning stores exactly as v4 does; a v5 run must not skip the PIT
         membership check merely because its paper bindings resolve first.
         """
-        if request_schema in {"research_run_request_v4", "research_run_request_v5"}:
+        if request_schema in {"research_run_request_v4", "research_run_request_v5", "research_run_request_v6"}:
             self._verify_v4_input_sets(candidate)
-        if request_schema == "research_run_request_v5":
+        if request_schema in {"research_run_request_v5", "research_run_request_v6"}:
             self._verify_v5_paper_bindings(candidate)
 
     def _verify_v5_paper_bindings(self, candidate: dict[str, Any]) -> None:
@@ -336,7 +391,7 @@ class ResearchChainRequestResolver:
         if not self.market_dataset_store:
             raise ResearchResolutionError(
                 "request_invalid",
-                "v5 request requires a market_dataset_store for paper input resolution",
+                "v5/v6 request requires a market_dataset_store for paper input resolution",
             )
         _PAPER_BINDING_FAMILIES = {
             "market_data_binding": "bars_daily_v2",
@@ -393,11 +448,11 @@ class ResearchChainRequestResolver:
 
 
     def _verify_v4_input_sets(self, request: dict[str, Any]) -> None:
-        """Bind a v4/v5 request to the point-in-time membership and factor partition sets."""
+        """Bind a v4/v5/v6 request to the PIT membership and factor partition sets."""
         if self.membership_store is None or self.trading_calendar is None:
             raise ResearchResolutionError(
                 "request_invalid",
-                "v4/v5 requests require an index membership store and a governed trading calendar",
+                "v4/v5/v6 requests require an index membership store and a governed trading calendar",
             )
         factor_store = self.stores_by_output_family.get("factor_partition")
         if factor_store is None:
@@ -843,6 +898,8 @@ def _data_checksum_for(output_family: str, manifest: Mapping[str, Any]) -> str |
         return manifest.get("data_checksum_sha256")
     if output_family == "feature_preprocessing":
         return manifest.get("output_frame_sha256")
+    if output_family == "sample_construction":
+        return manifest.get("data_checksum_sha256")
     if output_family == "backtest_config":
         binding = manifest.get("price_source_binding", {})
         # cr.md 8.63: v1 names one partition, v2 names the window's partition set;

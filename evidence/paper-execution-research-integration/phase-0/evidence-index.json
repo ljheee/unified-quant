@@ -172,19 +172,19 @@
     },
     {
       "path": "src/uq/contracts/model_layer.py",
-      "sha256": "f00e402d10ec36c9e68b8b66635ded5cc93f6e620daa79e63b8263a758366d0e"
+      "sha256": "0d808e327c50e6fdfe0501b64b83884c69c707ff0b352b1a1e05cca7abf46512"
     },
     {
       "path": "src/uq/research_chain/contracts.py",
-      "sha256": "103dbbc859ec3e8ed2e1eec68e8cd2358521416dcf16ba4f8b558702de7fe0a5"
+      "sha256": "826d51956ec0b5c9aeca72ea2618ec2068c8e25dcba73176cec786a37ae14b6d"
     },
     {
       "path": "src/uq/research_chain/resolver.py",
-      "sha256": "161b5c79375ee3fe6a4b8423575dba640bf67f1cc66ab48d79cbefd0f8de1755"
+      "sha256": "fe109717c07982fefe599b330453d5b9db6d8152698b93deaa0b1e6bd02ac1aa"
     },
     {
       "path": "src/uq/research_chain/runner.py",
-      "sha256": "90c7a3e33b3698efa20d387b8259590b159dca0b0e5ab8cae6c7caa7c39deceb"
+      "sha256": "1ec0b9a9fc967e37c44f0694e9a03f0bb080e95b1ccea47185d694532ef5a4d5"
     },
     {
       "path": "tests/test_paper_execution_research_integration_phase0.py",

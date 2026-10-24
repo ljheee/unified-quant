@@ -32,6 +32,7 @@
         "model_run_v1",
         "model_artifact_v1",
         "feature_preprocessing_v1",
+        "sample_construction_v1",
         "qlib_dataset_export_v1",
         "qlib_init_receipt_v1",
         "prediction_set_v1",
@@ -55,7 +56,8 @@
       "enum": [
         "reject_all",
         "accept_with_warnings",
-        "cross_sectional_stateless_v1"
+        "cross_sectional_stateless_v1",
+        "pit_label_join_v1"
       ]
     },
     "status": {

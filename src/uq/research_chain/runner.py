@@ -19,6 +19,7 @@ from ..contracts.model_layer import (
     research_stage_plan_v3_sha256,
     research_stage_plan_v4_sha256,
     research_stage_plan_v5_sha256,
+    research_stage_plan_v6_sha256,
     resolve_subject_quality_decision,
     sha256_json,
 )
@@ -81,6 +82,7 @@ def _result_output_binding(binding: ResolvedStageBinding) -> dict[str, Any]:
             "adjusted_price_dataset": f"adjusted_prices/generation={binding.generation_id}/manifest.json",
             "label_set": f"label_sets/generation={binding.generation_id}/manifest.json",
             "feature_preprocessing": f"feature_preprocessing/generation={binding.generation_id}/manifest.json",
+            "sample_construction": f"sample_construction/generation={binding.generation_id}/manifest.json",
             "backtest_config": f"backtest_configs/generation={binding.generation_id}/manifest.json",
         }[binding.output_family]
     quality_checksum = binding.quality_decision_checksum_sha256
@@ -379,7 +381,7 @@ class ResearchChainRunner:
         if plan.request.get("contract_version") in {3, 4}:
             raise ContractError("research request v3/v4 paper-execution runtime is not enabled")
         request_schema = research_request_schema_name(plan.request)
-        if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5"}:
+        if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "research_run_request_v6"}:
             verify_stage_plan_review(
                 plan.request["stage_plan_review"],
                 stage_plan_sha256=plan.request["stage_plan_sha256"],
@@ -394,6 +396,8 @@ class ResearchChainRunner:
             else research_stage_plan_v4_sha256()
             if request_schema == "research_run_request_v4"
             else research_stage_plan_v5_sha256()
+            if request_schema == "research_run_request_v5"
+            else research_stage_plan_v6_sha256()
         )
         if plan.request["stage_plan_sha256"] != expected_stage_plan_sha256:
             raise ContractError("research request stage plan digest mismatch")
@@ -526,6 +530,11 @@ class ResearchChainRunner:
         # the writer, which resolves providers against the derived generation.
         label_binding = self._binding(plan, "label_set")
         preprocessing_binding = self._binding(plan, "feature_preprocessing")
+        sample_binding = (
+            self._binding(plan, "sample_construction")
+            if plan.request.get("contract_version") == 6
+            else None
+        )
         result = self.dataset_adapter.run(
             plan,
             runner_identity=dict(runner_identity),
@@ -533,6 +542,14 @@ class ResearchChainRunner:
             preprocessing_quality_decision=self._decision(
                 quality_decisions, "feature_preprocessing",
                 preprocessing_binding.generation_id,
+            ),
+            sample_construction_quality_decision=(
+                self._decision(
+                    quality_decisions, "sample_construction",
+                    sample_binding.generation_id,
+                )
+                if sample_binding is not None
+                else None
             ),
             label_quality_decision=self._decision(
                 quality_decisions, "label_set", label_binding.generation_id
@@ -805,9 +822,15 @@ class ResearchChainRunner:
         risk_decision_source: Callable[[str, str], Mapping[str, Any]] | None,
     ) -> Any:
         if self.paper_adapter is None:
-            raise ContractError("research request v5 requires a wired paper execution adapter")
+            raise ContractError(
+                f"research request v{plan.request.get('contract_version')} requires "
+                "a wired paper execution adapter"
+            )
         if risk_decision_source is None:
-            raise ContractError("research request v5 requires a paper risk decision source")
+            raise ContractError(
+                f"research request v{plan.request.get('contract_version')} requires "
+                "a paper risk decision source"
+            )
         portfolio_result = self.portfolio_adapter.last_result
         decision_dates = sorted(portfolio_result.target_weight_manifests)
         if not decision_dates:
@@ -1451,7 +1474,7 @@ class ResearchChainRunner:
         return dict(document)
 
     def _reverify_input_sets(self, plan: ResolvedExecutionPlan) -> None:
-        """Re-bind v4/v5 set bindings to their owning stores at reconciliation.
+        """Re-bind v4/v5/v6 set bindings to their owning stores at reconciliation.
 
         The membership and factor-partition sets are resolved once at resolve time,
         but the raw artifacts stay on disk for the whole run.  Re-deriving both sets
@@ -1460,13 +1483,13 @@ class ResearchChainRunner:
         lineage no longer matches the request.  The inputs are immutable, so one
         re-verification per reconciliation covers every stage readback.
         """
-        if plan.request.get("contract_version") not in {4, 5}:
+        if plan.request.get("contract_version") not in {4, 5, 6}:
             return
         membership_store = getattr(self.dataset_adapter, "membership_store", None)
         trading_calendar = getattr(self.dataset_adapter, "trading_calendar", None)
         if membership_store is None or trading_calendar is None:
             raise ContractError(
-                "v4/v5 reconciliation requires a governed membership store and trading calendar"
+                "v4/v5/v6 reconciliation requires a governed membership store and trading calendar"
             )
         from .membership_input import verify_request_input_sets
 
@@ -1493,6 +1516,8 @@ class ResearchChainRunner:
             manifest = self.dataset_adapter.label_store.read_frame(generation_id)[0]
         elif family == "feature_preprocessing":
             manifest = self.dataset_adapter.preprocessing_store.read_manifest(generation_id)
+        elif family == "sample_construction":
+            manifest = self.dataset_adapter.sample_construction_store.read_manifest(generation_id)
         elif family == "model_dataset":
             template = self.run_store.last_plan.request["dataset_policy_template"]
             manifest = self.dataset_adapter.dataset_writer.read(
@@ -1583,6 +1608,8 @@ class ResearchChainRunner:
             expected_checksum = manifest.get("manifest_digest_sha256")
         elif family == "feature_preprocessing":
             expected_checksum = manifest.get("output_frame_sha256")
+        elif family == "sample_construction":
+            expected_checksum = manifest.get("data_checksum_sha256")
         elif family == "execution_config":
             expected_checksum = manifest.get("manifest_digest_sha256")
         else:

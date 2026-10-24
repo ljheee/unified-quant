@@ -375,6 +375,7 @@ canonical partitions, schemas, checksums, and source versions.
 ```text
 FactorStore (accepted factors)
   -> Model Dataset Feature Schema
+  -> sample_construction.v1 (label-aware row selection, v6)
   -> feature_preprocessing.v1 (stateless, cross-sectional transform)
   -> Model Dataset / Qlib runtime
 ```
@@ -382,6 +383,11 @@ FactorStore (accepted factors)
 Preprocessing is model governance, not factor computation. The first slice may
 only use same-date cross-sectional stateless transforms. Qlib runtime processors
 are disabled unless they consume a governed preprocessing manifest.
+
+Label-null filtering belongs to sample construction, not feature preprocessing.
+`sample_construction.v1` binds the factor/label/universe/membership inputs and
+publishes the selected training frame; `feature_preprocessing.v1` remains
+label-agnostic. A request that wants this boundary must use v6 (v5 is unchanged).
 
 ## 11.5 Portfolio and Backtest Layer Boundary
 

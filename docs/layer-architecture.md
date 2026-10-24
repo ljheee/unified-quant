@@ -11,7 +11,7 @@
   -> Data Ingest / Canonical Store
   -> Universe Snapshot
   -> Factor Layer / Qlib Factor Adapter
-  -> Labels / Feature Preprocessing / Model Dataset
+  -> Labels / Sample Construction / Feature Preprocessing / Model Dataset
   -> Qlib Export & Runtime Trainer
   -> Model Artifact / Prediction
   -> Portfolio Construction
@@ -33,7 +33,7 @@ Research Chain 是编排层：
 | Universe Snapshot | 已有 v1 契约和存储 | instrument list、快照日期 | 不可变 universe manifest 与成员列表 | 能通过 store/API 使用；还没有按历史日期追溯成分股的 PIT membership。 |
 | Factor Layer | v1.0.0 scoped release | canonical bars、factor registry | factor partition、manifest、checksum、accepted factor index | 能。可通过 `FactorStore` 单独计算和读取。 |
 | Qlib Factor Adapter | v1.0.0，仅 Alpha158 已实现 | canonical bars / governed factor store | Alpha158 因子数据、Qlib 兼容输入 | 能。Alpha360 只有契约，不是完整实现。 |
-| Model Layer | v1.1.4，Phase 0–5 released | factors、labels、universe、adjusted prices、dataset/model policy | feature schema、feature preprocessing、model dataset、Qlib export/receipt、model run/artifact、prediction set | 能通过 owning stores/API 使用；完整训练通常走 Research Chain。当前研究链的预测分数仍由外部 `scores-json` 提供，尚未自动完成“加载 artifact 推理今日分数”。 |
+| Model Layer | v1.1.4，Phase 0–5 released | factors、labels、universe、adjusted prices、dataset/model policy | feature schema、sample construction、feature preprocessing、model dataset、Qlib export/receipt、model run/artifact、prediction set | 能通过 owning stores/API 使用；完整训练通常走 Research Chain。当前研究链的预测分数仍由外部 `scores-json` 提供，尚未自动完成“加载 artifact 推理今日分数”。 |
 | Portfolio / Backtest | v1.0.0，Phase 0–3 released | prediction/score、universe、portfolio config、行情与复权价 | portfolio definition、target weights、backtest config/result | 能通过对应 store 和回测引擎单独调用。当前只支持 `top_n_equal_weight`。 |
 | Risk Control Plane | v0.2.2，Phase 0–5 released | policy、policy review、组合/订单/发布上下文 | risk event、risk decision、risk exception、risk run/state | 不能作为孤立业务层运行。它是横切治理与风控层，需要被数据发布、研究链或执行路径调用。 |
 | Paper Execution | v0.1.9，Phase 0–5 released | execution config、target weights/order plan、market data、portfolio state、risk decisions | order plan、paper fills/execution result、paper portfolio state | 能以确定性模拟撮合方式单独调用，但不能接入真实券商。 |

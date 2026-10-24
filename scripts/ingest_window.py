@@ -140,6 +140,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--calendar-source",
+        choices=("eastmoney", "sina"),
+        default="eastmoney",
+        help=(
+            "independent calendar vendor. eastmoney is the historical default; "
+            "sina reads the same index-series shape from a different vendor and "
+            "exists because push2his.eastmoney.com was measured 2026-10-23 "
+            "answering every request with an empty reply."
+        ),
+    )
+    parser.add_argument(
         "--session-interval-seconds",
         type=float,
         default=25.0,
@@ -160,7 +171,12 @@ def main(argv: list[str] | None = None) -> int:
     if end < start:
         raise SystemExit("--end precedes --start")
 
-    provider = EastMoneySessionProvider()
+    if args.calendar_source == "sina":
+        from uq.adapters.sina import SinaSessionProvider
+
+        provider = SinaSessionProvider()
+    else:
+        provider = EastMoneySessionProvider()
     calendar = TradingCalendar(provider=provider, provenance=provider.provenance)
     # The independent calendar is a governance input, not a nicety: it is what
     # keeps a vendor calendar from silently narrowing the session set.  It is

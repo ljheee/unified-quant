@@ -20,12 +20,14 @@ from ..contracts.model_layer import (
     bind_reviewed_quality_decision,
     model_manifest_identities,
     resolve_subject_quality_decision,
+    reviewed_allowed_statuses,
     sha256_json,
 )
 from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
 from ..models.labels import label_row_checksum
+from ..models.sample_construction import serialize_sample_frame
 
 
 class FeatureSchemaStore:
@@ -544,6 +546,127 @@ class FeaturePreprocessingStore:
             (self.root / "external_quality_reviews" / f"{report_checksum}.json").write_text(
                 json.dumps(bound_report, sort_keys=True) + "\n", encoding="utf-8"
             )
+            staging.replace(directory)
+        except Exception:
+            for path in staging.glob("*"):
+                path.unlink()
+            staging.rmdir()
+            raise
+        return published
+
+
+class SampleConstructionStore:
+    """Publish and read the immutable training-sample selection.
+
+    This family exists so label-aware row selection cannot leak into
+    `feature_preprocessing.v1`. It binds the factor/label/universe inputs, the
+    selected frame and the selection audit; preprocessing then receives the
+    selected feature frame and remains a stateless transform.
+    """
+
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root)
+
+    def read_manifest(self, generation_id: str) -> dict[str, Any]:
+        manifest = _read_manifest(
+            self.root / "sample_construction", generation_id, "sample_construction"
+        )
+        if manifest.get("quality_report_checksum_sha256") in (None, "0" * 64):
+            raise ContractError("sample construction is missing a quality report binding")
+        checksum = manifest["quality_report_checksum_sha256"]
+        report_path = self.root / "external_quality_reviews" / f"{checksum}.json"
+        if not report_path.is_file():
+            raise ContractError("sample construction quality report is unavailable")
+        report = _read_json(report_path)
+        ModelContractLoader.validate("model_quality_report", report)
+        if (
+            sha256_json({
+                key: value for key, value in report.items()
+                if key != "report_checksum_sha256"
+            }) != checksum
+            or report.get("binding_type") != "sample_construction_v1"
+            or report.get("bound_generation_id") != generation_id
+            or report.get("subject_content_sha256") != generation_id
+        ):
+            raise ContractError("sample construction quality report rejects read")
+        if report.get("status") not in reviewed_allowed_statuses("sample_construction_v1"):
+            raise ContractError("sample construction quality report status rejects read")
+        return manifest
+
+    def read_frame(self, generation_id: str) -> tuple[dict[str, Any], pd.DataFrame]:
+        manifest = self.read_manifest(generation_id)
+        directory = _match_directory(
+            self.root / "sample_construction", generation_id
+        )
+        data_path = directory / "data.parquet"
+        if not data_path.is_file():
+            raise ContractError(f"unpublished sample construction data: {generation_id}")
+        frame = pd.read_parquet(data_path)
+        if list(frame.columns) != manifest["columns"]:
+            raise ContractError("sample construction column mismatch")
+        if len(frame) != manifest["row_count"]:
+            raise ContractError("sample construction row count mismatch")
+        if file_sha256_bytes(data_path.read_bytes()) != manifest["data_checksum_sha256"]:
+            raise ContractError("tampered sample construction data checksum")
+        if logical_fingerprint(frame) != manifest["logical_fingerprint"]:
+            raise ContractError("sample construction logical fingerprint mismatch")
+        return manifest, frame
+
+    def publish(
+        self,
+        manifest: dict[str, Any],
+        frame: pd.DataFrame,
+        *,
+        quality_decision: dict[str, Any],
+    ) -> dict[str, Any]:
+        generation = manifest.get("generation_id")
+        if not isinstance(generation, str) or not re.fullmatch(r"[0-9a-f]{64}", generation):
+            raise ContractError("sample construction manifest lacks a derived generation")
+        if manifest.get("generation_id") == "0" * 64:
+            raise ContractError("sample construction generation is unresolved")
+        if list(frame.columns) != manifest["columns"] or len(frame) != manifest["row_count"]:
+            raise ContractError("sample construction frame does not match its manifest")
+        artifact, data_checksum = serialize_sample_frame(frame)
+        if data_checksum != manifest["data_checksum_sha256"]:
+            raise ContractError("sample construction frame checksum mismatch")
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision,
+            subject_generation_id=generation,
+            subject_content_sha256=generation,
+        )
+        bound_report, report_checksum = bind_reviewed_quality_decision(
+            quality_decision,
+            binding_type="sample_construction_v1",
+            subject_generation_id=generation,
+            subject_content_sha256=generation,
+        )
+        published = dict(manifest)
+        published["quality_report_checksum_sha256"] = report_checksum
+        regenerated, digest = model_manifest_identities(
+            published,
+            schema_name="sample_construction",
+            exclude_fields={"quality_report_checksum_sha256"},
+        )
+        if regenerated != generation:
+            raise ContractError("sample construction generation moved when review was bound")
+        published["manifest_digest_sha256"] = digest
+        ModelContractLoader.validate("sample_construction", published)
+        directory = self.root / "sample_construction" / f"generation={generation}"
+        if directory.exists():
+            raise ContractError(f"immutable sample construction already published: {directory}")
+        staging = self.root / "sample_construction" / f".staging_{uuid.uuid4().hex}"
+        staging.mkdir(parents=True)
+        try:
+            data_path = staging / "data.parquet"
+            data_path.write_bytes(artifact)
+            (staging / "manifest.json").write_text(
+                json.dumps(published, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            (self.root / "external_quality_reviews").mkdir(parents=True, exist_ok=True)
+            (self.root / "external_quality_reviews" / f"{report_checksum}.json").write_text(
+                json.dumps(bound_report, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            fsync_tree(staging)
             staging.replace(directory)
         except Exception:
             for path in staging.glob("*"):

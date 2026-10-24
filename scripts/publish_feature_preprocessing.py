@@ -19,6 +19,10 @@ Qlib's default learning pipeline uses (`DropnaLabel` then `CSZScoreNorm` in
 `learn_processors`). The artifact then pins the *post-drop* frame in
 `input_frame_sha256`, which is what the research stage re-checks at execute time.
 
+Label-null filtering does not belong here. Pass the reviewed
+`sample_construction` artifact with `--sample-construction-root` and
+`--sample-construction-generation`; its selected frame is the transform input.
+
 Usage:
   scripts/publish_feature_preprocessing.py \
       --factor-root data/factors-a500-store \
@@ -166,20 +170,44 @@ def main(argv: list[str] | None = None) -> int:
             "artifact must attest the post-drop frame, or the stage's fingerprint check fails."
         ),
     )
+    parser.add_argument(
+        "--sample-construction-root",
+        type=Path,
+        default=None,
+        help=(
+            "governed store holding sample_construction/. When provided, the transform "
+            "input is exactly that artifact's selected frame; label-null filtering has "
+            "already happened there."
+        ),
+    )
+    parser.add_argument(
+        "--sample-construction-generation",
+        default=None,
+        help="generation id of the sample_construction artifact to transform",
+    )
     parser.add_argument("--quality-decisions-json", type=Path, required=True,
                         help="externally signed decisions; the script never signs its own review")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
-    if args.partition_set is None and not args.partition_date:
-        return _refuse("provide --partition-set or at least one --partition-date")
-    if args.partition_set is not None and args.partition_date:
-        return _refuse("--partition-set and --partition-date are mutually exclusive")
+    if (args.sample_construction_root is None) != (args.sample_construction_generation is None):
+        return _refuse(
+            "--sample-construction-root and --sample-construction-generation must be provided together"
+        )
+    if args.sample_construction_root is None:
+        if args.partition_set is None and not args.partition_date:
+            return _refuse("provide --partition-set or at least one --partition-date")
+        if args.partition_set is not None and args.partition_date:
+            return _refuse("--partition-set and --partition-date are mutually exclusive")
+    elif args.partition_set is not None or args.partition_date:
+        return _refuse(
+            "sample-construction input and factor partition selection are mutually exclusive"
+        )
     dates = (
         _read_partition_set(args.partition_set)
         if args.partition_set is not None
         else sorted(set(args.partition_date))
-    )
+    ) if args.sample_construction_root is None else []
 
     registry = FactorRegistry(PROJECT_ROOT)
     store = FactorStore(args.factor_root, registry)
@@ -187,6 +215,28 @@ def main(argv: list[str] | None = None) -> int:
     frames: list[pd.DataFrame] = []
     partition_ids: list[str] = []
     manifests: list[dict[str, Any]] = []
+    sample_manifest: dict[str, Any] | None = None
+    if args.sample_construction_root is not None:
+        from uq.research_chain.owning_contracts import SampleConstructionStore
+
+        sample_manifest, sample_frame = SampleConstructionStore(
+            args.sample_construction_root
+        ).read_frame(args.sample_construction_generation)
+        ordered_features = list(sample_manifest["ordered_features"])
+        factor_frame = sample_frame[
+            ["instrument", "datetime", *ordered_features]
+        ].copy()
+        partition_ids = list(sample_manifest["source_factor_generation_ids"])
+        for generation_id in partition_ids:
+            manifests.append(store.read_manifest(generation_id))
+        if sample_manifest["source_factor_set"] != args.factor_set:
+            return _refuse(
+                "sample construction factor set does not match --factor-set"
+            )
+        if sample_manifest["source_factor_version"] != args.factor_version:
+            return _refuse(
+                "sample construction factor version does not match --factor-version"
+            )
     for value in dates:
         partition = store.partition_path(
             input_dataset="bars_daily",
@@ -204,14 +254,29 @@ def main(argv: list[str] | None = None) -> int:
         manifests.append(manifest)
         partition_ids.append(manifest["generation_id"])
 
-    factor_frame = pd.concat(frames, ignore_index=True).sort_values(
-        ["instrument", "datetime"], kind="mergesort"
-    ).reset_index(drop=True)
-    ordered_features = [c for c in factor_frame.columns if c not in ("instrument", "datetime")]
+    if args.sample_construction_root is None:
+        factor_frame = pd.concat(frames, ignore_index=True).sort_values(
+            ["instrument", "datetime"], kind="mergesort"
+        ).reset_index(drop=True)
+    ordered_features = (
+        list(sample_manifest["ordered_features"])
+        if sample_manifest is not None
+        else [c for c in factor_frame.columns if c not in ("instrument", "datetime")]
+    )
     if not ordered_features:
         return _refuse("factor frame has no feature columns")
 
     dropped: dict[str, Any] = {}
+    if sample_manifest is not None and args.drop_incomplete_rows:
+        return _refuse(
+            "--drop-incomplete-rows is invalid with a sample-construction input; "
+            "row selection already happened there"
+        )
+    if sample_manifest is not None and factor_frame[ordered_features].isna().any().any():
+        return _refuse(
+            "sample construction contains null features; the selection policy should "
+            "have removed them"
+        )
     if args.drop_incomplete_rows:
         incomplete = factor_frame[ordered_features].isna().any(axis=1)
         if incomplete.any():
@@ -302,7 +367,17 @@ def main(argv: list[str] | None = None) -> int:
     report = {
         "record_version": 1,
         "kind": "feature_preprocessing_publication",
-        "window": {"partitions": dates, "sessions": len(dates)},
+        "window": {
+            "partitions": dates,
+            "sessions": len(dates) if dates else None,
+            "sample_construction": (
+                None if sample_manifest is None
+                else {
+                    "window_start": sample_manifest["window_start"],
+                    "window_end": sample_manifest["window_end"],
+                }
+            ),
+        },
         "factor": {"set": source_factor_set, "version": source_factor_version,
                    "generation_ids": partition_ids},
         "transform": args.transform,
@@ -311,6 +386,9 @@ def main(argv: list[str] | None = None) -> int:
         "ordered_features": ordered_features,
         "rows": int(len(factor_frame)),
         "instruments": int(factor_frame["instrument"].nunique()),
+        "sample_construction_generation_id": (
+            None if sample_manifest is None else sample_manifest["generation_id"]
+        ),
         "dropped_incomplete_rows": dropped,
         "drop_incomplete_rows_enabled": bool(args.drop_incomplete_rows),
         "input_frame_sha256": manifest["input_frame_sha256"],
