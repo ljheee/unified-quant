@@ -3541,3 +3541,36 @@ identical keep set? True  | only-v5: 0  only-v6: 0
 没有保护过跨侧一致性**——`scripts/publish_feature_preprocessing.py` 根本不调用它，
 只有 stage 调。本轮保留该函数（有测试直接锁它，且报告侧仍需要"键集"而非"过滤后
 的帧"），但把 docstring 改成如实描述，不再声称它防跨侧漂移。
+
+#### E. 收敛后新 run 完整跑通（2026-10-25）
+
+用户要求"新 request 完整跑通"，用来回答"改动后会不会导致全链路跑不通"。
+
+**做法**：`request_content_generation_id` 不变（`4928a68b…`，run_id 不参与 request
+identity），只把 `run_id` 换成 `00000000-0000-4000-8000-000000000002`。ledger 路径
+按 run_id 分目录，所以 `publish_result` 面对的是全新路径，不会撞上一轮的不可变制品。
+
+**结果**：
+
+```
+result_generation: a034d8571e5600bb767779daa44e57e87d80d48a74d6af157b8530d114cbf105
+final_status: passed
+resolve_request / factor_computation / dataset_preparation / qlib_export
+model_training / prediction_publication / portfolio_construction
+backtest_execution / paper_execution / result_reconciliation   -> 全 passed
+```
+
+**三条证据说明改动没有改变数据语义**：
+
+1. 上一轮用**同一 run_id** 重跑时，`publish_result` 撞的是 `731eb47b…`——与收敛
+   **之前**那一轮的 result generation **逐字节相同**。若 label 选择路径产出的帧有任何
+   变化，这个 id 必然不同。
+2. 本轮换了 run_id 后 result 是 `a034d857…`，差异来自 result 文档里的 `run_id`
+   字段（`_RUN_LOCAL_FIELDS` 从 *generation* 中排除，但 `manifest_digest_sha256`
+   覆盖它），不是数据变化。
+3. 10 个 stage 全部通过，中途没有一处因列集、`frame_fingerprint` 或行数对账失败——
+   而这三处正是本次收敛最可能踩坏的地方（v6 返回训练帧含 label 列 vs v5 需要
+   preprocessing 输入不含）。
+
+**边界不变**：质量决策仍是仓库测试密钥、分数仍是确定性占位。这证明链路闭合与
+fail-closed 行为，**不构成研究结论**；回测与 paper 的 PnL 数值未人工复核。

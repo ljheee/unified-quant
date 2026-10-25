@@ -2,15 +2,18 @@
   "record_version": 1,
   "kind": "full_a_v6_execute_smoke",
   "status": "passed",
-  "run_at_utc": "2026-10-24T12:00:00Z",
+  "run_at_utc": "2026-10-25T00:30:00Z",
   "window": {"start": "2025-09-10", "end": "2025-09-30"},
-  "result_generation_id": "731eb47b8812642aade43c237c958b9a244a2110d7fa63035420ce03316f5f3a",
+  "result_generation_id": "a034d8571e5600bb767779daa44e57e87d80d48a74d6af157b8530d114cbf105",
+  "run_id": "00000000-0000-4000-8000-000000000002",
+  "request_content_generation_id": "4928a68bd1102bbd55c383187f7ce821d2d3cf437e8fb6c4b2b9c6cc0404d87f",
   "decision_dates": 10,
   "stages_passed": 10,
   "notes": [
     "All quality decisions were signed with the repository TEST key; this proves the chain runs, not a research result.",
     "Scores are deterministic placeholders keyed on the instrument id, not model predictions.",
-    "The store roots live under data/ (gitignored); this index carries the generator outputs and bindings only."
+    "The store roots live under data/ (gitignored); this index carries the generator outputs and bindings only.",
+    "This is the run that closed cr.md 8.76: the same request and data, after the v5/v6 label-selection implementations were unified. An earlier run of the identical request (run_id ...0001) produced result 731eb47b..., so the data path is unchanged."
   ],
   "artifacts": [
     {"path": "evidence/csi-all-pilot/2026-10-24-full-a/ingest-window.json"},
