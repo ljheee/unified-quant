@@ -61,7 +61,7 @@
   "generation_id": "291de4e061023f3ddc92394da2c00fe69608ec6210e54358b67490b3add99b3e",
   "manifest_digest_sha256": "33fa8212e6a8b3f8cfe956589224dd11ff62ac7a5bf6747466aa9eb4d6722cb0"
  },
- "manifest_digest_sha256": "cad482b5f33d60f9304fa0ae8980abe45e4ea87be6983a2504a7c13144910f96",
+ "manifest_digest_sha256": "90f4a214c89eaa06f79c91aaae73d0d6fb6056001526f58b44ae2d96c7543df4",
  "model_definition_template": {
   "algorithm": "qlib_linear",
   "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -120,7 +120,7 @@
  },
  "request_content_generation_id": "4928a68bd1102bbd55c383187f7ce821d2d3cf437e8fb6c4b2b9c6cc0404d87f",
  "research_name": "full-a-2025-09-v6",
- "run_id": "00000000-0000-4000-8000-000000000002",
+ "run_id": "00000000-0000-4000-8000-000000000003",
  "run_visible_cutoff": "2025-09-30T15:00:00+08:00",
  "schema_version": "6.0.0",
  "stage_plan_sha256": "163f9aec63c14db929a7d1f305872bf5d93f85c8f77bb6b78971c36f4c692cb8",

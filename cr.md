@@ -3574,3 +3574,84 @@ backtest_execution / paper_execution / result_reconciliation   -> 全 passed
 
 **边界不变**：质量决策仍是仓库测试密钥、分数仍是确定性占位。这证明链路闭合与
 fail-closed 行为，**不构成研究结论**；回测与 paper 的 PnL 数值未人工复核。
+
+### 8.77 加载 model artifact 算分数：补上链路里一直缺的那一环（2026-10-25）
+
+**触发**：用户问"目前没有加载 artifact 算今日分数？分数是哈希值？"——两个问题的答案都是"是"。
+
+#### A. 缺口的确切形状
+
+`prediction_publication` 阶段的分数来自 `--scores-json`（`cli.py:533` 读、
+`runner.py:685` 按决策日分发）。全 A 那两轮冒烟里，这个文件是我按 instrument
+字符串哈希生成的占位值。所以：
+
+- 模型训练了、artifact 发布了、receipt 签了，但**没有任何一步把它加载回来**；
+- 进入 portfolio / backtest / paper 的每个分数都来自链路之外；
+- 这也解释了 §8.75 的实测 IC ≈ 0.0095（哈希噪声）——那不是模型表现。
+
+#### B. 落地
+
+- 新增 `src/uq/models/inference.py::score_decision_dates`：读已发布的 Qlib export
+  （逐文件校验 checksum 与字节数）、`feature_mapping.json`、model artifact（经
+  `ArtifactStore.read` 校验 generation/digest/checksum），再调
+  `LinearModel.predict`。
+- 新增生产入口 `scripts/score_decision_dates.py`：从 export 的日历里取
+  `[--start, --end]` 内的会话作为决策日，输出**与 `--scores-json` 完全同形状**的
+  `research_scores.v1` 文档，直接喂给现有 execute。
+- 三个 generation（export / model_run / model_artifact）必须由调用方显式给出；
+  reader 会拒绝不属于该 dataset 的 artifact。
+
+**推理期发现的三件事，都写进了代码注释**：
+
+1. **Qlib 导出把 instrument 小写**（`qlib_export.py:105`），业务层是大写。推理后
+   必须 `.str.upper()` 映射回去，否则 prediction set 与 dataset/universe 一条都
+   join 不上。
+2. **Qlib 按 `instruments/all.txt` 的区间枚举**，所以某只当天在 canonical 面板里
+   没有行（停牌/缺数据）时，它会返回全 NaN 特征向量和 NaN 分数。实测 23/50377 行
+   （0.046%）如此。这些行在训练帧里也不存在，**丢弃是对的，但不能静默**——
+   所以 `InferenceResult.unscorable_rows` 显式报告数量。
+3. **Qlib 是可选依赖**。第一版把 `import qlib` 放在函数顶部，导致 `.venv`
+   里连"export 不存在"这种纯拒绝路径都跑不了。改为在通过 manifest 与 artifact
+   校验之后才 import，拒绝路径因此在两个环境都可测。
+
+#### C. 真模型 vs 哈希占位（同一窗口、同一数据面）
+
+| | 哈希占位 | 真模型 artifact |
+|---|---|---|
+| mean rank IC | 0.0095 | **0.0933** |
+| mean Pearson | 0.0079 | **0.0962** |
+| 单日 rank IC 区间 | -0.003 ~ 0.017 | **-0.081 ~ 0.271** |
+| 回测累计收益 | +0.84% | **+4.89%** |
+| 年化收益 | +15.09% | **+122.97%** |
+| Sharpe | 0.954 | **5.193** |
+| 最大回撤 | 2.67% | **1.75%** |
+| 胜率 | 53.33% | **66.67%** |
+
+**这个对比的意义是"证明这一环接上了"，不是"模型很好"**：年化 123% 与 Sharpe 5.19
+来自 15 个交易日、单日训练集、4 个因子，统计上毫无意义。它唯一说明的是——当分数
+真的来自 artifact 时，下游确实拿到了不同的、非随机的信号。
+
+#### D. 端到端
+
+新 run（`run_id=...0003`）10/10 stage passed，
+`result 0481514e…`，`backtest_result c84e5005…`。
+分数文档 `evidence/csi-all-pilot/2026-10-24-full-a/scores-model.json`
+（10 日 / 50354 行 / 23 行 unscorable）。
+
+#### E. 测试
+
+`tests/test_inference.py` 4 例：未发布 export、manifest 不合契约、无 qlib 时的
+契约化拒绝、`unscorable_rows` 必须显式暴露。成功路径需要真实 Qlib export，
+由本节的全 A 冒烟覆盖。
+
+- `.venv` **1270 passed / 28 skipped**（父 1265/28，净 +5）
+- `.venv-qlib` **1297 passed / 1 skipped**（父 1293/0；新增的 skip 是"无 qlib"
+  那条用例在 qlib 环境下不适用）
+
+#### F. 诚实边界
+
+- 仍使用仓库测试评审密钥；分数现在来自 artifact，但**模型本身**仍是 4 因子线性
+  ridge、train 只有 1 个交易日（受 purge5+embargo2 与 10 个可用决策日限制）。
+- 回测/paper 的 PnL 数值未人工复核。
+- 本轮**没有**改 `--scores-json` 的契约：外部提供分数仍是被支持的路径，
+  `score_decision_dates.py` 只是新增了一个"分数来自模型"的生产来源。
