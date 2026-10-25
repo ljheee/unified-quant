@@ -3655,3 +3655,82 @@ fail-closed 行为，**不构成研究结论**；回测与 paper 的 PnL 数值�
 - 回测/paper 的 PnL 数值未人工复核。
 - 本轮**没有**改 `--scores-json` 的契约：外部提供分数仍是被支持的路径，
   `score_decision_dates.py` 只是新增了一个"分数来自模型"的生产来源。
+
+### 8.78 扩窗到 2025 全年 + alpha158 生产发布器（2026-10-25）
+
+**触发**：用户问"可以进行一次真实且对交易有指导意义的训练了吗"，随后授权"2 + 3 合并"
+（修 adapter 支持 v3 定义 + 全年入库）。
+
+#### A. 先证伪自己的三个判断（都错了）
+
+1. **"路径 A 是唯一语义正确的"** —— 错。实测路径 C（只保留全窗口完整的标的）在 37
+   会话下只丢 1.1%（5073 → 5019），我此前"可能缩到 3000-4000"是猜测。
+2. **"Qlib 表达式对 NaN 是安全的、会传播"** —— 错。实测 `D.features` 对缺失日**整行
+   不返回**（Empty DataFrame），不是 NaN 传播。而 `_write_qlib_data` 确实在写 NaN，
+   说明"允许 NaN"这件事代码里早已发生，`_validate_request` 拒的是调用方传入的 panel。
+3. **"路径 C 引入幸存者偏差"** —— 用词错。cr.md §8.52 已经更正过：那是
+   **future-conditioned complete-case selection**，不是 survivorship bias。
+
+#### B. adapter 的 v3 缺口（真缺陷）
+
+`QlibFactorAdapter.__init__` 硬编码 `set_definition_version != 2` 就拒。它写于
+2026-09-01，而 `alpha158-v2`（绑 bars_daily/v2）是 2026-10-16 才加的 v3 定义 ——
+adapter 从未跟上。后果：**alpha158 在 v2 数据线上完全不可发布**。
+
+修法：改为 `not in _SUPPORTED_DEFINITION_VERSIONS`（`{2, 3}`）。判据不再硬编码单一
+版本，内容合法性仍由 registry 按自身版本选 schema 校验（`factor_governance.py:124`）。
+
+#### C. 全年入库（220 会话）
+
+**关键约束（新发现）**：membership 快照 `publish_lag_days=5`，2025-01-27 的快照要到
+**2025-02-12** 才 `visible_from`。所以全年入库最早从 02-12 开始，不是 01-02。
+
+结果：**220/220 会话**（2025-02-12..12-31）全部入库。过程中 Tushare 300/min 限流与
+`api.waditu.com` read timeout 反复出现，每批 2-5 会话 + 45s 间隔 + 失败重试，
+每次失败都记进各自的 `ingest-*.json`。
+
+#### D. alpha158 生产发布器（新增）
+
+`scripts/publish_qlib_factor_partitions.py`。与 raw-price 发布器有两个本质差异，
+都是被 reviewed 定义逼出来的：
+
+- **一次计算、多分区**：Alpha158 的滚动表达式需要 60 会话历史，必须整窗一次算完再按
+  日切分。逐日算既错（无历史）又慢 220 倍。
+- **完整面板规则**：`QlibFactorAdapter` 拒收非笛卡尔积面板，而 canonical 每天都有
+  空洞。发布器只保留**每个会话都在场**的标的，并把排除清单写进报告。
+  实测全年：5073 → **4695**（丢 378 只，7.4%）。
+
+**warm-up 边界（两次修正）**：第一版用 `minimum_history - 1 = 59`，实测第 60 个会话
+的 `qlib_roc60` 仍全 NaN 被 engine 拒；改成 `warmup = minimum_history = 60` 才对。
+现在前 60 个会话记为 `warmup_insufficient_history` 跳过，从 2025-05-13 开始发布。
+
+**幂等**：重跑时 160 个已发布分区记 `already_published`，`partition_set` 从**磁盘上
+实际存在的分区**组装（而不是从请求窗口），所以中断后重跑能收敛。
+
+#### E. 结果
+
+| 项目 | 数值 |
+|---|---|
+| canonical 会话 | 220（2025-02-12..12-31） |
+| alpha158 分区 | **160**（2025-05-13..12-31） |
+| 因子数 | **157** |
+| 标的数 | **4695**（完整面板，排除 378） |
+| partition_set digest | `35c2635b5c3c59bc…` |
+
+对比之前的 `basic/2.0.0`：4 因子 → 157 因子；15 交易日 → 160；5050 只 → 4695 只。
+**这才是第一次具备"训练窗口足够、因子数合理"这两个前提。**
+
+#### F. 测试
+
+`.venv` **1270 passed / 28 skipped**、`.venv-qlib` **1297 passed / 1 skipped**。
+`tests/test_qlib_adapter.py` + `tests/test_factor_set_input_line_v2.py` 共 40 例在
+v3 支持改动后仍全绿。
+
+#### G. 还没做的（下一步）
+
+- **尚未用 alpha158 跑完整 v6 execute**：因子发布完了，但 universe snapshot、
+  label set、adjusted price、backtest config 都还是 09-10..09-30 那个窗口的制品，
+  要为新窗口重新发布一遍才能跑。
+- **模型仍是 `qlib_linear`**（ridge）。157 因子下线性模型可用，但 GBDT 未接入。
+- 没有 test 段表现——160 天里要切 train/validation/test，test 段才是"对交易有
+  指导意义"的证据。

@@ -1,0 +1,28 @@
+{
+  "record_version": 1,
+  "kind": "full_a_2025_ingest_and_alpha158",
+  "status": "passed",
+  "window": {
+    "start": "2025-02-12",
+    "end": "2025-12-31"
+  },
+  "why_not_january": "membership snapshots carry publish_lag_days=5; the 2025-01-27 snapshot only becomes visible_from 2025-02-12, so no session before that can be ingested under PIT membership",
+  "canonical_sessions": 220,
+  "alpha158": {
+    "partitions": 160,
+    "window": {
+      "start": "2025-05-13",
+      "end": "2025-12-31"
+    },
+    "factors": 157,
+    "instruments": 4695,
+    "excluded_incomplete_instruments": 378,
+    "warmup_sessions_skipped": 60,
+    "partition_set_digest_sha256": "35c2635b5c3c59bc77f0d774a1cc8451cac659c36ffc25b55a35351ad5ebf510"
+  },
+  "notes": [
+    "Every ingest batch is recorded in its own ingest-*.json; failures were retried and are visible there, never silently dropped.",
+    "The 2025-01-02..01-10 report is kept as evidence that membership was not yet visible, not as a failure of the data source.",
+    "Alpha158 needs 60 complete sessions before its longest expression is defined; the first 60 sessions of the window are recorded as warmup_insufficient_history."
+  ]
+}

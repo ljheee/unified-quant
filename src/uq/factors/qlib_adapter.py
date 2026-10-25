@@ -21,6 +21,10 @@ _QLIB_INPUT_COLUMNS = ("open", "high", "low", "close", "volume")
 _ALLOWED_QLIB_FIELDS = {"$" + column for column in _QLIB_INPUT_COLUMNS}
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFINITIONS_ROOT = _REPO_ROOT / "config" / "factor-sets"
+# Definition schema versions the registry publishes. The registry is the
+# authority on *content*; this set only says which schema files this adapter is
+# willing to consume.
+_SUPPORTED_DEFINITION_VERSIONS = frozenset({2, 3})
 
 
 class QlibNotInstalledError(ContractError):
@@ -114,8 +118,19 @@ class QlibFactorAdapter:
         registered = registry.get(document.get("factor_set"), document.get("factor_version"))
         if document != registered.document:
             raise ContractError("qlib factor definition does not match reviewed registry")
-        if registered.document.get("set_definition_version") != 2:
-            raise ContractError("qlib factor definition schema must be v2")
+        # The registry validates a definition against the schema named by its own
+        # `set_definition_version` (`factor_governance._validate_factor_set`), so
+        # hardcoding one version here silently excluded every later one: this
+        # adapter was written against v2 and never followed the v3 definitions
+        # that bind the bars_daily/v2 input line (alpha158-v2, basic-v2). Accept
+        # any version the registry knows, and let the registry be the single
+        # source of truth for what a definition may contain.
+        if registered.document.get("set_definition_version") not in _SUPPORTED_DEFINITION_VERSIONS:
+            raise ContractError(
+                "qlib factor definition schema must be one of "
+                f"{sorted(_SUPPORTED_DEFINITION_VERSIONS)}, got "
+                f"{registered.document.get('set_definition_version')}"
+            )
         if registered.document.get("status") != "reviewed":
             raise ContractError("factor set definition must be reviewed")
         self.definition = registered.document

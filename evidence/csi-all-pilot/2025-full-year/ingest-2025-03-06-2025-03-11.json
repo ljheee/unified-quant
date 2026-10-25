@@ -1,0 +1,67 @@
+{
+  "calendar_evidence": {
+    "certified_end": "2026-10-23",
+    "certified_start": "2023-02-07",
+    "fetched_at": "2026-10-25T05:42:00.263830+00:00",
+    "payload_sha256": "d9fd7c33d9c6e1a4a298329019d0e4cc069e034a885ecceef3527accb6e6a750",
+    "provenance": "sina_index_kline_v1",
+    "sessions": 900,
+    "symbol": "sh000300",
+    "url": "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=sh000300&scale=240&ma=no&datalen=900"
+  },
+  "calendar_provenance": "sina_index_kline_v1",
+  "data_root": "data/bars-csiall-store",
+  "failed": [
+    {
+      "errors": [
+        "HTTPConnectionPool(host='api.waditu.com', port=80): Read timed out. (read timeout=30)"
+      ],
+      "session": "2025-03-11",
+      "stage": "ingest",
+      "status": "primary_source_upstream_error",
+      "warnings": []
+    }
+  ],
+  "interrupted": false,
+  "membership_root": "data/csi-all-store",
+  "published": [
+    {
+      "members": 5061,
+      "rows": 5047,
+      "session": "2025-03-06",
+      "warnings": [
+        "daily omitted 1 requested instruments that suspend_d does not cover for the whole window: ['600837.XSHG']",
+        "route coverage is partial; output remains exploratory"
+      ]
+    },
+    {
+      "members": 5061,
+      "rows": 5048,
+      "session": "2025-03-07",
+      "warnings": [
+        "daily omitted 1 requested instruments that suspend_d does not cover for the whole window: ['600837.XSHG']",
+        "route coverage is partial; output remains exploratory"
+      ]
+    },
+    {
+      "members": 5060,
+      "rows": 5047,
+      "session": "2025-03-10",
+      "warnings": [
+        "daily omitted 1 requested instruments that suspend_d does not cover for the whole window: ['600837.XSHG']",
+        "route coverage is partial; output remains exploratory"
+      ]
+    }
+  ],
+  "record_version": 1,
+  "sessions": 4,
+  "skipped": [],
+  "status": "failed",
+  "tail_membership_read_failures": [],
+  "tail_sessions": 0,
+  "universe_id": "csi-all",
+  "window": {
+    "end": "2025-03-11",
+    "start": "2025-03-06"
+  }
+}
