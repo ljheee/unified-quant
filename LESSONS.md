@@ -1,4 +1,4 @@
-<!-- reviewed-through: 711cae95df5c3e87951d4e01739866bd762034a7 -->
+<!-- reviewed-through: b3044677176e29141a2b2a083deb9c6d5b9fb461 -->
 # Project Lessons and Retrospectives (Lessons)
 
 This is the target project's living incident and learning log, not a collection of generic examples. Except for the maintenance protocol defined in this file, every entry must come from commits, issues/PRs, CI output, reproduction records, or verifiable maintainer feedback inspected for this project; do not copy specific technical rules from templates or other projects.
@@ -216,6 +216,26 @@ When recording a specific event, evidence may support checking whether it can be
 - **Status:** active
 - **Distinct review dates observed:** 1 (2026-10-21)
 <!-- /frozen-review-lessons: sha256:2ac1a0d7044c14542e9f560a0c8335132b98c10c00da19aed8b3a77abaa8caac -->
+
+<!-- frozen-review-lessons: sha256:7ac0349266e2d38c59c5706538233c34cebf24ce4f3da136bd19b5db50d839fc -->
+### L-0023 — 回归测试只能依赖已跟踪 fixture 或 `tmp_path`，不能用被忽略的运行时数据换取本地全绿
+- **Why:** `tests/test_model_layer_contracts.py:410-426` 新增的 v2 factor-manifest 回归测试直接读取 `data/root-2025/.../manifest.json`，而 `.gitignore:12` 忽略整个 `data/`。开发者工作树里恰好存在这份生成数据，所以 `.venv` 与 `.venv-qlib` 两套本地套件都能通过；但用 `git archive HEAD` 建立 clean checkout 后，测试在打开该文件时抛出 `FileNotFoundError`。这把一个本应保护 schema dispatch 的回归测试变成了只在特定机器上有效的测试，也让 clean CI 与本地结果分叉。该问题同时触碰仓库“不得提交生成数据”的边界。
+- **Review evidence:**
+  - `2026-10-27` — [tests/test_model_layer_contracts.py:410-426，回归测试直接读取 data/root-2025 下的 manifest](tests/test_model_layer_contracts.py#L410)
+  - `2026-10-27` — [.gitignore:12，data/ 被整体忽略](.gitignore#L12)
+- **Fix or follow-up:** 将测试改为在 `tmp_path` 中构造最小合法 v2 manifest，或使用仓库已跟踪的专用 fixture；不得以 `data/`、`qlib_data/` 或其他生成目录作为测试输入。验证时至少执行一次 clean checkout 或等价的“无本地生成数据”测试运行。
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-27)
+
+### L-0024 — 从契约读取可选字段前先确认该契约声明了它；否则守卫可能永远拿到 `None`
+- **Why:** `src/uq/research_chain/runner.py:795` 用 `export_manifest.get("qlib_version")` 填充 `expected_qlib_version`，但 `config/schemas/contracts/qlib_dataset_export.v2.json` 既没有 `qlib_version` 字段，又设置了 `additionalProperties: false`；真实 export manifest 也没有该键。因此研究链推理路径上的版本守卫始终收到 `None`，`src/uq/models/inference.py:129` 的不一致拒绝不会执行。版本实际记录在 `qlib_init_receipt.v2.json` 的 `qlib_version` 和 `model_artifact.v1.json` 的 `runtime_version`。这不是“检查写错了”，而是检查读取了错误的契约，导致一个看似存在的防线没有生效。
+- **Review evidence:**
+  - `2026-10-27` — [src/uq/research_chain/runner.py:795，从 export manifest 读取不存在的 qlib_version](src/uq/research_chain/runner.py#L795) 与 [src/uq/models/inference.py:129，只有非 None 才执行版本比较](src/uq/models/inference.py#L129)
+  - `2026-10-27` — [config/schemas/contracts/qlib_dataset_export.v2.json:6，additionalProperties=false](config/schemas/contracts/qlib_dataset_export.v2.json#L6)；版本字段实际位于 [qlib_init_receipt.v2.json:54](config/schemas/contracts/qlib_init_receipt.v2.json#L54) 和 [model_artifact.v1.json:6](config/schemas/contracts/model_artifact.v1.json#L6)
+- **Fix or follow-up:** 明确版本守卫的权威来源，并从实际声明该字段的契约读取；若同时存在 init receipt 与 model artifact 的版本记录，增加两者一致性和“不匹配即拒绝”的链路径测试。任何可选字段读取都应有一条测试证明“字段存在时守卫会触发”，而不是只证明正常路径能通过。
+- **Status:** active
+- **Distinct review dates observed:** 1 (2026-10-27)
+<!-- /frozen-review-lessons: sha256:7ac0349266e2d38c59c5706538233c34cebf24ce4f3da136bd19b5db50d839fc -->
 <!-- ACTIVE_LESSONS:END -->
 
 ## Promotion history
