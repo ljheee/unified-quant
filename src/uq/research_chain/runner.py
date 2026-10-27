@@ -443,7 +443,9 @@ class ResearchChainRunner:
         path = self.run_store.root / self._request_relative_path(request)
         if path.exists() or path.is_symlink():
             self.run_store.read_request(
-                request["request_content_generation_id"], request["manifest_digest_sha256"]
+                request["request_content_generation_id"],
+                request["manifest_digest_sha256"],
+                request["run_id"],
             )
             return
         self.run_store.publish_request(request, path_policy="strict_v1")

@@ -72,8 +72,13 @@ class ResearchRunStore(Protocol):
     def publish_request(self, manifest: Mapping[str, Any], *, path_policy: str) -> PublishedRequest:
         """Atomically publish the attempt-local request manifest."""
 
-    def read_request(self, request_content_generation_id: str, manifest_digest_sha256: str) -> Mapping[str, Any]:
-        """Manifest-first readback; reject digest, path, and identity mismatches."""
+    def read_request(
+        self,
+        request_content_generation_id: str,
+        manifest_digest_sha256: str,
+        run_id: str,
+    ) -> Mapping[str, Any]:
+        """Manifest-first readback for one run; reject digest and identity mismatches."""
 
     def publish_state(self, manifest: Mapping[str, Any], *, stage: str) -> PublishedState:
         """Atomically publish an append-forward state snapshot."""

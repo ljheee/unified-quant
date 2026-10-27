@@ -260,7 +260,9 @@ def test_dry_run_state_contains_no_downstream_outputs(tmp_path: Path) -> None:
     assert published_request.manifest_path.is_file()
     assert published_state.manifest_path.is_file()
     assert store.read_request(
-        request["request_content_generation_id"], request["manifest_digest_sha256"]
+        request["request_content_generation_id"],
+        request["manifest_digest_sha256"],
+        request["run_id"],
     )["run_id"] == request["run_id"]
     assert store.read_state(
         request["request_content_generation_id"], request["run_id"],
@@ -497,7 +499,43 @@ def test_request_readback_rejects_tampered_manifest(tmp_path: Path) -> None:
     manifest_path.write_text(json.dumps(document))
     with pytest.raises(ContractError, match="stable content identity mismatch"):
         store.read_request(
-            request["request_content_generation_id"], request["manifest_digest_sha256"]
+            request["request_content_generation_id"],
+            request["manifest_digest_sha256"],
+            request["run_id"],
+        )
+
+
+def test_request_readback_selects_the_requested_run_when_content_is_shared(
+    tmp_path: Path,
+) -> None:
+    """A retry may reuse content identity under a new attempt-local run id."""
+    manifests = _upstream_manifests()
+    request = _request(manifests)
+    store = FileResearchRunStore(tmp_path)
+    store.publish_request(request, path_policy="strict_v1")
+
+    retry = dict(request)
+    retry["run_id"] = "00000000-0000-4000-8000-000000000099"
+    retry["request_content_generation_id"], retry["manifest_digest_sha256"] = (
+        research_contract_identities(retry, schema_name="research_run_request")
+    )
+    store.publish_request(retry, path_policy="strict_v1")
+
+    assert store.read_request(
+        request["request_content_generation_id"],
+        request["manifest_digest_sha256"],
+        request["run_id"],
+    )["run_id"] == request["run_id"]
+    assert store.read_request(
+        retry["request_content_generation_id"],
+        retry["manifest_digest_sha256"],
+        retry["run_id"],
+    )["run_id"] == retry["run_id"]
+    with pytest.raises(ContractError, match="manifest digest mismatch"):
+        store.read_request(
+            request["request_content_generation_id"],
+            request["manifest_digest_sha256"],
+            retry["run_id"],
         )
 
 

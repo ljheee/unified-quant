@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from tests.review_key import REVIEWER_PRIVATE_KEY
 import pytest
@@ -128,6 +129,85 @@ class TestQlibDatasetExporter:
         exporter.export(**common)
         with pytest.raises(ContractError, match="already exists"):
             exporter.export(**common)
+
+    def test_feature_bins_are_written_once_and_preserve_calendar_gaps(
+        self, tmp_path: Path
+    ) -> None:
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        frame = pd.DataFrame([
+            {"instrument": "INST0", "datetime": "2026-01-07", "volume_ratio_20d": 3.0, "label": 0.3},
+            {"instrument": "INST0", "datetime": "2026-01-05", "volume_ratio_20d": 1.0, "label": 0.1},
+            {"instrument": "INST1", "datetime": "2026-01-06", "volume_ratio_20d": 2.0, "label": 0.2},
+        ])
+        manifest = exporter.export(
+            dataset_name="sparse", generation_id="d" * 64,
+            frame=frame, feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+            calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+            provider_uri="file:///data", quality_decision=export_decision(),
+        )
+        _, snapshot = exporter.read("sparse", manifest["generation_id"])
+
+        inst0 = np.fromfile(
+            snapshot / "features" / "inst0" / "volume_ratio_20d.day.bin",
+            dtype="<f",
+        )
+        assert inst0[0] == 0.0
+        assert inst0[1] == 1.0
+        assert np.isnan(inst0[2])
+        assert inst0[3] == 3.0
+        inst1 = np.fromfile(
+            snapshot / "features" / "inst1" / "volume_ratio_20d.day.bin",
+            dtype="<f",
+        )
+        assert inst1.tolist() == [1.0, 2.0]
+
+    def test_feature_bin_header_uses_the_real_calendar_index(self, tmp_path: Path) -> None:
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        frame = pd.DataFrame([
+            {"instrument": "INST0", "datetime": "2026-01-06", "volume_ratio_20d": 2.0, "label": 0.2},
+            {"instrument": "INST0", "datetime": "2026-01-07", "volume_ratio_20d": 3.0, "label": 0.3},
+        ])
+        manifest = exporter.export(
+            dataset_name="offset", generation_id="d" * 64,
+            frame=frame, feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+            calendar_dates=CALENDAR, instruments=["INST0"],
+            provider_uri="file:///data", quality_decision=export_decision(),
+        )
+        _, snapshot = exporter.read("offset", manifest["generation_id"])
+        values = np.fromfile(
+            snapshot / "features" / "inst0" / "volume_ratio_20d.day.bin",
+            dtype="<f",
+        )
+        assert values.tolist() == [1.0, 2.0, 3.0]
+
+    def test_duplicate_calendar_key_is_refused_before_writing(self, tmp_path: Path) -> None:
+        frame = pd.DataFrame([
+            {"instrument": "INST0", "datetime": "2026-01-05", "volume_ratio_20d": 1.0, "label": 0.1},
+            {"instrument": "INST0", "datetime": "2026-01-05", "volume_ratio_20d": 2.0, "label": 0.2},
+        ])
+        with pytest.raises(ContractError, match="duplicate date keys"):
+            QlibDatasetExporter(tmp_path / "exports").export(
+                dataset_name="dup", generation_id="d" * 64,
+                frame=frame, feature_mapping=FEATURE_MAPPING,
+                label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+                calendar_dates=CALENDAR, instruments=["INST0"],
+                provider_uri="file:///data", quality_decision=export_decision(),
+            )
+
+    def test_missing_feature_value_is_refused_before_writing(self, tmp_path: Path) -> None:
+        frame = pd.DataFrame([
+            {"instrument": "INST0", "datetime": "2026-01-05", "volume_ratio_20d": np.nan, "label": 0.1},
+        ])
+        with pytest.raises(ContractError, match="cannot contain missing values"):
+            QlibDatasetExporter(tmp_path / "exports").export(
+                dataset_name="null", generation_id="d" * 64,
+                frame=frame, feature_mapping=FEATURE_MAPPING,
+                label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+                calendar_dates=CALENDAR, instruments=["INST0"],
+                provider_uri="file:///data", quality_decision=export_decision(),
+            )
 
     def test_wrong_provider_uri_rejected_on_receipt(self, tmp_path: Path) -> None:
         exporter = QlibDatasetExporter(tmp_path / "exports")

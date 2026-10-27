@@ -505,19 +505,20 @@ class FileResearchRunStore:
         )
 
     def read_request(
-        self, request_content_generation_id: str, manifest_digest_sha256: str
+        self,
+        request_content_generation_id: str,
+        manifest_digest_sha256: str,
+        run_id: str,
     ) -> Mapping[str, Any]:
         base = self.root / "research_runs" / "requests"
-        matches = [
-            path.parent
-            for path in base.glob(f"request={request_content_generation_id}/run=*/manifest.json")
-            if base.exists()
-        ]
-        if not matches:
-            raise ContractError(f"unpublished research request: {request_content_generation_id}")
-        if len(matches) > 1:
-            raise ContractError(f"ambiguous research request: {request_content_generation_id}")
-        request = _read_json(matches[0] / "manifest.json")
+        request_path = (
+            base / f"request={request_content_generation_id}" / f"run={run_id}" / "manifest.json"
+        )
+        if not request_path.is_file():
+            raise ContractError(
+                f"unpublished research request: {request_content_generation_id} run={run_id}"
+            )
+        request = _read_json(request_path)
         request_schema = research_request_schema_name(request)
         ModelContractLoader.validate(request_schema, request)
         expected_generation, expected_digest = research_contract_identities(
@@ -527,6 +528,8 @@ class FileResearchRunStore:
             raise ContractError("research request generation mismatch")
         if request["request_content_generation_id"] != expected_generation:
             raise ContractError("research request stable content identity mismatch")
+        if request["run_id"] != run_id:
+            raise ContractError("research request run id mismatch")
         if request["manifest_digest_sha256"] != manifest_digest_sha256:
             raise ContractError("research request manifest digest mismatch")
         if request["manifest_digest_sha256"] != expected_digest:
