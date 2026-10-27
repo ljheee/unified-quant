@@ -16,7 +16,11 @@ import pandas as pd
 import pytest
 
 from uq.errors import ContractError
-from uq.models.inference import InferenceResult, score_decision_dates
+from uq.models.inference import (
+    InferenceResult,
+    assert_runtime_version,
+    score_decision_dates,
+)
 
 
 def test_an_unpublished_export_is_refused(tmp_path: Path) -> None:
@@ -91,3 +95,20 @@ def test_inference_refuses_without_the_qlib_extra(tmp_path: Path) -> None:
             artifact_generation_id="d" * 64,
             decision_dates=["2025-09-10"],
         )
+
+
+def test_a_runtime_version_mismatch_is_refused_before_scoring() -> None:
+    """The version guard must be live, not an always-None branch.
+
+    A model trained with one Qlib version must not be scored by another: model
+    deserialization and feature evaluation can differ silently across runtime
+    versions. The chain test proves the artifact's version is what reaches this
+    guard; this test proves a mismatch is refused rather than ignored.
+    """
+    with pytest.raises(ContractError, match="Qlib version 0.9.6"):
+        assert_runtime_version("0.9.6", "0.9.7")
+
+
+def test_a_matching_or_unspecified_runtime_version_is_accepted() -> None:
+    assert_runtime_version("0.9.7", "0.9.7")
+    assert_runtime_version("0.9.7", None)

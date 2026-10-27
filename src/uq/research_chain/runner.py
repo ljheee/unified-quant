@@ -782,9 +782,7 @@ class ResearchChainRunner:
         artifact_binding = self._binding(plan, "model_artifact")
         run_binding = self._binding(plan, "model_run")
         template = plan.request["dataset_policy_template"]
-        export_manifest = self.export_adapter.exporter.read(
-            template["dataset_name"], export_binding.generation_id
-        )[0]
+        artifact_manifest = self.model_adapter.last_result.artifact_manifest
         result = score_decision_dates(
             export_root=self.export_adapter.exporter.export_root,
             dataset_name=template["dataset_name"],
@@ -792,7 +790,11 @@ class ResearchChainRunner:
             run_generation_id=run_binding.generation_id,
             artifact_generation_id=artifact_binding.generation_id,
             decision_dates=dates,
-            expected_qlib_version=export_manifest.get("qlib_version"),
+            # `qlib_version` belongs to the model artifact's runtime, not to
+            # the export contract. Reading it from the export manifest made the
+            # guard permanently receive `None`, so a training/inference runtime
+            # mismatch was never checked on the research-chain path.
+            expected_qlib_version=artifact_manifest["runtime_version"],
         )
         return result.scores
 

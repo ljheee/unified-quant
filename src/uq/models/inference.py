@@ -56,6 +56,18 @@ class InferenceResult:
     unscorable_rows: int
 
 
+def assert_runtime_version(
+    actual_qlib_version: str,
+    expected_qlib_version: str | None,
+) -> None:
+    """Refuse scoring when the installed Qlib differs from the trained runtime."""
+    if expected_qlib_version is not None and actual_qlib_version != expected_qlib_version:
+        raise ContractError(
+            f"Qlib version {actual_qlib_version} does not match the trained runtime "
+            f"{expected_qlib_version}"
+        )
+
+
 def score_decision_dates(
     *,
     export_root: Path | str,
@@ -126,11 +138,7 @@ def score_decision_dates(
         raise ContractError(
             "Qlib is required to score decision dates; install the qlib extra"
         ) from exc
-    if expected_qlib_version is not None and qlib.__version__ != expected_qlib_version:
-        raise ContractError(
-            f"Qlib version {qlib.__version__} does not match the trained runtime "
-            f"{expected_qlib_version}"
-        )
+    assert_runtime_version(qlib.__version__, expected_qlib_version)
 
     calendar = [line for line in (snapshot / "calendars" / "day.txt").read_text(
         encoding="utf-8"

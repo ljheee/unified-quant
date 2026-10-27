@@ -872,6 +872,77 @@ def test_default_prediction_date_uses_the_last_exported_session(tmp_path: Path):
     assert runner._default_decision_dates(plan) == ["2026-01-07"]
 
 
+def test_inference_uses_the_artifact_runtime_version_not_the_export_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The version guard must read the runtime that trained the artifact.
+
+    The export contract deliberately carries no `qlib_version`; reading one from
+    it made the guard receive `None` forever. This test drives the real
+    `_infer_scores_for_dates` branch and asserts the artifact's runtime version
+    reaches `score_decision_dates`.
+    """
+    from types import SimpleNamespace
+    from uq.research_chain.resolver import ResolvedStageBinding
+
+    runner = ResearchChainRunner.__new__(ResearchChainRunner)
+    generation = "9" * 64
+    runner.export_adapter = SimpleNamespace(
+        exporter=SimpleNamespace(
+            export_root=tmp_path / "qlib_exports",
+            read=lambda *_args, **_kwargs: ({}, tmp_path),
+        )
+    )
+    runner.model_adapter = SimpleNamespace(
+        last_result=SimpleNamespace(
+            artifact_manifest={"runtime_version": "0.9.7"},
+        )
+    )
+    plan = SimpleNamespace(
+        request={
+            "dataset_policy_template": {"dataset_name": "research_slice"},
+        },
+        stage_bindings=(
+            ResolvedStageBinding(
+                stage="qlib_export",
+                output_family="qlib_dataset_export",
+                generation_id=generation,
+                manifest_digest_sha256=generation,
+                data_checksum_sha256=generation,
+            ),
+            ResolvedStageBinding(
+                stage="model_training",
+                output_family="model_run",
+                generation_id="8" * 64,
+                manifest_digest_sha256="8" * 64,
+                data_checksum_sha256="8" * 64,
+            ),
+            ResolvedStageBinding(
+                stage="model_training",
+                output_family="model_artifact",
+                generation_id="7" * 64,
+                manifest_digest_sha256="7" * 64,
+                data_checksum_sha256="7" * 64,
+            ),
+        ),
+    )
+    captured: dict[str, object] = {}
+    scores = {"2026-01-07": object()}
+
+    def fake_score(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(scores=scores)
+
+    monkeypatch.setattr("uq.models.inference.score_decision_dates", fake_score)
+    result = runner._infer_scores_for_dates(
+        plan,
+        ["2026-01-07"],
+        runner_identity={"code_fingerprint": "0" * 64},
+    )
+    assert captured["expected_qlib_version"] == "0.9.7"
+    assert result is scores
+
+
 def test_a_v2_price_panel_is_keyed_on_its_own_session_column(tmp_path: Path):
     """cr.md 8.62 F: `bars_daily/v2` publishes `session_date`, not `datetime`.
 

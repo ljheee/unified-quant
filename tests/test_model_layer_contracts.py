@@ -6,7 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from uq.contracts.gate_contracts import validate_contract
+from uq.contracts.gate_contracts import (
+    factor_manifest_identities,
+    validate_contract,
+)
 from uq.contracts.model_layer import (
     AcceptedFactorIndexContract,
     ModelContractLoader,
@@ -407,7 +410,9 @@ def test_cross_manifest_binding_resolver_passes_and_fails() -> None:
         resolve_bindings({"model_dataset": dataset})
 
 
-def test_cross_manifest_binding_resolver_selects_the_factor_manifest_version() -> None:
+def test_cross_manifest_binding_resolver_selects_the_factor_manifest_version(
+    tmp_path: Path,
+) -> None:
     """Expression-defined factor sets publish `manifest_version: 2`.
 
     `resolve_bindings` used to hardcode `factor_manifest.v1.json`, so every
@@ -417,13 +422,51 @@ def test_cross_manifest_binding_resolver_selects_the_factor_manifest_version() -
     """
     from uq.contracts.model_layer import resolve_bindings
 
+    # Build the fixture from tracked contract data, never from the ignored
+    # `data/` tree: a local suite that only passes with generated market data
+    # is not portable and would fail in a clean checkout.
     factor = json.loads(
-        (
-            ROOT
-            / "data/root-2025/factors/dataset=bars_daily/schema_version=v2"
-            / "factor_set=alpha158/factor_version=2.0.0/date=2025-05-13/manifest.json"
-        ).read_text()
+        (ROOT / "config/schemas/fixtures/factor-manifest-v1-valid.json").read_text()
     )
+    factor.update({
+        "manifest_version": 2,
+        "input_dataset": "bars_daily",
+        "input_schema_version": "v2",
+        "factor_set": "alpha158",
+        "factor_version": "2.0.0",
+        "partition_date": "2026-08-21",
+        "decision_time": "2026-08-21T15:00:00+08:00",
+        "run_visible_cutoff": "2026-08-21T15:00:00+08:00",
+        "engine_version": "v0",
+        "engine_contract": {
+            "engine_name": "qlib",
+            "engine_version": "0.9.7",
+            "qlib_expression_set": "Alpha158",
+        },
+    })
+    factor["inputs"][0].update({
+        "dataset": "bars_daily",
+        "schema_version": "v2",
+        "partition_date": "2026-08-21",
+    })
+    factor["factor_definitions"] = [{
+        "name": "qlib_kmid",
+        "version": "1.0.0",
+        "implementation_fingerprint": "c" * 64,
+        "qlib_name": "KMID",
+        "expression": "($close-$open)/$open",
+        "minimum_history": 60,
+    }]
+    factor["columns"] = ["instrument", "qlib_kmid"]
+    factor["dtypes"] = {"instrument": "object", "qlib_kmid": "float32"}
+    unsigned = {
+        key: value
+        for key, value in factor.items()
+        if key not in {"generation_id", "manifest_digest_sha256"}
+    }
+    generation, digest = factor_manifest_identities(unsigned)
+    factor["generation_id"] = generation
+    factor["manifest_digest_sha256"] = digest
     assert factor["manifest_version"] == 2
     with pytest.raises(ContractError) as failure:
         resolve_bindings({
