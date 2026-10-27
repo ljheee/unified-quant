@@ -168,7 +168,7 @@ class ResearchChainRunner:
         *,
         runner_identity: Mapping[str, str],
         quality_decisions: Mapping[str, Any],
-        scores_by_decision_date: Mapping[str, pd.DataFrame],
+        scores_by_decision_date: Mapping[str, pd.DataFrame] | None,
         decision_dates: Sequence[str] | None = None,
         provider_uri: str = "file:///research-exports",
         qlib_import_path: str = "qlib",
@@ -682,15 +682,34 @@ class ResearchChainRunner:
         quality_decisions: Mapping[str, Any],
         created_at: str,
         decision_dates: Sequence[str] | None,
-        scores_by_decision_date: Mapping[str, pd.DataFrame],
+        scores_by_decision_date: Mapping[str, pd.DataFrame] | None,
     ) -> None:
-        dates = sorted(set(decision_dates or [plan.request["window_end_date"]]))
+        dates = sorted(set(
+            decision_dates or self._default_decision_dates(plan)
+        ))
         dataset_binding = self._binding(plan, "model_dataset")
+        if scores_by_decision_date is None:
+            # No external scores were supplied: derive them from the artifact this
+            # run just trained. Before this, `--scores-json` was mandatory, which
+            # made the chain circular -- the prediction stage needed scores that
+            # only the model in the same run could produce, so any real training
+            # had to be split into two executes with a hand-written file in
+            # between. Loading the artifact here keeps the governed surface
+            # intact: the scores come from a published, reviewed model, not from
+            # a file outside the chain.
+            scores_by_decision_date = self._infer_scores_for_dates(
+                plan, dates, runner_identity=runner_identity
+            )
         if not scores_by_decision_date:
             raise ContractError("prediction stage requires governed scores")
         for decision_date in dates:
             if decision_date not in scores_by_decision_date:
                 raise ContractError(f"missing governed scores for decision date {decision_date}")
+        if self.model_adapter.last_result is None:
+            # A resumed run skips model_training, so the artifact hand-off must be
+            # rebuilt before the prediction stage. Recompute it here as well rather
+            # than relying on the resume path's ordering.
+            self.model_adapter.last_result = self._restored_model_result(plan)
         results = self.prediction_adapter.run_for_dates(
             plan,
             dataset_generation_id=dataset_binding.generation_id,
@@ -707,6 +726,75 @@ class ResearchChainRunner:
         )
         self.prediction_adapter.last_result = results[-1]
         return results
+
+    def _default_decision_dates(self, plan: ResolvedExecutionPlan) -> list[str]:
+        """The last session the export can score, not necessarily the window end.
+
+        The export calendar is the dataset's supervised dates. A research window
+        can end after the last labeled decision date (the forward-label tail), so
+        scoring `window_end_date` unconditionally asks Qlib for a date that is not
+        in its own export and fails at the last stage. The default is therefore
+        the last exported session inside the window; an explicit
+        `--scores-json`/decision-date list still wins.
+        """
+        export_binding = self._binding(plan, "qlib_dataset_export")
+        template = plan.request["dataset_policy_template"]
+        snapshot = (
+            self.export_adapter.exporter.export_root
+            / f"dataset={template['dataset_name']}"
+            / f"generation={export_binding.generation_id}"
+        )
+        calendar_path = snapshot / "calendars" / "day.txt"
+        try:
+            calendar = [
+                line for line in calendar_path.read_text(encoding="utf-8").splitlines()
+                if line
+            ]
+        except OSError as exc:
+            raise ContractError(f"unpublished Qlib export calendar: {calendar_path}") from exc
+        start = plan.request["window_start_date"]
+        end = plan.request["window_end_date"]
+        eligible = [day for day in calendar if start <= day <= end]
+        if not eligible:
+            raise ContractError(
+                f"export calendar has no session inside {start}..{end}; "
+                f"calendar spans {calendar[0] if calendar else 'empty'}.."
+                f"{calendar[-1] if calendar else 'empty'}"
+            )
+        return [eligible[-1]]
+
+    def _infer_scores_for_dates(
+        self,
+        plan: ResolvedExecutionPlan,
+        dates: Sequence[str],
+        *,
+        runner_identity: Mapping[str, str],
+    ) -> dict[str, pd.DataFrame]:
+        """Score `dates` by loading the model artifact this run published."""
+        from ..models.inference import score_decision_dates
+
+        if self.model_adapter.last_result is None:
+            raise ContractError(
+                "prediction stage needs scores, but no model artifact is available "
+                "in this run; pass --scores-json or run the model stage first"
+            )
+        export_binding = self._binding(plan, "qlib_dataset_export")
+        artifact_binding = self._binding(plan, "model_artifact")
+        run_binding = self._binding(plan, "model_run")
+        template = plan.request["dataset_policy_template"]
+        export_manifest = self.export_adapter.exporter.read(
+            template["dataset_name"], export_binding.generation_id
+        )[0]
+        result = score_decision_dates(
+            export_root=self.export_adapter.exporter.export_root,
+            dataset_name=template["dataset_name"],
+            export_generation_id=export_binding.generation_id,
+            run_generation_id=run_binding.generation_id,
+            artifact_generation_id=artifact_binding.generation_id,
+            decision_dates=dates,
+            expected_qlib_version=export_manifest.get("qlib_version"),
+        )
+        return result.scores
 
     def _run_portfolio(
         self,
@@ -1208,20 +1296,27 @@ class ResearchChainRunner:
         """
         if "model_training" not in completed:
             return
-        try:
-            binding = next(
-                binding for binding in plan.stage_bindings
-                if binding.stage == "model_training"
-                and binding.output_family in {"model_run", "model_artifact"}
-            )
-        except StopIteration:
-            return
-        # The model stage's in-process result is the only hand-off with no read-back
-        # path (`_read_published_document` refuses `model_artifact`), so it is rebuilt
-        # from the two published artifacts through the same store read the stage
-        # itself performs after training.
-        # Same read-back the runner's own per-family path uses for `model_run`: the
-        # manifest is a top-level document, not an owning-store partition.
+        self.model_adapter.last_result = self._restored_model_result(plan)
+        # cr.md 8.62 D: the portfolio stage consumes the prediction hand-off, not
+        # just the plan's bindings, so a resume that replays prediction_publication
+        # has to re-hydrate it too. It is a per-date family, so the earliest
+        # published prediction is the one the hand-off carries.
+        if "prediction_publication" in completed:
+            self.prediction_adapter.last_result = self._restored_prediction_result(plan)
+        # cr.md 8.62 D: the backtest stage reads the portfolio hand-off the same
+        # way, so a resume that replays portfolio_construction has to rebuild it
+        # from the published per-date target weights.
+        if "portfolio_construction" in completed:
+            self.portfolio_adapter.last_result = self._restored_portfolio_result(plan)
+
+    def _restored_model_result(self, plan: ResolvedExecutionPlan) -> ModelStageResult:
+        """Rebuild the model hand-off from the published run and artifact.
+
+        The model stage's in-process result is the only hand-off with no read-back
+        path (`_read_published_document` refuses `model_artifact`), so it is rebuilt
+        from the two published artifacts through the same store read the stage
+        itself performs after training.
+        """
         run_binding = self._binding(plan, "model_run")
         artifact_binding = self._binding(plan, "model_artifact")
         run_path = (
@@ -1241,21 +1336,10 @@ class ResearchChainRunner:
         )
         if artifact_manifest["generation_id"] != artifact_binding.generation_id:
             raise ContractError("model artifact readback identity mismatch")
-        self.model_adapter.last_result = ModelStageResult(
+        return ModelStageResult(
             run_manifest=run_manifest,
             artifact_manifest=artifact_manifest,
         )
-        # cr.md 8.62 D: the portfolio stage consumes the prediction hand-off, not
-        # just the plan's bindings, so a resume that replays prediction_publication
-        # has to re-hydrate it too. It is a per-date family, so the earliest
-        # published prediction is the one the hand-off carries.
-        if "prediction_publication" in completed:
-            self.prediction_adapter.last_result = self._restored_prediction_result(plan)
-        # cr.md 8.62 D: the backtest stage reads the portfolio hand-off the same
-        # way, so a resume that replays portfolio_construction has to rebuild it
-        # from the published per-date target weights.
-        if "portfolio_construction" in completed:
-            self.portfolio_adapter.last_result = self._restored_portfolio_result(plan)
 
     def _restored_portfolio_result(self, plan: ResolvedExecutionPlan) -> Any:
         """Rebuild the portfolio hand-off from the published target weights.

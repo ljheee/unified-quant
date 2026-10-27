@@ -82,6 +82,17 @@ def main(argv: list[str] | None = None) -> int:
              "cover (all of 北交所). Without it a BSE name looks eventless and its "
              "real dividend fails the jump check.",
     )
+    parser.add_argument(
+        "--excluded-instruments",
+        type=Path,
+        default=None,
+        help=(
+            "governed JSON object of instrument -> reason. These names are dropped "
+            "from the adjusted line before any cross-check runs. Excluding a name "
+            "is a sample-selection decision, so the reason is mandatory and the "
+            "file is an archived artifact, never a command-line list."
+        ),
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
@@ -107,6 +118,37 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     instruments = sorted({name for frame in frames.values() for name in frame["instrument"]})
+    excluded: dict[str, str] = {}
+    if args.excluded_instruments is not None:
+        try:
+            document = json.loads(args.excluded_instruments.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"unreadable excluded-instruments file {args.excluded_instruments}: {exc}")
+        if not isinstance(document, dict) or not all(
+            isinstance(key, str) and isinstance(value, str) and value
+            for key, value in document.items()
+        ):
+            raise SystemExit(
+                "excluded-instruments file must be a JSON object of instrument -> reason"
+            )
+        window_instruments = set(instruments)
+        stale = sorted(set(document) - window_instruments)
+        if stale:
+            raise SystemExit(
+                "excluded-instruments names instruments absent from this window, "
+                f"so the exclusion cannot be audited against it: {stale[:10]}"
+            )
+        excluded = document
+        instruments = [name for name in instruments if name not in excluded]
+        # The exclusion has to reach the frames, not just the event map. `frames`
+        # is what gets restated and published, so filtering only `instruments`
+        # would still publish (and still cross-check) the excluded names.
+        frames = {
+            session: frame[~frame["instrument"].isin(excluded)].reset_index(drop=True)
+            for session, frame in frames.items()
+        }
+        if not instruments:
+            raise SystemExit("excluded-instruments removed every instrument in the window")
     symbols = [name.split(".")[0] for name in instruments]
     adapter = MootdxSourceAdapter()
     try:
@@ -221,7 +263,15 @@ def main(argv: list[str] | None = None) -> int:
         },
         "tolerance": args.tolerance,
         "instruments": len(instruments),
-            "previous_basis": previous_basis,
+        "excluded_instruments": excluded,
+        "excluded_provenance": (
+            None if not excluded else f"file:{args.excluded_instruments}"
+        ),
+        "exclusion_note": (
+            "excluding a name is a sample-selection decision, not a data repair: "
+            "the reason each name carries is archived with this report"
+        ),
+        "previous_basis": previous_basis,
         "published": len(published),
         "skipped": len(skipped),
         "refused": len(refused),

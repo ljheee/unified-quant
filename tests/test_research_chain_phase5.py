@@ -719,6 +719,159 @@ def test_the_portfolio_stage_binds_the_date_the_hand_off_carries(tmp_path: Path)
     assert _latest_prediction_binding([stand_in, *bindings]).generation_id == "1".ljust(64, "0")
 
 
+@requires_qlib
+def test_the_runner_scores_from_the_artifact_when_no_scores_file_is_given(tmp_path: Path):
+    """Without `--scores-json` the prediction stage must load the model it trained.
+
+    The CLI used to require an external scores document, which made real training
+    circular: the document could only be produced after the run had trained the
+    model it was supposed to consume.  This drives the full chain without a scores
+    mapping and asserts the prediction comes from the governed artifact.
+    """
+    from tests.test_research_chain_phase4 import _extended_plan
+    from tests.test_research_chain_phase2 import (
+        _dataset_quality_decision,
+        _factor_quality_decision,
+        _label_quality_decision,
+        _preprocessing_quality_decision,
+    )
+    from tests.test_research_chain_phase3 import (
+        artifact_decision,
+        export_decision,
+        prediction_decision,
+        receipt_decision,
+        run_decision,
+    )
+    from tests.test_research_chain_phase4 import (
+        _config_decision,
+        _definition_decision,
+        _publish_market_inputs,
+        _replace_backtest_config,
+        _result_decision,
+        _weights_decision,
+    )
+    from tests.test_research_chain_phase5 import _research_result_decision
+
+    dataset_adapter, plan, universe_binding = _extended_plan(
+        tmp_path, "9" * 64, "c" * 64, "c" * 64
+    )
+    plan.request.pop("universe_id", None)
+    plan.request["window_start_date"] = "2026-01-05"
+    plan.request["window_end_date"] = "2026-01-30"
+    plan.request["request_content_generation_id"], plan.request["manifest_digest_sha256"] = (
+        research_contract_identities(plan.request, schema_name="research_run_request")
+    )
+    plan = dataclasses.replace(
+        plan, request_manifest_digest_sha256=plan.request["manifest_digest_sha256"]
+    )
+    factor_store = FactorStore(tmp_path, FactorRegistry(ROOT))
+    factor_binding = next(
+        binding for binding in plan.stage_bindings
+        if binding.output_family == "factor_partition"
+    )
+    factor_manifest = factor_store.read_manifest(factor_binding.generation_id)
+    adjusted_binding = next(
+        binding for binding in plan.stage_bindings
+        if binding.output_family == "adjusted_price_dataset"
+    )
+    adjusted_manifest = dataset_adapter.adjusted_price_store.read_manifest(
+        adjusted_binding.generation_id
+    )
+    config = _publish_market_inputs(
+        tmp_path,
+        universe_binding.generation_id,
+        adjusted_binding.generation_id,
+        adjusted_manifest["data_checksum_sha256"],
+    )
+    plan = _replace_backtest_config(plan, config)
+    runner = _build_runner(
+        tmp_path, dataset_adapter, factor_store, FileResearchRunStore(tmp_path)
+    )
+    # Stop after prediction publication. The fixture window has one session, and a
+    # one-session backtest legitimately has no Sharpe ratio; the v1 backtest-result
+    # schema requires a number there, which is a separate contract issue. This test
+    # only needs the prediction stage to have published from the artifact.
+    from uq.errors import ContractError
+
+    def stop_after_predictions(*args, **kwargs):
+        raise ContractError("stop after prediction publication")
+
+    with pytest.MonkeyPatch.context() as patched:
+        patched.setattr(ResearchChainRunner, "_run_portfolio", stop_after_predictions)
+        with pytest.raises(ContractError, match="stop after prediction publication"):
+            runner.execute(
+                plan,
+                runner_identity=RUNNER,
+                quality_decisions={
+                    "factor_partition": _factor_quality_decision(factor_manifest),
+                    "label_set": _label_quality_decision(),
+                    "feature_preprocessing": _preprocessing_quality_decision(),
+                    "model_dataset": _dataset_quality_decision(),
+                    "qlib_dataset_export": export_decision(),
+                    "qlib_init_receipt": receipt_decision(),
+                    "model_run": run_decision(),
+                    "model_artifact": artifact_decision,
+                    "prediction_set": prediction_decision(),
+                    "portfolio_definition": _definition_decision,
+                    "target_weights": _weights_decision(),
+                    "backtest_config": _config_decision(),
+                    "backtest_result": _result_decision(),
+                    "research_run_result": _research_result_decision,
+                },
+                scores_by_decision_date=None,
+                decision_dates=None,
+                created_at="2026-01-30T07:00:00+00:00",
+            )
+    snapshots = FileResearchRunStore(tmp_path).list_state_snapshots(
+        plan.request["request_content_generation_id"], plan.request["run_id"]
+    )
+    assert any(
+        snapshot.stage == "prediction_publication" and snapshot.status == "passed"
+        for snapshot in snapshots
+    )
+
+
+@requires_qlib
+def test_default_prediction_date_uses_the_last_exported_session(tmp_path: Path):
+    """A window can end after the export's last supervised decision date.
+
+    The forward-label tail makes `window_end_date` unscorable even though the
+    dataset and export are correct. The default decision date must come from the
+    export calendar, not the request's nominal window end.
+    """
+    from types import SimpleNamespace
+    from uq.research_chain.resolver import ResolvedStageBinding
+
+    runner = ResearchChainRunner.__new__(ResearchChainRunner)
+    runner.export_adapter = SimpleNamespace(
+        exporter=SimpleNamespace(export_root=tmp_path / "qlib_exports")
+    )
+    generation = "9" * 64
+    plan = SimpleNamespace(
+        request={
+            "dataset_policy_template": {"dataset_name": "research_slice"},
+            "window_start_date": "2026-01-05",
+            "window_end_date": "2026-01-09",
+        },
+        stage_bindings=(
+            ResolvedStageBinding(
+                stage="qlib_export",
+                output_family="qlib_dataset_export",
+                generation_id=generation,
+                manifest_digest_sha256=generation,
+                data_checksum_sha256=generation,
+            ),
+        ),
+    )
+    calendar_path = (
+        tmp_path / "qlib_exports" / "dataset=research_slice"
+        / f"generation={generation}" / "calendars" / "day.txt"
+    )
+    calendar_path.parent.mkdir(parents=True, exist_ok=True)
+    calendar_path.write_text("2026-01-05\n2026-01-06\n2026-01-07\n")
+    assert runner._default_decision_dates(plan) == ["2026-01-07"]
+
+
 def test_a_v2_price_panel_is_keyed_on_its_own_session_column(tmp_path: Path):
     """cr.md 8.62 F: `bars_daily/v2` publishes `session_date`, not `datetime`.
 

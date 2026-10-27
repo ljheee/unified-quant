@@ -3734,3 +3734,95 @@ v3 支持改动后仍全绿。
 - **模型仍是 `qlib_linear`**（ridge）。157 因子下线性模型可用，但 GBDT 未接入。
 - 没有 test 段表现——160 天里要切 train/validation/test，test 段才是"对交易有
   指导意义"的证据。
+
+### 8.79 全 A 2025 v6 首次端到端跑通：union universe、O(n) 清单校验与推理日边界（2026-10-26/27）
+
+**触发**：用户要求用全 A 指数做首次真实训练，并在真实数据上跑通 v6 execute。
+
+#### A. union universe：跨月窗口没有单一 PIT 快照
+
+`publish_universe_snapshots.py` 把月度 membership 铺成
+`[visible_from, 下一 visible_from)`，2025-05-13..12-31 跨 8 个 tile，因此不存在
+一个可直接绑定的 `universe_snapshot`。新增
+`scripts/publish_universe_union.py` 发布窗口级并集：
+
+- 8 个可见快照并集 **5163** 只，`valid_from=2025-05-13`、`valid_to=null`；
+- 生成 `ec49a372…`；
+- `membership_evidence` 明写
+  `semantics=window_level_union_not_daily_pit`，并说明逐日成员规则仍是
+  `index_membership_binding`。
+
+**这不是“全 A 5163 只训练集”**：union 是成员上界；真实训练样本是 **4891 只、
+728880 行**。
+
+#### B. adjusted price 的 3 个缺口与 84 只排除
+
+全年 `adjusted-v2` 初版缺 `2025-08-12`、`2025-08-15`、`2025-10-16` 三个会话。
+用已归档的 84 只排除清单（`excluded-instruments.json`，每只带原因）补齐后，
+160/160 会话覆盖。`publish_adjusted_window.py` 的排除会同时作用于**发布帧**与
+交叉校验，不只是事件 map；报告记录 `excluded_instruments` 与来源。
+
+#### C. `uniqueItems` 的 O(n²) 阻塞（本轮最重要）
+
+`qlib_dataset_export.v2.json` 的 `files` 有 `uniqueItems: true`。真实 export 有
+**772,781** 个文件，jsonschema 的通用实现是超线性比较：
+
+| n | 单次校验 |
+|---:|---:|
+| 1,000 | 0.32s |
+| 2,000 | 1.22s |
+| 4,000 | 4.67s |
+| 8,000 | 18.56s |
+
+按此推算，77 万项单次约 44–48 小时；整条路径还会多次校验。这不是哈希或网络问题：
+全量哈希实测约 58 秒，`fsync` 约 28 秒。
+
+**修法**：保留 schema 的契约声明，生产校验路径改用
+`validate_contract_with_linear_unique_items()`（跳过 O(n²) 关键字），并在共享
+`ModelContractLoader.validate("qlib_dataset_export", …)` 中执行 O(n) 的
+`files[].path` 唯一检查。该检查同时拦：
+
+- 同一路径、不同 checksum；
+- 完全重复对象。
+
+修复后 export 收尾从“十余小时仍不结束”降为分钟级；`qlib_export` 已 passed。
+
+#### D. factor manifest v2 被硬编码按 v1 校验
+
+训练阶段报 160 个 factor manifest 全部
+`invalid factor manifest content`。实测第一个 manifest：
+
+- schema 校验失败：`manifest_version: 2` 被 v1 schema 拒；
+- identity 重算完全匹配。
+
+根因是 `resolve_bindings()` 硬编码 `factor_manifest.v1.json`。修为按
+`manifest_version` 选择 schema，并补 v2 回归测试。`model_training` 随后 passed。
+
+#### E. 无 scores 时的预测日：窗口末日不等于可评分日
+
+label 监督集止于 `2025-12-24`，export 日历同止；请求窗口末日是 `2025-12-31`。
+runner 原默认用窗口末日，导致：
+
+`decision dates outside the exported calendar: ['2025-12-31']`
+
+修为：无外部 scores 时，默认决策日取 **export 日历内、窗口内的最后一个会话**；
+显式 `--scores-json` 仍优先。补测试锁定该边界。
+
+#### F. 端到端结果
+
+request `41064ea2…`，result `509fa284…`，`final_status=passed`，10/10 stage passed。
+
+| 项目 | 数值 |
+|---|---|
+| 训练样本 | 728880 行 / 4891 只 |
+| 因子 | 157 |
+| 交易日 | 160（2025-05-13..12-31） |
+| 预测日 | 2025-12-24 |
+| 预测行数 | 4695 |
+| 回测累计收益 | +1.66% |
+| 年化收益 | +2.63% |
+| Sharpe | 0.972 |
+| 最大回撤 | 0.985% |
+
+**边界**：质量决策仍是仓库测试密钥；结果证明链路闭合与 fail-closed，不构成
+研究结论。模型仍是 `qlib_linear`，GBDT 未接入。

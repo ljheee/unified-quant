@@ -1,0 +1,71 @@
+{
+  "status": "published",
+  "universe_id": "csi-all",
+  "window": {
+    "start": "2025-05-13",
+    "end": "2025-12-31"
+  },
+  "generation_id": "ec49a3722d6dead6ae03572035c888796c2353e4a008b760e5a9d45768cab841",
+  "valid_from": "2025-05-13",
+  "valid_to": null,
+  "instrument_count": 5163,
+  "contributing_snapshots": [
+    {
+      "snapshot_date": "2025-04-30",
+      "visible_from": "2025-05-13",
+      "generation_id": "771175db046fd8bdc88888fb49f85686d6c2b087f55b04fc3c76cc9b8e674028",
+      "manifest_digest_sha256": "1afefb32ac87b01fc2eedd86d4dcf962524de313b18d2959504259e0320c33d7",
+      "members_checksum_sha256": "dd2be0985610be98231e0ae8e0a3cac51a632cadd7e503d063b71186dd814760"
+    },
+    {
+      "snapshot_date": "2025-05-30",
+      "visible_from": "2025-06-10",
+      "generation_id": "83e0d408fb7edaea27efeb2b86bad385c9a7316e2a387675d117eaf92c2b25b3",
+      "manifest_digest_sha256": "aae41a01aaa24474724665f1f282556781360969c9622c596db77e74a3705de3",
+      "members_checksum_sha256": "3ebfd2b242b54a3507424c3d17ecc8ce2684cc0f48de067c06ffb5b2c69e8f77"
+    },
+    {
+      "snapshot_date": "2025-06-30",
+      "visible_from": "2025-07-08",
+      "generation_id": "f96d5194e75b44c275147b5257df3d45778b6239583774c2cf190e11f819295f",
+      "manifest_digest_sha256": "da0065a78130efea8bd6b49a37c7e8b21049480df404d39e2441b592c943fff3",
+      "members_checksum_sha256": "8c5f9f4f837ac3d281cba9fae97971f8a90ff06a07dc5a83d87be8e94ff89195"
+    },
+    {
+      "snapshot_date": "2025-07-31",
+      "visible_from": "2025-08-08",
+      "generation_id": "a3570ac88975422b5e4052f9d187a462bfc4eb15a13396a0039129e2c0524267",
+      "manifest_digest_sha256": "de3033a5bf60dacf846e05747c637fb3eeb636b1104cb90fcceb0e7ad28e87b3",
+      "members_checksum_sha256": "61d76584067799552a82d505cfe267b9cc76db9492812a866ff7a0d59dccb354"
+    },
+    {
+      "snapshot_date": "2025-08-29",
+      "visible_from": "2025-09-08",
+      "generation_id": "3100e27a27492e7d18f5909a05aeceb6ec591dd9ff9837a7a6e692259cd3761d",
+      "manifest_digest_sha256": "2d9a68c082f43fd253dd2d4dab17983ecb0cab4b5d8a2a6e7f7eb8f36109c5ba",
+      "members_checksum_sha256": "c1c605e727ba7df75595a3ac3f0cea8d2496859f0c81176f47cf385d2525b077"
+    },
+    {
+      "snapshot_date": "2025-09-30",
+      "visible_from": "2025-10-16",
+      "generation_id": "4ba57dcb82c640cbb0c12f9271752aa242a457e98bf7242e1c1a69a4c54d4d20",
+      "manifest_digest_sha256": "7529e550995a86dc4175ab6a1c0c231d0af984260a329b98c1bd1438e8305f5c",
+      "members_checksum_sha256": "b9515337f4c07b60315e170a088db6a4231b25c23b7697d8c1ff605cd995a9ba"
+    },
+    {
+      "snapshot_date": "2025-10-31",
+      "visible_from": "2025-11-10",
+      "generation_id": "1f9392e0e39d6b0dc5485f19f569130db71232f106c09072dfd0d5dd266d9fe6",
+      "manifest_digest_sha256": "07da2e4bd75c59061317d5918576e3d912c870fa60eccb5c7b29aabb426d2885",
+      "members_checksum_sha256": "3f12953e84bc59b96cbdddc68c3e0dfeb1dff133374a701139aab4c069455ee2"
+    },
+    {
+      "snapshot_date": "2025-11-28",
+      "visible_from": "2025-12-08",
+      "generation_id": "edc1acca6a119841152b033dff1c24b23e543716a1717137f2af70f18e53bab1",
+      "manifest_digest_sha256": "c32310379735e4f755ae50edb7f3c25fc27a10ac52b7a2cb19454fcff6653aeb",
+      "members_checksum_sha256": "583e3f1f7946ad0bd2cbd83f4add6fe39c9a8019425dc900b7f0c8e97da9fa81"
+    }
+  ],
+  "semantics": "window_level_union_not_daily_pit"
+}

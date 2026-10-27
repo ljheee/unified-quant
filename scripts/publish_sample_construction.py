@@ -58,11 +58,32 @@ def _refuse(message: str) -> int:
     return 2
 
 
-def _load_decision(path: Path, family: str) -> dict[str, Any]:
+def _load_decision(path: Path, family: str, subject_generation_id: str) -> dict[str, Any]:
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ContractError(f"unreadable quality decisions {path}: {exc}") from exc
+    if isinstance(document, dict) and "provider_command" in document:
+        command = document["provider_command"]
+        if not isinstance(command, list) or not command or not all(
+            isinstance(item, str) and item for item in command
+        ):
+            raise ContractError("provider_command must be a non-empty list of strings")
+        if document.get("provider_id") != "external-model-quality-reviewer-v1":
+            raise ContractError("unsupported decision provider identity")
+        from uq.research_chain.cli import _CommandDecisionProvider, _decision_provider_for_family
+
+        provider = _CommandDecisionProvider(
+            command=command,
+            provider_config_ref=document.get(
+                "provider_config_ref", "sample-construction-publisher"
+            ),
+        )
+        return dict(
+            _decision_provider_for_family(provider, family)(
+                subject_generation_id, subject_generation_id
+            )
+        )
     if isinstance(document, dict) and "quality_decisions" in document:
         decisions = document["quality_decisions"]
         if not isinstance(decisions, dict):
@@ -233,7 +254,11 @@ def main(argv: list[str] | None = None) -> int:
         dropped_labels=dropped_labels,
     )
     try:
-        decision = _load_decision(args.quality_decisions_json, "sample_construction")
+        decision = _load_decision(
+            args.quality_decisions_json,
+            "sample_construction",
+            manifest["generation_id"],
+        )
     except ContractError as exc:
         return _refuse(str(exc))
     try:

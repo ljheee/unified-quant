@@ -288,3 +288,58 @@ def test_instruments_tdx_does_not_cover_fall_back_to_the_dividend_store(tmp_path
     report = json.loads(out.read_text())
     by_source = report["sources"]["cross_check_events_by_instrument"]
     assert "920000.XBSE" in by_source.get("tushare:dividend", [])
+
+
+def test_excluded_instruments_filter_the_published_frames_and_are_reported(tmp_path, monkeypatch):
+    """A sample-selection exclusion must reach the frames, not just the event map.
+
+    The cross-check computes an event map keyed by instrument, but the bytes that
+    are published come from `frames`.  Filtering only the instrument list left an
+    excluded name in the adjusted line while the report claimed it was excluded.
+    """
+    start, end = DATES[1].date().isoformat(), DATES[-1].date().isoformat()
+    excluded = tmp_path / "excluded.json"
+    excluded.write_text(json.dumps({"000001.XSHE": "reviewed exclusion for this test"}))
+    _publish_bars(tmp_path / "bars")
+    monkeypatch.setattr(module, "MootdxSourceAdapter", lambda: _fake_adapter({}))
+    out = tmp_path / "report.json"
+    code = module.main([
+        "--bars-root", str(tmp_path / "bars"), "--adjusted-root", str(tmp_path / "adj"),
+        "--start", start, "--end", end, "--excluded-instruments", str(excluded),
+        "--out", str(out),
+    ])
+    assert code == 0
+    report = json.loads(out.read_text())
+    assert report["excluded_instruments"] == {"000001.XSHE": "reviewed exclusion for this test"}
+    assert report["instruments"] == 1
+    last = tmp_path / "adj" / "canonical" / "bars_adjusted" / "adjusted-v2" / f"date={end}"
+    frame = pd.read_parquet(last / "data.parquet")
+    assert set(frame["instrument"]) == {"600000.XSHG"}
+
+
+def test_an_excluded_instrument_must_carry_a_reason(tmp_path, monkeypatch):
+    start, end = DATES[1].date().isoformat(), DATES[-1].date().isoformat()
+    excluded = tmp_path / "excluded.json"
+    excluded.write_text(json.dumps({"000001.XSHE": ""}))
+    _publish_bars(tmp_path / "bars")
+    monkeypatch.setattr(module, "MootdxSourceAdapter", lambda: _fake_adapter({}))
+    with pytest.raises(SystemExit, match="instrument -> reason"):
+        module.main([
+            "--bars-root", str(tmp_path / "bars"), "--adjusted-root", str(tmp_path / "adj"),
+            "--start", start, "--end", end, "--excluded-instruments", str(excluded),
+            "--out", str(tmp_path / "report.json"),
+        ])
+
+
+def test_a_stale_excluded_instrument_is_refused(tmp_path, monkeypatch):
+    start, end = DATES[1].date().isoformat(), DATES[-1].date().isoformat()
+    excluded = tmp_path / "excluded.json"
+    excluded.write_text(json.dumps({"999999.XSHE": "stale entry from another window"}))
+    _publish_bars(tmp_path / "bars")
+    monkeypatch.setattr(module, "MootdxSourceAdapter", lambda: _fake_adapter({}))
+    with pytest.raises(SystemExit, match="absent from this window"):
+        module.main([
+            "--bars-root", str(tmp_path / "bars"), "--adjusted-root", str(tmp_path / "adj"),
+            "--start", start, "--end", end, "--excluded-instruments", str(excluded),
+            "--out", str(tmp_path / "report.json"),
+        ])

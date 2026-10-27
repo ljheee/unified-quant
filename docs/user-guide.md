@@ -286,6 +286,7 @@ execute 的命令形状如下，仅作结构说明：
 | --- | --- | --- |
 | `factor_binding` / `factor_partition_set_binding` | `uq.factors.store.FactorStore` | 是:`scripts/publish_factor_partitions.py`(读 canonical bars → 投影 → 算 → 发布,并输出 `factor_partition_set` 绑定) |
 | `universe_snapshot_binding` | `uq.contracts.artifacts.UniverseSnapshotStore` | 是:`scripts/publish_universe_snapshots.py`(把 `scripts/fetch_index_membership.py` 的 PIT 成分快照铺成 `[visible_from, 下一 visible_from)` 区间) |
+| 跨月窗口的 `universe_snapshot_binding` | 同上 | 是:`scripts/publish_universe_union.py`(窗口内可见月度快照的并集;只作身份锚点,逐日成员规则仍由 `index_membership_binding` 承担) |
 | `adjusted_price_binding` | `src/uq/research_chain/owning_contracts.py:89` `AdjustedPriceDatasetStore` | 否:只读 |
 | `sample_construction_binding` (v6) | 同文件 `SampleConstructionStore` | 是:`scripts/publish_sample_construction.py`(factor + label + universe + membership → 按 reviewed 行策略筛选 → 绑定**外部签发**的评审 → 发布最终训练样本) |
 | `feature_preprocessing_binding` | 同文件 `FeatureSchemaStore` + `FeaturePreprocessingStore` | 是:`scripts/publish_feature_preprocessing.py`(读 factor 分区或已评审 sample_construction → 截面变换 → 绑定**外部签发**的评审 → 发布) |
@@ -298,6 +299,7 @@ v5/v6 请求额外要求的两类绑定**有**随仓库提供的生产者:
 - `paper_execution_template` 的市场数据四族:`scripts/publish_market_datasets.py`。
 - `backtest_config` 绑定的 calendar / suspension / corporate_action 三族(整窗口单一制品,**不是**上面那四族的布局):`scripts/publish_backtest_market_data.py`。来源见 `docs/subsystems/research-chain.md`;除权排除集按 **`ex_date` 而非公告日**判入窗。
 - `backtest_config_binding` 本身:`scripts/publish_backtest_config.py`。四个绑定全部从已发布制品显式读取,市场三族还会**逐个回读校验**,不会把报告里不一致的 checksum 烙进 config。
+- `adjusted_price` 的按日分区写侧:`scripts/publish_adjusted_window.py`。它逐会话发布 `adjusted-v2`,并把样本选择排除项作为带原因的受治理 JSON 输入(`--excluded-instruments`),排除会同时作用于发布帧与交叉校验。
 
 两点提醒:
 

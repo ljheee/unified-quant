@@ -1,0 +1,74 @@
+{
+  "already_published": [
+    {
+      "index_snapshot_date": "2025-08-29",
+      "reason": "already_published",
+      "valid_from": "2025-09-08"
+    }
+  ],
+  "failed": [],
+  "limitation": "limitation: monthly approximation, not strict daily PIT; intra-month index adjustments cannot be distinguished because the source publishes no announcement or effective date",
+  "pit_precision": "monthly_approximation",
+  "published": [
+    {
+      "generation_id": "d4b43f568a7718f83c6b52496d6acc6d0b80ffd1e7ae2f67e6bbb5a2ad9ee563",
+      "instrument_count": 5046,
+      "members_checksum_sha256": "dd2be0985610be98231e0ae8e0a3cac51a632cadd7e503d063b71186dd814760",
+      "open_ended": false,
+      "valid_from": "2025-05-13",
+      "valid_to": "2025-06-09"
+    },
+    {
+      "generation_id": "e2e79304b25fd4ee57462385639710777b817b4f86334ed2064833e8bb7af675",
+      "instrument_count": 4961,
+      "members_checksum_sha256": "3ebfd2b242b54a3507424c3d17ecc8ce2684cc0f48de067c06ffb5b2c69e8f77",
+      "open_ended": false,
+      "valid_from": "2025-06-10",
+      "valid_to": "2025-07-07"
+    },
+    {
+      "generation_id": "bf9f4b6e0109b4c5645c753d58d4b9171eb81b6e35dce0063a3da2f8d88a8299",
+      "instrument_count": 5074,
+      "members_checksum_sha256": "8c5f9f4f837ac3d281cba9fae97971f8a90ff06a07dc5a83d87be8e94ff89195",
+      "open_ended": false,
+      "valid_from": "2025-07-08",
+      "valid_to": "2025-08-07"
+    },
+    {
+      "generation_id": "413528d2fbacba5805291fd2b883887b2f9ccd71a7fc5b4b4a095ec124569139",
+      "instrument_count": 5073,
+      "members_checksum_sha256": "61d76584067799552a82d505cfe267b9cc76db9492812a866ff7a0d59dccb354",
+      "open_ended": false,
+      "valid_from": "2025-08-08",
+      "valid_to": "2025-09-07"
+    },
+    {
+      "generation_id": "95a269b713f75a0cb3398bda9d45bb56df4c613dfdb3c162fb746c5076a1b1d2",
+      "instrument_count": 5066,
+      "members_checksum_sha256": "b9515337f4c07b60315e170a088db6a4231b25c23b7697d8c1ff605cd995a9ba",
+      "open_ended": false,
+      "valid_from": "2025-10-16",
+      "valid_to": "2025-11-09"
+    },
+    {
+      "generation_id": "d6ac01df811ac6dc710347eb3fbb3616f32553f529bf2ad9bc82c7c3b57378d3",
+      "instrument_count": 5060,
+      "members_checksum_sha256": "3f12953e84bc59b96cbdddc68c3e0dfeb1dff133374a701139aab4c069455ee2",
+      "open_ended": false,
+      "valid_from": "2025-11-10",
+      "valid_to": "2025-12-07"
+    },
+    {
+      "generation_id": "a885df7f5cf95669769bec29f523f645a4f1e1a5856aa355ded107506ae952d2",
+      "instrument_count": 5057,
+      "members_checksum_sha256": "583e3f1f7946ad0bd2cbd83f4add6fe39c9a8019425dc900b7f0c8e97da9fa81",
+      "open_ended": false,
+      "valid_from": "2025-12-08",
+      "valid_to": "2026-01-11"
+    }
+  ],
+  "snapshots_available": 21,
+  "snapshots_selected": 8,
+  "status": "published",
+  "universe_id": "csi-all"
+}

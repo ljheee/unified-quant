@@ -1,0 +1,75 @@
+{
+ "template_version": "2.0.0",
+ "status": "reviewed",
+ "mode": "paper",
+ "market": "cn_a",
+ "state_mode_policy": "initial_then_continuation",
+ "lot_size": 100,
+ "quantity_policy": {
+  "board_lot": 100,
+  "minimum_order_quantity": 100,
+  "partial_fills": false,
+  "sell_before_buy": true,
+  "enforce_t1": true,
+  "minimum_holding_rule": "preserve_one_lot",
+  "insufficient_cash_policy": "round_down_to_lot"
+ },
+ "fee_policy": {
+  "buy_commission_rate": 0.0003,
+  "sell_commission_rate": 0.0003,
+  "sell_stamp_tax_rate": 0.001,
+  "transfer_fee_rate": 1e-05,
+  "minimum_commission": 5.0,
+  "currency_precision": 2
+ },
+ "price_policy": {
+  "order_pricing_basis": "decision_close_estimate",
+  "limit_tolerance_absolute": 0.01,
+  "limit_tolerance_relative": 0.001,
+  "execution_window": "open"
+ },
+ "initial_state": {
+  "cash": 1000000.0,
+  "holdings": [],
+  "valuation_price_basis": "decision_close_estimate"
+ },
+ "market_data_binding": {
+  "family": "bars_daily_v2",
+  "window_start": "2025-05-13",
+  "window_end": "2025-12-31",
+  "set_digest_sha256": "e425263cbe46d4d199e177644b4a6b5b6e407cd1813ae9da7c30475d0a1d236e",
+  "member_count": 160
+ },
+ "calendar_binding": {
+  "family": "trading_calendar_snapshot_v1",
+  "window_start": "2025-05-13",
+  "window_end": "2025-12-31",
+  "set_digest_sha256": "c446fa7c3c712683e85773d79235adaa3dfa42d8fdc4b32c1c2b9d49f13445db",
+  "member_count": 1
+ },
+ "suspension_binding": {
+  "family": "suspension_snapshot_v1",
+  "window_start": "2025-05-13",
+  "window_end": "2025-12-31",
+  "set_digest_sha256": "c2eb891d8bc16e1f2e8a8bf5e0ea67529a9c50514cf50bf70763103c380f09d6",
+  "member_count": 160
+ },
+ "corporate_action_binding": {
+  "family": "dividend_event_v1",
+  "window_start": "2025-05-13",
+  "window_end": "2025-12-31",
+  "set_digest_sha256": "d88189d7f7bb6143d154288cada206c77ffa1055b2666041e0c1965c06465ade",
+  "member_count": 160
+ },
+ "risk_policy_binding": {
+  "family": "risk_policy_v1",
+  "generation_id": "2a9d232834b46fab1cded7a4fe2bf7b142222d49dd110c7f0e0edf2799e69751",
+  "manifest_digest_sha256": "4172bdcbac5db0d0b6965b3440cd8da4e99082ae64770c130534dc442d1cd804"
+ },
+ "data_delay_policy": "delayed_replay",
+ "data_delay_reason": "T+1 execution on open",
+ "serialization_profiles": {
+  "manifest": "json-canonical-v1",
+  "payload": "parquet-v1"
+ }
+}

@@ -1,0 +1,49 @@
+{
+  "record_version": 1,
+  "kind": "sample_construction_publication",
+  "window": {
+    "start": "2025-05-13",
+    "end": "2025-12-31"
+  },
+  "sample_name": "full-a-2025-alpha158",
+  "semantic_version": "1.0.0",
+  "missing_policy": "drop_unlabeled_rows",
+  "rows_before_selection": 752376,
+  "rows_after_selection": 728880,
+  "instruments": 4891,
+  "dropped_rows": {
+    "rows": 22,
+    "instruments_fully_dropped": 0,
+    "per_feature": {
+      "qlib_cord5": 6,
+      "qlib_corr5": 22,
+      "qlib_rsqr5": 22
+    }
+  },
+  "dropped_labels": {
+    "rows": 23474,
+    "instruments": 4695,
+    "null_labels": 23474,
+    "absent_keys": 0
+  },
+  "generation_id": "781b03b61bb54e0ad619f5da4cabfe72a34e38b4a9ab6fc5739818876beb09f4",
+  "manifest_digest_sha256": "e5eeb49854329db4a6b39eacc441911887a56c6a25d2dc295fbf750088876ce8",
+  "binding": {
+    "family": "sample_construction",
+    "generation_id": "781b03b61bb54e0ad619f5da4cabfe72a34e38b4a9ab6fc5739818876beb09f4",
+    "manifest_digest_sha256": "e5eeb49854329db4a6b39eacc441911887a56c6a25d2dc295fbf750088876ce8"
+  },
+  "review": {
+    "source": "evidence/csi-all-pilot/2026-10-24-full-a/decisions.json",
+    "status": "passed",
+    "signed_by_script": false
+  },
+  "stores": {
+    "factor_root": "data/root-2025",
+    "label_root": "data/root-2025",
+    "universe_root": "data/root-2025",
+    "sample_construction_root": "data/root-2025/governed",
+    "membership_root": "data/csi-all-store",
+    "tracked": false
+  }
+}

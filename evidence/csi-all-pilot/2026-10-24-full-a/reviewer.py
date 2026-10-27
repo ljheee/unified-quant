@@ -25,7 +25,8 @@ args = parser.parse_args()
 if args.binding_type == "factor_v1":
     # The factor store owns this report; hand back exactly what it published.
     from pathlib import Path
-    root = Path("/Users/lijianhua04/Documents/IdeaProject/unified-quant/data/full-a-root")
+    import os
+    root = Path(os.environ.get("UQ_DATA_ROOT", "/Users/lijianhua04/Documents/IdeaProject/unified-quant/data/full-a-root"))
     path = root / "reports" / "factor_v1" / args.subject_generation_id / "report.json"
     if not path.is_file():
         sys.stderr.write(f"factor quality report missing: {path}\n")

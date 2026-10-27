@@ -13,6 +13,11 @@ from referencing.jsonschema import DRAFT202012
 _ROOT = Path(__file__).resolve().parents[3]
 _CONTRACT_DIR = _ROOT / "config" / "schemas" / "contracts"
 _CACHE: dict[str, jsonschema.Draft202012Validator] = {}
+# `uniqueItems` is a contract rule, not a mandate to run jsonschema's
+# quadratic comparison on every payload. Large, legitimate file lists need the
+# same rule in O(n); callers that do so validate against a schema copy with the
+# keyword removed and enforce it themselves.
+_LINEAR_UNIQUE_ITEMS_CACHE: dict[str, jsonschema.Draft202012Validator] = {}
 
 
 def canonical_json(value: Any) -> bytes:
@@ -55,6 +60,49 @@ def validate_contract(schema_name: str, payload: dict[str, Any]) -> None:
             registry=registry,
         )
     errors = sorted(_CACHE[schema_name].iter_errors(payload), key=lambda error: list(error.path))
+    if errors:
+        details = "; ".join(f"{list(error.path)}: {error.message}" for error in errors)
+        raise ContractError(f"{schema_name} validation failed: {details}")
+
+
+def validate_contract_with_linear_unique_items(
+    schema_name: str, payload: dict[str, Any]
+) -> None:
+    """Validate without running jsonschema's O(n²) `uniqueItems` comparison.
+
+    The keyword remains in the published schema as the contract statement; the
+    caller is responsible for enforcing the same uniqueness rule with a linear
+    check. Used only for the qlib export manifest, whose `files` array is large
+    enough for the generic implementation to take hours.
+    """
+    from ..errors import ContractError
+
+    cache_key = f"{schema_name}:linear-unique-items"
+    if cache_key not in _LINEAR_UNIQUE_ITEMS_CACHE:
+        schema = json.loads((_CONTRACT_DIR / schema_name).read_text(encoding="utf-8"))
+        try:
+            files_schema = schema["properties"]["files"]
+        except (KeyError, TypeError) as exc:
+            raise ContractError(
+                f"{schema_name} has no files array for linear unique-items validation"
+            ) from exc
+        files_schema.pop("uniqueItems", None)
+        registry = Registry()
+        for schema_path in _CONTRACT_DIR.glob("*.json"):
+            resource = Resource.from_contents(
+                json.loads(schema_path.read_text(encoding="utf-8")),
+                default_specification=DRAFT202012,
+            )
+            registry = registry.with_resource(schema_path.name, resource)
+        _LINEAR_UNIQUE_ITEMS_CACHE[cache_key] = jsonschema.Draft202012Validator(
+            schema,
+            format_checker=jsonschema.FormatChecker(),
+            registry=registry,
+        )
+    errors = sorted(
+        _LINEAR_UNIQUE_ITEMS_CACHE[cache_key].iter_errors(payload),
+        key=lambda error: list(error.path),
+    )
     if errors:
         details = "; ".join(f"{list(error.path)}: {error.message}" for error in errors)
         raise ContractError(f"{schema_name} validation failed: {details}")

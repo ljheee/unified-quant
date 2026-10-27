@@ -1,0 +1,30 @@
+{
+  "bars_daily_v2": {
+    "family": "bars_daily_v2",
+    "member_count": 160,
+    "set_digest_sha256": "e425263cbe46d4d199e177644b4a6b5b6e407cd1813ae9da7c30475d0a1d236e",
+    "window_end": "2025-12-31",
+    "window_start": "2025-05-13"
+  },
+  "dividend_event_v1": {
+    "family": "dividend_event_v1",
+    "member_count": 160,
+    "set_digest_sha256": "d88189d7f7bb6143d154288cada206c77ffa1055b2666041e0c1965c06465ade",
+    "window_end": "2025-12-31",
+    "window_start": "2025-05-13"
+  },
+  "suspension_snapshot_v1": {
+    "family": "suspension_snapshot_v1",
+    "member_count": 160,
+    "set_digest_sha256": "c2eb891d8bc16e1f2e8a8bf5e0ea67529a9c50514cf50bf70763103c380f09d6",
+    "window_end": "2025-12-31",
+    "window_start": "2025-05-13"
+  },
+  "trading_calendar_snapshot_v1": {
+    "family": "trading_calendar_snapshot_v1",
+    "member_count": 1,
+    "set_digest_sha256": "c446fa7c3c712683e85773d79235adaa3dfa42d8fdc4b32c1c2b9d49f13445db",
+    "window_end": "2025-12-31",
+    "window_start": "2025-05-13"
+  }
+}

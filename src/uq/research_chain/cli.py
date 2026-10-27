@@ -110,10 +110,16 @@ def uq_research_run(argv: list[str] | None = None) -> int:
             decisions_document = None
             if args.quality_decisions_json is None:
                 raise ContractError("execute mode requires --quality-decisions-json")
-            if args.scores_json is None:
-                raise ContractError("execute mode requires --scores-json")
             decisions_document = json.loads(args.quality_decisions_json.read_text(encoding="utf-8"))
-            scores_document = json.loads(args.scores_json.read_text(encoding="utf-8"))
+            # `--scores-json` is optional: without it the prediction stage scores
+            # the decision dates by loading the model artifact this same run
+            # trains. Requiring the file made real training circular -- the
+            # scores only exist after the model does.
+            scores_document = (
+                json.loads(args.scores_json.read_text(encoding="utf-8"))
+                if args.scores_json is not None
+                else None
+            )
             provider_document = None
             if args.decision_provider_json is not None:
                 provider_document = json.loads(args.decision_provider_json.read_text(encoding="utf-8"))
@@ -696,7 +702,7 @@ def _execute(
             family: _envelope_decision_for_family(envelope_provider, family)
             for family in _BINDING_TYPE_BY_FAMILY
         }
-    scores = _load_scores(scores_document)
+    scores = _load_scores(scores_document) if scores_document is not None else None
     run_store = FileResearchRunStore(data_root)
     membership_store = IndexMembershipStore(membership_root) if membership_root is not None else None
     market_publisher = (
@@ -790,7 +796,10 @@ def _execute(
         },
         quality_decisions=decisions,
         scores_by_decision_date=scores,
-        decision_dates=sorted(scores),
+        # Without an external scores file the runner decides which dates to score
+        # (it defaults to the window end); with one, the file's dates are
+        # authoritative -- that is the option-4 contract from cr.md 8.75.
+        decision_dates=sorted(scores) if scores is not None else None,
         paper_risk_decision_source=paper_risk_source,
     )
     return {

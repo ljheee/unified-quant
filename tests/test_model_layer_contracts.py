@@ -236,6 +236,64 @@ def test_remaining_manifest_families_have_representative_and_negative_coverage(s
         validate_contract(f"{schema_name}.v2.json" if schema_name in {"qlib_dataset_export", "qlib_init_receipt"} else f"{schema_name}.v1.json", invalid)
 
 
+@pytest.mark.parametrize("files", [
+    [
+        {"path": "features/a.bin", "checksum_sha256": "1" * 64, "byte_size": 1},
+        {"path": "features/a.bin", "checksum_sha256": "2" * 64, "byte_size": 1},
+    ],
+    [
+        {"path": "features/a.bin", "checksum_sha256": "1" * 64, "byte_size": 1},
+        {"path": "features/a.bin", "checksum_sha256": "1" * 64, "byte_size": 1},
+    ],
+])
+def test_qlib_export_rejects_duplicate_paths_without_quadratic_schema_work(files):
+    """The schema keeps `uniqueItems`, but the production validator must enforce
+    the same rule in linear time -- including the same-path/different-checksum
+    case the generic object comparison misses.
+    """
+    document = _extended_document("qlib_dataset_export")
+    document["contract_version"] = 2
+    document.pop("run_id", None)
+    document.pop("created_at", None)
+    document["files"] = files
+    generation, digest = model_manifest_identities(
+        document, schema_name="qlib_dataset_export"
+    )
+    document["generation_id"] = generation
+    document["manifest_digest_sha256"] = digest
+    with pytest.raises(ContractError, match="duplicate Qlib export file path"):
+        ModelContractLoader.validate("qlib_dataset_export", document)
+
+
+def test_qlib_export_linear_validation_accepts_a_large_unique_file_list():
+    """Guard the performance path: 20k unique entries must validate quickly.
+
+    The generic `uniqueItems` implementation takes minutes at this size; the
+    production path must stay linear.
+    """
+    import time
+
+    document = _extended_document("qlib_dataset_export")
+    document["contract_version"] = 2
+    document.pop("run_id", None)
+    document.pop("created_at", None)
+    document["files"] = [
+        {"path": f"features/{index:06d}.bin", "checksum_sha256": "1" * 64, "byte_size": 1}
+        for index in range(20_000)
+    ]
+    generation, digest = model_manifest_identities(
+        document,
+        schema_name="qlib_dataset_export",
+        exclude_fields={"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
+        digest_exclude_fields={"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
+    )
+    document["generation_id"] = generation
+    document["manifest_digest_sha256"] = digest
+    started = time.perf_counter()
+    ModelContractLoader.validate("qlib_dataset_export", document)
+    assert time.perf_counter() - started < 5.0
+
+
 def test_loader_rejects_nonfinite_invalid_formats_and_unapproved_root(tmp_path: Path) -> None:
     loader = ModelContractLoader(accepted_root=tmp_path / "accepted")
     accepted = tmp_path / "accepted"; accepted.mkdir()
@@ -347,6 +405,42 @@ def test_cross_manifest_binding_resolver_passes_and_fails() -> None:
         resolve_bindings({"model_dataset": dataset, "label_set": wrong_label})
     with pytest.raises(ContractError, match="missing"):
         resolve_bindings({"model_dataset": dataset})
+
+
+def test_cross_manifest_binding_resolver_selects_the_factor_manifest_version() -> None:
+    """Expression-defined factor sets publish `manifest_version: 2`.
+
+    `resolve_bindings` used to hardcode `factor_manifest.v1.json`, so every
+    alpha158 partition failed schema validation even though its identity was
+    exact. The resolver must select the schema the manifest declares, as the
+    factor store's own reader already does.
+    """
+    from uq.contracts.model_layer import resolve_bindings
+
+    factor = json.loads(
+        (
+            ROOT
+            / "data/root-2025/factors/dataset=bars_daily/schema_version=v2"
+            / "factor_set=alpha158/factor_version=2.0.0/date=2025-05-13/manifest.json"
+        ).read_text()
+    )
+    assert factor["manifest_version"] == 2
+    with pytest.raises(ContractError) as failure:
+        resolve_bindings({
+        "model_dataset": {
+            "generation_id": "a" * 64,
+            "label_generation_id": "b" * 64,
+            "label_set_name": "return_5d",
+            "factor_generation_ids": [factor["generation_id"]],
+            "universe_snapshot_generation_id": "c" * 64,
+        },
+        "label_set": {"generation_id": "b" * 64, "name": "return_5d"},
+        "universe_snapshot": {"generation_id": "c" * 64},
+        "factor_manifests": {factor["generation_id"]: factor},
+        })
+    # The placeholder universe is unrelated to this regression; the factor
+    # manifest must no longer be reported as invalid.
+    assert "invalid factor manifest content" not in str(failure.value)
 
 
 def test_accepted_index_response_schema_validates() -> None:

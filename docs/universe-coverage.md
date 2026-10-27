@@ -114,3 +114,21 @@ complete-case universe 受**数据本身**限制，当前上限约 98.5%。把�
 - 全部数字由**本轮实测**得出，可复现命令见 `cr.md` §8.51。
 - 47/18/32 三组分类由独立 subagent 逐名核对，本人复核了 47 组的涨停/跌停拆分（37/10/0）。
 - `declared_fill` 无实现、Qlib 硬拒 null 两条，本人独立读码确认（附行号）。
+
+## 10. 跨月窗口：union snapshot 是身份锚点，不是逐日成员表（2026-10-27）
+
+一个跨越多个月度 membership 分区的 v6 窗口，无法直接绑定
+`publish_universe_snapshots.py` 产出的单个 `[visible_from, 下一 visible_from)` 区间。
+新增 `scripts/publish_universe_union.py` 发布一份**窗口级 union** 快照：
+
+- 成员 = 窗口内所有可见月度快照的并集。2025-05-13..12-31 实测 **5163** 只；
+  8 个参与快照逐项写入 `membership_evidence`。
+- `valid_from=2025-05-13`，`valid_to=null`，`generation_id=ec49a372…`。
+- 这**不是**逐日 PIT 成员表。逐日规则仍由请求的
+  `index_membership_binding` 承担；v6 dataset stage 每天与该日可见成员求交。
+- 因此 union snapshot 在 v6 中是**身份锚点**：它让请求有一个可绑定的
+  `universe_snapshot`，同时由 `membership_evidence` 明示
+  `semantics=window_level_union_not_daily_pit`。
+
+不要把它报告成“全 A 5163 只训练集”。2025 全年实际训练样本是
+`4891` 只、`728880` 行（见 `sample-construction.json`）；union 只是成员上界。

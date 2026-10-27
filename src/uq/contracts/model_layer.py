@@ -14,7 +14,15 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .canonical_v2 import file_sha256_bytes
 from .paths import reject_symlinks_within
-from .gate_contracts import adjustment_snapshot_generation, canonical_json, factor_manifest_identities, sha256_bytes, validate_contract, validate_contract_path
+from .gate_contracts import (
+    adjustment_snapshot_generation,
+    canonical_json,
+    factor_manifest_identities,
+    sha256_bytes,
+    validate_contract,
+    validate_contract_path,
+    validate_contract_with_linear_unique_items,
+)
 from ..errors import ContractError
 from ..runtime import require_production_review_key
 
@@ -297,6 +305,22 @@ def validate_quality_decision_owning_report(report: Mapping[str, Any]) -> str:
     return checksum
 
 
+def _validate_qlib_export_file_paths(payload: Mapping[str, Any]) -> None:
+    """The `files[].path` uniqueness rule, enforced in linear time.
+
+    The published schema states `uniqueItems: true`, but the generic jsonschema
+    implementation compares every pair and takes hours on a real export. The
+    contract's actual invariant is stronger and cheaper to check: no two entries
+    may name the same file, even if their checksums differ.
+    """
+    seen: set[str] = set()
+    for entry in payload["files"]:
+        path = entry["path"]
+        if path in seen:
+            raise ContractError(f"duplicate Qlib export file path: {path}")
+        seen.add(path)
+
+
 def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
     if schema_name == "model_dataset":
         validate_contract("model_dataset.v1.json", payload)
@@ -304,7 +328,16 @@ def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
     if schema_name == "sample_construction":
         validate_contract("sample_construction.v1.json", payload)
         return
-    if schema_name in {"qlib_dataset_export", "qlib_init_receipt"} and payload.get("contract_version") == 2:
+    if schema_name == "qlib_dataset_export":
+        schema_name = (
+            "qlib_dataset_export.v2.json"
+            if payload.get("contract_version") == 2
+            else "qlib_dataset_export.v1.json"
+        )
+        validate_contract_with_linear_unique_items(schema_name, payload)
+        _validate_qlib_export_file_paths(payload)
+        return
+    if schema_name == "qlib_init_receipt" and payload.get("contract_version") == 2:
         validate_contract(f"{schema_name}.v2.json", payload)
         return
     if schema_name == "model_quality_report":
@@ -1184,7 +1217,18 @@ def resolve_bindings(
             errors.append(f"invalid factor manifest for generation {generation_id}")
             return
         try:
-            validate_contract_path(Path(__file__).resolve().parents[3] / "config/schemas/manifests/factor_manifest.v1.json", document)
+            # Expression-defined factor sets (alpha158) publish
+            # `manifest_version: 2`, which carries `engine_contract` and
+            # per-factor `expression`/`qlib_name`. The v1 schema rejects all
+            # three, so hardcoding v1 made every v2 partition look invalid even
+            # though its identity matched exactly. Select the schema the
+            # manifest declares, the same way FactorStore's reader does.
+            manifest_version = document.get("manifest_version", 1)
+            validate_contract_path(
+                Path(__file__).resolve().parents[3]
+                / f"config/schemas/manifests/factor_manifest.v{manifest_version}.json",
+                document,
+            )
             unsigned = {key: value for key, value in document.items() if key != "manifest_digest_sha256"}
             expected_generation, expected_digest = factor_manifest_identities({
                 key: value for key, value in unsigned.items() if key != "generation_id"
