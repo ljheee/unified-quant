@@ -96,6 +96,34 @@ def resolve_train_split(
     return train_start, train_end
 
 
+def resolve_test_decision_dates(
+    dataset_manifest: Mapping[str, Any], calendar_dates: list[str]
+) -> list[str]:
+    """Resolve the declared test split against an export calendar.
+
+    The no-scores path must score every out-of-sample decision date, not only
+    the last one. Restricting the default to the test split keeps training and
+    validation dates out of the strategy backtest; an explicit decision-date
+    list remains the caller's override.
+    """
+    splits = dataset_manifest["split_policy"]["splits"]
+    test_splits = [split for split in splits if split["name"] == "test"]
+    if len(test_splits) != 1:
+        raise ContractError(
+            "default decision dates require exactly one test split in the dataset split policy"
+        )
+    test_start = test_splits[0]["start_date"]
+    test_end = test_splits[0]["end_date"]
+    if not calendar_dates:
+        raise ContractError("Qlib export calendar is empty")
+    if test_start < calendar_dates[0] or test_end > calendar_dates[-1]:
+        raise ContractError("Qlib export calendar does not cover the dataset test split")
+    dates = [day for day in calendar_dates if test_start <= day <= test_end]
+    if not dates:
+        raise ContractError("dataset test split has no session in the export calendar")
+    return dates
+
+
 class DatasetBuilder:
     """Build a governed model dataset manifest from factor/label/universe bindings."""
 

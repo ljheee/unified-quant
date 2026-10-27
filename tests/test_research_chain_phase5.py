@@ -819,7 +819,10 @@ def test_the_runner_scores_from_the_artifact_when_no_scores_file_is_given(tmp_pa
                     "research_run_result": _research_result_decision,
                 },
                 scores_by_decision_date=None,
-                decision_dates=None,
+                # This integration fixture predates test splits. The default
+                # test-split selection has dedicated pure and runner tests;
+                # here we explicitly exercise artifact inference for one date.
+                decision_dates=["2026-01-09"],
                 created_at="2026-01-30T07:00:00+00:00",
             )
     snapshots = FileResearchRunStore(tmp_path).list_state_snapshots(
@@ -831,25 +834,40 @@ def test_the_runner_scores_from_the_artifact_when_no_scores_file_is_given(tmp_pa
     )
 
 
-@requires_qlib
-def test_default_prediction_date_uses_the_last_exported_session(tmp_path: Path):
-    """A window can end after the export's last supervised decision date.
+def test_default_prediction_dates_cover_the_governed_test_split(tmp_path: Path):
+    """The default covers the whole governed test split.
 
     The forward-label tail makes `window_end_date` unscorable even though the
-    dataset and export are correct. The default decision date must come from the
-    export calendar, not the request's nominal window end.
+    dataset and export are correct. The default decision dates must come from
+    the export calendar intersected with the test split, not the request's
+    nominal window end.
     """
     from types import SimpleNamespace
     from uq.research_chain.resolver import ResolvedStageBinding
 
     runner = ResearchChainRunner.__new__(ResearchChainRunner)
+    class _DatasetWriter:
+        def read(self, *_args, **_kwargs):
+            return {
+                "split_policy": {
+                    "splits": [
+                        {"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-06"},
+                        {"name": "test", "start_date": "2026-01-07", "end_date": "2026-01-08"},
+                    ]
+                }
+            }, None
+
+    runner.dataset_adapter = SimpleNamespace(dataset_writer=_DatasetWriter())
     runner.export_adapter = SimpleNamespace(
         exporter=SimpleNamespace(export_root=tmp_path / "qlib_exports")
     )
     generation = "9" * 64
     plan = SimpleNamespace(
         request={
-            "dataset_policy_template": {"dataset_name": "research_slice"},
+            "dataset_policy_template": {
+                "dataset_name": "research_slice",
+                "semantic_version": "1.0.0",
+            },
             "window_start_date": "2026-01-05",
             "window_end_date": "2026-01-09",
         },
@@ -861,6 +879,13 @@ def test_default_prediction_date_uses_the_last_exported_session(tmp_path: Path):
                 manifest_digest_sha256=generation,
                 data_checksum_sha256=generation,
             ),
+            ResolvedStageBinding(
+                stage="dataset_preparation",
+                output_family="model_dataset",
+                generation_id="8" * 64,
+                manifest_digest_sha256="8" * 64,
+                data_checksum_sha256="8" * 64,
+            ),
         ),
     )
     calendar_path = (
@@ -868,8 +893,8 @@ def test_default_prediction_date_uses_the_last_exported_session(tmp_path: Path):
         / f"generation={generation}" / "calendars" / "day.txt"
     )
     calendar_path.parent.mkdir(parents=True, exist_ok=True)
-    calendar_path.write_text("2026-01-05\n2026-01-06\n2026-01-07\n")
-    assert runner._default_decision_dates(plan) == ["2026-01-07"]
+    calendar_path.write_text("2026-01-05\n2026-01-06\n2026-01-07\n2026-01-08\n")
+    assert runner._default_decision_dates(plan) == ["2026-01-07", "2026-01-08"]
 
 
 def test_inference_uses_the_artifact_runtime_version_not_the_export_manifest(

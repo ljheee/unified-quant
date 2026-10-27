@@ -728,17 +728,22 @@ class ResearchChainRunner:
         return results
 
     def _default_decision_dates(self, plan: ResolvedExecutionPlan) -> list[str]:
-        """The last session the export can score, not necessarily the window end.
+        """Score every exported session in the governed test split.
 
-        The export calendar is the dataset's supervised dates. A research window
-        can end after the last labeled decision date (the forward-label tail), so
-        scoring `window_end_date` unconditionally asks Qlib for a date that is not
-        in its own export and fails at the last stage. The default is therefore
-        the last exported session inside the window; an explicit
+        Training and validation dates are not out-of-sample evidence, so the
+        no-scores default must not backtest them. An explicit
         `--scores-json`/decision-date list still wins.
         """
+        from ..models.dataset import resolve_test_decision_dates
+
         export_binding = self._binding(plan, "qlib_dataset_export")
+        dataset_binding = self._binding(plan, "model_dataset")
         template = plan.request["dataset_policy_template"]
+        dataset_manifest, _ = self.dataset_adapter.dataset_writer.read(
+            template["dataset_name"],
+            template["semantic_version"],
+            dataset_binding.generation_id,
+        )
         snapshot = (
             self.export_adapter.exporter.export_root
             / f"dataset={template['dataset_name']}"
@@ -752,16 +757,7 @@ class ResearchChainRunner:
             ]
         except OSError as exc:
             raise ContractError(f"unpublished Qlib export calendar: {calendar_path}") from exc
-        start = plan.request["window_start_date"]
-        end = plan.request["window_end_date"]
-        eligible = [day for day in calendar if start <= day <= end]
-        if not eligible:
-            raise ContractError(
-                f"export calendar has no session inside {start}..{end}; "
-                f"calendar spans {calendar[0] if calendar else 'empty'}.."
-                f"{calendar[-1] if calendar else 'empty'}"
-            )
-        return [eligible[-1]]
+        return resolve_test_decision_dates(dataset_manifest, calendar)
 
     def _infer_scores_for_dates(
         self,

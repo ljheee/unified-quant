@@ -31,7 +31,7 @@ Entry point is the console script `uq-research-run` (`uq.research_chain.cli:uq_r
 
 **dry-run** validates the request against its schema, verifies the signed stage-plan review, matches `stage_plan_sha256` to the contract version's expected digest, recomputes the request identity, and publishes a request manifest plus a `stage=00` state manifest. It does **not** read any bound store, so a green dry-run is not evidence that execute can run.
 
-**execute** requires `--quality-decisions-json` and `--scores-json`; v5/v6 additionally require `--membership-root` and `--market-dataset-root` together (one without the other is refused). The runner then:
+**execute** requires `--quality-decisions-json`; `--scores-json` is optional and, when omitted, scores come from the model artifact this run trained. v5/v6 additionally require `--membership-root` and `--market-dataset-root` together (one without the other is refused). Without external scores, the default decision dates are every session in the dataset's governed **test split** that the export calendar contains; training and validation dates are not backtested. The runner then:
 
 1. validates the plan (`_validate_plan`), refusing contract versions 3/4 and verifying the stage-plan review for v2–v6;
 2. publishes the request and resolution state;

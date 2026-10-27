@@ -500,6 +500,35 @@ def test_qlib_train_split_validation_is_pure_and_rejects():
         resolve_train_split(late_end, calendar)
 
 
+def test_test_decision_dates_cover_the_whole_exported_test_split():
+    # The no-scores default must produce every out-of-sample decision date, not
+    # only the last exported session. Keep the resolver pure so this runs in
+    # qlib-free environments.
+    from uq.models.dataset import resolve_test_decision_dates
+
+    calendar = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]
+    good = _split_manifest([
+        {"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-06"},
+        {"name": "test", "start_date": "2026-01-07", "end_date": "2026-01-08"},
+    ])
+    assert resolve_test_decision_dates(good, calendar) == ["2026-01-07", "2026-01-08"]
+    assert "2026-01-05" not in resolve_test_decision_dates(good, calendar)
+    assert "2026-01-06" not in resolve_test_decision_dates(good, calendar)
+
+    no_test = _split_manifest([
+        {"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-08"},
+    ])
+    with pytest.raises(StoreContractError, match="exactly one test split"):
+        resolve_test_decision_dates(no_test, calendar)
+
+    late_test = _split_manifest([
+        {"name": "train", "start_date": "2026-01-05", "end_date": "2026-01-06"},
+        {"name": "test", "start_date": "2026-01-09", "end_date": "2026-01-10"},
+    ])
+    with pytest.raises(StoreContractError, match="does not cover"):
+        resolve_test_decision_dates(late_test, calendar)
+
+
 def test_universe_id_schema_pattern_matches_runtime_whitelist():
     # U4: the schema accepted universe ids the H12 runtime whitelist rejects
     # (single-char, uppercase, dotted) — schema and runtime now agree.
