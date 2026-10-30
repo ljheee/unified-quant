@@ -1,0 +1,190 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_lightgbm_score_weighted_chain_implementation",
+  "date": "2026-10-30",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "f2df25e8f72c292b1480abecbc320bae7e1805749cec5a5d8d16277ff88d135c",
+  "environment_lock_digest_sha256": "217b496a69f89ceed8ba957161f395a5aa33d8123e6f54b654d89ec5bd546a35",
+  "runtime": {
+    "python": "3.12.13",
+    "platform": "macOS-26.3-arm64",
+    "lightgbm": "4.7.0",
+    "pyqlib_test_environment": "0.9.7"
+  },
+  "files": [
+    {
+      "path": "config/schemas/contracts/model_definition.v2.json",
+      "sha256": "76bc2dd51872d372fdc2558e5ad9517ab05baf2e402034cd83c8c09a83832e9c"
+    },
+    {
+      "path": "config/schemas/contracts/model_definition_template.v2.json",
+      "sha256": "c88fe19dc23ff524f870e679c4dde64cddbf63903911e836d6568cd7a9322ba0"
+    },
+    {
+      "path": "config/schemas/contracts/portfolio_definition.v2.json",
+      "sha256": "f0936810a24c237f06d746f5201c6c78c85bca202009a685c319d80dcff935c3"
+    },
+    {
+      "path": "config/schemas/contracts/portfolio_definition_template.v2.json",
+      "sha256": "086d2b8b319f5a0f81ffdc717c19c36ab1d376ffcdf966ab5f3d2c674d08b5d7"
+    },
+    {
+      "path": "config/schemas/contracts/research_run_request_v7.json",
+      "sha256": "ffedc3ecc4616819d7304e486e134e2802fecc9da4f4930519dd1235af2edd80"
+    },
+    {
+      "path": "config/schemas/contracts/research_run_state.v1.json",
+      "sha256": "28c89fa6307629155067365f6fe877bff45403565a7ecad4a55e97e53b5c0a05"
+    },
+    {
+      "path": "config/schemas/contracts/research_run_result.v1.json",
+      "sha256": "b99baccf5fcafcd555a66c228eac75df1a67d5c9d1ffd1b51050961aadc7a708"
+    },
+    {
+      "path": "src/uq/contracts/model_layer.py",
+      "sha256": "c30592a1e4d3f3945e627a57785afe8671926fe5be45d99895c5634a7fd230d8"
+    },
+    {
+      "path": "src/uq/models/definition.py",
+      "sha256": "b08237e47a173a2487b65b7ab28fd77825cbbda999ff3465475f23fafe6096bb"
+    },
+    {
+      "path": "src/uq/models/qlib_runtime.py",
+      "sha256": "2b723edea24dee4939317a91b44bdfaf58cedf8c638c19ed62cc7b6923665aef"
+    },
+    {
+      "path": "src/uq/models/inference.py",
+      "sha256": "83f9bc00c7c178456465c47317e95d247207e1aaf9361cefade95905e7c8da7e"
+    },
+    {
+      "path": "src/uq/research_chain/contracts.py",
+      "sha256": "e92a5a7a9261366eabb7ca31d58ff4956a5ddb119505140d0422880c7c033f34"
+    },
+    {
+      "path": "src/uq/research_chain/resolver.py",
+      "sha256": "495571cef148162f452aecf1527c7afeaa46b5889c6ef98447c037ecfe44ba40"
+    },
+    {
+      "path": "src/uq/research_chain/runner.py",
+      "sha256": "38e77d57b4a1acd857693bd45a436fece9446333573ed5e07d39e2e42a49f901"
+    },
+    {
+      "path": "src/uq/research_chain/adapters.py",
+      "sha256": "1e86bd616db115945cecad26535405942e4a43e588289930de750c8a2c831bc5"
+    },
+    {
+      "path": "src/uq/research_chain/cli.py",
+      "sha256": "0cd0a3ef7439de29ea4fb9605fd70d5ad4d83c9cea8cd941f120738012674aad"
+    },
+    {
+      "path": "src/uq/portfolio/builder.py",
+      "sha256": "9aa739201ca5ea2aab0ceb17094bd28379348a909c9c0b512314f1934f6c2e30"
+    },
+    {
+      "path": "tests/test_research_v7_lightgbm.py",
+      "sha256": "3256bd601b6ebb83e364821dfff8d9907a7ebb964eb6c0d41ba703fdee57c190"
+    },
+    {
+      "path": "tests/test_portfolio_layer.py",
+      "sha256": "86a5286b6a118d8ce1bcef1ce129264e2cdb5e91f6bb413d86ed7faa2fc5e4b0"
+    },
+    {
+      "path": "tests/test_research_v4_contract.py",
+      "sha256": "411961e6f1ab941bbef17643478ebcff1ff0092c3da983a60c63e9c594f13ae2"
+    },
+    {
+      "path": "tests/test_paper_execution_research_integration_phase0r.py",
+      "sha256": "68885ed3e3a18830c13c3cba4e13bbce9b8e2cee3d0edc15e8ded946029bbe26"
+    },
+    {
+      "path": "docs/subsystems/README.md",
+      "sha256": "4ae23aada5babc5f99515b9cf9e2b509fffd4543a04f966429805868daacf776"
+    },
+    {
+      "path": "docs/subsystems/research-chain.md",
+      "sha256": "d6ab56c5634b35196682fecdbfad42dcda2b8c813f37311b1feaf0285a15c3b5"
+    },
+    {
+      "path": "docs/subsystems/model-layer.md",
+      "sha256": "ff233a9862b85d7d410005debca700d1e093cb94fdae5f4c91fafd9e4319d09a"
+    },
+    {
+      "path": "docs/subsystems/portfolio-backtest-risk-execution.md",
+      "sha256": "482f241db2c03b1777fbf5edb1184d16819a57de6186de710dc8ae49eb5d12fa"
+    },
+    {
+      "path": "docs/trading-grade-training-plan.md",
+      "sha256": "f8c5ea73785a613c917450dd0f53e72e48f4415148c20f149c136ca634d01556"
+    },
+    {
+      "path": "docs/trading-grade-progress.md",
+      "sha256": "304b09d8b209e29e66feaf2c03bdc39713cfa7b25166c8caef9542ac5b0daccf"
+    },
+    {
+      "path": "docs/user-guide.md",
+      "sha256": "cca2927c17971c5365f0946ba3a1f831fa9e73c79cfcdff2ca01491ac34b26fb"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/evidence-index.json",
+      "sha256": "adb7d7bed9a5a10bdc2fb3eff9249ba6fb22c514b95fce65dc4c40b39e67ffcb"
+    },
+    {
+      "path": "uv.lock",
+      "sha256": "217b496a69f89ceed8ba957161f395a5aa33d8123e6f54b654d89ec5bd546a35"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest tests/test_research_v7_lightgbm.py tests/test_portfolio_layer.py tests/test_paper_execution_research_integration_phase0r.py::test_state_and_result_widening_is_compatibility_preserving tests/test_adv_review_fixes.py::test_evidence_indexes_are_fresh_and_never_index_themselves tests/test_paper_execution_research_integration_evidence.py::test_phase_0_evidence_index_hashes_are_complete -q",
+      "exit_code": 0,
+      "passed": 25
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest tests/test_research_v7_lightgbm.py tests/test_model_end_to_end.py::TestEndToEndPipeline::test_full_chain_from_factor_to_prediction tests/test_research_chain_phase5.py::test_full_research_chain_end_to_end -q",
+      "exit_code": 0,
+      "passed": 6
+    },
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1460,
+      "skipped": 33,
+      "elapsed_seconds": 91.92
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1492,
+      "skipped": 1,
+      "elapsed_seconds": 150.17
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_adv_review_fixes.py::test_evidence_indexes_are_fresh_and_never_index_themselves tests/test_paper_execution_research_integration_evidence.py::test_phase_0_evidence_index_hashes_are_complete -q",
+      "exit_code": 0,
+      "passed": 2
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python scripts/research_environment.py --project-root .",
+      "exit_code": 0
+    }
+  ],
+  "scope": {
+    "research_request": "v7 selects model-definition template v2 with qlib_lightgbm and portfolio-definition template v2",
+    "compatibility": "request v1-v6 and portfolio-definition v1 schemas remain supported; v7 reuses the unchanged signed v6 stage plan",
+    "score_weighted_rule": "top-N by descending score, deterministic instrument-id tie break, stable temperature softmax, non-finite selected scores refused",
+    "portfolio_constraints": "single-name cap, cash reserve and existing turnover rule applied; cap clipping may leave extra cash",
+    "one_year_oos_and_linear_comparison": "not run; required governed full-history data is unavailable",
+    "historical_data_root": "data/trading-grade-history/ does not exist and has no data loaded",
+    "analyst_expectations_source": "unavailable; no proxy or synthetic feature created",
+    "risk_parity": "not implemented; requires governed historical returns/covariance input",
+    "industry_neutral": "not implemented; requires PIT industry membership source and runtime",
+    "paper_execution": "deterministic replay path remains tested; no same-source real-history paper/backtest comparison was run",
+    "production_key_provisioning_and_certification_gate": "not run"
+  }
+}

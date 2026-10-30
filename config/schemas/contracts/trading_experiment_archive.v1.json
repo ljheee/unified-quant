@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/trading_experiment_archive.v1.json",
+  "title": "Immutable trading experiment evidence index v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_version", "kind", "publication_scope", "experiment_name", "components",
+    "source_locations", "request", "result_binding", "backtest_binding",
+    "evaluation_binding", "evaluation_metrics", "evaluation_protocol", "environment",
+    "telemetry", "external_review_checksums", "verification_scope", "limitations",
+    "archive_checksum_sha256"
+  ],
+  "properties": {
+    "record_version": {"const": 1},
+    "kind": {"const": "trading_experiment_archive"},
+    "publication_scope": {"const": "evidence_only_no_quality_authorization"},
+    "experiment_name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,255}$"},
+    "components": {
+      "type": "object", "additionalProperties": false,
+      "required": ["universe", "oos_start", "oos_end", "protocol", "model", "variant"],
+      "properties": {
+        "universe": {"$ref": "#/$defs/name_part"},
+        "oos_start": {"$ref": "#/$defs/date"},
+        "oos_end": {"$ref": "#/$defs/date"},
+        "protocol": {"$ref": "#/$defs/name_part"},
+        "model": {"$ref": "#/$defs/name_part"},
+        "variant": {"$ref": "#/$defs/name_part"}
+      }
+    },
+    "source_locations": {
+      "type": "object", "additionalProperties": false,
+      "required": ["data_root", "benchmark_root", "evaluation_root", "telemetry_path"],
+      "properties": {
+        "data_root": {"type": "string", "minLength": 1},
+        "benchmark_root": {"type": "string", "minLength": 1},
+        "evaluation_root": {"type": "string", "minLength": 1},
+        "telemetry_path": {"type": "string", "minLength": 1}
+      }
+    },
+    "request": {"type": "object"},
+    "result_binding": {"$ref": "#/$defs/binding"},
+    "backtest_binding": {"$ref": "#/$defs/binding"},
+    "evaluation_binding": {
+      "type": "object", "additionalProperties": false, "required": ["generation_id"],
+      "properties": {"generation_id": {"$ref": "#/$defs/sha256"}}
+    },
+    "evaluation_metrics": {"type": "object"},
+    "evaluation_protocol": {"type": "object"},
+    "environment": {"type": "object"},
+    "telemetry": {"type": "object"},
+    "external_review_checksums": {
+      "type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}
+    },
+    "verification_scope": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "declared_test_split_covered", "evaluation_tables_recomputed",
+        "paired_backtest_sources_reverified", "historical_source_bytes_reconstructed",
+        "upstream_prediction_label_payloads_reread", "one_year_oos_and_pit_certified"
+      ],
+      "properties": {
+        "declared_test_split_covered": {"type": "boolean"},
+        "evaluation_tables_recomputed": {"const": true},
+        "paired_backtest_sources_reverified": {"const": true},
+        "historical_source_bytes_reconstructed": {"const": false},
+        "upstream_prediction_label_payloads_reread": {"const": false},
+        "one_year_oos_and_pit_certified": {"const": false}
+      }
+    },
+    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "archive_checksum_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "name_part": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,39}$"},
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["generation_id", "manifest_digest_sha256"],
+      "properties": {
+        "generation_id": {"$ref": "#/$defs/sha256"},
+        "manifest_digest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

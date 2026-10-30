@@ -1,0 +1,112 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_backtest_risk_controls_implementation",
+  "date": "2026-10-30",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "dea261bf21d798225d295d675031f35b5e3490e72c1ea6d276228e2037829276",
+  "environment_lock_digest_sha256": "217b496a69f89ceed8ba957161f395a5aa33d8123e6f54b654d89ec5bd546a35",
+  "runtime": {
+    "python": "3.12.13",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "lightgbm": "4.7.0",
+    "pyqlib_test_environment": "0.9.7 (verified in .venv-qlib full suite)"
+  },
+  "files": [
+    {
+      "path": "config/schemas/contracts/backtest_config.v3.json",
+      "sha256": "a1ac6019d275e395dff4262c6d35a2cc88b456f26963c5f0067bc63c5d271848"
+    },
+    {
+      "path": "config/schemas/contracts/backtest_result.v3.json",
+      "sha256": "206fb849e226b79f0485288eb5855e29d2c7f1a082fcc861cc0d2c20ee370932"
+    },
+    {
+      "path": "src/uq/backtest/engine_v3.py",
+      "sha256": "ad28e3cd7d0b41a5235dbaf11e9363679252e715611f665d90af840dfa3cdf61"
+    },
+    {
+      "path": "scripts/publish_backtest_config.py",
+      "sha256": "489febc8d72bd05624f37c4934ec628a44b7b87b75d7c086508669be93ed11ae"
+    },
+    {
+      "path": "tests/test_backtest_v3.py",
+      "sha256": "81fb6acef2ded3ba32e344c9e0372abc10b627873a7f175f6062576378c097f4"
+    },
+    {
+      "path": "docs/trading-grade-training-plan.md",
+      "sha256": "19db6db225287e6a2a1d494c10c82cd485c6f238ea262a62a11cfe8fa4afc01f"
+    },
+    {
+      "path": "docs/trading-grade-progress.md",
+      "sha256": "b5771d695c9dbd073b081cca63846d9240425f4e14ada028ab0d969dc5cb1f58"
+    },
+    {
+      "path": "docs/subsystems/README.md",
+      "sha256": "393a352b1993249c2d6b375450c51383a2fb8ce7913b04bbb97969922102e223"
+    },
+    {
+      "path": "docs/subsystems/portfolio-backtest-risk-execution.md",
+      "sha256": "6cd0903856436e00c85d33584a91b78aac26396cf14e962a18a05f05d6588408"
+    },
+    {
+      "path": "docs/user-guide.md",
+      "sha256": "08b544998f0f9c03587ef921bfa8e745d86fa47a63dfa99d6f68bd1df4ae5e20"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest tests/test_backtest_v3.py tests/test_portfolio_layer.py tests/test_research_v7_lightgbm.py -q",
+      "exit_code": 0,
+      "passed": 56
+    },
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1462,
+      "skipped": 33,
+      "elapsed_seconds": 80.19
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1494,
+      "skipped": 1,
+      "elapsed_seconds": 126.28
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_adv_review_fixes.py::test_evidence_indexes_are_fresh_and_never_index_themselves tests/test_paper_execution_research_integration_evidence.py::test_phase_0_evidence_index_hashes_are_complete -q",
+      "exit_code": 0,
+      "passed": 2
+    },
+    {
+      "command": ".venv/bin/python scripts/publish_backtest_config.py --help",
+      "exit_code": 0
+    },
+    {
+      "command": "JSON parsing of backtest_config.v3.json and backtest_result.v3.json",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python scripts/research_environment.py --project-root .",
+      "exit_code": 0
+    }
+  ],
+  "scope": {
+    "max_drawdown_stop": "Optional backtest-v3 control measured from close-marked NAV high water; latches on breach and retries a cash exit on later sessions, subject to normal execution guards.",
+    "volatility_target": "Optional backtest-v3 control estimates sample volatility from completed daily NAV returns, annualizes by sqrt(252), and scales exposure down only after the configured minimum history is available; never leverages.",
+    "governance": "Controls are bound into the externally reviewed backtest config; they are deterministic research/replay controls and do not replace risk-policy governance or prove live risk.",
+    "one_year_oos_and_linear_comparison": "not run; governed multi-year history is unavailable",
+    "historical_data_root": "data/trading-grade-history/ does not exist and has no governed data loaded",
+    "analyst_expectations_source": "unavailable; no substitute or synthetic data created",
+    "risk_parity": "not implemented; requires governed historical returns/covariance input",
+    "industry_neutral": "not implemented; requires PIT industry classification and a governed runtime",
+    "paper_execution": "deterministic replay is tested; no same-source real-history paper/backtest reconciliation was run",
+    "production_and_certification": "broker/live trading remains out of scope; production key provisioning, scripts/run_gate.sh and remote certification matrix were not run"
+  }
+}

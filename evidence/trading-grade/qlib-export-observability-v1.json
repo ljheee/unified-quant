@@ -1,0 +1,76 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_qlib_export_timing_and_inventory",
+  "date": "2026-10-29",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "63053306e73b9e30b835d8b49aa9b974880c76e809885d007106d726db83c268",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "files": [
+    {
+      "path": "src/uq/models/qlib_export.py",
+      "sha256": "9c56854731ab63ef54036bb949f0931e45c61480785061555d511c6a310dc881"
+    },
+    {
+      "path": "src/uq/research_chain/telemetry.py",
+      "sha256": "f8b4d295ae6187dfd89c8c0d9b0ae86bc7324e90c4447749561808a8e44be3ec"
+    },
+    {
+      "path": "src/uq/research_chain/adapters.py",
+      "sha256": "a663cd03d528faa5b3be8d9eab5270f5358c9525467bc4eabb03be6ed853ee6d"
+    },
+    {
+      "path": "src/uq/research_chain/runner.py",
+      "sha256": "c42cc41955ea825862825182889f80c1a21f6abf6ed29f99c42b6ea292c84950"
+    },
+    {
+      "path": "tests/test_model_qlib_export.py",
+      "sha256": "4a93605697b93a25cd2a50cfd32fc09e206044d7f46178fc52821fdbf26f2a02"
+    },
+    {
+      "path": "tests/test_research_chain_phase5.py",
+      "sha256": "965e896e36c03d5bc7c6f04ac50f4395170a9aa878e40e47d752228da1e733b6"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/evidence-index.json",
+      "sha256": "b9d282ea6e92943ea966d5c5c81f7f85793bfc25827c0213c761a214a1bba072"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1430,
+      "skipped": 32,
+      "elapsed_seconds": 87.76
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1461,
+      "skipped": 1,
+      "elapsed_seconds": 132.82
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_model_qlib_export.py tests/test_training_provenance.py tests/test_research_chain_phase5.py -q",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest tests/test_model_qlib_export.py tests/test_training_provenance.py tests/test_research_chain_phase5.py -q",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "scope": {
+    "export_substages": "feature files, file inventory/checksums, durable publication",
+    "directory_walk": "zero-byte validation and inventory combined; layout and hashes preserved",
+    "full_a_performance_baseline": "not_run",
+    "real_data_publish": "not_run",
+    "certification_gate_remote_matrix": "not_run"
+  },
+  "archive_checksum_sha256": "ac71b5753de59fb4f195c20ce05beef7d3f4908806b17df5a08bccd521a30044"
+}

@@ -313,4 +313,8 @@ def research_request_schema_name(request: Mapping[str, Any]) -> str:
         return "research_run_request_v5"
     if version == 6:
         return "research_run_request_v6"
+    if version == 7:
+        return "research_run_request_v7"
+    if version == 8:
+        return "research_run_request_v8"
     raise ContractError(f"unsupported research request contract version: {version}")

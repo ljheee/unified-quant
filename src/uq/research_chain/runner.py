@@ -114,6 +114,7 @@ from .adapters import (
 )
 from ..models.definition import ModelDefinitionBuilder
 from .contracts import research_request_schema_name, verify_stage_plan_review
+from .telemetry import RunTelemetry
 from .resolver import FileResearchRunStore, ResolvedExecutionPlan, ResolvedStageBinding, build_dry_run_state, stage_plan_for_request
 
 
@@ -175,6 +176,7 @@ class ResearchChainRunner:
         qlib_version: str | None = None,
         cache_root: Path | str | None = None,
         export_layout_root: Path | str | None = None,
+        telemetry: RunTelemetry | None = None,
         artifact_decision_provider: Callable[[str], Mapping[str, Any]] | None = None,
         definition_decision_provider: Callable[..., Mapping[str, Any]] | None = None,
         risk_documents: Mapping[str, Any] | None = None,
@@ -183,22 +185,36 @@ class ResearchChainRunner:
     ) -> ResearchRunOutcome:
         if plan.request.get("execution_mode") != "full_research_run":
             raise ContractError("research runner only supports full_research_run")
+        def run_stage(stage: str, operation: Callable, *args: Any, **kwargs: Any) -> Any:
+            if telemetry is None:
+                return operation(*args, **kwargs)
+            with telemetry.stage(stage):
+                return operation(*args, **kwargs)
+
         self._validate_plan(plan)
         created_at = created_at or datetime.now(timezone.utc).isoformat()
         self.run_store.last_plan = plan
         try:
             self._ensure_request(plan.request)
-            self._publish_resolution_state(plan, runner_identity=runner_identity, created_at=created_at)
+            run_stage(
+                "resolve_request", self._publish_resolution_state, plan,
+                runner_identity=runner_identity, created_at=created_at,
+            )
 
             # Every writer is immutable, so re-running a completed stage raises
             # "already exists". Fold the stages this run already passed into the plan
             # and skip them, or a failure anywhere makes the run unrepeatable.
-            plan, completed = self._resume_from_passed_stages(plan)
+            plan, completed = run_stage("resume_readback", self._resume_from_passed_stages, plan)
+            if telemetry is not None:
+                for stage in stage_plan_for_request(plan.request):
+                    if stage in completed and stage != "resolve_request":
+                        telemetry.reused(stage)
 
             if "factor_computation" in completed:
                 factor_result = None
             else:
-                factor_result = self._run_factor(
+                factor_result = run_stage(
+                    "factor_computation", self._run_factor,
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
                 )
@@ -206,7 +222,8 @@ class ResearchChainRunner:
             if "dataset_preparation" in completed:
                 dataset_result = None
             else:
-                dataset_result = self._run_dataset(
+                dataset_result = run_stage(
+                    "dataset_preparation", self._run_dataset,
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
                 )
@@ -214,18 +231,21 @@ class ResearchChainRunner:
             if "qlib_export" in completed:
                 export_result = None
             else:
-                export_result = self._run_export(
+                export_result = run_stage(
+                    "qlib_export", self._run_export,
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
                     provider_uri=provider_uri, qlib_import_path=qlib_import_path,
                     qlib_version=qlib_version, cache_root=cache_root,
                     export_layout_root=export_layout_root,
+                    telemetry=telemetry,
                 )
                 plan = self._plan_with_stage_outputs(plan, export_result.published_state.manifest_path)
             if "model_training" in completed:
                 model_result = None
             else:
-                model_result = self._run_model(
+                model_result = run_stage(
+                    "model_training", self._run_model,
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
                     artifact_decision_provider=artifact_decision_provider,
@@ -234,7 +254,8 @@ class ResearchChainRunner:
             if "prediction_publication" in completed:
                 prediction_results = []
             else:
-                prediction_results = self._run_predictions(
+                prediction_results = run_stage(
+                    "prediction_publication", self._run_predictions,
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
                     decision_dates=decision_dates,
@@ -242,11 +263,14 @@ class ResearchChainRunner:
                 )
                 for prediction_result in prediction_results:
                     plan = self._plan_with_stage_outputs(plan, prediction_result.published_state.manifest_path)
-            self._enforce_risk_gate(plan, risk_documents=risk_documents)
+            run_stage(
+                "risk_gate", self._enforce_risk_gate, plan, risk_documents=risk_documents
+            )
             if "portfolio_construction" in completed:
                 portfolio_result = None
             else:
-                portfolio_result = self._run_portfolio(
+                portfolio_result = run_stage(
+                    "portfolio_construction", self._run_portfolio,
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
                     definition_decision_provider=definition_decision_provider,
@@ -255,19 +279,22 @@ class ResearchChainRunner:
             if "backtest_execution" in completed:
                 backtest_result = None
             else:
-                backtest_result = self._run_backtest(
+                backtest_result = run_stage(
+                    "backtest_execution", self._run_backtest,
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
                 )
                 plan = self._plan_with_stage_outputs(plan, backtest_result.published_state.manifest_path)
             if stage_plan_for_request(plan.request)[-2] == "paper_execution" and "paper_execution" not in completed:
-                paper_result = self._run_paper(
+                paper_result = run_stage(
+                    "paper_execution", self._run_paper,
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
                     risk_decision_source=paper_risk_decision_source,
                 )
                 plan = self._plan_with_stage_outputs(plan, paper_result.published_state.manifest_path)
-            result = self._reconcile(
+            result = run_stage(
+                "result_reconciliation", self._reconcile,
                 plan, runner_identity=runner_identity,
                 quality_decisions=quality_decisions, created_at=created_at,
             )
@@ -377,11 +404,12 @@ class ResearchChainRunner:
         if documents["decision"]["action"] != "allow":
             raise ContractError("research portfolio stage stopped by rejected risk decision")
 
-    def _validate_plan(self, plan: ResolvedExecutionPlan) -> None:
+    @staticmethod
+    def _validate_plan(plan: ResolvedExecutionPlan) -> None:
         if plan.request.get("contract_version") in {3, 4}:
             raise ContractError("research request v3/v4 paper-execution runtime is not enabled")
         request_schema = research_request_schema_name(plan.request)
-        if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "research_run_request_v6"}:
+        if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "research_run_request_v6", "research_run_request_v7", "research_run_request_v8"}:
             verify_stage_plan_review(
                 plan.request["stage_plan_review"],
                 stage_plan_sha256=plan.request["stage_plan_sha256"],
@@ -534,7 +562,7 @@ class ResearchChainRunner:
         preprocessing_binding = self._binding(plan, "feature_preprocessing")
         sample_binding = (
             self._binding(plan, "sample_construction")
-            if plan.request.get("contract_version") == 6
+            if plan.request.get("contract_version") in {6, 7, 8}
             else None
         )
         result = self.dataset_adapter.run(
@@ -572,6 +600,7 @@ class ResearchChainRunner:
         qlib_version: str | None,
         cache_root: Path | str | None,
         export_layout_root: Path | str | None,
+        telemetry: RunTelemetry | None = None,
     ) -> None:
         dataset_binding = self._binding(plan, "model_dataset")
         dataset_name = plan.request["dataset_policy_template"]["dataset_name"]
@@ -606,6 +635,7 @@ class ResearchChainRunner:
             ),
             runner_identity=dict(runner_identity),
             created_at=created_at,
+            telemetry=telemetry,
         )
         self.export_adapter.last_result = result
         return result
@@ -645,6 +675,7 @@ class ResearchChainRunner:
             selection_rule=template["selection_rule"],
             quality_policy=template["quality_policy"],
             serializer_version="joblib-v1" if template["algorithm"] == "qlib_linear" else template["serializer_version"],
+            contract_version=template.get("contract_version", 1),
         )
         result = self.model_adapter.run(
             plan,
@@ -1619,13 +1650,13 @@ class ResearchChainRunner:
         lineage no longer matches the request.  The inputs are immutable, so one
         re-verification per reconciliation covers every stage readback.
         """
-        if plan.request.get("contract_version") not in {4, 5, 6}:
+        if plan.request.get("contract_version") not in {4, 5, 6, 7, 8}:
             return
         membership_store = getattr(self.dataset_adapter, "membership_store", None)
         trading_calendar = getattr(self.dataset_adapter, "trading_calendar", None)
         if membership_store is None or trading_calendar is None:
             raise ContractError(
-                "v4/v5/v6 reconciliation requires a governed membership store and trading calendar"
+                "v4-v8 reconciliation requires a governed membership store and trading calendar"
             )
         from .membership_input import verify_request_input_sets
 

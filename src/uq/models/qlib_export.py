@@ -4,11 +4,13 @@ import hashlib
 import json
 import os
 import shutil
+import time
 import uuid
 import fcntl
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterator
 
 import numpy as np
 import pandas as pd
@@ -20,6 +22,22 @@ from ..errors import ContractError
 
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+@contextmanager
+def _timed_export_step(
+    name: str, callback: Callable[[str, float, str], None] | None,
+) -> Iterator[None]:
+    started = time.perf_counter()
+    status = "passed"
+    try:
+        yield
+    except BaseException:
+        status = "failed"
+        raise
+    finally:
+        if callback is not None:
+            callback(f"qlib_export/{name}", time.perf_counter() - started, status)
 
 
 def _write_qlib_feature_files(
@@ -125,6 +143,7 @@ class QlibDatasetExporter:
         instruments: list[str],
         provider_uri: str,
         quality_decision: dict[str, Any],
+        timing_callback: Callable[[str, float, str], None] | None = None,
     ) -> dict[str, Any]:
         if frame.empty:
             raise ContractError("cannot export empty dataset")
@@ -170,18 +189,13 @@ class QlibDatasetExporter:
 
                 # 4. Data parquet with Qlib-compatible columns
                 feature_dir = staging / "features"
-                _write_qlib_feature_files(
-                    frame,
-                    mapping=complete_mapping,
-                    calendar_dates=calendar_dates,
-                    feature_dir=feature_dir,
-                )
-
-                # Build file list
-                # Verify all written files before building file list
-                for path in sorted(staging.rglob("*")):
-                    if path.is_file() and path.stat().st_size == 0:
-                        raise ContractError(f"zero-byte export file: {path.name}")
+                with _timed_export_step("feature_files", timing_callback):
+                    _write_qlib_feature_files(
+                        frame,
+                        mapping=complete_mapping,
+                        calendar_dates=calendar_dates,
+                        feature_dir=feature_dir,
+                    )
 
                 manifest: dict[str, Any] = {
                     "contract_version": 2,
@@ -198,76 +212,82 @@ class QlibDatasetExporter:
                     "generation_id": "0" * 64,
                     "manifest_digest_sha256": "0" * 64,
                 }
-                # Build complete file list including data.parquet and manifest itself
-                complete_files = []
-                for path in sorted(staging.rglob("*")):
-                    if path.is_file() and path.name != "manifest.json":
-                        rel = path.relative_to(staging).as_posix()
-                        complete_files.append({
-                            "path": rel,
-                    "checksum_sha256": "0" * 64,
-                            "byte_size": 0,
-                        })
-                for entry in complete_files:
-                    entry["checksum_sha256"] = file_sha256_bytes((staging / entry["path"]).read_bytes())
-                    entry["byte_size"] = (staging / entry["path"]).stat().st_size
+                # Check every file and build the list in one directory walk.
+                # A full-A export can contain hundreds of thousands of bins.
+                with _timed_export_step("file_inventory", timing_callback):
+                    complete_files = []
+                    for path in sorted(staging.rglob("*")):
+                        if path.is_file() and path.name != "manifest.json":
+                            size = path.stat().st_size
+                            if size == 0:
+                                raise ContractError(f"zero-byte export file: {path.name}")
+                            rel = path.relative_to(staging).as_posix()
+                            complete_files.append({
+                                "path": rel,
+                                "checksum_sha256": "0" * 64,
+                                "byte_size": size,
+                            })
+                    for entry in complete_files:
+                        entry["checksum_sha256"] = file_sha256_bytes((staging / entry["path"]).read_bytes())
                 manifest["files"] = complete_files
-                export_generation_id,_=model_manifest_identities(
-                    manifest,
-                    schema_name="qlib_dataset_export",
-                    exclude_fields={"export_layout","quality_report_checksum_sha256","provider_uri_sha256"},
-                    digest_exclude_fields={"export_layout","quality_report_checksum_sha256","provider_uri_sha256"},
-                )
-                manifest["export_layout"]["root"] = f"dataset={dataset_name}/generation={export_generation_id}"
-                export_subject_content = sha256_json({
-                    key: value for key, value in manifest.items()
-                    if key not in {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256", "generation_id", "manifest_digest_sha256"}
-                })
-                quality_decision = resolve_subject_quality_decision(
-                    quality_decision, subject_generation_id=export_generation_id, subject_content_sha256=export_subject_content
-                )
-                quality_report, report_checksum = bind_reviewed_quality_decision(
-                    quality_decision, binding_type="qlib_dataset_export_v1",
-                    subject_generation_id=export_generation_id,
-                    subject_content_sha256=export_subject_content,
-                )
-                manifest["quality_report_checksum_sha256"]=report_checksum
-                manifest["generation_id"]=export_generation_id
-                _, digest = model_manifest_identities(
-                    manifest,
-                    schema_name="qlib_dataset_export",
-                    exclude_fields={"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
-                    digest_exclude_fields={"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
-                )
-                manifest["manifest_digest_sha256"] = digest
-                ModelContractLoader.validate("qlib_dataset_export", manifest)
+                with _timed_export_step("review_binding", timing_callback):
+                    export_generation_id,_=model_manifest_identities(
+                        manifest,
+                        schema_name="qlib_dataset_export",
+                        exclude_fields={"export_layout","quality_report_checksum_sha256","provider_uri_sha256"},
+                        digest_exclude_fields={"export_layout","quality_report_checksum_sha256","provider_uri_sha256"},
+                    )
+                    manifest["export_layout"]["root"] = f"dataset={dataset_name}/generation={export_generation_id}"
+                    export_subject_content = sha256_json({
+                        key: value for key, value in manifest.items()
+                        if key not in {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256", "generation_id", "manifest_digest_sha256"}
+                    })
+                    quality_decision = resolve_subject_quality_decision(
+                        quality_decision, subject_generation_id=export_generation_id, subject_content_sha256=export_subject_content
+                    )
+                    quality_report, report_checksum = bind_reviewed_quality_decision(
+                        quality_decision, binding_type="qlib_dataset_export_v1",
+                        subject_generation_id=export_generation_id,
+                        subject_content_sha256=export_subject_content,
+                    )
+                    manifest["quality_report_checksum_sha256"]=report_checksum
+                    manifest["generation_id"]=export_generation_id
+                    _, digest = model_manifest_identities(
+                        manifest,
+                        schema_name="qlib_dataset_export",
+                        exclude_fields={"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
+                        digest_exclude_fields={"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"},
+                    )
+                    manifest["manifest_digest_sha256"] = digest
+                    ModelContractLoader.validate("qlib_dataset_export", manifest)
 
-                report_dir=self.export_root/"external_quality_reviews"
-                report_dir.mkdir(parents=True,exist_ok=True)
-                report_path=report_dir/f"{report_checksum}.json"
-                report_staging=report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
-                report_staging.write_text(json.dumps(quality_report,sort_keys=True,indent=2)+"\n")
-                os.replace(report_staging,report_path)
-                fsync_dir(report_dir)
+                    report_dir=self.export_root/"external_quality_reviews"
+                    report_dir.mkdir(parents=True,exist_ok=True)
+                    report_path=report_dir/f"{report_checksum}.json"
+                    report_staging=report_path.with_suffix(f".staging.{uuid.uuid4().hex}")
+                    report_staging.write_text(json.dumps(quality_report,sort_keys=True,indent=2)+"\n")
+                    os.replace(report_staging,report_path)
+                    fsync_dir(report_dir)
 
                 snapshot = self.export_root / f"dataset={dataset_name}" / f"generation={export_generation_id}"
                 if snapshot.exists():
                     raise ContractError(f"immutable Qlib export already exists: {snapshot}")
                 snapshot.parent.mkdir(parents=True, exist_ok=True)
 
-                manifest_path = staging / "manifest.json"
-                manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
-                # Readback verification
-                readback_manifest = json.loads(manifest_path.read_text())
-                if readback_manifest["generation_id"] != manifest["generation_id"]:
-                    raise ContractError("export manifest readback identity mismatch")
-                for entry in manifest["files"]:
-                    fp = staging / entry["path"]
-                    if not fp.is_file() or file_sha256_bytes(fp.read_bytes()) != entry["checksum_sha256"]:
-                        raise ContractError(f"export file verification failed: {entry['path']}")
-                fsync_tree(staging)
-                os.replace(staging, snapshot)
-                fsync_dir(snapshot.parent)
+                with _timed_export_step("prepublish_readback", timing_callback):
+                    manifest_path = staging / "manifest.json"
+                    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+                    readback_manifest = json.loads(manifest_path.read_text())
+                    if readback_manifest["generation_id"] != manifest["generation_id"]:
+                        raise ContractError("export manifest readback identity mismatch")
+                    for entry in manifest["files"]:
+                        fp = staging / entry["path"]
+                        if not fp.is_file() or file_sha256_bytes(fp.read_bytes()) != entry["checksum_sha256"]:
+                            raise ContractError(f"export file verification failed: {entry['path']}")
+                with _timed_export_step("durable_publish", timing_callback):
+                    fsync_tree(staging)
+                    os.replace(staging, snapshot)
+                    fsync_dir(snapshot.parent)
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise

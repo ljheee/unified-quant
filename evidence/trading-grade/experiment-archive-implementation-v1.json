@@ -1,0 +1,72 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_experiment_archive_implementation",
+  "date": "2026-10-30",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "8395b09e7906086e5291f8c2e94a7c6937316565e1d3681aa1fcafe58b0f5cb2",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "files": [
+    {
+      "path": "src/uq/evaluation/experiment_archive.py",
+      "sha256": "ec9532b7a682f8d66f22f0deb18d36ee8bda1dd3fb8ad0cbb1c348780191b10f"
+    },
+    {
+      "path": "scripts/archive_trading_experiment.py",
+      "sha256": "f8fa63533203c37c45e3c39af6a6d79d0e78424b8b9fc035ef89ba5a46411139"
+    },
+    {
+      "path": "config/schemas/contracts/trading_experiment_archive.v1.json",
+      "sha256": "1aeff59eb8e344ca19243720daf123ecc64a8c5f949cb7fb0d38f153f3c0a834"
+    },
+    {
+      "path": "tests/test_experiment_archive.py",
+      "sha256": "3f651875c5ef4a438100afd33775d665176e1e633b313f1335e59b2c1839b773"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1437,
+      "skipped": 32,
+      "elapsed_seconds": 87.93
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1468,
+      "skipped": 1,
+      "elapsed_seconds": 132.96
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_experiment_archive.py -q",
+      "exit_code": 0,
+      "passed": 7
+    },
+    {
+      "command": "python3 -m compileall -q src/uq/evaluation/experiment_archive.py scripts/archive_trading_experiment.py tests/test_experiment_archive.py",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python scripts/archive_trading_experiment.py --help",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "scope": {
+    "immutable_archive_publisher_and_reader": "verified on synthetic five-session owning stores",
+    "research_result_request_environment_telemetry_binding": "verified",
+    "paired_costed_backtest_evaluation_readback": "verified",
+    "external_reviews": "checksums referenced; paired reviews verified through owning readers",
+    "historical_source_bytes_reconstructed": false,
+    "one_year_oos_and_pit_certified": false,
+    "certification_gate_remote_matrix": "not_run",
+    "real_all_a_archive": "not_run"
+  },
+  "archive_checksum_sha256": "e24666e6c242d079f3e3a3c34380070c8cf9a013bbec73a5d3a6806c20e75d43"
+}

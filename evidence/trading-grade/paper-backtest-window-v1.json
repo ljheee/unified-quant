@@ -1,0 +1,89 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_paper_backtest_window_reconciliation",
+  "date": "2026-10-30",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "5cd232329911fe9e74ea5c44f08ac008e8455bb789e3cb932b25e4a791c37ad6",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "files": [
+    {
+      "path": "src/uq/evaluation/paper_reconciliation.py",
+      "sha256": "dda8cfff9b4aad2e78019b455b045e3c1f7cdc6e3be96ba21ea727427e14047f"
+    },
+    {
+      "path": "scripts/reconcile_paper_backtest.py",
+      "sha256": "8812fd9c51675ded0e8b1a4afc52c767b229cbfb48b79b7f1b6c648ccae64d31"
+    },
+    {
+      "path": "tests/test_paper_backtest_reconciliation.py",
+      "sha256": "e5e005056dbbc723513599eb8ab5cbc443766cc75995351307dd5eabf826b884"
+    },
+    {
+      "path": "docs/subsystems/training-evaluation.md",
+      "sha256": "924a6ba018979cc4e82dee3c299ad4b96526b464c4f1abdfbd3234f1d7d8ad56"
+    },
+    {
+      "path": "docs/subsystems/portfolio-backtest-risk-execution.md",
+      "sha256": "3fc5db7cae3eb832ccc201ad88be389e8daad193ee8fb03447ed9ea8b7f9c570"
+    },
+    {
+      "path": "docs/trading-grade-progress.md",
+      "sha256": "7d1a959bd8ae64464768a664cb39ba41a1e78be365830af364bb4f6fda6f1433"
+    },
+    {
+      "path": "cr.md",
+      "sha256": "999289e682acfbfaa0f3cfbaedbf674f030c47464f798f3dc2440b8a51929cc6"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1445,
+      "skipped": 33,
+      "elapsed_seconds": 89.83
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1477,
+      "skipped": 1,
+      "elapsed_seconds": 148.51
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_paper_backtest_reconciliation.py -q",
+      "exit_code": 0,
+      "passed": 7
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest tests/test_paper_backtest_reconciliation.py -q",
+      "exit_code": 0,
+      "passed": 7
+    },
+    {
+      "command": ".venv/bin/python -m compileall -q src/uq/evaluation/paper_reconciliation.py scripts/reconcile_paper_backtest.py",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python scripts/reconcile_paper_backtest.py --help",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "scope": {
+    "window_decision_coverage": "verified against published target-weight bindings",
+    "backtest_fill_coverage": "all fill decision/execution pairs checked",
+    "source_read_efficiency": "one verified backtest/calendar read and one fill grouping per window",
+    "paper_inputs": "owning stores; control-flow fake in integration test",
+    "real_historical_paper_backtest_pair": "not_run",
+    "broker_or_live_execution": "not_run",
+    "one_year_oos_and_pit": "not_established",
+    "certification_gate_remote_matrix": "not_run"
+  },
+  "archive_checksum_sha256": "9e5d60e8a8abdc9299a85e2efb23311ffc9da0712182d2e9c61bfabe80492157"
+}

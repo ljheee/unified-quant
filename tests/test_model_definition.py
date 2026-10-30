@@ -38,6 +38,33 @@ class TestModelDefinitionBuilder:
         with pytest.raises(ContractError, match="unsupported algorithm"):
             builder.build(algorithm="xgboost", hyperparameters={}, seed_policy={"base_seed": 0, "derivation": "fixed"}, **_common())
 
+    def test_build_lightgbm_uses_version_two_contract(self) -> None:
+        builder = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True)
+        manifest = builder.build(
+            algorithm="qlib_lightgbm",
+            hyperparameters={"n_estimators": 20, "num_leaves": 7},
+            seed_policy={"base_seed": 42, "derivation": "fixed"},
+            contract_version=2,
+            **_common(),
+        )
+        assert manifest["contract_version"] == 2
+        assert manifest["serializer_version"] == "joblib-v1"
+        assert len(manifest["generation_id"]) == 64
+
+    def test_lightgbm_requires_version_two_and_joblib(self) -> None:
+        builder = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True)
+        with pytest.raises(ContractError, match="unsupported algorithm"):
+            builder.build(
+                algorithm="qlib_lightgbm", hyperparameters={},
+                seed_policy={"base_seed": 42, "derivation": "fixed"}, **_common(),
+            )
+        with pytest.raises(ContractError, match="requires serializer"):
+            builder.build(
+                algorithm="qlib_lightgbm", hyperparameters={},
+                seed_policy={"base_seed": 42, "derivation": "fixed"},
+                serializer_version="json-numpy-v1", contract_version=2, **_common(),
+            )
+
     def test_reject_empty_metrics(self) -> None:
         builder = ModelDefinitionBuilder(run_content_generation_id=DIGEST, reviewed=True)
         common = _common()

@@ -1,0 +1,76 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_label_audit_implementation",
+  "date": "2026-10-29",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "0f779842dd4ddb2fe7b301bcacfba64e2bc5de47885a502bcc5bb4377ffecd86",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "files": [
+    {
+      "path": "scripts/build_label_sets.py",
+      "sha256": "e22b0991032b3ef5944b27b350e60c0454509368f04002fb20a57a3c60efefdb"
+    },
+    {
+      "path": "scripts/audit_label_design.py",
+      "sha256": "5f22d703e5b5a20dbd8ed3bf8adc6e39e02849a2fc62b5cf870c6caed2d9e0ae"
+    },
+    {
+      "path": "src/uq/evaluation/label_audit.py",
+      "sha256": "05f1be71f0dbc89e92d0733f898ec2f098307490938b7bff8235722f7c9f68a9"
+    },
+    {
+      "path": "tests/test_build_label_sets.py",
+      "sha256": "1473c57abb90e98dcc8c161c1bf4149e2e2344244a2f66bddf246c045ee63f7b"
+    },
+    {
+      "path": "tests/test_label_design_audit.py",
+      "sha256": "f2f82d95aa11d906f866bbffb29fedbb936d603166742dab255b9070f094f5de"
+    },
+    {
+      "path": "evidence/trading-grade/label-design-baseline-v1.json",
+      "sha256": "b0395519d095101879db95859a9fefd1e5c73953dcbe8e070bdc07483c8d0133"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1427,
+      "skipped": 32,
+      "elapsed_seconds": 84.18
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1458,
+      "skipped": 1,
+      "elapsed_seconds": 136.57
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_label_design_audit.py tests/test_build_label_sets.py",
+      "exit_code": 0,
+      "passed": 18
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python scripts/audit_label_design.py --bars-root data/root-2025 --label-root data/root-2025 --label-generation f6fa41bb476194a0971344fc6cefb0df328895ff3eb6fbb99c76316113e78534 --start 2025-05-13 --end 2025-12-31 --out evidence/trading-grade/label-design-baseline-v1.json",
+      "exit_code": 0,
+      "report_checksum_sha256": "76d108a327dfc382830f3270fb9d1d1fc3f097d763b33f02e1fdefe25056d679"
+    }
+  ],
+  "scope": {
+    "raw_v1_label_formula_recomputation": "780955 non-null rows reproduced",
+    "adjusted_input_guard": "implemented",
+    "pit_delisting_completeness": "not_verified",
+    "execution_leg_diagnostic": "price-only; no costs or fill constraints",
+    "real_data_root": "read_only",
+    "certification_gate_remote_matrix": "not_run",
+    "production_publish_or_broker_execution": "not_run"
+  },
+  "archive_checksum_sha256": "5e70b29aa0a9f10efce248b8a63bb899a8602868c83c75c25e3c2d2595bdf569"
+}

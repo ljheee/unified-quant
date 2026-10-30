@@ -39,6 +39,7 @@ from uq.contracts.schema import load_schema
 from uq.errors import ContractError
 from uq.models.label_store_writer import LabelSetWriter
 from uq.models.labels import LabelBuilder
+from uq.models.listing_snapshot import ListingDateSnapshotStore
 from uq.store.reader import ManifestFirstReader
 
 _HORIZON = 5
@@ -164,6 +165,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--schema", type=Path, default=Path("config/schemas/bars_daily.v2.yaml"))
     parser.add_argument("--name", default="return_5d")
     parser.add_argument("--semantic-version", default="1.0.0")
+    parser.add_argument(
+        "--listing-snapshot-generation",
+        help="reuse a pinned listing-date map in --label-root without any vendor call",
+    )
     parser.add_argument("--instrument", action="append", default=None,
                         help="restrict the DEFAULT per-instrument publication to these names")
     parser.add_argument(
@@ -178,10 +183,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
+    schema = load_schema(args.schema)
+    if (schema.dataset, schema.version) != ("bars_daily", "v2"):
+        raise ContractError(
+            "label v1 formula expects raw bars_daily/v2 prices and applies adj_factor once"
+        )
     sessions = _window_sessions(args.bars_root, args.start, args.end)
     if not sessions:
         raise SystemExit(f"no bars partitions in {args.start}..{args.end}")
-    schema = load_schema(args.schema)
     reader = ManifestFirstReader(args.bars_root)
     bars = pd.concat([reader.read(schema, session) for session in sessions], ignore_index=True)
 
@@ -195,7 +204,22 @@ def main(argv: list[str] | None = None) -> int:
     if not instruments:
         raise SystemExit("no instruments to label")
 
-    listing_dates = _listing_dates(instruments)
+    snapshot_store = ListingDateSnapshotStore(args.label_root)
+    if args.listing_snapshot_generation:
+        snapshot, listing_dates = snapshot_store.read(args.listing_snapshot_generation)
+        uncovered = sorted(set(instruments) - set(listing_dates))
+        if uncovered:
+            raise ContractError(f"listing snapshot does not cover instruments: {uncovered[:10]}")
+    else:
+        listing_dates = _listing_dates(instruments)
+        uncovered = sorted(set(instruments) - set(listing_dates))
+        if uncovered:
+            raise ContractError(f"listing dates do not cover instruments: {uncovered[:10]}")
+        snapshot = snapshot_store.publish(
+            listing_dates, source="tushare:stock_basic(list_date;list_status=L,D)"
+        )
+    # A restricted publication must not ask eligibility to resolve unselected names.
+    bars = bars[bars["instrument"].isin(instruments)].copy()
     # The label contract is keyed on `datetime`; the canonical v2 partition names
     # that column `session_date`. Rename at the boundary so the builder sees its own
     # contract, the same rename the factor layer makes.
@@ -296,16 +320,19 @@ def main(argv: list[str] | None = None) -> int:
         "instruments_considered": len(instruments),
         "mode": "combined" if args.combined else "per_instrument",
         "eligibility": {
-            "listing_date_source": "tushare:stock_basic(list_date)",
+            "listing_date_source": snapshot["source"],
             "listing_date_statuses": ["L", "D"],
+            "listing_date_snapshot": {
+                "generation_id": snapshot["generation_id"],
+                "path": str(snapshot_store.path_for(snapshot["generation_id"])),
+            },
             "limit_events": "not recognised; limit_up/limit_down are prices in the "
                             "canonical field list, so no limit day is excluded",
             "reproducibility_note": (
-                "the upstream binding checksum covers listing_date, which the "
-                "canonical v2 field list does not carry and which is therefore "
-                "fetched live from stock_basic. A label set published here is "
-                "reproducible only together with that listing_date mapping; the "
-                "governed bars store alone does not determine the checksum."
+                "the upstream binding checksum covers listing_date; the exact map "
+                "is preserved in the immutable listing_date_snapshot. Replay with "
+                "--listing-snapshot-generation to avoid a live security-master fetch. "
+                "This map does not certify historical PIT universe completeness."
             ),
         },
         "published": len(published),

@@ -1,0 +1,57 @@
+{
+  "record_version": 1,
+  "scope": "read_only_label_leg_diagnostic",
+  "bars_root": "data/root-2025",
+  "label_root": "data/root-2025",
+  "label_binding": {
+    "generation_id": "f6fa41bb476194a0971344fc6cefb0df328895ff3eb6fbb99c76316113e78534",
+    "manifest_digest_sha256": "39a48bb379c02e999872d6643e1fc50e5b9300233713178cb2295024912caeb0",
+    "data_checksum_sha256": "20c23e0db24f7ebe1a6d277a9e3f5617dda42c229ed2208884e97d80d0459969"
+  },
+  "window": {
+    "start": "2025-05-13",
+    "end": "2025-12-31"
+  },
+  "raw_partition_count": 160,
+  "raw_partition_set_sha256": "01455554d1d7ebe819fdc6807e1a1314d234dabffb937202800a1a0c06fb0600",
+  "raw_manifest_versions": [
+    1
+  ],
+  "reader": "ManifestFirstReader: manifest anchor, schema and byte checksum; old v1 quality report not reverified",
+  "published_label_rows": 806759,
+  "non_null_labels_reproduced": 780955,
+  "overlap_lags_sessions": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "entry_gap": {
+    "rows": 780955,
+    "label_minus_open_entry_close_exit": {
+      "mean": -0.00031074835134659685,
+      "median": 0.0,
+      "p95_absolute": 0.021125700693923683
+    },
+    "return_sign_flip_rows": 35468
+  },
+  "full_open_leg": {
+    "rows": 775795,
+    "label_minus_open_to_open": {
+      "mean": 6.797834140487688e-06,
+      "median": 0.0,
+      "p95_absolute": 0.03327794756061214
+    },
+    "return_sign_flip_rows": 50822
+  },
+  "delisting_visibility": {
+    "raw_status_counts": {
+      "trading": 806759
+    },
+    "instruments_last_seen_before_window_end": 116,
+    "null_label_rows_before_global_five_session_tail": 567,
+    "legacy_delisted_flag_source": "hardcoded_false; status_nontrading_sets_suspended"
+  },
+  "pit_delisting_completeness_certified": false,
+  "audit_checksum_sha256": "76d108a327dfc382830f3270fb9d1d1fc3f097d763b33f02e1fdefe25056d679"
+}

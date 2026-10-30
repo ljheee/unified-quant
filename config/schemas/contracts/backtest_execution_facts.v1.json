@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/backtest_execution_facts.v1.json",
+  "title": "Source-declared raw execution facts; bound by external config review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "source_id",
+    "source_approval_ref",
+    "window_start",
+    "window_end",
+    "row_count",
+    "columns",
+    "data_checksum_sha256",
+    "logical_checksum_sha256",
+    "price_basis",
+    "generation_id",
+    "manifest_digest_sha256"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_approval_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "window_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "window_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "row_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "columns": {
+      "const": [
+        "date",
+        "instrument",
+        "visible_at",
+        "board",
+        "is_st",
+        "suspended",
+        "has_price_limit",
+        "limit_up",
+        "limit_down",
+        "limit_reference_price",
+        "raw_previous_close",
+        "buy_lot",
+        "min_buy_shares",
+        "sell_lot",
+        "industry"
+      ]
+    },
+    "price_basis": {
+      "const": "raw_unadjusted_cny"
+    },
+    "generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "manifest_digest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "data_checksum_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "logical_checksum_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

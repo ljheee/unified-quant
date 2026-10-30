@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/research_evaluation.v1.json",
+  "title": "Recomputable research diagnostic; not a quality decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_version",
+    "kind",
+    "publication_scope",
+    "protocol",
+    "input_bindings",
+    "artifacts",
+    "metrics",
+    "generation_id"
+  ],
+  "properties": {
+    "record_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "research_evaluation"
+    },
+    "publication_scope": {
+      "const": "diagnostic_only_no_quality_authorization"
+    },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric_version",
+        "annualization_sessions",
+        "label_horizon_sessions",
+        "hac_lags"
+      ],
+      "properties": {
+        "metric_version": {
+          "const": 1
+        },
+        "annualization_sessions": {
+          "const": 252
+        },
+        "label_horizon_sessions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "hac_lags": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "label_horizon_sessions": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "hac_lags": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "hac_lags": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "input_bindings": {
+      "type": "object"
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "daily"
+      ],
+      "properties": {
+        "daily": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file",
+            "checksum_sha256",
+            "row_count",
+            "columns"
+          ],
+          "properties": {
+            "file": {
+              "enum": [
+                "daily.parquet",
+                "predictions.parquet",
+                "labels.parquet"
+              ]
+            },
+            "checksum_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "row_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          }
+        },
+        "predictions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file",
+            "checksum_sha256",
+            "row_count",
+            "columns"
+          ],
+          "properties": {
+            "file": {
+              "enum": [
+                "daily.parquet",
+                "predictions.parquet",
+                "labels.parquet"
+              ]
+            },
+            "checksum_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "row_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          }
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file",
+            "checksum_sha256",
+            "row_count",
+            "columns"
+          ],
+          "properties": {
+            "file": {
+              "enum": [
+                "daily.parquet",
+                "predictions.parquet",
+                "labels.parquet"
+              ]
+            },
+            "checksum_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "row_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "returns"
+      ],
+      "properties": {
+        "returns": {
+          "type": "object"
+        },
+        "information_coefficients": {
+          "type": "object"
+        }
+      }
+    },
+    "generation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

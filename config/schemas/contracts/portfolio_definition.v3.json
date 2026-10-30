@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/portfolio_definition.v3.json",
+  "title": "Portfolio definition manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "schema_version",
+    "portfolio_name",
+    "weight_scheme",
+    "scheme_parameters",
+    "score_policy",
+    "constraints",
+    "rebalance_schedule",
+    "universe_snapshot_generation_id",
+    "industry_source_binding",
+    "prediction_set_generation_id",
+    "run_id",
+    "created_at",
+    "quality_report_checksum_sha256",
+    "manifest_digest_sha256",
+    "generation_id",
+    "risk_model_binding"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 3
+    },
+    "schema_version": {
+      "const": "3.0.0"
+    },
+    "portfolio_name": {
+      "$ref": "#/$defs/path_segment"
+    },
+    "weight_scheme": {
+      "enum": [
+        "top_n_equal_weight",
+        "score_weighted",
+        "risk_parity",
+        "industry_neutral"
+      ]
+    },
+    "scheme_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "n"
+      ],
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "temperature": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "lookback_sessions": {
+          "type": "integer",
+          "minimum": 2,
+          "default": 60
+        }
+      }
+    },
+    "score_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "direction",
+        "nan_policy",
+        "tie_policy"
+      ],
+      "properties": {
+        "direction": {
+          "enum": [
+            "descending"
+          ]
+        },
+        "nan_policy": {
+          "enum": [
+            "exclude"
+          ]
+        },
+        "tie_policy": {
+          "enum": [
+            "first_by_instrument_id"
+          ]
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_single_weight"
+      ],
+      "properties": {
+        "max_single_weight": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "max_industry_weight": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_turnover": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2
+        },
+        "cash_reserve": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "rebalance_schedule": {
+      "enum": [
+        "daily"
+      ]
+    },
+    "universe_snapshot_generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "industry_source_binding": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "source_type"
+      ],
+      "properties": {
+        "source_type": {
+          "enum": [
+            "none",
+            "governed_execution_facts"
+          ]
+        },
+        "manifest_generation_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "industry_column": {
+          "type": "string"
+        }
+      }
+    },
+    "prediction_set_generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "run_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "created_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "quality_report_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "risk_model_binding": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "generation_id",
+        "manifest_digest_sha256"
+      ],
+      "properties": {
+        "family": {
+          "const": "portfolio_risk_returns_v1"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_digest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "path_segment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "weight_scheme": {
+            "const": "score_weighted"
+          }
+        },
+        "required": [
+          "weight_scheme"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scheme_parameters": {
+            "required": [
+              "n",
+              "temperature"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "weight_scheme": {
+            "const": "top_n_equal_weight"
+          }
+        },
+        "required": [
+          "weight_scheme"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scheme_parameters": {
+            "not": {
+              "required": [
+                "temperature"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "weight_scheme": {
+            "const": "risk_parity"
+          }
+        },
+        "required": [
+          "weight_scheme"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scheme_parameters": {
+            "required": [
+              "n",
+              "lookback_sessions"
+            ],
+            "not": {
+              "required": [
+                "temperature"
+              ]
+            }
+          },
+          "risk_model_binding": {
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "scheme_parameters": {
+            "not": {
+              "required": [
+                "lookback_sessions"
+              ]
+            }
+          },
+          "risk_model_binding": {
+            "type": "null"
+          }
+        }
+      }
+    }
+    ,
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {"weight_scheme": {"const": "industry_neutral"}},
+            "required": ["weight_scheme"]
+          },
+          {
+            "properties": {
+              "constraints": {
+                "properties": {"max_industry_weight": {"type": "number", "exclusiveMaximum": 1}},
+                "required": ["max_industry_weight"]
+              }
+            },
+            "required": ["constraints"]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "industry_source_binding": {
+            "type": "object",
+            "required": ["source_type", "manifest_generation_id", "industry_column"],
+            "properties": {
+              "source_type": {"const": "governed_execution_facts"},
+              "industry_column": {"const": "industry"}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

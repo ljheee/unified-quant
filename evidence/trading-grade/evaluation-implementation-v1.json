@@ -1,0 +1,100 @@
+{
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "elapsed_seconds": 67.6,
+      "exit_code": 0,
+      "passed": 1339,
+      "skipped": 31
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "elapsed_seconds": 109.63,
+      "exit_code": 0,
+      "passed": 1369,
+      "skipped": 1
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python scripts/evaluate_training.py --help",
+      "exit_code": 0
+    }
+  ],
+  "date": "2026-10-29",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "guard_mutations": {
+    "disabled": [
+      "paired-backtest comparable config equality",
+      "IC overlap HAC lag floor"
+    ],
+    "expected_result": "failed",
+    "method": "isolated in-memory mutation; no disk source edits",
+    "regression_failures_observed": 5
+  },
+  "implementation_files": [
+    {
+      "path": "src/uq/evaluation/__init__.py",
+      "sha256": "8771ce4f275e7735699138b9a7ea9a40bcdc4b925d52eb31f6834b9b27e61b0b"
+    },
+    {
+      "path": "src/uq/evaluation/metrics.py",
+      "sha256": "d0f652036f090a4b5e4e45db70d4e9c3ad403786d53ee6eb88707acff08f911c"
+    },
+    {
+      "path": "src/uq/evaluation/report.py",
+      "sha256": "23824fa525737fd62076bb3f4438d77ea05402c552662ed2e516691a8b084497"
+    },
+    {
+      "path": "scripts/evaluate_training.py",
+      "sha256": "7e5f9935f2cc3dea187fb406ad1a8289093fa65bf26d9714116dc3fc81342d64"
+    },
+    {
+      "path": "config/schemas/contracts/research_evaluation.v1.json",
+      "sha256": "adb1587822279aa0be401b6db3798a655075496d51771af50fdc2f17144938fd"
+    },
+    {
+      "path": "tests/test_evaluation_metrics.py",
+      "sha256": "9e95e70efe355023b411a726b18985ca26b201f40cf1b3b5a5cb53e2b9cb7644"
+    },
+    {
+      "path": "tests/test_evaluation_report.py",
+      "sha256": "b39e45bca90741fe1895ddd9c8420a9535f41d93e6dc1695c3b13836fa5b9999"
+    }
+  ],
+  "kind": "trading_grade_evaluation_implementation_verification",
+  "not_verified": [
+    "one-year historical OOS experiment",
+    "walk-forward orchestration",
+    "new benchmark portfolio construction",
+    "label execution-gap/delisting PIT audit",
+    "historical PIT completeness",
+    "exposure metrics",
+    "cost sensitivity reruns",
+    "live vendors",
+    "certification gate and remote matrix",
+    "paper/live small-capital acceptance"
+  ],
+  "real_store_smoke": {
+    "annualized_excess_return": 0.0,
+    "holding_sessions": 10,
+    "information_ratio": null,
+    "result_generation_id": "906320b9b6eb10621c16b83bb718142b352335cbf45c4187f25714c3ca28d7c2",
+    "scope": "read-only same-result comparison; not a benchmark experiment",
+    "sessions": 11,
+    "stores_written": false,
+    "window": [
+      "2025-12-10",
+      "2025-12-24"
+    ]
+  },
+  "record_checksum_sha256": "267fb16d212fc2757e1882bb78db6a195d2660416c93ea0b5ad6483c75396cd2",
+  "record_version": 1,
+  "release_or_quality_authorization": false,
+  "runtime_source_fingerprint": "63f73fa13ff18b4cde8de477e61859c3b64b069f4ba0515e77bff4dd6bba37bb",
+  "uncommitted_worktree": true
+}

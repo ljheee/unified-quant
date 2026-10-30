@@ -40,10 +40,22 @@ class ModelDefinitionBuilder:
         metrics: list[dict[str, Any]],
         selection_rule: str,
         quality_policy: str = "reject_all",
-        serializer_version: str = "json-numpy-v1",
+        serializer_version: str | None = None,
+        contract_version: int = 1,
     ) -> dict[str, Any]:
-        if algorithm not in {"regularized_linear", "qlib_linear"}:
+        algorithms_by_version = {
+            1: {"regularized_linear", "qlib_linear"},
+            2: {"qlib_lightgbm"},
+        }
+        if contract_version not in algorithms_by_version:
+            raise ContractError(f"unsupported model definition contract version: {contract_version}")
+        if algorithm not in algorithms_by_version[contract_version]:
             raise ContractError(f"unsupported algorithm: {algorithm}")
+        serializer_version = serializer_version or (
+            "joblib-v1" if contract_version == 2 else "json-numpy-v1"
+        )
+        if contract_version == 2 and serializer_version != "joblib-v1":
+            raise ContractError("qlib_lightgbm requires serializer joblib-v1")
         if not metrics:
             raise ContractError("model definition requires at least one metric")
         for metric in metrics:
@@ -53,7 +65,7 @@ class ModelDefinitionBuilder:
             raise ContractError(f"invalid quality policy: {quality_policy}")
 
         manifest: dict[str, Any] = {
-            "contract_version": 1,
+            "contract_version": contract_version,
             "model_set": model_set,
             "model_version": model_version,
             "status": "reviewed",

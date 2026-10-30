@@ -3826,3 +3826,249 @@ request `41064ea2…`，result `509fa284…`，`final_status=passed`，10/10 sta
 
 **边界**：质量决策仍是仓库测试密钥；结果证明链路闭合与 fail-closed，不构成
 研究结论。模型仍是 `qlib_linear`，GBDT 未接入。
+
+## 2026-10-29 — 交易级训练升级：walk-forward 接入核查
+
+范围：`src/uq/evaluation/walk_forward*.py`、`scripts/run_walk_forward.py` 与其
+新增回归；基点 `2d713260eef73d595bf75bb1bd06899a8929dad1` 的未提交工作树。
+
+1. **完成结果重试不能再次进入 immutable 结果发布器。** 现有单次 runner 可以恢复
+   passed stages，但完整结果发布仍走 `FileResearchRunStore.publish_result` 的不可覆盖
+   路径。批量协议重试已完成的折会再次触发该冲突。因此新 batch adapter 在调用执行器
+   前，按原 request/run 定位唯一完成结果，使用 owning store 读回，随后重新核验完整
+   dataset/model/artifact/prediction/backtest lineage；歧义或篡改即拒绝，不通过捕获
+   overwrite 异常回退重跑，不改 run id、stage ledger 或已有制品。
+   证据：`test_completed_fold_retry_reads_immutable_result_without_reentering_publishers`、
+   `test_invalid_completed_result_never_falls_back_to_rerunning_the_fold`，以及
+   Qlib 实际训练/推理/回测后的同结果重试测试。
+
+2. **旧回测契约的空仓统计量缺口，尚未修复。** 合法场景：最后一个行情 session
+   才出现目标权重，窗口内没有 T+1 执行日，整个区间维持现金。引擎产生
+   `sharpe_ratio=None`，但 `backtest_result.v1.json` 的该字段只允许 number，导致
+   owning publisher 校验拒绝。新增最小行为复现
+   `test_legacy_v1_cash_only_fold_exposes_undefined_sharpe_contract_gap`，验证价格完整、
+   持仓为零及拒绝发生在结果契约；不是把 Qlib skip/编译失败当作已验证行为。
+   现有 v1 不原地扩枚举/类型；纳入后续版本化回测升级，需同时覆盖零方差、零交易和
+   旧版本兼容。目前不能宣称所有 walk-forward 市场状态都能发布成功。
+
+3. **真实调用形状与 fixture 解析后 plan 要区分。** 旧全链路 fixture 的实际 source
+   identities 位于 `ResolvedExecutionPlan.stage_bindings`，原始 request 多个 binding
+   仍是零/占位值；它用于单次 runner 的直接 API 测试，不证明 CLI request 闭环。
+   新 Qlib fold 核验测试在首次执行/发布前，把真实 fixture 输入 identities 填入 request
+   并重新计算 identity，使用训练/验证/测试分离的 split，关闭外部分数，验证 owning
+   reader 对 request → dataset → model run/artifact → prediction → backtest 的一致性。
+   这只是短合成单折集成；多折控制流、源日历/标签/配置预检另有测试，真实一年历史
+   多折运行和连续资本组合仍未执行/实现，不以这些测试替代该验收。
+
+4. **守卫的反证验证。** 独立进程内禁用 purge 覆盖、默认一年窗口门槛、完成结果
+   发现分支，对应三条回归分别失败。源码磁盘文件未修改；正常实现的两套 targeted
+   suites 均通过。完整套件结果记录于本轮验收台账/验证制品，不作远程认证声明。
+
+## 2026-10-29 — 交易级训练升级：v3 回测与成本容量核查
+
+范围：`backtest/engine_v3.py`、`execution_facts.py`、新增 v3/facts/stress 契约、正式
+配置/事实/压力 CLI、研究回测 adapter 与评估入口；核查基点为
+`2d713260eef73d595bf75bb1bd06899a8929dad1` 的未提交工作树。
+
+1. **执行价格必须与资金/股数单位一致。** 现有 adjusted-v2 OHLC 的 schema 明确为
+   back-adjusted，不能把这些值当作原始成交 CNY，或与原始前收/除权参考限价混算。
+   新 v3 独立读取受治理原始 `bars_daily/v2` 分区集，保留旧版行为。实际阶段集成在
+   完全没有 adjusted store 的 scratch root 中发布 v3 结果，并通过评估 owning
+   读回；canonical manifest/quality/schema/byte 和事实表四种摘要都核验。
+
+2. **卖出和最低费需要现金账本反证。** 原版卖出现金按 gross price 入账，滑点只在
+   fill 价格字段体现。v3 的双边净成交价格都进入现金，commission/stamp 以净成交
+   notional 计、half-up 分位取整，零成交免收。100 股买卖的手算回归逐日核对现金、
+   持仓、NAV、收益、双边滑点和最低佣金；新 v3 同时允许空仓 null Sharpe 的发布/
+   读回，上一轮旧 v1 拒绝用例原样保留。
+
+3. **约束必须在最终数量与费用上执行。** 参与度依据前一交易日成交量，买卖均可
+   裁量部分成交，整手/最低量、T+1、先卖后买、限价/风险拒绝不能互相绕过。单票、
+   行业及现金按费用后的开盘净值检查；滑点/冲击后的价格也必须在已发布带内。
+   被动 EOD 超限有独立 evidence，不把允许买入等同于保证收盘预算。板块、ST、
+   无限价、除权参考来自 pre-open 可见事实；超时/篡改/缺失/软链接拒绝。
+   补查发现卖出不足整手的尾数时，若完整剩余股数处于原始参与度和换手预算内，
+   先整手取整会错失可执行的全部清仓；现只在完整清仓足额时保留尾数，部分卖出
+   仍按 sell lot 裁剪。对应行为回归已通过。
+
+4. **成本/容量变体不得篡改治理输入。** 压力入口先精确重放既有基线，再通过 owning
+   publishers 为每个变体发布新的已评审 config/result；原目标权重和价格事实不变。
+   报告读时重算、约束精确变体、核对源制品，测试覆盖费用翻倍、实际成交减半、资金
+   变化、不可比结果、重试及重新哈希的虚假结论。容量仅为假设/阈值下已测资金网格，
+   `market_capacity_certified=false`，没有市场校准或真实一年策略验证声明。
+   正式回测阶段也重新读取并比对目标权重的 owning manifest/数据；内存 handoff
+   与已发布数据不同时在运行前拒绝，不把未经签名修改的权重当作新结果的输入。
+
+5. **反证与范围。** 独立内存变异分别还原卖出漏扣滑点、未来成交量和不扣费用的
+   风险 NAV，三个对应回归都以 assertion failure 失败。没有编译失败/skip 充当行为
+   验证。公司行为持仓事件、历史事实源准入/校准和真实成本结论仍有缺口；后续阶段
+   及生产/实盘权限没有借 v3 打开。完整本地验证收据见本轮台账和 evidence。
+
+## 2026-10-29 — 交易级训练升级：标签基线审计
+
+1. **先核实原输入再归因公式。** 初步怀疑复权因子在标签中重复相乘；核查
+   `build_label_sets.py` 的默认 schema 与原基线 `bars_daily_v2` 绑定后，确认原发布
+   读的是原始 OHLC，`close × adj_factor` 正确，未把猜测写成缺陷。真实缺口是用户
+   可显式传入已复权的 `bars_adjusted/adjusted-v2`，从而重复乘因子。入口现只接受
+   原始 `bars_daily/v2`，在读数据/写标签前拒绝该误用；旧标签身份不变。
+
+2. **不可交易腿确实影响符号。** 原标签 806,759 行中 780,955 行非空；使用原
+   `ManifestFirstReader` 和 checksum/schema 检查，从 160 个旧版 raw 分区逐行重算
+   全部 780,955 行。入场改 T+1 开盘后平均差 −3.1075bps、35,468 行符号翻转；
+   出场也改 T+6 开盘的完整观测中 50,822 行翻转。全程只读原数据根，结果与
+   分区集摘要保存于 `label-design-baseline-v1.json`。旧清单为版本 1，不能借该
+   只读脚本宣称新版 canonical-v2 质量报告已核验。
+
+3. **退市资格声明未得到时点证据。** 生产脚本把 `status != trading` 设为停牌，
+   把 `delisted` 一律设为 False；旧窗口 bars 全为 trading。116 个标的提前消失、
+   567 条标签在全局末五个 session 前已为 null，但缺失原因并未归因到退市事件。
+   当前标签没有实际退市收益腿或完整 PIT 状态证明。书面结论保留该门槛，不把
+   名义 `delisting: exclude` 当成已执行的历史退市检查；维护者需裁决新源与口径。
+
+## 2026-10-29 — 交易级训练升级：Qlib 导出耗时核查
+
+原 attempt telemetry 仅记录 `qlib_export` 整阶段耗时，无法区分全 A 导出中
+二进制写入、校验和遍历及持久发布；已有计划要求首次真实测量并建立性能基线。
+导出器现通过可选 callback 报告三个子阶段，callback 留在 attempt 诊断层，
+不进入逻辑制品。相同 scratch 数据的有/无计时 manifest 相等；写入故障的
+子阶段保留失败耗时并清理 staging。真实 Qlib 短链路回归核对三个记录及同一
+研究结果。真实全 A 导出仍未执行，故暂无线上的阶段时间或加速结论。
+
+复查导出器发现空文件检查与文件清单各执行一次全目录遍历；在预期数十万文件时
+属于重复 I/O。两步已合并为一次遍历，校验和、发布前读回及 fsync 保留。
+注入空文件的回归仍在清单阶段拒绝，并保留失败计时；实际全 A 速度收益未测量。
+
+## 2026-10-29 — 交易级训练升级：实验归档绑定核查
+
+阶段 0 原先只有命名和目录约定，没有发布/读回入口，因而一次研究结果、
+计时和评估可能被放进同一目录却不属于同一 request/run、回测或源码状态。
+新归档入口在同名发布前核对研究结果绑定的唯一回测、非零且一致的源码/锁
+receipt、passed attempt 的 request/run/environment、评估策略绑定，并重跑
+同成本/行情/universe 约束下的配对回测比较；读回也执行相同核查。
+scratch 用例覆盖成功、同名冲突、错位计时、源指标篡改、错误模型命名及
+重新哈希伪指标/回测绑定；策略和基准的回测/配置评审摘要都保留引用。
+归档只引用外部评审 checksum，不重放所有上游制品和历史源码；自身无外部
+签名，不能作为生产信任锚或一年样本外资格证据。
+
+## 2026-10-30 — 交易级训练升级：Qlib 导出评审/读回耗时
+
+原 exporter 计时只覆盖 feature-bin 写入、文件清单与 fsync 发布；身份计算、
+外部评审绑定/持久化和 staging 文件 checksum 二次读回都落在阶段总耗时中，
+无法单独定位评审或校验开销。现分别增加 `review_binding` 和
+`prepublish_readback` 子阶段；计时 callback 仍只写 attempt telemetry，
+有/无计时导出 manifest 完全相同。注入 provider 失败后，最后一项记录
+`failed` 且清理 staging；真实 Qlib 短链路核对两项计时和结果身份。
+adapter 读回、receipt 签名绑定及真实全 A 耗时仍未独立测量。
+
+## 2026-10-30 — 交易级训练升级：Qlib adapter 计时闭环
+
+前轮 exporter 内部已细分，但 adapter 对已发布 export 的 owning 读回、
+receipt 构建及阶段状态发布仍混在粗粒度 `qlib_export` 中。现直接在对应调用点
+记录 attempt 计时；只有发生 immutable export 恢复才记录 `retry_readback`，
+不把重试误记成新导出。真实 Qlib 短链路的有/无计时结果 manifest 相同；
+注入 receipt builder 故障后，`receipt_binding` 记录 `failed`/`ContractError`，
+`stage_publication` 和模型训练均未发生。真实全 A 性能和输入数据准备耗时未测。
+
+## 2026-10-30 — 交易级训练升级：paper/v3 成交差异诊断
+
+阶段 6 原有确定性 paper 执行与 v3 回测各自有受治理的发布路径，但没有把
+同一目标权重、同一 T+1 session 的订单放在一起量化差异。新增只读对账入口，
+逐订单给出缺失、请求和成交股数、已成交价 bps、费用差；五项预算必须明确，
+不从零差异暗示无风险。回测、目标权重、日历均经 owning store 读回；paper
+结果、计划和配置也分别读回并比对关键绑定。隔离控制流测试确认跨层日期和
+目标权重错配会拒绝；真实已评审 v3 fixture 参与读回。两引擎经济假设不同，
+且本地没有覆盖暖机及一年样本外的同源历史 paper/v3 成对制品，故本次只形成
+诊断能力，未形成真实交易或策略验收结论。
+
+## 2026-10-30 — 交易级训练升级：完整窗口 paper 对账覆盖核查
+
+上一轮的单日对账可选择任意一日，不能证明整个回测窗口都有对应 paper 结果。
+新增窗口入口，以回测结果中已评审目标权重绑定为预期决策日集合；每个决策
+日必须有且只有一份 paper 结果，执行日必须是日历下一会话。回测成交表中若
+出现不属于这些决策/执行对的行，也拒绝窗口结论。窗口预算累计订单、请求和
+成交股数、费用差，价格差取全部已成交订单的最大 bps；空订单窗口不标为预算
+通过。受治理的真实 v3 fixture 及隔离 paper reader 测试了顺序、缺失、重复和
+伪造日期路径。没有历史同源 paper/v3 成对制品，故仍没有阶段 6 的真实数据验收。
+
+## 2026-10-30 — 交易级训练升级：实际持仓暴露的证据边界
+
+此前评估报告能给超额与回撤，却不能逐日展示实际持仓的行业和集中度；直接看
+目标权重会漏掉 v3 部分成交、现金和被动价格漂移。新增只读诊断从已评审成交
+重建股数，用原始收盘价估值并核对净值表，再给单票、行业、现金和前日成交额
+流动性代理。行业使用执行事实表中开盘前可见分类；分类或前日行情缺失时保留
+未知权重。市值数据源尚未准入，报告明确不提供市值暴露。合成数值和真实 v3
+scratch store 的测试证明重建与篡改拒绝；它们不证明历史行业源完整或真实资金
+容量。
+
+## 2026-10-30 — 交易级训练升级：风险平价与 v8 路由
+
+阶段 5 原先列有风险平价，但 portfolio builder 只支持等权和 v2 softmax；也没有
+Research Chain 路由或受治理收益面板。本轮新增版本化 portfolio definition/template v3，
+和继承 v7 LightGBM、paper、PIT membership、sample-construction 绑定的 research request v8。
+stage-plan 顺序不变，复用 v6 已签名 digest；state/result 的 paper stage 顺序及版本枚举
+扩展到 v8，旧版本保持兼容。
+
+风险权重先按现有分数政策选 top-N，再对请求固定的历史窗口求样本协方差和 long-only 等风险
+贡献解。默认建议为 60 个交易日，schema 仅标注默认值，已评审 request 必须显式携带窗口。
+收益由离线 Parquet publisher 发布，严格字段、复权简单收益单位、来源/审批引用和交易日历身份
+进入不可变 manifest。发布器和 owning reader 都校验外部 calendar manifest/checksum 与实际 session
+集合；Research resolver 检查请求前历史覆盖及研究窗口覆盖；portfolio stage 仅使用决策日前完成
+的收益。输入缺失、无效协方差或 solver 未收敛时拒绝发布。单票、现金和换手限制随后作用，可能
+令最终仓位不再满足完全等风险贡献。
+
+新增测试覆盖对角和相关协方差的风险预算、当日极端收益不得进入窗口、缺值/非正定/非对称拒绝、
+收益 store 篡改拒绝、calendar 绑定、publisher CLI、v3 template/v8 request 与 stage-order 路由。
+定向测试 28 项通过；普通完整套件 1488 passed / 33 skipped；Qlib 完整套件 1520 passed / 1
+skipped；`git diff --check` 通过。完整测试的警告来自既有 pandas `SettingWithCopyWarning` 和
+Qlib NumPy timedelta deprecation。
+
+本地没有真实历史 risk-return 面板，故只验证功能和失败路径，没有生成任何策略表现结论。
+阶段 5 的真实成本/OOS验收和历史波动/回撤效果评估也未完成。
+
+## 2026-10-30 — 交易级训练升级：行业预算与上限
+
+portfolio v1/v2 的 `max_industry_weight` 明确失败关闭，即使 definition 带有旧的
+`governed_industry_manifest` 也无运行时读取器。portfolio v3 新增 `industry_neutral`，采取
+不依赖外部 benchmark 的明确口径：模型分数先选 top-N，再对入选行业平均分预算、行业内等权。
+这属于组合内部行业平衡，不宣称相对基准行业中性。industry cap 将超过阈值的行业按比例缩减，
+释放仓位留作现金，不补分到其他行业；若 turnover 插值将行业曝险带回 cap 以上，则拒绝发布。
+
+分类读取复用已有 `ExecutionFactsStore`，但 request v8 template 必须绑定回测配置所绑定的同一
+facts generation，列名固定为 `industry`。resolver 重新读回 facts manifest，校验源绑定、研究
+窗口覆盖及标签可用性；事实契约本身校验 `visible_at` 不晚于 session open。portfolio stage 每个
+决策日取当日标签，并对任一选中标的分类缺失失败关闭。v1/v2 旧失败行为保持不变。
+
+回归验证覆盖 equal-industry allocation、cap 留存现金、缺标签拒绝、事实 generation 错配拒绝和
+旧 contract 行为。此项仍没有真实行业标签面板可验收历史覆盖与 OOS 表现；均衡计算只在测试数据
+中验证，不据此宣称行业风险已实证有效。定向 portfolio/v7/v8/execution-facts 测试 38 passed；
+最终普通全套 1490 passed / 33 skipped，Qlib 全套 1522 passed / 1 skipped，`git diff --check`
+通过。全量 warnings 是既有 pandas `SettingWithCopyWarning` 与 Qlib NumPy timedelta deprecation。
+
+## 2026-10-31 — CR 未提交交易级训练升级
+
+审查基于 HEAD `2d713260eef73d595bf75bb1bd06899a8929dad1` 的未提交工作树。修复确认的
+preflight 缺口：walk-forward 对 v5–v8 在首折前强制 membership/market 配对根与 paper 风险文档；
+新增有效 v7 请求批量回归测试，证明缺文档时不发布 batch plan、不执行折。归档发布现用
+`flock` 串行化同名创建，并在锁内读回判断幂等/冲突。IC 输入现在校验 binding 字段并归一化
+日历 `Timestamp`；LightGBM seed/thread_count 只接受精确整数；stress 结果重试通过目标路径和
+已发布内容确认，不再依赖异常文本，stress JSON 读取显式指定 UTF-8。HAC 公共边界把非数值输入
+转换成 `ContractError`。
+
+其余观察的处置：将研究请求 plan validator 改成静态检查，批预检不再在 `__new__` 对象上调用实例
+方法；plan 的绝对日历 store 路径属于身份并在训练评估页注明。持仓暴露诊断现在只在治理 facts
+标记停牌时沿用前收，且对可交易标的的无效 close 失败关闭。label audit 未与独立治理日历比对，
+其风险/证据边界已写入审计说明。遥测发布属于成功 run 的关键路径（失败 run 保留原始异常），买侧
+全持仓投影 NAV 检查会因被动越限拒绝当日所有买入；两项均补进子系统页。`evaluate_returns` 不产
+Sharpe/年化波动的范围也已写明。旧验证计数 1462/1494 已从子系统页移除，最终基线 1490/1522
+仍保留；user guide 已补 v8 paper 路由。`AGENTS.md` 仅 claude-mem 时间戳噪音已恢复原值。
+
+runner 源文件受 phase-0 evidence index 摘要保护，代码变更后同步更新并通过摘要核验。
+定向回归 `90 passed, 1 skipped`；针对 validator/evidence index 的补充测试 `6 passed`；
+普通全套 `.venv/bin/python -m pytest` 为 `1500 passed, 33 skipped`；Qlib 全套
+`.venv-qlib/bin/python -m pytest` 为 `1532 passed, 1 skipped`。两套全量有既有 pandas
+SettingWithCopyWarning；Qlib 环境另有其依赖包 NumPy timedelta deprecation warning。
+
+维护者裁决仍待：是否认可 `research_run_result.v1.json` 与 `research_run_state.v1.json` 原位纯追加
+contract_version 7/8（v4/v5/v6 有先例，已有兼容性测试）；以及是否保留完整 telemetry 与绝对路径
+进入实验归档 checksum（当前行为使证据身份依赖运行/机器）。新增/变更 LightGBM extra 已改依赖锁，
+因此认证矩阵已失效；当前没有 release 声明，发布前需重跑 `scripts/run_gate.sh`。本轮未运行该门。

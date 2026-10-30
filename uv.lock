@@ -4864,9 +4864,13 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "joblib" },
+    { name = "lightgbm" },
     { name = "pyarrow" },
     { name = "pytest" },
     { name = "scikit-learn" },
+]
+gbdt = [
+    { name = "lightgbm" },
 ]
 qlib = [
     { name = "pyqlib" },
@@ -4881,6 +4885,8 @@ requires-dist = [
     { name = "cryptography", specifier = ">=44" },
     { name = "joblib", marker = "extra == 'dev'", specifier = ">=1.3" },
     { name = "jsonschema", specifier = ">=4,<5" },
+    { name = "lightgbm", marker = "extra == 'dev'", specifier = ">=4.7,<5" },
+    { name = "lightgbm", marker = "extra == 'gbdt'", specifier = ">=4.7,<5" },
     { name = "mootdx", marker = "extra == 'real'", specifier = ">=0.11,<0.12" },
     { name = "pandas", specifier = ">=2.1,<3" },
     { name = "pyarrow", specifier = ">=14" },
@@ -4891,7 +4897,7 @@ requires-dist = [
     { name = "scikit-learn", marker = "extra == 'dev'", specifier = ">=1.3" },
     { name = "tushare", marker = "extra == 'real'", specifier = ">=1.4" },
 ]
-provides-extras = ["real", "dev", "qlib"]
+provides-extras = ["real", "dev", "qlib", "gbdt"]
 
 [[package]]
 name = "uri-template"

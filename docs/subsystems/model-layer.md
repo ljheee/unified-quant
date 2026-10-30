@@ -8,6 +8,11 @@ This subsystem turns governed factor partitions into published labels, feature s
 
 It does **not** compute factors (`docs/subsystems/factor-layer-and-qlib-adapter.md`) and does not orchestrate (`docs/subsystems/research-chain.md`). Every published family requires an externally signed, reviewed quality decision; a publisher may never self-approve (`evidence/research-chain/release/release-record.json` `external_quality_reviews.publisher_self_approval_forbidden`).
 
+Post-training diagnostic reports have a separate, non-authorizing contract under
+[`training-evaluation.md`](training-evaluation.md). Their read path checks a
+prediction's declared dataset/label/test-split binding; they are not a new
+accepted-model family and cannot replace the quality decisions above.
+
 ## Authoritative Sources
 
 | Fact | Authoritative path |
@@ -21,7 +26,7 @@ It does **not** compute factors (`docs/subsystems/factor-layer-and-qlib-adapter.
 | Dataset publication | `src/uq/models/dataset_writer.py:28` `DatasetWriter` |
 | Qlib export and init receipt | `src/uq/models/qlib_export.py:25` `QlibDatasetExporter`, `:264` `QlibInitReceiptBuilder` |
 | Deterministic trainer and artifact store | `src/uq/models/trainer.py:20` `ModelTrainer`, `:102` `ArtifactStore` |
-| True Qlib runtime trainer | `src/uq/models/qlib_runtime.py:30` `QlibRuntimeTrainer` |
+| Qlib runtime trainer | `src/uq/models/qlib_runtime.py:30` `QlibRuntimeTrainer`, supporting `qlib_linear` v1 and `qlib_lightgbm` v2 definitions |
 | Accepted-factor index (read side) | `src/uq/models/accepted_store.py:14` `AcceptedFactorIndexRuntime` |
 
 Contract schemas live in `config/schemas/contracts/*.json` (70 files); manifests for canonical-v2 and factor manifest v1/v2 live in `config/schemas/manifests/`.
@@ -34,8 +39,48 @@ Producers exist in two forms: owning-layer APIs usable directly, and scripts for
 2. **Feature schema and preprocessing.** `FeaturePreprocessorBuilder` builds one transform per manifest (`standardize_cross_section` or `rank_cross_section`), stateless and same-date cross-sectional. `complete_rows` is the single definition of "trainable row": rows with any undefined feature are dropped **before** the transform so the cross-sectional statistics describe exactly the rows that will be trained on, and so the published `input_frame_sha256` describes the frame actually handed over. A null **label** is a separate policy from a null **feature** (`drop_unlabeled_rows` vs `drop_incomplete_rows`). For v6, label-aware row selection is published first as `sample_construction.v1` (`src/uq/models/sample_construction.py`, producer `scripts/publish_sample_construction.py`); preprocessing consumes that selected frame and never reads the label.
 3. **Dataset.** `DatasetWriter` requires an externally reviewed quality report, validates the feature schema against the frame, validates splits, serializes, re-reads and reconciles. `SplitValidator` evaluates purge/embargo in **time order**, so a `[validation, train]` declaration is not mistaken for a leak.
 4. **Qlib export/receipt.** `QlibDatasetExporter` produces a Qlib-initializable layout and an init receipt; it does not import or install Qlib. Identity fields (`generation_id`, `manifest_digest_sha256`) are finalized **before** the receipt is written to disk, because only a resume path reads the persisted receipt — which is exactly how an earlier defect stayed invisible.
-5. **Training.** `ModelTrainer` requires a reviewed definition, an explicitly declared `train_period` (fitting on the full frame would leak validation/test labels), and rejects non-finite features or labels before solving, so a NaN model can never be published with a legitimate checksum. `QlibRuntimeTrainer` trains through the Qlib model API against a verified governed export. The artifact's `runtime_version` is the authoritative Qlib version for inference; the research chain passes it to the runtime guard so a model trained under one Qlib version is never scored under another.
-6. **Prediction.** `PredictionBuilder` publishes prediction sets from externally supplied scores; the research chain does not yet auto-load an artifact to infer today's scores (`docs/layer-architecture.md` §2).
+5. **Training.** `ModelTrainer` requires a reviewed definition, an explicitly declared `train_period` (fitting on the full frame would leak validation/test labels), and rejects non-finite features or labels before solving, so a NaN model can never be published with a legitimate checksum. `QlibRuntimeTrainer` trains through a verified governed export. The artifact's `runtime_version` binds the Qlib runtime; the research chain passes it to the runtime guard so a model trained under one Qlib version is never scored under another.
+6. **Prediction.** `PredictionBuilder` publishes prediction sets. `score_decision_dates` loads and scores reviewed `qlib_linear` and `qlib_lightgbm` artifacts; the Research Chain runner still does not select a model artifact for inference automatically (`docs/layer-architecture.md` §2).
+
+### LightGBM model and candidate paths
+
+`ModelDefinitionBuilder` keeps v1 definitions for `regularized_linear` and
+`qlib_linear`; v2 defines `qlib_lightgbm` with `joblib-v1` serialization. The
+Qlib trainer fits the declared training split, binds both Qlib and LightGBM
+runtime versions in the artifact manifest, and `score_decision_dates` refuses a
+LightGBM runtime version mismatch before scoring. A regression integration
+trains the v2 definition, publishes the artifact through `ArtifactStore`, then
+scores a requested date from the verified Qlib export.
+
+Research Chain request templates v1–v6 retain model-definition template v1;
+request v7 selects a reviewed model-definition template v2 for
+`qlib_lightgbm`. Request v8 keeps that model route and adds the independently
+versioned portfolio-definition template v3. Its risk-return binding is part of
+the reviewed request, while return publication and covariance checks are owned
+by the portfolio subsystem. The request schema, model-stage builder and route
+are covered by regressions. A same-cost, same-portfolio comparison against
+`qlib_linear`, one-year OOS performance and contribution concentration remain
+empirical acceptance work.
+
+The bounded candidate research path:
+
+`scripts/select_lightgbm_candidate.py` reads a dataset through `DatasetWriter.read`,
+so manifest identity, checksums, feature schema and declared split coverage are
+checked before model fitting. `select_lightgbm_candidate` in
+`src/uq/models/lightgbm_selection.py` requires the declared train, validation and
+test splits, rechecks purge/embargo separation, and caps the experiment at three
+candidate parameter sets. It selects only by mean daily cross-sectional RankIC
+on validation, then refits the selected parameters on the train split, matching
+the baseline fit window, and
+emits test predictions. Test labels are not read for fitting, selection, or the
+receipt. The receipt binds dataset generation/digests, feature order, split
+windows, candidate scores and model/prediction checksums.
+
+Use `--extra gbdt` for runtime installation; `dev` also includes LightGBM so
+regression tests exercise the model. Candidate selection remains a research
+receipt and does not make a model promotion decision.
+The regression in `tests/test_lightgbm_selection.py` changes only test labels and
+asserts that model bytes, selected parameters and test scores stay identical.
 
 ## Multiple Implementations / Entry Points
 
@@ -72,6 +117,19 @@ Two facts about `QlibDatasetExporter` that are not visible from a call site:
 ``exporter_fingerprint`` is *inside* the identity, so a mismatch is already refused as
 a generation mismatch — do not add a second check for it.
 
+When a runner attempt supplies telemetry, the exporter reports elapsed time for
+feature-bin writing, file inventory/checksums, export identity and external
+review binding, staging readback, and durable publication. The callback records
+a failed feature-write or review-binding step before the exception propagates.
+These measurements stay in the attempt receipt and do not alter export bytes,
+manifest identity or external quality binding.
+The zero-byte check and file-list construction now share one directory walk;
+the subsequent content checksums, readback and durable fsync keep their own
+verification passes. The real full-A time effect has not been measured.
+The research-chain adapter records its later owning export readback, cache and
+receipt binding, and stage-state publication in the same attempt telemetry;
+those steps are outside the exporter manifest.
+
 **A retry of the same request and run does not republish.** ``ResearchChainRunner``
 resumes from the stage ledger (``_resume_from_passed_stages``): a stage recorded as passed is
 skipped, so the writer is never reached twice for one run. There is deliberately no
@@ -80,6 +138,30 @@ skipped, so the writer is never reached twice for one run. There is deliberately
 because the identity is a content hash and does not encode the run.
 
 ## Constraints, Failures, and Compatibility
+
+- `scripts/build_label_sets.py` now pins the exact security-master listing-date
+  map before publishing labels (`src/uq/models/listing_snapshot.py`). Snapshots
+  live under `<label-root>/listing_date_snapshots/generation=<sha256>.json`;
+  identities cover source, version and the complete mapping. Publication is
+  immutable and idempotent, and reads reject changed bytes, invalid dates,
+  invalid instruments and in-store symlinks. A missing listing date fails before
+  snapshot or label publication. `--listing-snapshot-generation` reuses a saved
+  mapping without calling the vendor; the publication report binds its identity
+  and path. The label-v1 formula, eligibility semantics and checksum remain
+  unchanged (the existing input checksum already includes listing dates).
+  This preserves a reproducibility input; it does **not** certify a historically
+  complete PIT universe. Older label sets remain readable but their missing
+  original maps cannot be reconstructed by this change. Regression verification:
+  `tests/test_listing_snapshot.py`, `tests/test_build_label_sets.py`.
+
+- The v1 five-session formula multiplies raw `bars_daily/v2.close` by the vendor
+  `adj_factor` once. `scripts/build_label_sets.py` now rejects an already
+  adjusted schema before reading or publishing data; passing
+  `bars_adjusted/adjusted-v2` would double the factor. The frozen baseline
+  binds raw bars, so this guard prevents future mispublication without rewriting
+  historical labels. The [trading-grade label audit](../trading-grade-label-audit.md)
+  quantifies the old close decision versus later open execution legs and
+  documents unresolved PIT delisting and terminal-price evidence.
 
 - Null handling is policy, not accident: a null label means "insufficient future rows" and is dropped before finiteness checks; a null feature makes a row unusable for learning but is preserved for inference. Folding the two into one policy either hides defects or deletes valid rows.
 - Training on a frame that spans all splits is refused; `train_period` is mandatory.

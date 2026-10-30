@@ -41,8 +41,11 @@ class QlibRuntimeTrainer:
         feature_columns: list[str],
         label_column: str,
     ) -> tuple[dict[str, Any], bytes]:
-        if definition["algorithm"] != "qlib_linear":
-            raise ContractError(f"Qlib trainer only supports qlib_linear, got {definition['algorithm']}")
+        algorithm = definition["algorithm"]
+        if algorithm not in {"qlib_linear", "qlib_lightgbm"}:
+            raise ContractError(f"Qlib trainer does not support {algorithm}")
+        if algorithm == "qlib_lightgbm" and definition.get("contract_version") != 2:
+            raise ContractError("qlib_lightgbm requires model_definition.v2")
         if definition["serializer_version"] != "joblib-v1":
             raise ContractError("Qlib trainer requires serializer joblib-v1")
 
@@ -147,11 +150,48 @@ class QlibRuntimeTrainer:
         if prepared.empty or len(prepared) < 2:
             raise ContractError("Qlib training requires at least two supervised observations")
 
-        alpha = float(definition["hyperparameters"].get("alpha", 1.0))
-        fit_intercept = bool(definition["hyperparameters"].get("fit_intercept", False))
         np.random.seed(int(definition["seed_policy"]["base_seed"]))
-        model = LinearModel(estimator="ridge", alpha=alpha, fit_intercept=fit_intercept)
-        model.fit(dataset)
+        if algorithm == "qlib_linear":
+            alpha = float(definition["hyperparameters"].get("alpha", 1.0))
+            fit_intercept = bool(definition["hyperparameters"].get("fit_intercept", False))
+            model = LinearModel(estimator="ridge", alpha=alpha, fit_intercept=fit_intercept)
+            model.fit(dataset)
+            runtime_name = "qlib_linear"
+            runtime_import_path = "qlib.contrib.model.linear.LinearModel"
+        else:
+            try:
+                import lightgbm
+                from lightgbm import LGBMRegressor
+            except ImportError as exc:
+                raise ContractError("qlib_lightgbm training requires the gbdt extra") from exc
+            allowed_parameters = {
+                "n_estimators", "num_leaves", "learning_rate", "min_child_samples",
+                "max_depth", "reg_alpha", "reg_lambda", "subsample", "colsample_bytree",
+            }
+            parameters = dict(definition["hyperparameters"])
+            unknown = sorted(set(parameters) - allowed_parameters)
+            if unknown:
+                raise ContractError(f"unsupported qlib_lightgbm hyperparameters: {unknown}")
+            features = prepared.xs("feature", axis=1, level=0, drop_level=True)
+            labels = prepared.xs("label", axis=1, level=0, drop_level=True)
+            if labels.shape[1] != 1:
+                raise ContractError("qlib_lightgbm requires exactly one label column")
+            feature_values = features.to_numpy(dtype="float64")
+            label_values = labels.iloc[:, 0].to_numpy(dtype="float64")
+            if not np.isfinite(feature_values).all() or not np.isfinite(label_values).all():
+                raise ContractError("qlib_lightgbm train data contains non-finite values")
+            model = LGBMRegressor(
+                objective="regression",
+                random_state=int(definition["seed_policy"]["base_seed"]),
+                n_jobs=1,
+                deterministic=True,
+                force_col_wise=True,
+                verbosity=-1,
+                **parameters,
+            )
+            model.fit(features, label_values)
+            runtime_name = f"qlib_lightgbm:{lightgbm.__version__}"
+            runtime_import_path = "lightgbm.sklearn.LGBMRegressor"
 
         artifact_buffer = io.BytesIO()
         joblib.dump(model, artifact_buffer, compress=3)
@@ -166,9 +206,9 @@ class QlibRuntimeTrainer:
             "artifact_filename": "model.joblib",
             "artifact_checksum_sha256": artifact_checksum,
             "byte_size": len(artifact_bytes),
-            "runtime_name": "qlib_linear",
+            "runtime_name": runtime_name,
             "runtime_version": qlib.__version__,
-            "runtime_import_path": "qlib.contrib.model.linear.LinearModel",
+            "runtime_import_path": runtime_import_path,
             "model_run_content_generation_id": run_content_generation_id,
             "serialization_profile_id": "joblib-v1",
             "run_id": "00000000-0000-4000-8000-000000000000",

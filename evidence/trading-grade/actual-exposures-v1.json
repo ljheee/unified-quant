@@ -1,0 +1,92 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_actual_v3_exposures",
+  "date": "2026-10-30",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "038958e0c51dd62275e9f63274607942e6629300a356e7a653210dbca731d3dc",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "files": [
+    {
+      "path": "src/uq/evaluation/exposures.py",
+      "sha256": "1be0b0a593893dd1617276ce13393eecf914e2ff2da559788a54896986ef2e7c"
+    },
+    {
+      "path": "scripts/evaluate_portfolio_exposures.py",
+      "sha256": "f8eaf27b4d5868a2ebba0f0a1f8741573a2c113e98f717d61ca12e6338bec4ef"
+    },
+    {
+      "path": "tests/test_portfolio_exposures.py",
+      "sha256": "7f42ed3e4a833aa961c35dd0992a718b2c50b8b5d80b9a6905f5f5be8b3f3a6f"
+    },
+    {
+      "path": "docs/subsystems/training-evaluation.md",
+      "sha256": "1ece0eff7207af8fb8af337c7530e4f0f04ccbb3b4f795dfeef5a1ccfe082d14"
+    },
+    {
+      "path": "docs/subsystems/portfolio-backtest-risk-execution.md",
+      "sha256": "dd3b1e59b8c2c7559084f71440b3a211c83cb1ed707f00e724a07c8606a57d33"
+    },
+    {
+      "path": "docs/subsystems/README.md",
+      "sha256": "609b1dd8a6fedd1504b8af70e1999c11109ea0dd506c82b9e878c12cc1ae763f"
+    },
+    {
+      "path": "docs/trading-grade-progress.md",
+      "sha256": "3e63552573ba2a68808942528eb5f2940e22f4d7dff4bfee4fd7d105d7a73422"
+    },
+    {
+      "path": "cr.md",
+      "sha256": "30477244957db1fa9466f4489b2ba443ea75706e9a8346eb66f3a0c2243a7c00"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1450,
+      "skipped": 33,
+      "elapsed_seconds": 92.81
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1482,
+      "skipped": 1,
+      "elapsed_seconds": 157.09
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_portfolio_exposures.py -q",
+      "exit_code": 0,
+      "passed": 5
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest tests/test_portfolio_exposures.py -q",
+      "exit_code": 0,
+      "passed": 5
+    },
+    {
+      "command": ".venv/bin/python -m compileall -q src/uq/evaluation/exposures.py scripts/evaluate_portfolio_exposures.py",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python scripts/evaluate_portfolio_exposures.py --help",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "scope": {
+    "actual_holdings_reconstruction": "reviewed v3 fills and equity reconciled",
+    "raw_prices_and_facts": "owning readback and bound source identities",
+    "industry_source_historical_approval": "not_established",
+    "market_cap_exposure": "unavailable_without_governed_source",
+    "real_all_a_year_oos": "not_run",
+    "broker_or_live_execution": "not_run",
+    "certification_gate_remote_matrix": "not_run"
+  },
+  "archive_checksum_sha256": "d43cd8afaee32d98225efaa334989da44540ea919a9a6031964b948f1a5a008e"
+}

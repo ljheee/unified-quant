@@ -1002,3 +1002,90 @@ def test_a_v2_price_panel_is_keyed_on_its_own_session_column(tmp_path: Path):
         assert ("2026-01-05", "A") in panel.index
         # both lines lose the same columns the same way once paneled
         assert list(panel.columns) == ["open", "high", "low", "close", "volume", "amount"]
+
+
+@requires_qlib
+def test_attempt_telemetry_covers_real_stages_without_changing_results(tmp_path, monkeypatch):
+    from uq.research_chain.telemetry import RunTelemetry
+
+    plain, _, _ = _run_full_chain(tmp_path / 'plain')
+    real_execute = ResearchChainRunner.execute
+    attempts = []
+
+    def measured(self, plan, **kwargs):
+        with RunTelemetry(self.run_store.root, plan.request, {'test': 'isolated'}) as attempt:
+            attempts.append(attempt)
+            return real_execute(self, plan, telemetry=attempt, **kwargs)
+
+    monkeypatch.setattr(ResearchChainRunner, 'execute', measured)
+    timed, _, _ = _run_full_chain(tmp_path / 'timed')
+    assert plain.result_manifest == timed.result_manifest
+    record = json.loads(attempts[0].path.read_text())
+    assert record['status'] == 'passed'
+    covered_stages = {item['stage'] for item in record['stages']}
+    assert set(STAGES) <= covered_stages
+    assert {'qlib_export/feature_files', 'qlib_export/file_inventory',
+            'qlib_export/review_binding', 'qlib_export/prepublish_readback',
+            'qlib_export/durable_publish', 'qlib_export/owner_readback',
+            'qlib_export/receipt_binding', 'qlib_export/stage_publication'} <= covered_stages
+    for item in record['stages']:
+        if item['status'] == 'reused':
+            assert 'elapsed_seconds' not in item
+        else:
+            assert item['elapsed_seconds'] >= 0
+
+
+@requires_qlib
+def test_failed_real_stage_retains_measurement_and_stops_later_stages(tmp_path, monkeypatch):
+    from uq.research_chain.telemetry import RunTelemetry
+
+    real_execute = ResearchChainRunner.execute
+    attempts = []
+
+    def measured(self, plan, **kwargs):
+        with RunTelemetry(self.run_store.root, plan.request, {}) as attempt:
+            attempts.append(attempt)
+            return real_execute(self, plan, telemetry=attempt, **kwargs)
+
+    def fail(*args, **kwargs):
+        raise ContractError('measured export failure')
+
+    monkeypatch.setattr(ResearchChainRunner, 'execute', measured)
+    monkeypatch.setattr(ResearchChainRunner, '_run_export', fail)
+    with pytest.raises(ContractError, match='measured export failure'):
+        _run_full_chain(tmp_path)
+    record = json.loads(attempts[0].path.read_text())
+    assert record['status'] == 'failed'
+    assert record['stages'][-1]['stage'] == 'qlib_export'
+    assert record['stages'][-1]['status'] == 'failed'
+    assert not any(item['stage'] == 'model_training' for item in record['stages'])
+
+
+@requires_qlib
+def test_failed_qlib_receipt_binding_records_substage_and_stops_later_stages(tmp_path, monkeypatch):
+    from uq.models.qlib_export import QlibInitReceiptBuilder
+    from uq.research_chain.telemetry import RunTelemetry
+
+    real_execute = ResearchChainRunner.execute
+    attempts = []
+
+    def measured(self, plan, **kwargs):
+        with RunTelemetry(self.run_store.root, plan.request, {}) as attempt:
+            attempts.append(attempt)
+            return real_execute(self, plan, telemetry=attempt, **kwargs)
+
+    def fail_receipt(self, **kwargs):
+        raise ContractError('synthetic receipt binding failure')
+
+    monkeypatch.setattr(ResearchChainRunner, 'execute', measured)
+    monkeypatch.setattr(QlibInitReceiptBuilder, 'build', fail_receipt)
+    with pytest.raises(ContractError, match='synthetic receipt binding failure'):
+        _run_full_chain(tmp_path)
+    record = json.loads(attempts[0].path.read_text())
+    stages = {item['stage']: item for item in record['stages']}
+    assert record['status'] == 'failed'
+    assert stages['qlib_export/owner_readback']['status'] == 'passed'
+    assert stages['qlib_export/receipt_binding']['status'] == 'failed'
+    assert stages['qlib_export/receipt_binding']['error_type'] == 'ContractError'
+    assert 'qlib_export/stage_publication' not in stages
+    assert 'model_training' not in stages

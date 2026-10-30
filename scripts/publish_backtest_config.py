@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the `backtest_config.v1` artifact a research request binds.
+"""Publish a reviewed backtest config (v2 adjusted replay or v3 raw execution).
 
 `BacktestConfigStore.publish` derives the config's identity from its content and
 binds an externally signed review, but nothing assembled the content, so a real
@@ -25,6 +25,10 @@ The four bindings:
     (cr.md 8.63).  The set digest is computed from the store's own enumeration, so
     the binding names exactly the partitions the backtest will read and
     concatenate -- no merged window artifact exists to drift.
+    Version 3 instead binds raw `bars_daily/v2` partitions and a separately
+    published `backtest_execution_facts.v1` table. It requires explicit
+    participation, minimum commission and impact coefficients; industry, board,
+    lots, historical ST and daily price bands come from those pre-open facts.
   * `calendar_binding` / `suspension_binding` / `corporate_action_binding` --
     the three window-level artifacts published by
     `scripts/publish_backtest_market_data.py`.
@@ -144,16 +148,68 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--end", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--backtest-name", required=True)
+    parser.add_argument("--contract-version", type=int, choices=(2, 3), default=2)
     parser.add_argument("--commission-bps", type=float, default=2.5)
     parser.add_argument("--stamp-duty-bps", type=float, default=5.0)
     parser.add_argument("--slippage-bps", type=float, default=1.0)
     parser.add_argument("--volume-participation-cap", type=float, default=None)
-    parser.add_argument("--limit-ratio", type=float, default=0.1)
+    parser.add_argument("--limit-ratio", type=float, default=None, help="v2 only; defaults to 0.1")
+    parser.add_argument("--execution-facts-generation", help="v3: published pre-open execution facts")
+    parser.add_argument("--minimum-commission-cny", type=float)
+    parser.add_argument("--impact-type", choices=("linear", "square_root"), default="square_root")
+    parser.add_argument("--impact-coefficient-bps", type=float)
+    parser.add_argument("--impact-maximum-bps", type=float)
+    parser.add_argument("--fill-rate-multiplier", type=float, default=1.0)
+    parser.add_argument("--rebalance-every-n-sessions", type=int, default=1)
+    parser.add_argument("--max-single-weight", type=float, default=1.0)
+    parser.add_argument("--max-industry-weight", type=float)
+    parser.add_argument("--max-turnover", type=float)
+    parser.add_argument("--cash-reserve", type=float, default=0.0)
+    parser.add_argument("--max-drawdown-stop", type=float,
+                        help="v3: latch a cash-exit circuit breaker at this drawdown from peak NAV")
+    parser.add_argument("--volatility-target-annualized", type=float,
+                        help="v3: one-sided annualized realized-volatility target")
+    parser.add_argument("--volatility-lookback-sessions", type=int,
+                        help="v3: trailing sessions used to estimate realized volatility")
+    parser.add_argument("--volatility-min-history-sessions", type=int,
+                        help="v3: minimum trailing returns before volatility scaling starts")
     parser.add_argument("--initial-capital", type=float, default=1_000_000.0)
     parser.add_argument("--quality-decisions-json", type=Path, required=True,
                         help="externally signed decisions; the script never signs its own review")
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
+    if args.start > args.end:
+        parser.error("--start must not follow --end")
+    if args.contract_version == 3:
+        for name in ("execution_facts_generation", "volume_participation_cap", "minimum_commission_cny",
+                     "impact_coefficient_bps", "impact_maximum_bps"):
+            if getattr(args, name) is None:
+                parser.error("v3 requires --" + name.replace("_", "-"))
+        if args.limit_ratio is not None:
+            parser.error("v3 uses published price bands; --limit-ratio is v2 only")
+        if args.slippage_bps + args.impact_maximum_bps >= 10000:
+            parser.error("slippage plus maximum impact must remain below 10000 bps")
+        if args.max_drawdown_stop is not None and not 0 < args.max_drawdown_stop <= 0.95:
+            parser.error("--max-drawdown-stop must be in (0, 0.95]")
+        if args.volatility_target_annualized is not None:
+            if args.volatility_lookback_sessions is None or args.volatility_min_history_sessions is None:
+                parser.error("a volatility target requires both lookback and minimum-history session counts")
+            if not 0 < args.volatility_target_annualized <= 5:
+                parser.error("--volatility-target-annualized must be in (0, 5]")
+            if not 2 <= args.volatility_min_history_sessions <= args.volatility_lookback_sessions <= 756:
+                parser.error("volatility session counts must satisfy 2 <= min-history <= lookback <= 756")
+        elif args.volatility_lookback_sessions is not None or args.volatility_min_history_sessions is not None:
+            parser.error("volatility session counts require --volatility-target-annualized")
+    elif any(value is not None for value in (args.execution_facts_generation, args.minimum_commission_cny,
+                                             args.impact_coefficient_bps, args.impact_maximum_bps,
+                                             args.max_industry_weight, args.max_turnover,
+                                             args.max_drawdown_stop, args.volatility_target_annualized,
+                                             args.volatility_lookback_sessions,
+                                             args.volatility_min_history_sessions)) or (
+        args.fill_rate_multiplier != 1 or args.rebalance_every_n_sessions != 1
+        or args.max_single_weight != 1 or args.cash_reserve != 0
+    ):
+        parser.error("execution facts, extended costs and risk constraints require v3")
 
     market = _market_bindings(args.market_inputs)
 
@@ -162,18 +218,32 @@ def main(argv: list[str] | None = None) -> int:
     # Reading the frame through its store re-verifies the parquet bytes against the
     # manifest's checksum, so a name that does not resolve -- or a partition whose
     # bytes drifted -- is refused here rather than baked into the config.
-    price_store = AdjustedPriceDatasetStore(args.data_root)
-    price_triples = price_store.list_partitions_in_window(args.start, args.end)
-    if not price_triples:
-        raise SystemExit(
-            f"no published adjusted-v2 partitions in {args.start}..{args.end}; "
-            "run scripts/publish_adjusted_window.py first"
+    if args.contract_version == 3:
+        from uq.backtest.execution_facts import ExecutionFactsStore, RawExecutionPriceStore, facts_binding
+
+        price_source_binding, price_frame = RawExecutionPriceStore(args.data_root).read_window(
+            args.start.isoformat(), args.end.isoformat(),
         )
+        fact_manifest, fact_frame = ExecutionFactsStore(args.data_root).read(args.execution_facts_generation)
+        execution_facts_binding = facts_binding(fact_manifest)
+    else:
+        price_store = AdjustedPriceDatasetStore(args.data_root)
+        price_triples = price_store.list_partitions_in_window(args.start, args.end)
+        if not price_triples:
+            raise SystemExit(
+                f"no published adjusted-v2 partitions in {args.start}..{args.end}; "
+                "run scripts/publish_adjusted_window.py first"
+            )
+        price_frame = price_store.read_partition_frames(price_triples)
+        price_source_binding = {
+            "family": "bars_adjusted_adjusted_v2",
+            "window_start": args.start.isoformat(), "window_end": args.end.isoformat(),
+            "set_digest_sha256": set_digest_sha256(price_triples), "member_count": len(price_triples),
+        }
     # cr.md 8.62: the backtest derives its calendar from the price panel and asserts
     # `set(price_dates) == set(calendar_dates)`, so a binding that does not cover the
     # whole window fails at the backtest stage with a message that names neither the
     # window nor the binding.  Refuse here, where the operator can still fix it.
-    price_frame = price_store.read_partition_frames(price_triples)
     import pandas as pd
 
     session_column = "session_date" if "session_date" in price_frame.columns else "datetime"
@@ -188,13 +258,6 @@ def main(argv: list[str] | None = None) -> int:
             "adjusted price frame covers sessions outside the requested window: "
             + ", ".join(outside[:5])
         )
-    price_source_binding = {
-        "family": "bars_adjusted_adjusted_v2",
-        "window_start": args.start.isoformat(),
-        "window_end": args.end.isoformat(),
-        "set_digest_sha256": set_digest_sha256(price_triples),
-        "member_count": len(price_triples),
-    }
 
     market_store = BacktestMarketDatasetStore(args.data_root)
     for name, dataset_type in (
@@ -208,13 +271,20 @@ def main(argv: list[str] | None = None) -> int:
         # Reading through the store re-verifies the bytes against the manifest,
         # so a market-inputs report that does not match the store is refused here
         # rather than being baked into the config.
-        market_store.read_frame(generation, checksum, dataset_type=dataset_type)
+        market_frame = market_store.read_frame(generation, checksum, dataset_type=dataset_type)
+        if dataset_type == "calendar" and args.contract_version == 3:
+            calendar_dates = sorted(pd.to_datetime(market_frame["date"]).dt.strftime("%Y-%m-%d").tolist())
+            if (calendar_dates != price_dates or price_dates[0] != args.start.isoformat()
+                    or price_dates[-1] != args.end.isoformat()):
+                raise ContractError("v3 raw prices must exactly cover the governed calendar/window")
+            if sorted(fact_frame["date"].unique().tolist()) != calendar_dates:
+                raise ContractError("v3 execution facts must exactly cover the governed calendar")
 
     manifest = {
         # cr.md 8.63: v2 names the window's partition set instead of one
         # partition, because the per-session line's invariants are between
         # adjacent partitions and must not be merged away.
-        "contract_version": 2,
+        "contract_version": args.contract_version,
         "schema_version": "1.0.0",
         "backtest_name": args.backtest_name,
         "start_date": args.start.isoformat(),
@@ -234,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
             "slippage_bps": args.slippage_bps,
         },
         "limit_rules": {
-            "limit_ratio": args.limit_ratio,
+            "limit_ratio": .1 if args.limit_ratio is None else args.limit_ratio,
             "prev_close_source": "raw_prev_close",
             "adjustment_basis": "raw",
         },
@@ -261,6 +331,33 @@ def main(argv: list[str] | None = None) -> int:
             "data_checksum_sha256": market["suspension_binding"]["data_checksum_sha256"],
         },
     }
+    if args.contract_version == 3:
+        manifest["execution_model"] = {
+            "type": "daily_t1_open", "sellable_quantity_rule": "prior_day_holding_only",
+            "lot_rule_source": "execution_facts", "volume_participation_cap": args.volume_participation_cap,
+            "fill_rate_multiplier": args.fill_rate_multiplier,
+            "rebalance_every_n_sessions": args.rebalance_every_n_sessions,
+        }
+        manifest["cost_model"].update({
+            "minimum_commission_cny": args.minimum_commission_cny,
+            "commission_basis": "executed_notional", "fee_rounding": "half_up_cent",
+            "impact_model": {"type": args.impact_type, "coefficient_bps": args.impact_coefficient_bps,
+                             "maximum_bps": args.impact_maximum_bps},
+        })
+        manifest["limit_rules"] = {"type": "published_daily_price_bands", "price_basis": "raw_unadjusted_cny"}
+        manifest["execution_facts_binding"] = execution_facts_binding
+        manifest["risk_constraints"] = {
+            "max_single_weight": args.max_single_weight, "max_industry_weight": args.max_industry_weight,
+            "max_turnover": args.max_turnover, "cash_reserve": args.cash_reserve,
+        }
+        if args.max_drawdown_stop is not None:
+            manifest["risk_constraints"]["max_drawdown_stop"] = args.max_drawdown_stop
+        if args.volatility_target_annualized is not None:
+            manifest["risk_constraints"]["volatility_target"] = {
+                "target_annualized": args.volatility_target_annualized,
+                "lookback_sessions": args.volatility_lookback_sessions,
+                "min_history_sessions": args.volatility_min_history_sessions,
+            }
     published = BacktestConfigStore(args.data_root).publish(
         manifest,
         quality_decision=_load_decision(

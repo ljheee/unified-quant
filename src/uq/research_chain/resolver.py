@@ -58,7 +58,7 @@ _EXPECTED_STAGE_PLAN_SHA256 = research_stage_plan_sha256()
 def stage_plan_for_request(request: Mapping[str, Any]) -> tuple[str, ...]:
     """Return the reviewed stage order for the request contract version.
 
-    V3, V4 and V5 all insert ``paper_execution`` before ``result_reconciliation``
+    V3 through V8 insert ``paper_execution`` before ``result_reconciliation``
     (their normative plans are identical), so both must map to the V3 order:
     the previous ``== 3`` test silently gave V4 the released V1 order, which
     would have numbered the paper stage as ``result_reconciliation`` the moment
@@ -70,7 +70,7 @@ def stage_plan_for_request(request: Mapping[str, Any]) -> tuple[str, ...]:
     version = request.get("contract_version", 1)
     if version in {1, 2}:
         return tuple(_STAGE_PLAN)
-    if version in {3, 4, 5, 6}:
+    if version in {3, 4, 5, 6, 7, 8}:
         return tuple(_STAGE_PLAN_V3)
     raise ContractError(f"unsupported research request contract version: {version!r}")
 _DEFAULT_STAGE_PLAN = tuple(_STAGE_PLAN)
@@ -156,7 +156,7 @@ class ResearchChainRequestResolver:
             candidate = dict(request)
             request_schema = research_request_schema_name(candidate)
             ModelContractLoader.validate(request_schema, candidate)
-            if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "research_run_request_v6"}:
+            if request_schema in {"research_run_request_v2", "research_run_request_v3", "research_run_request_v4", "research_run_request_v5", "research_run_request_v6", "research_run_request_v7", "research_run_request_v8"}:
                 verify_stage_plan_review(
                     candidate["stage_plan_review"],
                     stage_plan_sha256=candidate["stage_plan_sha256"],
@@ -288,7 +288,7 @@ class ResearchChainRequestResolver:
                 ),
             ))
 
-        if request_schema == "research_run_request_v6":
+        if request_schema in {"research_run_request_v6", "research_run_request_v7", "research_run_request_v8"}:
             sample_binding = candidate["sample_construction_binding"]
             if sample_binding.get("family") not in {None, "sample_construction"}:
                 raise ResearchResolutionError(
@@ -338,6 +338,9 @@ class ResearchChainRequestResolver:
             ))
 
         self._verify_contract_version_inputs(request_schema, candidate)
+        if request_schema == "research_run_request_v8":
+            self._verify_v8_risk_returns(candidate)
+            self._verify_v8_industry_binding(candidate)
 
         execution_plan = {
             "schema_version": "v1",
@@ -372,10 +375,118 @@ class ResearchChainRequestResolver:
         to their owning stores exactly as v4 does; a v5 run must not skip the PIT
         membership check merely because its paper bindings resolve first.
         """
-        if request_schema in {"research_run_request_v4", "research_run_request_v5", "research_run_request_v6"}:
+        if request_schema in {"research_run_request_v4", "research_run_request_v5", "research_run_request_v6", "research_run_request_v7", "research_run_request_v8"}:
             self._verify_v4_input_sets(candidate)
-        if request_schema in {"research_run_request_v5", "research_run_request_v6"}:
+        if request_schema in {"research_run_request_v5", "research_run_request_v6", "research_run_request_v7", "research_run_request_v8"}:
             self._verify_v5_paper_bindings(candidate)
+
+    def _verify_v8_risk_returns(self, candidate: dict[str, Any]) -> None:
+        """Resolve v3 portfolio risk returns and require prior-window coverage."""
+        template = candidate["portfolio_definition_template"]
+        if template.get("weight_scheme") != "risk_parity":
+            if template.get("risk_model_binding") is not None:
+                raise ResearchResolutionError(
+                    "lineage_mismatch", "non-risk-parity portfolio must not bind risk returns"
+                )
+            return
+        binding = template.get("risk_model_binding")
+        if not isinstance(binding, dict) or binding.get("family") != "portfolio_risk_returns_v1":
+            raise ResearchResolutionError(
+                "input_unresolved", "risk-parity portfolio requires a governed risk-returns binding"
+            )
+        store = self.stores_by_output_family.get("portfolio_risk_returns")
+        if store is None:
+            raise ResearchResolutionError(
+                "request_invalid", "no owning store is registered for portfolio_risk_returns"
+            )
+        try:
+            manifest, _ = store.read(binding["generation_id"])
+        except ContractError as exc:
+            detail = str(exc)
+            reason = "input_tampered" if ("tampered" in detail or "identity mismatch" in detail) else "input_unresolved"
+            raise ResearchResolutionError(reason, detail) from exc
+        if manifest.get("manifest_digest_sha256") != binding.get("manifest_digest_sha256"):
+            raise ResearchResolutionError(
+                "input_tampered", "portfolio risk-returns manifest digest mismatch"
+            )
+        sessions = manifest.get("calendar_sessions", [])
+        lookback = template.get("scheme_parameters", {}).get("lookback_sessions")
+        start = candidate["window_start_date"]
+        end = candidate["window_end_date"]
+        before_start = [session for session in sessions if session < start]
+        within_window = [session for session in sessions if start <= session <= end]
+        if len(before_start) < lookback or not within_window or sessions[-1] < end:
+            raise ResearchResolutionError(
+                "input_unresolved",
+                "portfolio risk returns calendar lacks the full prior lookback and research window",
+            )
+        if (manifest.get("observation_visibility") != "available_after_session_close"
+                or manifest.get("strict_prior_session_policy") is not True):
+            raise ResearchResolutionError(
+                "lineage_mismatch", "portfolio risk returns do not enforce prior-session visibility"
+            )
+
+    def _verify_v8_industry_binding(self, candidate: dict[str, Any]) -> None:
+        """Bind industry caps/neutral weights to the backtest's PIT execution facts."""
+        template = candidate["portfolio_definition_template"]
+        constraints = template.get("constraints", {})
+        industry_cap = constraints.get("max_industry_weight")
+        required = template.get("weight_scheme") == "industry_neutral" or (
+            industry_cap is not None and industry_cap < 1.0
+        )
+        binding = template.get("industry_source_binding")
+        if binding is None:
+            if required:
+                raise ResearchResolutionError(
+                    "input_unresolved", "industry-aware portfolio requires a point-in-time industry binding"
+                )
+            return
+        if (binding.get("source_type") != "governed_execution_facts"
+                or binding.get("industry_column") != "industry"):
+            raise ResearchResolutionError(
+                "lineage_mismatch", "portfolio industry binding must use the governed industry facts column"
+            )
+        config_store = self.stores_by_output_family.get("backtest_config")
+        if config_store is None:
+            raise ResearchResolutionError(
+                "request_invalid", "industry-aware portfolio has no backtest config store"
+            )
+        config_binding = candidate["backtest_config_binding"]
+        try:
+            config_manifest = config_store.read_manifest(config_binding["generation_id"])
+        except ContractError as exc:
+            raise ResearchResolutionError("input_unresolved", str(exc)) from exc
+        facts_binding = config_manifest.get("execution_facts_binding")
+        if (not isinstance(facts_binding, dict)
+                or facts_binding.get("generation_id") != binding.get("manifest_generation_id")):
+            raise ResearchResolutionError(
+                "lineage_mismatch", "portfolio industry facts differ from the reviewed backtest config"
+            )
+        try:
+            from ..backtest.execution_facts import ExecutionFactsStore, facts_binding as facts_manifest_binding
+
+            facts_manifest, facts_frame = ExecutionFactsStore(config_store.root).read(
+                facts_binding["generation_id"]
+            )
+        except ContractError as exc:
+            reason = "input_tampered" if ("tampered" in str(exc) or "identity mismatch" in str(exc)) else "input_unresolved"
+            raise ResearchResolutionError(reason, str(exc)) from exc
+        if facts_manifest_binding(facts_manifest) != facts_binding:
+            raise ResearchResolutionError(
+                "input_tampered", "execution-facts manifest binding mismatch"
+            )
+        if (facts_manifest["window_start"] > candidate["window_start_date"]
+                or facts_manifest["window_end"] < candidate["window_end_date"]):
+            raise ResearchResolutionError(
+                "input_unresolved", "execution facts do not cover the portfolio research window"
+            )
+        window_facts = facts_frame.loc[
+            facts_frame["date"].between(candidate["window_start_date"], candidate["window_end_date"])
+        ]
+        if window_facts.empty or window_facts["industry"].notna().sum() == 0:
+            raise ResearchResolutionError(
+                "input_unresolved", "execution facts have no point-in-time industry labels in the request window"
+            )
 
     def _verify_v5_paper_bindings(self, candidate: dict[str, Any]) -> None:
         """Resolve template-v2 paper bindings against the published market-data store.
@@ -391,7 +502,7 @@ class ResearchChainRequestResolver:
         if not self.market_dataset_store:
             raise ResearchResolutionError(
                 "request_invalid",
-                "v5/v6 request requires a market_dataset_store for paper input resolution",
+                "v5-v8 request requires a market_dataset_store for paper input resolution",
             )
         _PAPER_BINDING_FAMILIES = {
             "market_data_binding": "bars_daily_v2",
@@ -448,11 +559,11 @@ class ResearchChainRequestResolver:
 
 
     def _verify_v4_input_sets(self, request: dict[str, Any]) -> None:
-        """Bind a v4/v5/v6 request to the PIT membership and factor partition sets."""
+        """Bind a v4-v8 request to the PIT membership and factor partition sets."""
         if self.membership_store is None or self.trading_calendar is None:
             raise ResearchResolutionError(
                 "request_invalid",
-                "v4/v5/v6 requests require an index membership store and a governed trading calendar",
+                "v4-v8 requests require an index membership store and a governed trading calendar",
             )
         factor_store = self.stores_by_output_family.get("factor_partition")
         if factor_store is None:

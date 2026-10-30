@@ -1,0 +1,906 @@
+{
+  "archive_checksum_sha256": "69ec8d86aee7539ffc9ce83176def1c9ac0b12c082f35112cbdd4668b8badc48",
+  "backtest_config": {
+    "backtest_name": "research-baseline",
+    "calendar_binding": {
+      "checksum_sha256": "872782d7604f162338c5be073f672ea7b52e1af01b537c1e6763c54906a3f617",
+      "generation_id": "fa9686c614a2123d3e035f479074101216f5914b2111874d68a596a51dcb2a7d"
+    },
+    "contract_version": 2,
+    "corporate_action_binding": {
+      "data_checksum_sha256": "c21b8815c620b18017b0edb786e23f54aa99a96e01cd92aa46df705e4898e6f1",
+      "dataset_generation_id": "8c64b241e4ecb216ee7ad1b9d0531eb5bd8fa8acac01a178014675fd4e16d566"
+    },
+    "cost_model": {
+      "commission_bps": 2.5,
+      "slippage_bps": 1.0,
+      "stamp_duty_bps": 5.0
+    },
+    "created_at": "1970-01-01T00:00:00+00:00",
+    "end_date": "2025-12-31",
+    "execution_model": {
+      "board_lot": 100,
+      "sellable_quantity_rule": "prior_day_holding_only",
+      "type": "daily_t1_open"
+    },
+    "generation_id": "c67a48fd0e2be52fc15f675980516a77f3af9c21dc7890665db113eda5f01ba5",
+    "initial_capital": 1000000.0,
+    "limit_rules": {
+      "adjustment_basis": "raw",
+      "limit_ratio": 0.1,
+      "prev_close_source": "raw_prev_close"
+    },
+    "manifest_digest_sha256": "b15887b6d17dc46243cd400fd1ab5b242078d96c42e189f597bf7a020f015b56",
+    "price_source_binding": {
+      "family": "bars_adjusted_adjusted_v2",
+      "member_count": 160,
+      "set_digest_sha256": "2f18f34b3b5e2020312bfafb6c83cfba999e3a9fffc12e1e2eda985ab592a712",
+      "window_end": "2025-12-31",
+      "window_start": "2025-05-13"
+    },
+    "quality_report_checksum_sha256": "b441d4a2bc26d9608f3d64d50d17c42b26c0d4abdb13b1291cb8bb1640eca4d9",
+    "run_id": "00000000-0000-4000-8000-000000000000",
+    "schema_version": "1.0.0",
+    "start_date": "2025-05-13",
+    "suspension_binding": {
+      "data_checksum_sha256": "f5ab0424d6fa422c5d48e4f657d0ed88707baa0ac1cbd7d0a2aceab7692528c7",
+      "dataset_generation_id": "7e1740c0253092c193c7919a2577bcd3ced5d7870237c89f88391ad86d505787"
+    },
+    "universe_binding": {
+      "snapshot_generation_id": "ec49a3722d6dead6ae03572035c888796c2353e4a008b760e5a9d45768cab841"
+    }
+  },
+  "backtest_result": {
+    "artifact_descriptors": {
+      "daily_metrics_artifact": {
+        "checksum_sha256": "b66a130f958f70b4b2f07777c9d828854ee58f6831a840c3c019f84326a81011",
+        "columns": [
+          "date",
+          "daily_return",
+          "executed_turnover",
+          "cash_ratio"
+        ],
+        "dtypes": {
+          "cash_ratio": "float64",
+          "daily_return": "float64",
+          "date": "object",
+          "executed_turnover": "float64"
+        },
+        "file": "daily_metrics.parquet",
+        "row_count": 160,
+        "serialization_profile_id": "parquet-v1"
+      },
+      "equity_curve_artifact": {
+        "checksum_sha256": "229414af8a8f9a04e0f594943435e853a99483007d331beea0abe0e56fd875f7",
+        "columns": [
+          "date",
+          "portfolio_value",
+          "cash",
+          "holdings_value"
+        ],
+        "dtypes": {
+          "cash": "float64",
+          "date": "object",
+          "holdings_value": "float64",
+          "portfolio_value": "float64"
+        },
+        "file": "equity_curve.parquet",
+        "row_count": 160,
+        "serialization_profile_id": "parquet-v1"
+      },
+      "fills_artifact": {
+        "checksum_sha256": "a318982d368b48b3edc554dae2c98745015f3b81e13e4ab98c371ec902b927cc",
+        "columns": [
+          "date",
+          "instrument",
+          "side",
+          "target_shares",
+          "filled_shares",
+          "gross_execution_price",
+          "net_execution_price",
+          "commission_fee",
+          "stamp_duty_fee",
+          "status"
+        ],
+        "dtypes": {
+          "commission_fee": "float64",
+          "date": "object",
+          "filled_shares": "int64",
+          "gross_execution_price": "float64",
+          "instrument": "object",
+          "net_execution_price": "float64",
+          "side": "object",
+          "stamp_duty_fee": "float64",
+          "status": "object",
+          "target_shares": "int64"
+        },
+        "file": "fills.parquet",
+        "row_count": 250,
+        "serialization_profile_id": "parquet-v1"
+      }
+    },
+    "decision_dates": [
+      "2025-12-10",
+      "2025-12-11",
+      "2025-12-12",
+      "2025-12-15",
+      "2025-12-16",
+      "2025-12-17",
+      "2025-12-18",
+      "2025-12-19",
+      "2025-12-22",
+      "2025-12-23",
+      "2025-12-24"
+    ],
+    "generation_id": "906320b9b6eb10621c16b83bb718142b352335cbf45c4187f25714c3ca28d7c2",
+    "manifest_digest_sha256": "160f06888ad6eb56861d33324cfa53aee446db0fb61cef7307ab3dd040dde650",
+    "summary_metrics": {
+      "annualized_return": -0.0445269071,
+      "annualized_volatility": 0.0692049316,
+      "avg_daily_turnover": 0.03187808,
+      "cumulative_return": -0.0285056192,
+      "max_drawdown": 0.07426166,
+      "sharpe_ratio": -0.623365,
+      "win_rate": 0.04375
+    }
+  },
+  "baseline_id": "full-a-2025-alpha158-linear-11d-v1",
+  "collection": {
+    "date": "2026-10-29",
+    "verification": "read-only manifest/store readback; no training or live vendor calls",
+    "worktree_base_head": "2d713260eef73d595bf75bb1bd06899a8929dad1"
+  },
+  "data_root": "data/root-2025",
+  "dataset": {
+    "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+    "contract_version": 1,
+    "created_at": "1970-01-01T00:00:00+00:00",
+    "data_checksum_sha256": "221a3102bd3997339dc97207b07bebaa6552eedf5b473213d580a0579037aba5",
+    "dataset_name": "research_baseline",
+    "factor_generation_ids": [
+      "7ed78665f4b835ef62e4e044861b8bc58952790035dde7116b0ba7c18b8cf9a3",
+      "d1f340798ad5a0b7258bf2e9d3a73ea7ee624c91a55779e96b5121ef07f389b8",
+      "0f2361a49cf697a6d54e5139280074a0e96741fc362e7a62083f964de2a338c0",
+      "a54ea6bc87d4b2e2e72a674a8d07945962abf2d9e6886bfa45e8cfff7395cbc9",
+      "9596cddb3679d224e7e1a47f93974fcecc0a3ee8af9681176b5c569be29775bf",
+      "5739288617406541ea96eb5568aa39fb154150ac078dc90f8bb231b617c78d30",
+      "2756495e4d4a12c38aab6a8fdd7c7ac4e098fefd333c414dabb1530e9b5a77cb",
+      "af57c792b09670127cf62cca086a1b35009e14bd8c295d755ca26d68f7d91e19",
+      "504a00b64394dd402decebf5d84ccbc4de764388ca7de157ac9936323e1b92db",
+      "4af0a22d99464ab58f3b7d00ce7aa795c75ec0ef2e4de90d22fb1ca91e28e00f",
+      "720f5935a10b3a179e721d90613425a8dbabd7be9f129c0d8b8a59811f41ebda",
+      "677c6015e0d0663bd65438108cf94b0bf52463d2d0a28522c14cf0fba7cd8301",
+      "8935f7380eb13fa307d41310c8aa9eddef0a339cf94f69375a4ad9bb0f786004",
+      "553d3a0eeda6163b6d7084a786072ba706c38cf5e94449ab71355284296e2125",
+      "fc6095633ae6e82e05fd4a6fc41967486285cda28ad53f61aa33578f02ebdf02",
+      "c1434f6c78adc90413ec1c53eefc0ad93ef879c65cd0fe48889d198fb0bb2986",
+      "f668533327e5e958e8444eee4f40de0e082ea7458ebbe50ef601b2d1865e536e",
+      "072b363afc7ddd5fa498da20536d4f3c1a009fa9a4c622ea81ddd865b2842f0a",
+      "3caae980824cad7427df38f1e808ae90dbf58a3878b1ab7a8a48a2a784983850",
+      "28c798dafa2fec42d256dd1bb3c37095e971dc84a9276e96f6c12427014114a1",
+      "d8fdbc4e69a2392e8d441446cd579c82e6b80a857d1efc5372915896bfdc3221",
+      "cdd0317a60fcd55c1a3d02af235fd6a68d3a1eef56dde0ec88b7950cf49ed098",
+      "0bebbe6f95e1be34d16e0f89708fdbfca49e4ba42ba0fe9058e7fc476110d7ca",
+      "a5246498fc558016c89253e31799c0f68ce4609ec03ce7e5562d3e4e37b4964e",
+      "54752f0e4aacc7ff6384b185a37ab8c8ca7f60c6fd2b0976484cda7d796baad2",
+      "a7a0e057785d7a48dc0f6d078521231d681b4a50a53803c5c12631a4b9d7c6d4",
+      "24b6687c85883c1834396ac2b839aa4b9fa8b10a663a36f43a14262ba6a62571",
+      "23f53c906eef416da2162700f1c791c35e7cff807b02c22c178aa56aa996ac73",
+      "d98073049b5d4bb9354d634c3feabb7c63644514cc62a32b71ac974ceddebc16",
+      "0f0cb4f4bb978c6df5bb91a318f16c69a6aaf47ae3731461d1b5b89644298622",
+      "7434091bd7e9f996f7ca5e42ff4b487adfc226bf4038099440d6489a8b932afb",
+      "be0351077f6e3fc80ca463c9e4386a49e3398bc5b0e243438fbcf93774ed8614",
+      "28dd09c5813ca14237a71b61f643c1d235932faae275b7a634a871820123fe1a",
+      "40fc83d1a7d78be3cb3ecb3645e42b97e439dbc286c68990a6a6ef4b7ed564e8",
+      "63ba449f3d9e7b5489ea4f33eb107e7bcf4d828ffe9d17679fe746dfd8829a01",
+      "42774572c3870a3778c364f04b3f4689b0be83997a0392e32adeee9903a2142c",
+      "04ba364fb3f0053e7e37c9d7aa2a3a8728cc45cfc8014ea982b75a80bb355e58",
+      "b221c3faa21c5ebaaa534c427337ad582046d546bc8e3fd9ce93682db9e9fc75",
+      "43ade4038c0fab8bd85fafb1d9d872ed57fafd316d74b83791819671b23ecdcc",
+      "33e11da98a7688e2e353ade1aa7e8e98a08174968c238c38ff8070bf73f3c872",
+      "5bb23cbd1d1d2f7cea56cf81b337f7bdd18e7d2f54eaa5f7eec7000f7b615336",
+      "b006360f743c750e3613d1783227e3b3f175bff72f8d93b2e4fe229c52f816ec",
+      "6167395e724e6dec511e9d33caaee23e85fb85f223d5616325049143eb9734ac",
+      "f0e34a44589e7bda0f69f51694dac7bf932ea43b07791a82e68aafb19c017957",
+      "3ca85aab7206ab7b77cda8a960d13de262b096536321a88520b30747bcb502e7",
+      "8e25e80f935c7d55818737abbd151b6b866f225472dfa72ab0ab1874e23318e7",
+      "582edcc60e638b93c060c3c2402c47b2bbe316d64c30638592b115fde93f8ec7",
+      "3cb0f82c397267d0237cedfd9dfa2510235cd3235d66f956c6cae439393cd061",
+      "6062bbc364a933a5fa29e9933b07ba4de9eeb7afee6dfedc7eaa3815e4f274e6",
+      "7b20671a5f5ca204ba4cc03ca3c5e8dad28fac73113514e6a0e7e4b92ba6b2ce",
+      "22b588c2ee8667ac3db49735d28dd2f98a6b6a01763b2314bf27201a9337ab22",
+      "a8d7ee6e0d70953f69eb42cee0427b00f83e3f86c76cae917490b3381eba67e0",
+      "aa9dcce47cc1e3805e6abe5d38f313b260e9177f9230582a6a8eec06cbf393e8",
+      "5378048cc1f269d6503eecfeb9de051487bceef3491984dbe43a24e9828e3df9",
+      "776b2a9334c70816026539f6339a75f3615ca7d31bbca27f579d3d5101db3738",
+      "7cb9ff51a25caebbedab89f818ba552bdfe7de5d636128ad17830d98dd8b43f5",
+      "b7a6a40f05320f7986b7673641254533877f4a0684da63a77a36ea023e3f085f",
+      "351dbff8f27b155615798edcc2f2b11a9d0bff28cc69dc8f1c4c724a1629cf17",
+      "27e0ce916703de8f6f7074864be526707f1b137135129a40fe1371e162a739a2",
+      "b3dec00c0b9fcc4f7774646ad697f51ab3ac27a4b6c857abad3d431b678dbf22",
+      "406fbbcea4ed9a2fbbc3cc8abe2d78c69b1f388e3272877ca142d25e04e674c8",
+      "8366eff44eb5e4b8d347fff0024d63cfe9dff88ad987d22e053acfb0d1ea0ba9",
+      "a7826212bed0c7ca221808c80edc921804218b734251051b4fd3724910304028",
+      "294fc44ee24ae41ab2ed4c2695a3aa602338b3d936e121c7587549fe4bfc22b3",
+      "ec4a86922531563c7654b658444d0b5e8d8b38d740d7cae162715e410d9fe73c",
+      "8eb3e6e40f82547124e947e86df43ec8bc76a23bdb4015ca5650159449e86b79",
+      "fd9708e32ccaecba2ffac3fde3a3e88fe70afae24ef09d479a2473e92eef5189",
+      "79ec68abb33ae23fd16d33182f5a31196cbc8cfb4637a9b339df3e1e3123a33f",
+      "7336018f7a69c42da6a72a6e67382fcc09d06cd01a63d7e9b7aadb8dfe960b1e",
+      "672d3f84885a2a24da710676b889bda31cde87aad177d9b2213294c009174a3d",
+      "d25d525d98eb55e753894d252333a29f1c48bbe5b7cb4090446eb99aa3c27f5b",
+      "f696dfc1a7d6c82e52ae62ca092d920e1e946ab8383a1e60479d4c99482d9c11",
+      "ebd713a2ab786d2b31b1cfe03aa1ebbad2280d8b70f0e1667cc79b711e4e899f",
+      "cce88433ef26634540f81d6b52978a5deb46b428961d643209ff4e6cbc3eb4a7",
+      "fed109021cc6b72b945367973f36c63e4a346be6b409bcf4670fcedca0fb0884",
+      "8ec53133193da0abf2480c2a028efbf1137ee8056c0e77639f3886bace285ecc",
+      "e714c0948e94b88aebdafc9d5dd56c2a9f17d8e1e88df44791aef81631743bc1",
+      "5c5599a86449a41c56b377a2bd0f50a35669e0241a3c74550ba1f7106e701c79",
+      "c37a347a7bd94ea15d1fff7326de98e62e5abe4501d58a890f86dd09f2126703",
+      "910c4b7ce07b20fe5faf9e75c1eddf7244f1be638cc3f09ab38752c2d9371885",
+      "d0619c2120b51809e8a3ee1c9cbbc5f0666b30ae1cb5be8b3e9bb6812e180522",
+      "0edaa110c3172a5e22816dbea9f4a3dfd5974e3194e8c0e47f19342a9ca49863",
+      "48ffda78f06a00243f4125aa5f7371fb7c573d84dc9806449144112db0f12a85",
+      "eb4576563a22e0287780d6f52d448393cd1d1e1d7ff26e8faef60677d52495e8",
+      "0200c0b9083679ea034bf57766195ed3d5cd6520d2915574903b137f22056552",
+      "e2597e6586fcab30f75ccb1452265ef163597cbf8f9c9b65af6010a96c3f0bdb",
+      "53f2a9a2db1b96e6b25084be1d956d88ac02d3dc0c3c1119ebcb2a15798d486f",
+      "b18981d50f362852cfcd18bab9b45489f4abb73e3fa6b3fc5a6fd595f6f45dd5",
+      "791b460edc5fb88296be313b59c0f4f2753bdebb9dd575d53e2d67c7e04f3f5c",
+      "c81b17757e9964697cbbc8abf2e1163b662278da24182dda4cbbd888ef04f9d8",
+      "2d8c86d86b0cbb5fe167e8c67644a37984995c4f149f9ff19b8d740f484cd6a1",
+      "ad4ab9064e83e886823cd0b48207ff6317d2498ec08668b4d40bcf465896fb4f",
+      "0e5611b5b47f99bdfac0f50a0b67839760805e487363bb49cc1fc7f7b635625c",
+      "64ffdd88c33d0aff8d352170f60526729ee974b69524cf8d95168336803b94d7",
+      "0e01c69ae213f9662738771b8905f09dc30ff79e2170d05bd8fb38dd36851ad3",
+      "5ad842ab83b3302fec0bdf33c02436725c065ee9666364abb03ca291b150e49e",
+      "16455230d6497017e20859335d3217d6412ab607b46aa40c102698b2ec009da3",
+      "00fef7095691f428cfce3745861a02923812fed3e11fa4372bc5a9e02671534b",
+      "5d4a3bda50738eff750b9432f0a39a1173fed93654e335dab29587377bedc0c7",
+      "23cbf066d3f65efb5082adca92e90aaf3bac83e3d88fbf7b62707349d0c01e79",
+      "ce569a1ba58d30000a55e134ecbd82fe3cf528699681206fe97ba22a5f38c225",
+      "5bc8e72c2dbdefc6c5bcbb31bc3f59975b2de828aa0c66548140af67b07c91d4",
+      "852e263e76ae5491d5d9f33522818a7424e7bae68db5af82af24473a59323f66",
+      "95b1a3f682d79616c9e4fa20f47eb17f59f8a0a8b13881a164fb75b2f1e7a1ac",
+      "3a1ebab7049e5d91f76174556feaa08dd02556beaf7c0d7598d18d48e681378f",
+      "1d072dcf5c12b96ca0e4f8af7ba40da999bcf6d797fc99c328ea9055cd269941",
+      "c293cea818014ac79b8d5718261656f3ea82ef74e7aad420f7e7a03c3f0f3e5e",
+      "7c2517da818e896051f7088b04e13e21a5ee832009f79ed81e64d16fc72c1212",
+      "14032ac0f1265d73e340d1adda54a6b4f7a665994ff9010a67363e08a672f46b",
+      "903d3034bdd8cffb5af75ec62ff17a2812bf3b7f57e2328e27a9a187175a25b6",
+      "47287a5b687ac7d12fefc511728c8e49337a007f5b3fb5c8da3f2c6200c52a26",
+      "12f628ba2246fab246ccc96cf84621dadea6e6617b3007b4bf84071025fa98c0",
+      "cee600b2d97f5c28a62648bfedffc8092ce6fabaff1a9eeba7ad2de8c3e05d6c",
+      "0d2ff73f4fb01078d601c1b41f9fba84eb42d29617971ce6e821b65d0c2e91e9",
+      "197275dfecc6cdd6d10cb4a74563b8512910cae8791af762cfb189235d2ce7b5",
+      "58585ffad2090bbc09cf1a6fe2f1da6b2d2a3a83d9044f7c4c8c5851127b207f",
+      "e27105abbb135aef57ddf7be7302ce3d5902d051facec7518ca54ec0b29f6dd3",
+      "429d3bb22fe2f4a7f59f88901637e18c2d3ae5fda86a3d6b0a17bcc8f841ffd6",
+      "11143f79dfc250ec68039c5ac2c53990dfef2a089e62b5bf1a1f663d5bebd5ab",
+      "655c3125a5b931e7ffb5ee4b219643e726cab0b346f01864ed00c762aa5abf3a",
+      "f885457ead5e7cd156e73276bc3f7a6cf6510c1ef5503a7415dd2d792a5bb70e",
+      "87e850338996e1eed5bd89ae7e7871fb0c1bea31ad3f29025fd047e0ce123800",
+      "7f6c68824a81953f9c1ea24ec5cbb22753b1f334bf3180e6d606aff1dc03119a",
+      "fd63735f914a68f20c04be6f7cb06eb03bc37ae75e3c8a9c820b6c7adf8111f7",
+      "8e26c75e3a0bb913730796fa297f2386bb1b8529f8d8d0b56cba442396244470",
+      "e770f3b70ab4cbf3b0bff0930bae46fa1d05c70bd67334a79ff1fda4d50c29cf",
+      "149f2f2df52ec33ffa4bb6851fd54c9a252f3cc153203ec9f995f1614b7065a1",
+      "2f113f64fae66ff27e8b092140238fcaaf2fa652fe6cfde03893dcf5d3f13b72",
+      "5cff2e5e46cc99ec022383fcf36a0cbb798f62a2cde3f4d3466308b4b5d15f9f",
+      "ef6398acf7411a627401ec77bda921052faecafa4437580e25d594d9de4dab34",
+      "f22592bef396cfdcf9ba17fe40e8b0bc1b2c2541f3484cc0ff544f77c91687aa",
+      "b53bc09c1f0d6183250283b9aca086a4bda3cbe44cfd39f9d19709aa58ec2a3c",
+      "0ab2decdbe5872f5539f739257abc77af12c7c9c62b90b77921974c3554499f2",
+      "fc8ff5c22988b1c5f72ba81852de8850d9f34bbb0cb45ae23735f3f30ecdd6e3",
+      "16e378972a23d66a7cc23e6481892d6a42cce223c3c089e491ed5746e3acdd0c",
+      "ee365b8acc86d38d9463a18a4f95d1cf20f23846dd4872a5e9aa5578089a631a",
+      "0fe1a29a64e9e171f407f09520dedfca16ac326b86391202b0dfd56759002327",
+      "b27e8eec3b7646f32bd3d7c7fcbfb84f720695957f1cb1c70aee397679c01daa",
+      "5cb5a642f4a896455b0f1dc5147c94c5fc2e642126304b6d24c1363ea11abb6e",
+      "4569bc0a1a00df19048968e8646d5c0dc32e114292cf732d5a4beb5402dd90c5",
+      "fc60190315070af836ec5268a85c346c9331ca150e692959f689e6b0e2f7ecc1",
+      "7eb5164be94adc8f890010c22c97fa06646080105c67747a2772b707f8478f45",
+      "61f5d63b6a3334f8c42654302d9f8069a941cae1af5807c9a74fa506e3e14522",
+      "7c018a6f2e98d957212e90f9055378d6a4e9202610f3a30ce49437d5a23ec524",
+      "3d141cb32d436dfb406915eb0faa2dee95aedfae78adc31bbf0908a17c6b525b",
+      "eec5e85a28833ab5fa76f8d84e89d8648a9fbc8bf8a2e2c70bf64c5d6605a161",
+      "af5e0b921c84962cf2c2fc4538330e3f5b35043d2f6f8b7a28229e5ca10b5bbc",
+      "e69399cf7533c6ee59fa52076d2bbd1fc8e5573f53e9edc2d12b7b494bece6c2",
+      "5e4e2342e345fb2f25d8a4d0d3c7be448c52bda736f309f251f1eeb910516fb0",
+      "892de67d19cc2a833916c0d274d805f022953826dcb862633b1bfb7f70108120",
+      "fbedde93c5fb58ffd9977ed4b6be663675cac8f18284617ab68176ad5e11d843",
+      "d28845329e10f966b1e6bdb2178d774e05b9528b226637f1a15d949a006a0002",
+      "1838871ee6f3b99491cc08a90b651c7592ad06db237c723277a7da6964cb7ee0",
+      "852975d16ca1594111b4829fb5dc4681e1d989e3e490364026fbd9dc7eb69465",
+      "b337337a6631c3487d380f927861a69781a628c81a51038dcd61b6ae37146ebc",
+      "fca2b4d7082bbdc19e893c4c94b2671205c8606cd5356a38e27a89e75f434337",
+      "20999608e788e0471034326d9e1dbc525cb1e4294a40481c543b55c5fc4b8567",
+      "020afceb806905cb376b8e297635b97060cec0cd7526cf29c3e7acf47b56ed7d",
+      "241574466a191c968be1285963dc35be1bdfbcb377299a3ef90adbb27377b53a",
+      "cf2f36842c725b4c6d27fd02b41a1e28b60d6e676ba1cd36a0efad50ee4b0707"
+    ],
+    "factor_set": "alpha158",
+    "factor_version": "2.0.0",
+    "feature_preprocessing_generation_id": "86f6c5caf574bd36d5e2ff0ba70a55c341b1770773155206ff0fa54218e6e10a",
+    "generation_id": "08407d11acf4e98e8fb472289876cd46de793dd62c9a56a1ac3e6b7a647dc421",
+    "input_feature_schema_generation_id": "4198b4f45014b497111cd5400612281ccc94c13bd0955f63f2697c39ba45c2d6",
+    "input_feature_schema_manifest_digest_sha256": "f0635990da09f10cbd9d6830bf9b2a2acb923bde67dffd8eea4c0d97c729f41b",
+    "input_feature_schema_path": "feature_schemas/input.json",
+    "label_generation_id": "f6fa41bb476194a0971344fc6cefb0df328895ff3eb6fbb99c76316113e78534",
+    "label_set_name": "return_5d",
+    "logical_fingerprint": "091811c1d498272bdf3c604badc38445628774a4bce495e568cedb7dac8ef26e",
+    "manifest_digest_sha256": "3cb7c31a9ee4d1bffb41f5af1e4bc73ea3df3483538d3643c47ce7271a28c5e3",
+    "missing_policy": "drop_unlabeled_rows",
+    "ordered_features": [
+      "qlib_beta10",
+      "qlib_beta20",
+      "qlib_beta30",
+      "qlib_beta5",
+      "qlib_beta60",
+      "qlib_cntd10",
+      "qlib_cntd20",
+      "qlib_cntd30",
+      "qlib_cntd5",
+      "qlib_cntd60",
+      "qlib_cntn10",
+      "qlib_cntn20",
+      "qlib_cntn30",
+      "qlib_cntn5",
+      "qlib_cntn60",
+      "qlib_cntp10",
+      "qlib_cntp20",
+      "qlib_cntp30",
+      "qlib_cntp5",
+      "qlib_cntp60",
+      "qlib_cord10",
+      "qlib_cord20",
+      "qlib_cord30",
+      "qlib_cord5",
+      "qlib_cord60",
+      "qlib_corr10",
+      "qlib_corr20",
+      "qlib_corr30",
+      "qlib_corr5",
+      "qlib_corr60",
+      "qlib_high0",
+      "qlib_imax10",
+      "qlib_imax20",
+      "qlib_imax30",
+      "qlib_imax5",
+      "qlib_imax60",
+      "qlib_imin10",
+      "qlib_imin20",
+      "qlib_imin30",
+      "qlib_imin5",
+      "qlib_imin60",
+      "qlib_imxd10",
+      "qlib_imxd20",
+      "qlib_imxd30",
+      "qlib_imxd5",
+      "qlib_imxd60",
+      "qlib_klen",
+      "qlib_klow",
+      "qlib_klow2",
+      "qlib_kmid",
+      "qlib_kmid2",
+      "qlib_ksft",
+      "qlib_ksft2",
+      "qlib_kup",
+      "qlib_kup2",
+      "qlib_low0",
+      "qlib_ma10",
+      "qlib_ma20",
+      "qlib_ma30",
+      "qlib_ma5",
+      "qlib_ma60",
+      "qlib_max10",
+      "qlib_max20",
+      "qlib_max30",
+      "qlib_max5",
+      "qlib_max60",
+      "qlib_min10",
+      "qlib_min20",
+      "qlib_min30",
+      "qlib_min5",
+      "qlib_min60",
+      "qlib_open0",
+      "qlib_qtld10",
+      "qlib_qtld20",
+      "qlib_qtld30",
+      "qlib_qtld5",
+      "qlib_qtld60",
+      "qlib_qtlu10",
+      "qlib_qtlu20",
+      "qlib_qtlu30",
+      "qlib_qtlu5",
+      "qlib_qtlu60",
+      "qlib_rank10",
+      "qlib_rank20",
+      "qlib_rank30",
+      "qlib_rank5",
+      "qlib_rank60",
+      "qlib_resi10",
+      "qlib_resi20",
+      "qlib_resi30",
+      "qlib_resi5",
+      "qlib_resi60",
+      "qlib_roc10",
+      "qlib_roc20",
+      "qlib_roc30",
+      "qlib_roc5",
+      "qlib_roc60",
+      "qlib_rsqr10",
+      "qlib_rsqr20",
+      "qlib_rsqr30",
+      "qlib_rsqr5",
+      "qlib_rsqr60",
+      "qlib_rsv10",
+      "qlib_rsv20",
+      "qlib_rsv30",
+      "qlib_rsv5",
+      "qlib_rsv60",
+      "qlib_std10",
+      "qlib_std20",
+      "qlib_std30",
+      "qlib_std5",
+      "qlib_std60",
+      "qlib_sumd10",
+      "qlib_sumd20",
+      "qlib_sumd30",
+      "qlib_sumd5",
+      "qlib_sumd60",
+      "qlib_sumn10",
+      "qlib_sumn20",
+      "qlib_sumn30",
+      "qlib_sumn5",
+      "qlib_sumn60",
+      "qlib_sump10",
+      "qlib_sump20",
+      "qlib_sump30",
+      "qlib_sump5",
+      "qlib_sump60",
+      "qlib_vma10",
+      "qlib_vma20",
+      "qlib_vma30",
+      "qlib_vma5",
+      "qlib_vma60",
+      "qlib_vstd10",
+      "qlib_vstd20",
+      "qlib_vstd30",
+      "qlib_vstd5",
+      "qlib_vstd60",
+      "qlib_vsumd10",
+      "qlib_vsumd20",
+      "qlib_vsumd30",
+      "qlib_vsumd5",
+      "qlib_vsumd60",
+      "qlib_vsumn10",
+      "qlib_vsumn20",
+      "qlib_vsumn30",
+      "qlib_vsumn5",
+      "qlib_vsumn60",
+      "qlib_vsump10",
+      "qlib_vsump20",
+      "qlib_vsump30",
+      "qlib_vsump5",
+      "qlib_vsump60",
+      "qlib_wvma10",
+      "qlib_wvma20",
+      "qlib_wvma30",
+      "qlib_wvma5",
+      "qlib_wvma60"
+    ],
+    "quality_report_checksum_sha256": "ecace3f08c9becfb092dc7e5e784e28e3dc33f92158c641cae54d5d94d6dc264",
+    "row_count": 728880,
+    "run_id": "00000000-0000-4000-8000-000000000000",
+    "semantic_version": "1.0.0",
+    "serialization_profile_id": "parquet-v1",
+    "split_policy": {
+      "embargo_trading_days": 2,
+      "purge_trading_days": 5,
+      "splits": [
+        {
+          "end_date": "2025-10-31",
+          "name": "train",
+          "start_date": "2025-05-13"
+        },
+        {
+          "end_date": "2025-11-28",
+          "name": "validation",
+          "start_date": "2025-11-20"
+        },
+        {
+          "end_date": "2025-12-24",
+          "name": "test",
+          "start_date": "2025-12-10"
+        }
+      ]
+    },
+    "universe_snapshot_generation_id": "ec49a3722d6dead6ae03572035c888796c2353e4a008b760e5a9d45768cab841"
+  },
+  "effective_legacy_defaults": {
+    "source": "src/uq/backtest/engine.py at worktree base HEAD; absent in archived config",
+    "volume_participation_cap": 0.1
+  },
+  "kind": "trading_training_baseline",
+  "limitations": [
+    "11 out-of-sample decision dates only; 160 valuation dates are not 160 held dates.",
+    "Repository test-key reviews only; not approved for production or live execution.",
+    "Single 10% limit band and raw previous-close reference; no calibrated impact model.",
+    "Negative net return; no evidence of stable benchmark excess return."
+  ],
+  "missing_evidence": [
+    "Original execution code fingerprint and environment lock digest are zero; collection HEAD is not execution HEAD.",
+    "Original stock_basic listing-date mapping was not archived; never reconstruct it from a fresh live fetch and claim exact replay.",
+    "No post-2d71326 full-A or exporter phase performance measurement exists in this archive.",
+    "A fresh full-chain replay has not been performed."
+  ],
+  "record_version": 1,
+  "request": {
+    "adjusted_price_binding": {
+      "data_checksum_sha256": "846a3725d101185f7a641f7ab7d016bec07e1334b236c958badf368935f0c087",
+      "generation_id": "cf41ceb73d580a654440c54edff251a3a4a14e341d0682408d66b5aaebfec1ec"
+    },
+    "backtest_config_binding": {
+      "family": "backtest_config",
+      "generation_id": "c67a48fd0e2be52fc15f675980516a77f3af9c21dc7890665db113eda5f01ba5",
+      "manifest_digest_sha256": "b15887b6d17dc46243cd400fd1ab5b242078d96c42e189f597bf7a020f015b56"
+    },
+    "contract_version": 6,
+    "created_at": "2026-10-27T09:31:13.032915+00:00",
+    "dataset_policy_template": {
+      "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+      "contract_version": 1,
+      "dataset_name": "research_baseline",
+      "missing_policy": "drop_unlabeled_rows",
+      "semantic_version": "1.0.0",
+      "split_policy": {
+        "embargo_trading_days": 2,
+        "purge_trading_days": 5,
+        "splits": [
+          {
+            "end_date": "2025-10-31",
+            "name": "train",
+            "start_date": "2025-05-13"
+          },
+          {
+            "end_date": "2025-11-28",
+            "name": "validation",
+            "start_date": "2025-11-20"
+          },
+          {
+            "end_date": "2025-12-24",
+            "name": "test",
+            "start_date": "2025-12-10"
+          }
+        ]
+      },
+      "status": "reviewed",
+      "template_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "template_manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "template_version": "1.0.0"
+    },
+    "decision_timezone": "Asia/Shanghai",
+    "environment": {
+      "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+      "environment_lock_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "seed": 7,
+      "serialization_profile_id": "uq-parquet-v1",
+      "thread_count": 1
+    },
+    "execution_mode": "full_research_run",
+    "factor_binding": {
+      "family": "factor_partition",
+      "generation_id": "7ed78665f4b835ef62e4e044861b8bc58952790035dde7116b0ba7c18b8cf9a3",
+      "manifest_digest_sha256": "6a7baf6729c039aa3bfd27f47a48987cb27e2ade988dfe89a2db719dcc994d43"
+    },
+    "factor_partition_set_binding": {
+      "binding_type": "factor_partition_set",
+      "factor_set": "alpha158",
+      "factor_version": "2.0.0",
+      "input_dataset": "bars_daily",
+      "input_schema_version": "v2",
+      "set_digest_sha256": "35c2635b5c3c59bc77f0d774a1cc8451cac659c36ffc25b55a35351ad5ebf510",
+      "window_end": "2025-12-31",
+      "window_start": "2025-05-13"
+    },
+    "feature_preprocessing_binding": {
+      "family": "feature_preprocessing",
+      "generation_id": "86f6c5caf574bd36d5e2ff0ba70a55c341b1770773155206ff0fa54218e6e10a",
+      "manifest_digest_sha256": "f95fae28283fb98e8bfb2cc27413b853004cdf35669fd2e084486320550b9faf"
+    },
+    "index_membership_binding": {
+      "binding_type": "index_membership_set",
+      "index_code": "000985.CSI",
+      "set_digest_sha256": "5bf6311baa775a440c2c3ceac013018b5e962efaa0d417831ab000bf63e33e54",
+      "universe_id": "csi-all",
+      "window_end": "2025-12-31",
+      "window_start": "2025-05-13"
+    },
+    "label_binding": {
+      "family": "label_set",
+      "generation_id": "f6fa41bb476194a0971344fc6cefb0df328895ff3eb6fbb99c76316113e78534",
+      "manifest_digest_sha256": "39a48bb379c02e999872d6643e1fc50e5b9300233713178cb2295024912caeb0"
+    },
+    "manifest_digest_sha256": "e656f0e2e99a25cbc730f1ec3708abb80a82cc05e2e9652d42acaedf3bc6ce25",
+    "model_definition_template": {
+      "algorithm": "qlib_linear",
+      "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+      "compatible_dataset_versions": [
+        "1.0.0"
+      ],
+      "contract_version": 1,
+      "hyperparameters": {
+        "alpha": 0.5
+      },
+      "metrics": [
+        {
+          "direction": "maximize",
+          "name": "ic"
+        }
+      ],
+      "model_set": "baseline",
+      "model_version": "1.0.0",
+      "quality_policy": "reject_all",
+      "seed_policy": {
+        "base_seed": 7,
+        "derivation": "fixed"
+      },
+      "selection_rule": "maximum validation ic",
+      "serializer_version": "json-numpy-v1",
+      "status": "reviewed",
+      "template_generation_id": "1ebc548c2702a1cf941a4d5673ed582e7d94a5c2be6fd76e4d4cebec17c9233d",
+      "template_manifest_digest_sha256": "0231f1c3fc612e38eeb9eeaede55e70ad34bfafadcf168dfa973277f5380484c",
+      "template_version": "1.0.0"
+    },
+    "paper_execution_template": {
+      "calendar_binding": {
+        "family": "trading_calendar_snapshot_v1",
+        "member_count": 1,
+        "set_digest_sha256": "c446fa7c3c712683e85773d79235adaa3dfa42d8fdc4b32c1c2b9d49f13445db",
+        "window_end": "2025-12-31",
+        "window_start": "2025-05-13"
+      },
+      "corporate_action_binding": {
+        "family": "dividend_event_v1",
+        "member_count": 160,
+        "set_digest_sha256": "d88189d7f7bb6143d154288cada206c77ffa1055b2666041e0c1965c06465ade",
+        "window_end": "2025-12-31",
+        "window_start": "2025-05-13"
+      },
+      "data_delay_policy": "delayed_replay",
+      "data_delay_reason": "T+1 execution on open",
+      "fee_policy": {
+        "buy_commission_rate": 0.0003,
+        "currency_precision": 2,
+        "minimum_commission": 5.0,
+        "sell_commission_rate": 0.0003,
+        "sell_stamp_tax_rate": 0.001,
+        "transfer_fee_rate": 1e-05
+      },
+      "initial_state": {
+        "cash": 1000000.0,
+        "holdings": [],
+        "valuation_price_basis": "decision_close_estimate"
+      },
+      "lot_size": 100,
+      "market": "cn_a",
+      "market_data_binding": {
+        "family": "bars_daily_v2",
+        "member_count": 160,
+        "set_digest_sha256": "e425263cbe46d4d199e177644b4a6b5b6e407cd1813ae9da7c30475d0a1d236e",
+        "window_end": "2025-12-31",
+        "window_start": "2025-05-13"
+      },
+      "mode": "paper",
+      "price_policy": {
+        "execution_window": "open",
+        "limit_tolerance_absolute": 0.01,
+        "limit_tolerance_relative": 0.001,
+        "order_pricing_basis": "decision_close_estimate"
+      },
+      "quantity_policy": {
+        "board_lot": 100,
+        "enforce_t1": true,
+        "insufficient_cash_policy": "round_down_to_lot",
+        "minimum_holding_rule": "preserve_one_lot",
+        "minimum_order_quantity": 100,
+        "partial_fills": false,
+        "sell_before_buy": true
+      },
+      "risk_policy_binding": {
+        "family": "risk_policy_v1",
+        "generation_id": "2a9d232834b46fab1cded7a4fe2bf7b142222d49dd110c7f0e0edf2799e69751",
+        "manifest_digest_sha256": "4172bdcbac5db0d0b6965b3440cd8da4e99082ae64770c130534dc442d1cd804"
+      },
+      "serialization_profiles": {
+        "manifest": "json-canonical-v1",
+        "payload": "parquet-v1"
+      },
+      "state_mode_policy": "initial_then_continuation",
+      "status": "reviewed",
+      "suspension_binding": {
+        "family": "suspension_snapshot_v1",
+        "member_count": 160,
+        "set_digest_sha256": "c2eb891d8bc16e1f2e8a8bf5e0ea67529a9c50514cf50bf70763103c380f09d6",
+        "window_end": "2025-12-31",
+        "window_start": "2025-05-13"
+      },
+      "template_version": "2.0.0"
+    },
+    "policy_review": {
+      "contract_version": 1,
+      "errors": [],
+      "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+      "key_id": "risk-reviewer-v1-2026-09",
+      "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8",
+      "policy": "reject_all",
+      "review_signature_sha256": "7c11a845148bf9ade37547e0366a76a09a9073878382f536d2c65c65e48b2cc6c3a809b2f6b2c85a3ea12fd94075918af99bbe088a958697d54ed64d542b020e",
+      "review_status": "approved",
+      "review_type": "risk_policy_activation",
+      "reviewed_at_utc": "2026-09-06T00:00:00Z",
+      "reviewer": "repository-owner",
+      "schema_version": "1.0.0",
+      "subject_content_sha256": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+      "subject_generation_id": "50971140dc0bc23e3d4e10fdf62de3644bcd6d38b8f2cb99d6861bf700389c1c",
+      "subject_manifest_digest_sha256": "cfd9c82fa8e34fdd350d7673093966cea54a728b827e7381a4f35f3ed625fa72",
+      "warnings": []
+    },
+    "portfolio_definition_template": {
+      "constraints": {
+        "cash_reserve": 0.05,
+        "max_industry_weight": null,
+        "max_single_weight": 0.1,
+        "max_turnover": null
+      },
+      "contract_version": 1,
+      "industry_source_binding": null,
+      "portfolio_name": "top20",
+      "rebalance_schedule": "daily",
+      "scheme_parameters": {
+        "n": 20
+      },
+      "score_policy": {
+        "direction": "descending",
+        "nan_policy": "exclude",
+        "tie_policy": "first_by_instrument_id"
+      },
+      "status": "reviewed",
+      "template_generation_id": "6d72056d696c3d1c51c6303a65814027a046c4f5be32ea8216c6ec4b73512519",
+      "template_manifest_digest_sha256": "71c354dfa1dc8424800de5b25ee491d686e85984cb16014a86978b83a1d847fa",
+      "template_version": "1.0.0",
+      "universe_snapshot_generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "weight_scheme": "top_n_equal_weight"
+    },
+    "request_content_generation_id": "41064ea28ffd5db95ecc736c6c340da77505162698636ea1c4cbb26c4114df19",
+    "research_name": "full-a-2025-alpha158",
+    "risk_binding": {
+      "decision_binding": {
+        "action": "allow",
+        "decision_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+        "decision_scope": "portfolio_publication",
+        "family": "risk_decision_v1",
+        "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "event_bindings": [
+        {
+          "family": "risk_event_v1",
+          "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "policy_binding": {
+        "family": "risk_policy_v1",
+        "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "policy_review_binding": {
+        "family": "risk_review_decision_v1",
+        "generation_id": "48babf81b490165926125c45fc198b406176274b3284a17356c92c6b8ca88fef",
+        "manifest_digest_sha256": "5161183c16dd599b441870ac14d55595a2a6a65492939604e46070e9e4c907b8"
+      },
+      "run_binding": {
+        "family": "risk_run_v1",
+        "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "state_binding": {
+        "family": "risk_state_v1",
+        "generation_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "manifest_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "run_id": "00000000-0000-4000-8000-000000000011",
+    "run_visible_cutoff": "2025-12-31T15:00:00+08:00",
+    "sample_construction_binding": {
+      "family": "sample_construction",
+      "generation_id": "781b03b61bb54e0ad619f5da4cabfe72a34e38b4a9ab6fc5739818876beb09f4",
+      "manifest_digest_sha256": "e5eeb49854329db4a6b39eacc441911887a56c6a25d2dc295fbf750088876ce8"
+    },
+    "schema_version": "6.0.0",
+    "stage_plan_review": {
+      "key_id": "research-stage-plan-reviewer-v6-test-2026-10",
+      "review_signature_sha256": "3905efaf9a29f5cf3f100a4ea96eee88eafeb43d41b504cada88ae6cea661946196c92a8a837a419cab88cb581c2f3d2f1136531736891e98ce4fede784d4704",
+      "review_status": "approved",
+      "review_type": "research_stage_plan_v6_activation",
+      "reviewer": "repository-owner",
+      "subject_generation_id": "163f9aec63c14db929a7d1f305872bf5d93f85c8f77bb6b78971c36f4c692cb8",
+      "subject_manifest_digest_sha256": "163f9aec63c14db929a7d1f305872bf5d93f85c8f77bb6b78971c36f4c692cb8"
+    },
+    "stage_plan_sha256": "163f9aec63c14db929a7d1f305872bf5d93f85c8f77bb6b78971c36f4c692cb8",
+    "universe_snapshot_binding": {
+      "family": "universe_snapshot",
+      "generation_id": "ec49a3722d6dead6ae03572035c888796c2353e4a008b760e5a9d45768cab841",
+      "manifest_digest_sha256": "ec49a3722d6dead6ae03572035c888796c2353e4a008b760e5a9d45768cab841"
+    },
+    "window_end_date": "2025-12-31",
+    "window_start_date": "2025-05-13"
+  },
+  "result": {
+    "final_status": "passed",
+    "manifest_digest_sha256": "52a0b1934672805596c5617edb348b8e3731494c66204d1be905252d75ec1d21",
+    "overall_logical_fingerprint": "a1b6b2dc7797722bffa994ec406ea6ed607a1f05299f4a31c35fc17bfb7218d4",
+    "readback_status": {
+      "adjusted_price_dataset": "passed",
+      "backtest_config": "passed",
+      "backtest_result": "passed",
+      "execution_config": "passed",
+      "execution_result": "passed",
+      "factor_partition": "passed",
+      "feature_preprocessing": "passed",
+      "label_set": "passed",
+      "model_artifact": "passed",
+      "model_dataset": "passed",
+      "model_run": "passed",
+      "order_plan": "passed",
+      "paper_portfolio_state": "passed",
+      "prediction_set": "passed",
+      "qlib_dataset_export": "passed",
+      "qlib_init_receipt": "passed",
+      "research_run_request": "passed",
+      "sample_construction": "passed",
+      "target_weights": "passed",
+      "universe_snapshot": "passed"
+    },
+    "request_content_generation_id": "41064ea28ffd5db95ecc736c6c340da77505162698636ea1c4cbb26c4114df19",
+    "result_content_generation_id": "e1267f29287fbcdfe62efe14edf0940fc9b9b1ecb1934e9227dc3555c8e4a749",
+    "run_id": "00000000-0000-4000-8000-000000000011",
+    "runner_identity": {
+      "code_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+      "environment_profile": "locked",
+      "lock_digest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "source_manifests": [
+    {
+      "path": "data/root-2025/research_runs/requests/request=41064ea28ffd5db95ecc736c6c340da77505162698636ea1c4cbb26c4114df19/run=00000000-0000-4000-8000-000000000011/manifest.json",
+      "sha256": "3cd11bdd65bb4af4f5e56d899fcb11770d53a827ecdfda2c8415045f2d3c7124"
+    },
+    {
+      "path": "data/root-2025/research_runs/results/request=41064ea28ffd5db95ecc736c6c340da77505162698636ea1c4cbb26c4114df19/run=00000000-0000-4000-8000-000000000011/result=e1267f29287fbcdfe62efe14edf0940fc9b9b1ecb1934e9227dc3555c8e4a749/manifest.json",
+      "sha256": "7590fecb4e53199904282a52a564c394f4d78a7115ed64b8944947618be0cee1"
+    },
+    {
+      "path": "data/root-2025/datasets/dataset=research_baseline/version=1.0.0/generation=08407d11acf4e98e8fb472289876cd46de793dd62c9a56a1ac3e6b7a647dc421/manifest.json",
+      "sha256": "ba68c6dcae23a95f291a88d3d94a046b7326320903dac862375a5f15e48bceea"
+    },
+    {
+      "path": "data/root-2025/backtest_results/result=906320b9b6eb10621c16b83bb718142b352335cbf45c4187f25714c3ca28d7c2/manifest.json",
+      "sha256": "de8b6036bc3109167ca190571738d7805e64c7d7608df794e9fe88ca8f370046"
+    },
+    {
+      "path": "data/root-2025/backtest_configs/generation=c67a48fd0e2be52fc15f675980516a77f3af9c21dc7890665db113eda5f01ba5/manifest.json",
+      "sha256": "dd49b04aafc688c56f47c3e4f64aedbb0466fa2514ab950054c30578cf685895"
+    }
+  ],
+  "status": "frozen_with_reproducibility_gaps",
+  "verified_now": {
+    "all_upstream_payloads_reverified": false,
+    "backtest_config_identity_and_review": true,
+    "backtest_result_manifest_review_and_artifact_checksums": true,
+    "dataset_manifest_identity": true,
+    "research_request_and_result_identity": true,
+    "retrained": false
+  }
+}

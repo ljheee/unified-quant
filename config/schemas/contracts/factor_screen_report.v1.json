@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/factor_screen_report.v1.json",
+  "title": "Recomputable single-factor screening diagnostic",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_version",
+    "kind",
+    "publication_scope",
+    "window",
+    "input_bindings",
+    "environment_binding",
+    "protocol",
+    "feature_summary",
+    "pairwise_collinearity",
+    "daily",
+    "generation_id"
+  ],
+  "properties": {
+    "record_version": {"const": 1},
+    "kind": {"const": "factor_screen_report"},
+    "publication_scope": {"const": "diagnostic_only_no_factor_selection"},
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date", "session_count"],
+      "properties": {
+        "start_date": {"$ref": "#/$defs/date"},
+        "end_date": {"$ref": "#/$defs/date"},
+        "session_count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["factor_set", "factor_version", "factor_partitions", "label", "calendar", "backtest_cost_config"],
+      "properties": {
+        "factor_set": {"type": "string", "minLength": 1},
+        "factor_version": {"type": "string", "minLength": 1},
+        "input_dataset": {"type": "string", "minLength": 1},
+        "input_schema_version": {"type": "string", "minLength": 1},
+        "factor_partitions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["partition_date", "generation_id", "manifest_digest_sha256", "data_checksum_sha256"],
+            "properties": {
+              "partition_date": {"$ref": "#/$defs/date"},
+              "generation_id": {"$ref": "#/$defs/sha256"},
+              "manifest_digest_sha256": {"$ref": "#/$defs/sha256"},
+              "data_checksum_sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        },
+        "label": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["generation_id", "manifest_digest_sha256", "data_checksum_sha256", "horizon_sessions", "formula_sha256"],
+          "properties": {
+            "generation_id": {"$ref": "#/$defs/sha256"},
+            "manifest_digest_sha256": {"$ref": "#/$defs/sha256"},
+            "data_checksum_sha256": {"$ref": "#/$defs/sha256"},
+            "horizon_sessions": {"type": "integer", "minimum": 1},
+            "formula_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "calendar": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["generation_id", "manifest_digest_sha256", "data_checksum_sha256"],
+          "properties": {
+            "generation_id": {"$ref": "#/$defs/sha256"},
+            "manifest_digest_sha256": {"$ref": "#/$defs/sha256"},
+            "data_checksum_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "backtest_cost_config": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["generation_id", "manifest_digest_sha256", "start_date", "end_date", "commission_bps", "stamp_duty_bps", "slippage_bps", "minimum_commission_cny", "impact_type", "impact_coefficient_bps", "impact_maximum_bps", "impact_at_participation_cap_bps", "volume_participation_cap", "fill_rate_multiplier"],
+              "properties": {
+                "generation_id": {"$ref": "#/$defs/sha256"},
+                "manifest_digest_sha256": {"$ref": "#/$defs/sha256"},
+                "start_date": {"$ref": "#/$defs/date"},
+                "end_date": {"$ref": "#/$defs/date"},
+                "commission_bps": {"type": "number", "minimum": 0},
+                "stamp_duty_bps": {"type": "number", "minimum": 0},
+                "slippage_bps": {"type": "number", "minimum": 0},
+                "minimum_commission_cny": {"type": "number", "minimum": 0},
+                "impact_type": {"enum": ["linear", "square_root"]},
+                "impact_coefficient_bps": {"type": "number", "minimum": 0},
+                "impact_maximum_bps": {"type": "number", "minimum": 0},
+                "impact_at_participation_cap_bps": {"type": "number", "minimum": 0},
+                "volume_participation_cap": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+                "fill_rate_multiplier": {"type": "number", "minimum": 0, "maximum": 1}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "environment_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code_fingerprint", "environment_lock_digest_sha256"],
+      "properties": {
+        "code_fingerprint": {"$ref": "#/$defs/sha256"},
+        "environment_lock_digest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label_horizon_sessions", "hac_lags", "top_n", "top_n_turnover_definition", "turnover_cost_proxy_definition", "collinearity_definition", "correlation_threshold", "factor_score_direction", "missing_feature_policy"],
+      "properties": {
+        "label_horizon_sessions": {"type": "integer", "minimum": 1},
+        "hac_lags": {"type": "integer", "minimum": 0},
+        "top_n": {"type": "integer", "minimum": 1},
+        "top_n_turnover_definition": {"const": "equal_weight_membership_half_l1_change; diagnostic_proxy_only"},
+        "turnover_cost_proxy_definition": {"enum": ["not_computed_without_reviewed_v3_cost_config", "fees_slippage_and_impact_at_participation_cap; ignores_minimum_fees_fills_and_constraints"]},
+        "collinearity_definition": {"const": "mean_absolute_daily_spearman_pairwise_complete"},
+        "correlation_threshold": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "factor_score_direction": {"const": "raw_values_descending_for_top_n_turnover_proxy"},
+        "missing_feature_policy": {"const": "drop_null_per_feature_and_preserve_calendar_positions"}
+      }
+    },
+    "feature_summary": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature", "valid_ic_sessions", "valid_rank_ic_sessions", "mean_ic", "mean_rank_ic", "rank_ic_standard_error", "rank_ic_t_statistic", "rank_ic_effective_sessions", "positive_rank_ic_fraction", "feature_coverage_sessions", "top_n_eligible_sessions", "mean_top_n_one_way_turnover_proxy", "mean_turnover_cost_proxy_bps_of_nav", "turnover_transitions"],
+        "properties": {
+          "feature": {"type": "string", "minLength": 1},
+          "valid_ic_sessions": {"type": "integer", "minimum": 0},
+          "valid_rank_ic_sessions": {"type": "integer", "minimum": 0},
+          "mean_ic": {"type": ["number", "null"]},
+          "mean_rank_ic": {"type": ["number", "null"]},
+          "rank_ic_standard_error": {"type": ["number", "null"], "minimum": 0},
+          "rank_ic_t_statistic": {"type": ["number", "null"]},
+          "rank_ic_effective_sessions": {"type": ["number", "null"], "minimum": 0},
+          "positive_rank_ic_fraction": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "feature_coverage_sessions": {"type": "integer", "minimum": 0},
+          "top_n_eligible_sessions": {"type": "integer", "minimum": 0},
+          "mean_top_n_one_way_turnover_proxy": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "mean_turnover_cost_proxy_bps_of_nav": {"type": ["number", "null"], "minimum": 0},
+          "turnover_transitions": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "pairwise_collinearity": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature_left", "feature_right", "valid_sessions", "mean_daily_spearman", "mean_absolute_daily_spearman", "high_collinearity"],
+        "properties": {
+          "feature_left": {"type": "string", "minLength": 1},
+          "feature_right": {"type": "string", "minLength": 1},
+          "valid_sessions": {"type": "integer", "minimum": 0},
+          "mean_daily_spearman": {"type": ["number", "null"], "minimum": -1, "maximum": 1},
+          "mean_absolute_daily_spearman": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "high_collinearity": {"type": "boolean"}
+        }
+      }
+    },
+    "daily": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["decision_date", "feature", "eligible_instruments", "ic_pairs", "ic", "rank_ic", "ic_status", "selected_count", "top_n_one_way_turnover_proxy", "turnover_cost_proxy_bps_of_nav", "turnover_status"],
+        "properties": {
+          "decision_date": {"$ref": "#/$defs/date"},
+          "feature": {"type": "string", "minLength": 1},
+          "eligible_instruments": {"type": "integer", "minimum": 0},
+          "ic_pairs": {"type": "integer", "minimum": 0},
+          "ic": {"type": ["number", "null"], "minimum": -1, "maximum": 1},
+          "rank_ic": {"type": ["number", "null"], "minimum": -1, "maximum": 1},
+          "ic_status": {"enum": ["estimated", "insufficient_pairs", "constant_cross_section"]},
+          "selected_count": {"type": "integer", "minimum": 0},
+          "top_n_one_way_turnover_proxy": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "turnover_cost_proxy_bps_of_nav": {"type": ["number", "null"], "minimum": 0},
+          "turnover_status": {"enum": ["estimated", "first_session", "insufficient_eligible_names"]}
+        }
+      }
+    },
+    "generation_id": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+  }
+}

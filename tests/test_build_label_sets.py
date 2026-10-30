@@ -21,6 +21,7 @@ from uq.contracts.artifacts import QualityReportStore
 from uq.contracts.canonical_v2 import CanonicalV2Store, file_sha256_bytes
 from uq.contracts.model_layer import sha256_json
 from uq.contracts.schema import load_schema
+from uq.errors import ContractError
 from uq.research_chain.owning_contracts import LabelStore
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +35,7 @@ DATES = pd.bdate_range("2026-01-05", periods=12)
 INSTRUMENTS = ("600000.XSHG", "000001.XSHE")
 
 
-def _publish_bars(root: Path, instruments=INSTRUMENTS, listing_dates=None):
+def _publish_bars(root: Path, instruments=INSTRUMENTS, listing_dates=None, open_offset=0.1):
     schema = load_schema("config/schemas/bars_daily.v2.yaml")
     rows = []
     for index, instrument in enumerate(instruments):
@@ -42,7 +43,7 @@ def _publish_bars(root: Path, instruments=INSTRUMENTS, listing_dates=None):
             close = 10.0 + position * 0.1 + index
             rows.append({
                 "instrument": instrument, "session_date": day,
-                "open": close - 0.1, "high": close + 0.2, "low": close - 0.2,
+                "open": close - open_offset, "high": close + 0.2, "low": close - 0.2,
                 "close": close, "volume": 10000.0, "amount": 100000.0,
                 "status": "trading", "limit_up": close * 1.1, "limit_down": close * 0.9,
                 "adj_factor": 1.0,
@@ -100,6 +101,17 @@ def test_publishes_one_label_set_per_instrument(tmp_path, monkeypatch):
     for record in report["records"]:
         assert record["rows"] == len(DATES)
         assert record["null_labels"] == 5
+
+
+def test_already_adjusted_input_is_rejected_before_label_or_source_publication(tmp_path):
+    with pytest.raises(ContractError, match="expects raw bars_daily/v2"):
+        module.main([
+            "--bars-root", str(tmp_path / "bars"), "--label-root", str(tmp_path / "labels"),
+            "--start", "2026-01-05", "--end", "2026-01-20",
+            "--schema", str(_ROOT / "config/schemas/bars_adjusted.adjusted-v2.yaml"),
+            "--out", str(tmp_path / "report.json"),
+        ])
+    assert not (tmp_path / "labels").exists()
 
 
 def test_publishes_one_combined_label_set_for_the_whole_universe(tmp_path, monkeypatch):
@@ -164,7 +176,7 @@ def test_combined_mode_publishes_nothing_when_an_eligibility_column_is_missing(t
     monkeypatch.setattr(module, "_listing_dates", lambda instruments: listing)
     listing.pop("000001.XSHE")
     monkeypatch.setattr(module, "_listing_dates", lambda instruments: listing)
-    with pytest.raises(KeyError):
+    with pytest.raises(ContractError, match="listing dates do not cover instruments"):
         module.main([
             "--bars-root", str(bars_root), "--label-root", str(tmp_path / "labels"),
             "--start", "2026-01-05", "--end", "2026-01-20", "--combined",
@@ -327,3 +339,47 @@ def test_combined_mode_names_an_instrument_whose_eligibility_removes_every_row(t
     store = LabelStore(tmp_path / "labels")
     _manifest, frame = store.read_frame(report["records"][0]["label_generation_id"])
     assert frame["instrument"].unique().tolist() == ["600000.XSHG"]
+
+
+def test_replays_exact_listing_mapping_without_vendor_access(tmp_path, monkeypatch):
+    from uq.models.listing_snapshot import ListingDateSnapshotStore
+
+    _, first = _run(tmp_path, monkeypatch, combined=True)
+    snapshot_id = first['eligibility']['listing_date_snapshot']['generation_id']
+    store = ListingDateSnapshotStore(tmp_path / 'labels')
+    snapshot, _dates = store.read(snapshot_id)
+    second_root = tmp_path / 'replayed-labels'
+    ListingDateSnapshotStore(second_root).publish(_dates, source=snapshot['source'])
+
+    def no_network(*args, **kwargs):
+        raise AssertionError('replay attempted a live security-master call')
+
+    monkeypatch.setattr(module, '_listing_dates', no_network)
+    out = tmp_path / 'replay.json'
+    assert module.main([
+        '--bars-root', str(tmp_path / 'bars'), '--label-root', str(second_root),
+        '--start', '2026-01-05', '--end', '2026-01-20', '--combined',
+        '--listing-snapshot-generation', snapshot_id, '--out', str(out),
+    ]) == 0
+    second = json.loads(out.read_text())
+    assert first['records'] == second['records']
+    assert second['eligibility']['listing_date_snapshot']['generation_id'] == snapshot_id
+
+
+def test_partial_listing_snapshot_fails_before_label_publication(tmp_path, monkeypatch):
+    from uq.errors import ContractError
+    from uq.models.listing_snapshot import ListingDateSnapshotStore
+
+    _publish_bars(tmp_path / 'bars')
+    root = tmp_path / 'labels'
+    snapshot = ListingDateSnapshotStore(root).publish(
+        {'600000.XSHG': date(1999, 11, 10)}, source='test',
+    )
+    with pytest.raises(ContractError, match='does not cover instruments'):
+        module.main([
+            '--bars-root', str(tmp_path / 'bars'), '--label-root', str(root),
+            '--start', '2026-01-05', '--end', '2026-01-20',
+            '--listing-snapshot-generation', snapshot['generation_id'],
+            '--out', str(tmp_path / 'report.json'),
+        ])
+    assert not (root / 'label_sets').exists()

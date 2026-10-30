@@ -1,0 +1,93 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_experiment_archive_and_qlib_observability",
+  "date": "2026-10-30",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "e740a60afcc9fba06db06b97624a475cce5e18fe32a6859d042578a8bb2a925b",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "files": [
+    {
+      "path": "src/uq/evaluation/experiment_archive.py",
+      "sha256": "ec9532b7a682f8d66f22f0deb18d36ee8bda1dd3fb8ad0cbb1c348780191b10f"
+    },
+    {
+      "path": "scripts/archive_trading_experiment.py",
+      "sha256": "f8fa63533203c37c45e3c39af6a6d79d0e78424b8b9fc035ef89ba5a46411139"
+    },
+    {
+      "path": "config/schemas/contracts/trading_experiment_archive.v1.json",
+      "sha256": "1aeff59eb8e344ca19243720daf123ecc64a8c5f949cb7fb0d38f153f3c0a834"
+    },
+    {
+      "path": "tests/test_experiment_archive.py",
+      "sha256": "3f651875c5ef4a438100afd33775d665176e1e633b313f1335e59b2c1839b773"
+    },
+    {
+      "path": "src/uq/models/qlib_export.py",
+      "sha256": "35dedf1c1a654d6d43cd792c34b665a475600cb4e2a11df738282b6a586aba9e"
+    },
+    {
+      "path": "tests/test_model_qlib_export.py",
+      "sha256": "fafa2d123bd7bc6dcef905dea8529e98878f241a31d31a755253b08b61f51a02"
+    },
+    {
+      "path": "tests/test_research_chain_phase5.py",
+      "sha256": "bd5619e5a66063db4e7a997a6acd275629c26dd2e942c9ef6f446b0092b8e42c"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1438,
+      "skipped": 32,
+      "elapsed_seconds": 85.13
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1469,
+      "skipped": 1,
+      "elapsed_seconds": 131.91
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_model_qlib_export.py tests/test_training_provenance.py tests/test_experiment_archive.py -q",
+      "exit_code": 0,
+      "passed": 41
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest tests/test_model_qlib_export.py tests/test_research_chain_phase5.py -q",
+      "exit_code": 0,
+      "passed": 52
+    },
+    {
+      "command": "python3 -m compileall -q src/uq/models/qlib_export.py src/uq/evaluation/experiment_archive.py scripts/archive_trading_experiment.py tests/test_model_qlib_export.py tests/test_research_chain_phase5.py tests/test_experiment_archive.py",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python scripts/archive_trading_experiment.py --help",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "scope": {
+    "immutable_archive_publisher_and_reader": "synthetic five-session owning stores only",
+    "paired_evaluation_and_review_bindings": "reverified by owning readers",
+    "new_qlib_export_substages": [
+      "review_binding",
+      "prepublish_readback"
+    ],
+    "timing_effect_on_export_manifest": "no difference in scratch comparison",
+    "review_provider_failure": "failed substage and staging cleanup verified",
+    "historical_source_bytes_reconstructed": false,
+    "one_year_oos_and_pit_certified": false,
+    "certification_gate_remote_matrix": "not_run",
+    "real_all_a_archive_or_performance": "not_run"
+  },
+  "archive_checksum_sha256": "166a8183a9f3f5861468cc7351c633c50232bf807ae0b4efe1ab2049321b9d19"
+}

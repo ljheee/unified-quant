@@ -102,6 +102,97 @@ INSTRUMENTS = ["INST0", "INST1"]
 
 
 class TestQlibDatasetExporter:
+    def test_export_step_timings_are_observations_only(self, tmp_path: Path) -> None:
+        measured = []
+        common = dict(
+            dataset_name="research_slice", generation_id="a" * 64,
+            frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+            calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+            provider_uri="file:///tmp/exports", quality_decision=export_decision(),
+        )
+        plain = QlibDatasetExporter(tmp_path / "plain").export(**common)
+        timed = QlibDatasetExporter(tmp_path / "timed").export(
+            **common, timing_callback=lambda name, seconds, status:
+                measured.append((name, seconds, status)),
+        )
+        assert plain == timed
+        assert {name for name, _, _ in measured} == {
+            "qlib_export/feature_files", "qlib_export/file_inventory",
+            "qlib_export/review_binding", "qlib_export/prepublish_readback",
+            "qlib_export/durable_publish",
+        }
+        assert all(seconds >= 0 and status == "passed" for _, seconds, status in measured)
+
+    def test_failed_review_binding_keeps_timing_and_cleans_staging(self, tmp_path: Path) -> None:
+        observed = []
+
+        def reject_review(subject_generation_id: str, subject_content_sha256: str):
+            raise ContractError("synthetic reviewer failure")
+
+        with pytest.raises(ContractError, match="synthetic reviewer failure"):
+            QlibDatasetExporter(tmp_path / "exports").export(
+                dataset_name="research_slice", generation_id="a" * 64,
+                frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+                label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+                calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+                provider_uri="file:///tmp/exports", quality_decision=reject_review,
+                timing_callback=lambda name, seconds, status:
+                    observed.append((name, seconds, status)),
+            )
+        assert [name for name, _, _ in observed] == [
+            "qlib_export/feature_files", "qlib_export/file_inventory",
+            "qlib_export/review_binding",
+        ]
+        assert observed[-1][2] == "failed"
+        assert not list((tmp_path / "exports").glob(".staging.*"))
+
+    def test_failed_feature_write_keeps_failed_step_timing(self, tmp_path: Path, monkeypatch) -> None:
+        from uq.models import qlib_export
+
+        observed = []
+        def fail_write(*args, **kwargs):
+            raise ContractError("synthetic feature write failure")
+        monkeypatch.setattr(qlib_export, "_write_qlib_feature_files", fail_write)
+        with pytest.raises(ContractError, match="synthetic feature write failure"):
+            QlibDatasetExporter(tmp_path / "exports").export(
+                dataset_name="research_slice", generation_id="a" * 64,
+                frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+                label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+                calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+                provider_uri="file:///tmp/exports", quality_decision=export_decision(),
+                timing_callback=lambda name, seconds, status:
+                    observed.append((name, seconds, status)),
+            )
+        assert len(observed) == 1
+        assert observed[0][0] == "qlib_export/feature_files"
+        assert observed[0][1] >= 0
+        assert observed[0][2] == "failed"
+        assert not list((tmp_path / "exports").glob(".staging.*"))
+
+    def test_combined_inventory_still_rejects_zero_byte_file(self, tmp_path: Path, monkeypatch) -> None:
+        from uq.models import qlib_export
+
+        original = qlib_export._write_qlib_feature_files
+        def add_empty_file(*args, **kwargs):
+            original(*args, **kwargs)
+            (kwargs["feature_dir"] / "empty.day.bin").write_bytes(b"")
+        monkeypatch.setattr(qlib_export, "_write_qlib_feature_files", add_empty_file)
+        observed = []
+        with pytest.raises(ContractError, match="zero-byte export file"):
+            QlibDatasetExporter(tmp_path / "exports").export(
+                dataset_name="research_slice", generation_id="a" * 64,
+                frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+                label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+                calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+                provider_uri="file:///tmp/exports", quality_decision=export_decision(),
+                timing_callback=lambda name, seconds, status:
+                    observed.append((name, seconds, status)),
+            )
+        assert observed[-1][0] == "qlib_export/file_inventory"
+        assert observed[-1][2] == "failed"
+        assert not list((tmp_path / "exports").glob(".staging.*"))
+
     def test_export_produces_valid_manifest(self, tmp_path: Path) -> None:
         exporter = QlibDatasetExporter(tmp_path / "exports")
         frame = _dataset_frame()

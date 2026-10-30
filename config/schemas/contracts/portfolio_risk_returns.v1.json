@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/portfolio_risk_returns.v1.json",
+  "title": "Portfolio risk returns v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "source_id",
+    "source_approval_ref",
+    "return_method",
+    "observation_visibility",
+    "strict_prior_session_policy",
+    "calendar_generation_id",
+    "calendar_manifest_digest_sha256",
+    "calendar_data_checksum_sha256",
+    "calendar_sessions",
+    "window_start",
+    "window_end",
+    "row_count",
+    "columns",
+    "data_checksum_sha256",
+    "logical_checksum_sha256",
+    "generation_id",
+    "manifest_digest_sha256"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": 1
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "source_approval_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "return_method": {
+      "const": "adjusted_close_simple_return_decimal"
+    },
+    "observation_visibility": {
+      "const": "available_after_session_close"
+    },
+    "strict_prior_session_policy": {
+      "const": true
+    },
+    "calendar_generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "calendar_manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "calendar_data_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "calendar_sessions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "format": "date"
+      },
+      "uniqueItems": true
+    },
+    "window_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "window_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "row_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "columns": {
+      "const": [
+        "date",
+        "instrument",
+        "return"
+      ]
+    },
+    "data_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "logical_checksum_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "generation_id": {
+      "$ref": "#/$defs/sha256"
+    },
+    "manifest_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

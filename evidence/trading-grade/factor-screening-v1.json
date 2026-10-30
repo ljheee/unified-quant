@@ -1,0 +1,97 @@
+{
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest tests/test_factor_screening.py -q",
+      "exit_code": 0,
+      "passed": 12
+    },
+    {
+      "command": ".venv/bin/python -m pytest",
+      "elapsed_seconds": 94.02,
+      "exit_code": 0,
+      "passed": 1474,
+      "skipped": 33
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "elapsed_seconds": 149.8,
+      "exit_code": 0,
+      "passed": 1506,
+      "skipped": 1
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_adv_review_fixes.py::test_evidence_indexes_are_fresh_and_never_index_themselves tests/test_paper_execution_research_integration_evidence.py::test_phase_0_evidence_index_hashes_are_complete -q",
+      "exit_code": 0,
+      "passed": 2
+    },
+    {
+      "command": ".venv/bin/python scripts/screen_factors.py --help",
+      "exit_code": 0
+    },
+    {
+      "command": "strict JSON parsing of factor_screen_report.v1.json, including duplicate-key rejection",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "code_fingerprint": "7b096b3bf7bb38ca6b6fd82325566125a18c0557fbef208034d8f4c0c91f6e90",
+  "date": "2026-10-30",
+  "environment_lock_digest_sha256": "217b496a69f89ceed8ba957161f395a5aa33d8123e6f54b654d89ec5bd546a35",
+  "files": [
+    {
+      "path": "src/uq/evaluation/factor_screening.py",
+      "sha256": "e698171d0cccae8e488ee8ae373e0400d7ba412787e5b7954e665a8163e4d98b"
+    },
+    {
+      "path": "scripts/screen_factors.py",
+      "sha256": "43f4990da599dd3aba091478aad7e4623a122da803192c7767ac605de2fe71bf"
+    },
+    {
+      "path": "config/schemas/contracts/factor_screen_report.v1.json",
+      "sha256": "a2bbb70d24009c89600089967ed29eac3df47aa07d928959e3959555ad51bc02"
+    },
+    {
+      "path": "tests/test_factor_screening.py",
+      "sha256": "784d0f8debc730948ffe051077952fc0cdcb6db54a2236b42dcbee4592621d30"
+    },
+    {
+      "path": "docs/trading-grade-training-plan.md",
+      "sha256": "360fe9befc9aad159e3f7376090dfec1305bc283286f396cc1b9a41cd0c0bd2f"
+    },
+    {
+      "path": "docs/trading-grade-progress.md",
+      "sha256": "3f3c90b8ad271278678c156e1a75fa590d0d79bce97007df521eb8f9452eb68f"
+    },
+    {
+      "path": "docs/subsystems/README.md",
+      "sha256": "a6feb36d5811ec179d3a189b892deb6f2bf2738710189558c69787acb9e9e4fa"
+    },
+    {
+      "path": "docs/subsystems/training-evaluation.md",
+      "sha256": "84606805f93bd5f82ea255b8724fbfef1293bbed9f953f9210548218e281fbc0"
+    }
+  ],
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "kind": "trading_grade_factor_screening_implementation",
+  "record_version": 1,
+  "runtime": {
+    "lightgbm": "4.7.0",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "pyqlib_test_environment": "0.9.7 (verified in .venv-qlib full suite)",
+    "python": "3.12.13"
+  },
+  "scope": {
+    "cost_proxy": "Requires a v3 backtest config with valid reviewed quality receipt and matching identities covering the window. Applies two-sided proportional commission, sell stamp duty, two-sided slippage, and impact at configured participation cap times fill-rate multiplier. Explicitly omits minimum commission, actual fills, prices, board lots, position/turnover limits, and capacity.",
+    "diagnostics": "Daily Pearson IC and RankIC, horizon-overlap HAC summaries, pairwise mean absolute daily Spearman collinearity, equal-weight top-N membership turnover proxy, and optional per-rebalance NAV bps cost proxy.",
+    "governance": "Reads published factor partitions, label generation, calendar, and optional reviewed v3 cost config; binds checksums, source fingerprint, lock digest, and cost config generation. Report remains diagnostic-only and no-overwrite.",
+    "new_factor_sources": "Fundamental, analyst-expectation, and flow sources remain unavailable/unimplemented; no synthetic replacement was created.",
+    "next_plan_gaps": "PIT neutralization, risk parity with governed covariance inputs, industry-neutral portfolio construction with PIT classification, and real-history paper reconciliation remain outstanding.",
+    "out_of_sample": "One-year multi-regime OOS and per-factor incremental contribution were not run; governed history root remains unavailable.",
+    "production_and_certification": "Certification gate, remote matrix, production provisioning, and live execution not run; broker/live path remains outside authorization."
+  },
+  "worktree_status": "uncommitted implementation on the reviewed HEAD"
+}

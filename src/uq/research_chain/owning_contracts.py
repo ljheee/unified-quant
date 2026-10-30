@@ -689,8 +689,9 @@ class BacktestConfigStore:
 
     ``contract_version`` selects the contract variant: 1 (default) keeps the
     original single-generation ``price_source_binding``; 2 uses the partition-set
-    form (cr.md 8.63).  The *review binding type* stays ``backtest_config_v1`` for
-    both, because it names the reviewer's registered policy for this family rather
+    form (cr.md 8.63); 3 binds raw prices and explicit pre-open execution facts,
+    liquidity, cost and risk rules. The review binding type stays ``backtest_config_v1``
+    for all three, because it names the reviewer's registered policy for this family rather
     than the manifest's shape -- the operator's quality-decision document is
     therefore the same for either version.
     """
@@ -728,8 +729,8 @@ class BacktestConfigStore:
         contract_version = payload.get("contract_version")
         if contract_version in (None, 1):
             schema_name = "backtest_config"
-        elif contract_version == 2:
-            schema_name = "backtest_config_v2"
+        elif contract_version in {2, 3}:
+            schema_name = f"backtest_config_v{contract_version}"
         else:
             raise ContractError(
                 f"unsupported backtest_config contract_version: {contract_version}"
@@ -797,7 +798,7 @@ class BacktestConfigStore:
                 # manifest names its own `contract_version`, so validation follows
                 # it; hardcoding one schema made a published v2 config unreadable.
                 ModelContractLoader.validate(
-                    "backtest_config_v2" if manifest.get("contract_version") == 2
+                    f"backtest_config_v{manifest['contract_version']}" if manifest.get("contract_version") in {2, 3}
                     else "backtest_config",
                     manifest,
                 )

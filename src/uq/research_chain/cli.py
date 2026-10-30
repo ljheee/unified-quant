@@ -21,6 +21,9 @@ from ..models.dataset_writer import DatasetWriter
 from ..models.predictions import PredictionBuilder
 from ..models.trainer import ArtifactStore
 from ..portfolio.builder import PortfolioBuilder, TargetWeightStore
+from ..portfolio.risk_model import PortfolioRiskReturnsStore
+from .provenance import capture_environment, verified_runner_identity
+from .telemetry import RunTelemetry
 from .owning_contracts import (
     AdjustedPriceDatasetStore,
     BacktestConfigStore,
@@ -145,7 +148,7 @@ def uq_research_run(argv: list[str] | None = None) -> int:
 
 
 def _dry_run(request: dict[str, Any], *, data_root: Path) -> dict[str, Any]:
-    # Route by contract version: a v2..v6 request has its own schema name, and
+    # Route by contract version: a v2..v8 request has its own schema name, and
     # hardcoding the v1 schema rejected every later version at the CLI boundary
     # even though the runner's dry-run path is version-aware.
     ModelContractLoader.validate(research_request_schema_name(request), request)
@@ -595,6 +598,9 @@ def _build_runner(
     dataset_writer = DatasetWriter(data_root)
     prediction_builder = PredictionBuilder(data_root)
     portfolio_builder = PortfolioBuilder(data_root)
+    risk_returns_store = PortfolioRiskReturnsStore(
+        data_root, calendar_store=BacktestMarketDatasetStore(data_root)
+    )
     return ResearchChainRunner(
         factor_adapter=FactorStageAdapter(factor_store, run_store),
         dataset_adapter=dataset_adapter,
@@ -626,6 +632,7 @@ def _build_runner(
             # reads its exclusion set from.
             backtest_config_store=BacktestConfigStore(data_root),
             market_dataset_store=BacktestMarketDatasetStore(data_root),
+            risk_returns_store=risk_returns_store,
         ),
         backtest_adapter=BacktestStageAdapter(
             backtest_engine=BacktestEngine(data_root),
@@ -662,6 +669,11 @@ def _execute(
         if not isinstance(decisions_document.get("quality_decisions"), dict):
             raise ContractError("quality decisions document requires quality_decisions")
         decisions = decisions_document["quality_decisions"]
+        # Static documents can carry the resolver's owning-report envelopes
+        # separately from the raw decisions consumed by stage implementations.
+        envelope_decisions = decisions_document.get("request_quality_decisions", decisions)
+        if not isinstance(envelope_decisions, dict):
+            raise ContractError("request_quality_decisions must be an object")
     else:
         decisions = {}
     if provider_document is not None:
@@ -718,7 +730,7 @@ def _execute(
         trading_calendar = None
     paper_adapter = None
     paper_risk_source = None
-    if request.get("contract_version") in {5, 6}:
+    if request.get("contract_version") in {5, 6, 7, 8}:
         if market_publisher is None:
             raise ContractError(
                 f"research request v{request.get('contract_version')} requires --market-dataset-root"
@@ -768,6 +780,9 @@ def _execute(
                 runner.dataset_adapter, "sample_construction_store", None
             ),
             "backtest_config": runner.backtest_adapter.backtest_config_store,
+            "portfolio_risk_returns": PortfolioRiskReturnsStore(
+                data_root, calendar_store=BacktestMarketDatasetStore(data_root)
+            ),
         },
         membership_store=membership_store,
         trading_calendar=trading_calendar,
@@ -786,22 +801,23 @@ def _execute(
         error = ContractError(status, str(exc))
         error.reason = status
         raise error from exc
-    environment = request["environment"]
-    outcome = runner.execute(
-        plan,
-        runner_identity={
-            "code_fingerprint": environment["code_fingerprint"],
-            "environment_profile": "locked",
-            "lock_digest_sha256": environment["environment_lock_digest_sha256"],
-        },
-        quality_decisions=decisions,
-        scores_by_decision_date=scores,
-        # Without an external scores file the runner decides which dates to score
-        # (it defaults to the window end); with one, the file's dates are
-        # authoritative -- that is the option-4 contract from cr.md 8.75.
-        decision_dates=sorted(scores) if scores is not None else None,
-        paper_risk_decision_source=paper_risk_source,
-    )
+    if project_root.resolve() != Path(__file__).resolve().parents[3]:
+        raise ContractError("--project-root does not match the executing uq checkout")
+    environment = capture_environment(project_root)
+    runner_identity = verified_runner_identity(request["environment"], environment)
+    with RunTelemetry(data_root, request, environment) as telemetry:
+        outcome = runner.execute(
+            plan,
+            runner_identity=runner_identity,
+            telemetry=telemetry,
+            quality_decisions=decisions,
+            scores_by_decision_date=scores,
+            # Without an external scores file the runner decides which dates to score
+            # (it defaults to the window end); with one, the file's dates are
+            # authoritative -- that is the option-4 contract from cr.md 8.75.
+            decision_dates=sorted(scores) if scores is not None else None,
+            paper_risk_decision_source=paper_risk_source,
+        )
     return {
         "status": "published",
         "request_content_generation_id": request["request_content_generation_id"],
@@ -810,6 +826,7 @@ def _execute(
         "manifest_path": str(outcome.result_path),
         "manifest_digest_sha256": outcome.result_manifest["manifest_digest_sha256"],
         "final_status": outcome.result_manifest["final_status"],
+        "telemetry_path": str(telemetry.path),
     }
 
 

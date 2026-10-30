@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 import joblib
+import numpy as np
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes
@@ -121,10 +122,13 @@ def score_decision_dates(
     artifact_manifest, artifact_bytes = artifact_store.read(
         run_generation_id, artifact_generation_id
     )
-    if artifact_manifest["runtime_import_path"] != "qlib.contrib.model.linear.LinearModel":
+    runtime_path = artifact_manifest["runtime_import_path"]
+    is_qlib_linear = runtime_path == "qlib.contrib.model.linear.LinearModel"
+    is_qlib_lightgbm = runtime_path == "lightgbm.sklearn.LGBMRegressor"
+    if not (is_qlib_linear or is_qlib_lightgbm):
         raise ContractError(
-            "inference only loads the reviewed qlib_linear runtime, got "
-            f"{artifact_manifest['runtime_import_path']}"
+            "inference only loads reviewed qlib_linear or qlib_lightgbm runtimes, got "
+            f"{runtime_path}"
         )
     # Qlib is an optional extra: the refusal paths above must stay testable in an
     # environment without it, so the import happens only once a caller has asked
@@ -139,6 +143,13 @@ def score_decision_dates(
             "Qlib is required to score decision dates; install the qlib extra"
         ) from exc
     assert_runtime_version(qlib.__version__, expected_qlib_version)
+    if is_qlib_lightgbm:
+        try:
+            import lightgbm
+        except ImportError as exc:
+            raise ContractError("LightGBM is required to score this artifact; install the gbdt extra") from exc
+        if artifact_manifest["runtime_name"] != f"qlib_lightgbm:{lightgbm.__version__}":
+            raise ContractError("LightGBM runtime version does not match the trained artifact")
 
     calendar = [line for line in (snapshot / "calendars" / "day.txt").read_text(
         encoding="utf-8"
@@ -194,7 +205,18 @@ def score_decision_dates(
     )
 
     model = _load_model(artifact_bytes, artifact_manifest)
-    predictions = model.predict(dataset, segment="infer")
+    if is_qlib_linear:
+        predictions = model.predict(dataset, segment="infer")
+    else:
+        feature_frame = dataset.prepare(
+            "infer", col_set="feature", data_key=DataHandlerLP.DK_I
+        )
+        values = feature_frame.to_numpy(dtype="float64", na_value=np.nan)
+        scorable = np.isfinite(values).all(axis=1)
+        scores = np.full(len(feature_frame), np.nan, dtype="float64")
+        if scorable.any():
+            scores[scorable] = model.predict(feature_frame.loc[scorable])
+        predictions = pd.Series(scores, index=feature_frame.index)
     if predictions.empty:
         raise ContractError("inference produced no scores")
 

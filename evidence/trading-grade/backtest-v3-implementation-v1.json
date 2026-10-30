@@ -1,0 +1,142 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_backtest_v3_implementation",
+  "date": "2026-10-29",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "7784aec62e549c3af6ccb81de1d8c9a5dca2141653db870aaa89b40054c6cbe4",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "implementation_files": [
+    {
+      "path": "src/uq/backtest/engine.py",
+      "sha256": "ed5be9e06c8ceac3585127a098eb67bdb3b238c3a17c5479ef625463cd04b79a"
+    },
+    {
+      "path": "src/uq/backtest/engine_v3.py",
+      "sha256": "2db5024750163045a62fa6159ae0d684fbeacc4f77af9b7c067546746f464c0e"
+    },
+    {
+      "path": "src/uq/backtest/execution_facts.py",
+      "sha256": "46fa14c9859d8cb4fb3ceaddf0e56ebd6096da20b309c595f6697bdebe75aa09"
+    },
+    {
+      "path": "src/uq/contracts/model_layer.py",
+      "sha256": "ef97b2acfd273724f873f73ae5c91c00e520781f6a90f49bdb0cfb1c6752cf2a"
+    },
+    {
+      "path": "src/uq/research_chain/adapters.py",
+      "sha256": "7fccd3605916445016909139e228d89eaf56646ae6c7f57d63d318bb49a33d00"
+    },
+    {
+      "path": "src/uq/research_chain/owning_contracts.py",
+      "sha256": "4aa30e438bd01f32c6ac0eb4f12f9b932d0dda12cf524e229f4a312e79bbe253"
+    },
+    {
+      "path": "src/uq/evaluation/report.py",
+      "sha256": "ee2b69e7eca5f52f82f510161fc2cdd613e672a20bcb9df295f7803a9c1a65f0"
+    },
+    {
+      "path": "src/uq/evaluation/stress.py",
+      "sha256": "19d57f684bafddecea741d00de2beadc94dbe1e6efe3f15eb7d34417d2f22aa3"
+    },
+    {
+      "path": "src/uq/evaluation/walk_forward_runner.py",
+      "sha256": "0aa1ea8fcce7186c483379f3f9820724f1f94ee24fff698aa94d570d239cf821"
+    },
+    {
+      "path": "scripts/publish_backtest_config.py",
+      "sha256": "e4a028ca749e08f5857016631ea6c4afd57d1e46196f933066ed3a021719b8ff"
+    },
+    {
+      "path": "scripts/publish_backtest_execution_facts.py",
+      "sha256": "6becf05f3fc9ace0d44406cd8daa8449ab7d525af75467a8f0707af2f1c1e642"
+    },
+    {
+      "path": "scripts/run_backtest_stress.py",
+      "sha256": "ed5372e6ba25fb12a31459299256a49c946ceb962f2fbe0fd8ad2bb59d9e7fad"
+    },
+    {
+      "path": "config/schemas/contracts/backtest_config.v3.json",
+      "sha256": "fd8f49d38975f74f8bc672bf5cefc885450d1edf0f73b5ad5a830ef902d43637"
+    },
+    {
+      "path": "config/schemas/contracts/backtest_result.v3.json",
+      "sha256": "e0e397258368e78c9a692227cdb6b9736f35b2ad1e5933fed09ec18d0fefd8c1"
+    },
+    {
+      "path": "config/schemas/contracts/backtest_execution_facts.v1.json",
+      "sha256": "0b6439e4ebdb6777f0594d0ef7ea01b728e5d0d2342e574c53baca938c57d691"
+    },
+    {
+      "path": "config/schemas/contracts/backtest_stress.v1.json",
+      "sha256": "62b2ec0389fdc8d4324bf9cfb4fb9616d0f58e236710a53b7255d8a76a550541"
+    },
+    {
+      "path": "tests/test_backtest_v3.py",
+      "sha256": "9d10a0a11f4a62d8287df6a38672029308a95dd02b149e2e3c79d98e52cab2e3"
+    },
+    {
+      "path": "tests/test_backtest_execution_facts.py",
+      "sha256": "22a2fd01c606880091ea417280ee3be103349d6ea47a82baa2ef668329650a8e"
+    },
+    {
+      "path": "tests/test_backtest_stress.py",
+      "sha256": "ded0f180f235786f417e3e35521e6902546e0397d924999452d2c983b6320e22"
+    },
+    {
+      "path": "tests/test_walk_forward_runner.py",
+      "sha256": "aa7e5a92b7a68572d4b12b97fd917859990114756ac6dc5b2c1dcaf8a58a554a"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1425,
+      "skipped": 32,
+      "elapsed_seconds": 90.72
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1456,
+      "skipped": 1,
+      "elapsed_seconds": 156.09
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_backtest_v3.py tests/test_backtest_execution_facts.py tests/test_backtest_stress.py tests/test_research_chain_phase4.py",
+      "exit_code": 0,
+      "passed": 76,
+      "elapsed_seconds": 18.3
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": "new publisher/stress CLI --help smoke",
+      "exit_code": 0
+    }
+  ],
+  "guard_mutations": {
+    "method": "isolated process, in-memory source mutation; source files unchanged",
+    "subjects": [
+      "sell cash ignores slippage",
+      "participation uses future-session volume",
+      "risk NAV omits execution cost"
+    ],
+    "expected_failing_regressions_observed": 3
+  },
+  "scope": {
+    "v3_raw_canonical_facts_and_price_bands": "implemented and exercised through the real research adapter",
+    "cost_and_capacity_grid": "reviewed diagnostic replays with recomputable local evidence",
+    "legacy_v1_v2_contracts": "preserved; original v1 null-Sharpe refusal retained",
+    "real_historical_source_onboarding": "not_run",
+    "impact_fill_market_calibration": "not_run",
+    "one_year_oos_or_trading_acceptance": "not_run",
+    "certification_gate_remote_matrix": "not_run",
+    "production_publish_or_broker_execution": "not_run"
+  },
+  "archive_checksum_sha256": "a418f1afa8c50d3cc6f8e56d947f24b40e1512177153bc832a6a482fbdc76df7"
+}

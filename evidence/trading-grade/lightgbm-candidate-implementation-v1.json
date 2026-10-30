@@ -1,0 +1,86 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_lightgbm_candidate_implementation",
+  "date": "2026-10-30",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "d4d08f6f8758e1b120e249c156f74d085a7507a922e8d9236eb119550ca6c602",
+  "environment_lock_digest_sha256": "217b496a69f89ceed8ba957161f395a5aa33d8123e6f54b654d89ec5bd546a35",
+  "runtime": {
+    "python": "3.12.13",
+    "platform": "macOS-26.3-arm64",
+    "lightgbm": "4.7.0"
+  },
+  "files": [
+    {
+      "path": "src/uq/models/lightgbm_selection.py",
+      "sha256": "4262a7665f17753f9336aa88a0c8056e4fb3d7de95a7fbec665de0d6e2d67b1f"
+    },
+    {
+      "path": "scripts/select_lightgbm_candidate.py",
+      "sha256": "eb3939e208c6aae8d6abe496bf951ba4790f654054d0a774c7d430bb50d6367b"
+    },
+    {
+      "path": "tests/test_lightgbm_selection.py",
+      "sha256": "2b233e2e11cf2e2243faeec4c8405b53cab4b65a3d44ddb4cb43db1b174919f4"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "0c19fcf3ad9391ac7fac26e8c3fd7e2ee5260f8493439465b7be571d4390c6e8"
+    },
+    {
+      "path": "uv.lock",
+      "sha256": "217b496a69f89ceed8ba957161f395a5aa33d8123e6f54b654d89ec5bd546a35"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest tests/test_lightgbm_selection.py -q",
+      "exit_code": 0,
+      "passed": 2
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest tests/test_lightgbm_selection.py -q",
+      "exit_code": 0,
+      "passed": 2
+    },
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1452,
+      "skipped": 33,
+      "elapsed_seconds": 97.90
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1484,
+      "skipped": 1,
+      "elapsed_seconds": 170.02
+    },
+    {
+      "command": ".venv/bin/python scripts/select_lightgbm_candidate.py --help",
+      "exit_code": 0
+    },
+    {
+      "command": "uv lock --check --offline",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "scope": {
+    "selection_metric": "mean daily cross-sectional RankIC on validation only",
+    "candidate_trial_limit": 3,
+    "test_labels_used_for_selection": false,
+    "accepted_model_artifact_and_inference": "not_integrated",
+    "one_year_oos_and_linear_baseline_comparison": "not_run; required historical data is unavailable",
+    "historical_data_root": "data/trading-grade-history/ (gitignored, not created, no data loaded)",
+    "analyst_expectations_source": "unavailable; no feature fabricated",
+    "paper_execution": "existing deterministic replay tests pass in the full suites; no real-history same-source comparison was run",
+    "certification_gate_and_remote_matrix": "not_run"
+  }
+}

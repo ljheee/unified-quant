@@ -139,8 +139,8 @@ def test_state_and_result_widening_is_compatibility_preserving() -> None:
     result_schema_path = ROOT / "config/schemas/contracts/research_run_result.v1.json"
     state_schema = json.loads(state_schema_path.read_text())
     result_schema = json.loads(result_schema_path.read_text())
-    assert state_schema["properties"]["contract_version"]["enum"] == [1, 3, 4, 5, 6]
-    assert result_schema["properties"]["contract_version"]["enum"] == [1, 3, 4, 5, 6]
+    assert state_schema["properties"]["contract_version"]["enum"] == [1, 3, 4, 5, 6, 7, 8]
+    assert result_schema["properties"]["contract_version"]["enum"] == [1, 3, 4, 5, 6, 7, 8]
 
 
 def test_set_binding_digest_recomputation_and_drift() -> None:

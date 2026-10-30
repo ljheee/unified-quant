@@ -363,6 +363,81 @@ class TestEndToEndPipeline:
             assert loaded_runtime_manifest["artifact_filename"] == "model.joblib"
             assert loaded_runtime_bytes == qlib_bytes
 
+            lightgbm_definition_input = ModelDefinitionBuilder(
+                run_content_generation_id="1" * 64, reviewed=True
+            ).build(
+                algorithm="qlib_lightgbm",
+                hyperparameters={
+                    "n_estimators": 8, "num_leaves": 3, "learning_rate": 0.1,
+                    "min_child_samples": 2,
+                },
+                seed_policy={"base_seed": 42, "derivation": "fixed"},
+                model_set="qlib-lightgbm", model_version="1.0.0",
+                feature_schema_generation_id=feature_schema["generation_id"],
+                compatible_dataset_versions=["1.0.0"],
+                metrics=[{"name": "rank_ic", "direction": "maximize"}],
+                selection_rule="maximum validation rank_ic",
+                contract_version=2,
+            )
+            _, lightgbm_definition = ModelRunBuilder.build(
+                definition=lightgbm_definition_input,
+                dataset_manifest=loaded_ds_manifest,
+                export_manifest=export_manifest,
+                receipt_manifest=receipt,
+                environment_lock_sha256=DIGEST,
+                determinism_controls={"random_seed": 42, "threads": 1},
+                label_manifest=label_manifest,
+                universe_snapshot=universe_manifest,
+                factor_manifests={factor_gen: factor_document},
+                quality_decision=run_decision(),
+                store_root=tmp_path,
+            )
+            lightgbm_manifest, lightgbm_bytes = QlibRuntimeTrainer().train(
+                definition=lightgbm_definition,
+                dataset_manifest=loaded_ds_manifest,
+                export_manifest=export_manifest,
+                receipt_manifest=receipt,
+                verified_export=exporter.read("e2e_slice", export_manifest["generation_id"]),
+                feature_columns=["volume_ratio_20d"],
+                label_column="label",
+            )
+            assert lightgbm_manifest["runtime_import_path"] == "lightgbm.sklearn.LGBMRegressor"
+            assert lightgbm_manifest["runtime_name"].startswith("qlib_lightgbm:")
+            lightgbm_generation = _runtime_mmi(
+                {**lightgbm_manifest, "generation_id": DIGEST, "manifest_digest_sha256": DIGEST},
+                schema_name="model_artifact",
+                exclude_fields={"quality_report_checksum_sha256"},
+            )[0]
+            lightgbm_report, _ = bind_reviewed_quality_decision(
+                create_reviewed_quality_decision(
+                    binding_type="model_artifact_v1", policy="reject_all", status="passed",
+                    checks=[{"name": "artifact_checksum", "threshold": 0, "observed": 0, "level": "error", "result": "passed"}],
+                    errors=[], warnings=[], producer_code_fingerprint=DIGEST,
+                    private_key_pem=REVIEWER_PRIVATE_KEY,
+                    subject_generation_id=lightgbm_generation,
+                    subject_content_sha256=lightgbm_generation,
+                ),
+                binding_type="model_artifact_v1",
+                subject_generation_id=lightgbm_generation,
+                subject_content_sha256=lightgbm_generation,
+            )
+            lightgbm_store = ArtifactStore(tmp_path)
+            lightgbm_store.publish(
+                lightgbm_manifest, lightgbm_bytes, quality_report=lightgbm_report,
+            )
+            from uq.models.inference import score_decision_dates
+
+            lightgbm_inference = score_decision_dates(
+                export_root=tmp_path / "qlib_exports",
+                dataset_name="e2e_slice",
+                export_generation_id=export_manifest["generation_id"],
+                run_generation_id=lightgbm_manifest["model_run_content_generation_id"],
+                artifact_generation_id=lightgbm_generation,
+                decision_dates=[calendar_dates[-1]],
+                expected_qlib_version=qlib.__version__,
+            )
+            assert len(lightgbm_inference.scores[calendar_dates[-1]]) > 0
+
         # === Phase 4: Train + publish artifact ===
         trainer = ModelTrainer(tmp_path)
         artifact_manifest, artifact_bytes = trainer.train(

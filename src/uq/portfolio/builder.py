@@ -8,7 +8,7 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,7 @@ import pyarrow as arrow
 import pyarrow.parquet as parquet
 
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
+from ..contracts.gate_contracts import validate_contract
 from ..contracts.model_layer import (
     ModelContractLoader,
     bind_reviewed_quality_decision,
@@ -28,6 +29,22 @@ from ..contracts.model_layer import (
 from ..errors import ContractError
 
 _WEIGHT_TOLERANCE = 1e-8
+
+
+def _selected_industries(
+    selected: list[str], industry_by_instrument: Mapping[str, str] | None
+) -> dict[str, str]:
+    if industry_by_instrument is None:
+        raise ContractError("industry-aware portfolio requires point-in-time industry facts")
+    labels: dict[str, str] = {}
+    for instrument in selected:
+        value = industry_by_instrument.get(instrument)
+        if not isinstance(value, str) or not value.strip():
+            raise ContractError(
+                f"industry facts are missing for selected instrument {instrument}"
+            )
+        labels[instrument] = value.strip()
+    return labels
 
 
 class PortfolioBuilder:
@@ -48,11 +65,15 @@ class PortfolioBuilder:
         previous_target_weights: dict[str, float] | None = None,
         initial_state: bool = False,
         quality_decision: dict[str, Any] | None = None,
+        risk_return_frame: pd.DataFrame | None = None,
+        risk_return_calendar_sessions: list[str] | None = None,
+        risk_return_manifest: dict[str, Any] | None = None,
+        industry_by_instrument: Mapping[str, str] | None = None,
     ) -> tuple[dict[str, Any], pd.DataFrame]:
         """Compute target weights for one rebalance date.
 
         Args:
-            definition: validated portfolio_definition.v1 manifest.
+            definition: validated portfolio_definition.v1, v2, or v3 manifest.
             prediction_generation_id: upstream prediction generation.
             decision_date: ISO date string.
             scores: instrument-indexed score series (already filtered to eligible).
@@ -66,11 +87,29 @@ class PortfolioBuilder:
                 records ``previous_target_weights_generation_id: null``, which is what
                 makes the exemption auditable instead of silent.
             quality_decision: externally reviewed quality decision document.
+            risk_return_frame / risk_return_calendar_sessions: governed daily returns
+                and their bound trading calendar, required by risk parity v3.
+            risk_return_manifest: verified manifest read from the owning risk-return
+                store, required to match the portfolio definition's binding.
+            industry_by_instrument: point-in-time industry labels read from the
+                reviewed execution-facts manifest, required for industry-neutral
+                weighting or an industry cap below 100%.
 
         Returns:
             (manifest, frame) where frame has columns [instrument, weight].
         """
-        if definition.get("weight_scheme") != "top_n_equal_weight":
+        contract_version = definition.get("contract_version", 1)
+        weight_scheme = definition.get("weight_scheme")
+        supported_schemes = (
+            {"top_n_equal_weight"}
+            if contract_version == 1
+            else {"top_n_equal_weight", "score_weighted"}
+            if contract_version == 2
+            else {"top_n_equal_weight", "score_weighted", "risk_parity", "industry_neutral"}
+            if contract_version == 3
+            else set()
+        )
+        if weight_scheme not in supported_schemes:
             raise ContractError(f"unsupported weight scheme: {definition.get('weight_scheme')}")
 
         scheme_params = definition["scheme_parameters"]
@@ -101,30 +140,146 @@ class PortfolioBuilder:
         ranked = ranked.sort_values(["score", "instrument"], ascending=[False, True])
         selected = ranked.head(n)["instrument"].tolist()
 
-        # Equal weight with single-position cap
-        raw_weight = 1.0 / n
-        capped_weight = min(raw_weight, max_single)
-        total_stock = capped_weight * n
+        selected_rows = ranked.head(n)
+        if weight_scheme == "top_n_equal_weight":
+            # Equal weight with single-position cap.
+            raw_weight = 1.0 / n
+            capped_weight = min(raw_weight, max_single)
+            weights_map = {inst: capped_weight for inst in selected}
+            total_stock = capped_weight * n
+        elif weight_scheme == "score_weighted":
+            selected_scores = selected_rows["score"].to_numpy(dtype=float)
+            if not np.isfinite(selected_scores).all():
+                raise ContractError("score_weighted requires finite scores for selected instruments")
+            if "temperature" not in scheme_params:
+                raise ContractError("score_weighted requires a temperature parameter")
+            temperature = float(scheme_params["temperature"])
+            if not np.isfinite(temperature) or temperature <= 0:
+                raise ContractError("score_weighted temperature must be finite and positive")
+            logits = (selected_scores - selected_scores.max()) / temperature
+            raw = np.exp(np.maximum(logits, -700.0))
+            total = float(raw.sum())
+            if not np.isfinite(total) or total <= 0:
+                raise ContractError("score_weighted could not normalize selected scores")
+            normalized = raw / total
+            weights_map = {
+                inst: min(float(weight), max_single)
+                for inst, weight in zip(selected, normalized, strict=True)
+            }
+            total_stock = sum(weights_map.values())
+        elif weight_scheme == "risk_parity":
+            risk_binding = definition.get("risk_model_binding")
+            selected_scores = selected_rows["score"].to_numpy(dtype=float)
+            if not np.isfinite(selected_scores).all():
+                raise ContractError("risk_parity requires finite selected scores")
+            if (not isinstance(risk_return_frame, pd.DataFrame)
+                    or set(risk_return_frame.columns) != {"date", "instrument", "return"}
+                    or risk_return_frame.duplicated(["date", "instrument"]).any()
+                    or risk_return_calendar_sessions is None
+                    or risk_return_manifest is None):
+                raise ContractError("risk_parity requires its governed daily returns and calendar")
+            validate_contract("portfolio_risk_returns.v1.json", risk_return_manifest)
+            risk_payload = {
+                key: value for key, value in risk_return_manifest.items()
+                if key not in {"generation_id", "manifest_digest_sha256"}
+            }
+            if (sha256_json(risk_payload) != risk_return_manifest["generation_id"]
+                    or sha256_json({**risk_payload, "generation_id": risk_return_manifest["generation_id"]})
+                    != risk_return_manifest["manifest_digest_sha256"]):
+                raise ContractError("risk_parity return manifest identity is invalid")
+            if (not isinstance(risk_binding, dict)
+                    or risk_binding.get("family") != "portfolio_risk_returns_v1"
+                    or risk_binding.get("generation_id") != risk_return_manifest.get("generation_id")
+                    or risk_binding.get("manifest_digest_sha256")
+                    != risk_return_manifest.get("manifest_digest_sha256")):
+                raise ContractError("risk_parity return manifest does not match its reviewed binding")
+            if (risk_return_manifest.get("calendar_sessions") != risk_return_calendar_sessions
+                    or len(risk_return_frame) != risk_return_manifest.get("row_count")
+                    or risk_return_manifest.get("observation_visibility")
+                    != "available_after_session_close"
+                    or risk_return_manifest.get("strict_prior_session_policy") is not True):
+                raise ContractError("risk_parity return manifest has an invalid calendar or visibility policy")
+            from .risk_model import (
+                covariance_for_decision,
+                daily_returns_fingerprint,
+                risk_parity_weights,
+            )
+
+            if daily_returns_fingerprint(risk_return_frame) != risk_return_manifest.get(
+                "logical_checksum_sha256"
+            ):
+                raise ContractError("risk_parity return data does not match its manifest")
+
+            lookback_sessions = scheme_params.get("lookback_sessions")
+            covariance = covariance_for_decision(
+                risk_return_frame,
+                calendar_sessions=risk_return_calendar_sessions,
+                decision_date=decision_date,
+                instruments=selected,
+                lookback_sessions=lookback_sessions,
+            )
+            raw_weights = risk_parity_weights(covariance)
+            weights_map = {
+                instrument: min(float(weight), max_single)
+                for instrument, weight in zip(selected, raw_weights, strict=True)
+            }
+            total_stock = sum(weights_map.values())
+        else:
+            selected_scores = selected_rows["score"].to_numpy(dtype=float)
+            if not np.isfinite(selected_scores).all():
+                raise ContractError("industry_neutral requires finite selected scores")
+            labels = _selected_industries(selected, industry_by_instrument)
+            groups: dict[str, list[str]] = {}
+            for instrument in selected:
+                groups.setdefault(labels[instrument], []).append(instrument)
+            industry_budget = 1.0 / len(groups)
+            weights_map = {
+                instrument: min(industry_budget / len(members), max_single)
+                for members in groups.values()
+                for instrument in members
+            }
+            total_stock = sum(weights_map.values())
 
         # Cash reserve: scale down if needed
         max_allowed_total = 1.0 - cash_reserve + _WEIGHT_TOLERANCE
         if total_stock > max_allowed_total:
             scale_factor = max_allowed_total / total_stock
-            capped_weight *= scale_factor
-            total_stock = capped_weight * n
-
-        weights_map = {inst: capped_weight for inst in selected}
+            weights_map = {
+                instrument: weight * scale_factor
+                for instrument, weight in weights_map.items()
+            }
+            total_stock = sum(weights_map.values())
 
         # Industry cap requires a governed manifest runtime; private field bypass is forbidden.
-        if max_industry is not None and max_industry < 1.0:
+        industry_cap_applied = max_industry is not None and max_industry < 1.0
+        if industry_cap_applied:
             industry_binding = definition.get("industry_source_binding")
-            if not industry_binding or industry_binding.get("source_type") != "governed_industry_manifest":
+            if contract_version < 3:
+                if (not industry_binding
+                        or industry_binding.get("source_type") != "governed_industry_manifest"):
+                    raise ContractError(
+                        "max_industry_weight requires a governed_industry_manifest binding"
+                    )
                 raise ContractError(
-                    "max_industry_weight requires a governed_industry_manifest binding"
+                    "industry cap requires a governed industry membership runtime, which is not enabled"
                 )
-            raise ContractError(
-                "industry cap requires a governed industry membership runtime, which is not enabled"
-            )
+            if (not industry_binding
+                    or industry_binding.get("source_type") != "governed_execution_facts"
+                    or industry_by_instrument is None):
+                raise ContractError(
+                    "max_industry_weight requires bound point-in-time industry facts"
+                )
+            labels = _selected_industries(selected, industry_by_instrument)
+            industry_weights: dict[str, float] = {}
+            for instrument, industry in labels.items():
+                industry_weights[industry] = industry_weights.get(industry, 0.0) + weights_map.get(instrument, 0.0)
+            for industry, exposure in industry_weights.items():
+                if exposure > max_industry + _WEIGHT_TOLERANCE:
+                    scale_factor = max_industry / exposure
+                    for instrument in selected:
+                        if labels[instrument] == industry:
+                            weights_map[instrument] *= scale_factor
+            total_stock = sum(weights_map.values())
 
         # Turnover cap.
         #
@@ -158,6 +313,24 @@ class PortfolioBuilder:
                             blended[k] = round(new_w, 12)
                     weights_map = blended
                     total_stock = sum(weights_map.values())
+
+        # Turnover blending toward prior holdings can reintroduce an industry
+        # exposure that the current target just scaled down. Never publish that
+        # conflict as a satisfied sector cap.
+        if industry_cap_applied and weights_map:
+            final_labels = _selected_industries(list(weights_map), industry_by_instrument)
+            final_industry_weights: dict[str, float] = {}
+            for instrument, industry in final_labels.items():
+                final_industry_weights[industry] = (
+                    final_industry_weights.get(industry, 0.0) + weights_map[instrument]
+                )
+            if any(
+                exposure > max_industry + _WEIGHT_TOLERANCE
+                for exposure in final_industry_weights.values()
+            ):
+                raise ContractError(
+                    "turnover constraint conflicts with the maximum industry weight"
+                )
 
         frame = pd.DataFrame(
             [(k, v) for k, v in sorted(weights_map.items())],

@@ -1,0 +1,100 @@
+{
+  "actual_qlib_integration": {
+    "one_year_or_real_data_experiment": false,
+    "scope": "short synthetic single-fold fit/inference/backtest; owning readbacks and completed-result retry",
+    "test_id": "tests/test_walk_forward_runner.py::test_real_qlib_fold_output_is_verified_through_owning_readers"
+  },
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "elapsed_seconds": 68.46,
+      "exit_code": 0,
+      "passed": 1372,
+      "skipped": 32
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "elapsed_seconds": 115.75,
+      "exit_code": 0,
+      "passed": 1403,
+      "skipped": 1
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv/bin/python scripts/run_walk_forward.py --help",
+      "exit_code": 0
+    }
+  ],
+  "date": "2026-10-29",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "guard_mutations": {
+    "disabled": [
+      "purge covers label horizon",
+      "one-year default admission",
+      "completed-result discovery"
+    ],
+    "expected_result": "failed",
+    "method": "isolated in-memory mutation; no disk source edits",
+    "regression_failures_observed": 3
+  },
+  "implementation_files": [
+    {
+      "path": "src/uq/evaluation/walk_forward.py",
+      "sha256": "fc2e2d4d3600076da9258979ee4a16ca31c248d1750b8f7ef1283b3becf33cc6"
+    },
+    {
+      "path": "src/uq/evaluation/walk_forward_runner.py",
+      "sha256": "3e543a161fa667bb04eaed43f767eb116d8df809ce67d2a140951db91d832a44"
+    },
+    {
+      "path": "scripts/run_walk_forward.py",
+      "sha256": "ad04e0c196d805dd50676928b8fa4b9a320e2076a8774c44baf8d0a970a6854a"
+    },
+    {
+      "path": "tests/test_walk_forward.py",
+      "sha256": "e07561da5e93c37ef31c9ad75cdd4edaddd59dfe8884745b296b05f4b9ff581b"
+    },
+    {
+      "path": "tests/test_walk_forward_runner.py",
+      "sha256": "dfd4ec4aba1ec9263cd7f882c68a4fc718495704ba2b81418ef103cd59c77895"
+    }
+  ],
+  "kind": "trading_grade_walk_forward_implementation_verification",
+  "not_verified": [
+    "real historical multi-fold annual OOS run",
+    "automated fold data/request publication and review",
+    "continuous cross-fold capital/holdings/terminal liquidation",
+    "shared benchmark across fold scores",
+    "historical PIT completeness and raw-factor warmup data",
+    "all three real market states",
+    "label execution-gap/delisting PIT audit",
+    "live vendors",
+    "certification gate and remote matrix",
+    "paper/live small-capital acceptance"
+  ],
+  "record_checksum_sha256": "35b297df50f8c3a4e9ed6ecbd396d979ca049f3308b47b7081f8e4a08a31b290",
+  "record_version": 1,
+  "release_or_quality_authorization": false,
+  "remaining_known_contract_gap": {
+    "description": "backtest_result.v1 rejects undefined Sharpe from a legitimate cash-only backtest",
+    "fixed": false,
+    "required_followup": "versioned backtest upgrade; keep existing v1 compatibility",
+    "test_id": "tests/test_walk_forward_runner.py::test_legacy_v1_cash_only_fold_exposes_undefined_sharpe_contract_gap"
+  },
+  "runtime_source_fingerprint": "70e4c8dcf9d25685737a132ec7077ea0016d752e5610e98428a63283b6d53a36",
+  "targeted_checks": {
+    "base_environment_passed": 33,
+    "base_environment_skipped": 1,
+    "files": [
+      "tests/test_walk_forward.py",
+      "tests/test_walk_forward_runner.py"
+    ],
+    "qlib_environment_passed": 34
+  },
+  "uncommitted_worktree": true
+}

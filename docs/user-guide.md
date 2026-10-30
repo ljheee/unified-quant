@@ -293,31 +293,31 @@ execute 的命令形状如下，仅作结构说明：
 | `label_binding` | 同文件 `LabelStore` | 是:`scripts/build_label_sets.py`(默认逐标的发布;`--combined` 发布**一份覆盖全部标的**的集合——研究请求只绑一份,所以跑 execute 要用这个开关) |
 | `backtest_config_binding` | 同文件 `BacktestConfigStore` | 否:只读 |
 
-v5/v6 请求额外要求的两类绑定**有**随仓库提供的生产者:
+v5–v8 请求额外要求的两类绑定**有**随仓库提供的生产者:
 
 - `index_membership_binding`:`scripts/fetch_index_membership.py`。
 - `paper_execution_template` 的市场数据四族:`scripts/publish_market_datasets.py`。
 - `backtest_config` 绑定的 calendar / suspension / corporate_action 三族(整窗口单一制品,**不是**上面那四族的布局):`scripts/publish_backtest_market_data.py`。来源见 `docs/subsystems/research-chain.md`;除权排除集按 **`ex_date` 而非公告日**判入窗。
 - `backtest_config_binding` 本身:`scripts/publish_backtest_config.py`。四个绑定全部从已发布制品显式读取,市场三族还会**逐个回读校验**,不会把报告里不一致的 checksum 烙进 config。
+- v3 `backtest_config` 可通过 `scripts/publish_backtest_config.py` 显式配置 `--max-drawdown-stop 0.20`，或用 `--volatility-target-annualized 0.20 --volatility-lookback-sessions 20 --volatility-min-history-sessions 20` 开启目标波动率；这些参数进入受外部评审绑定的回测配置。回撤停止会在后续 session 持续尝试退出；波动率目标只降仓不加杠杆，历史不足时不缩放。它们是确定性回放控制，不代表真实成交或风险预算必然满足。
 - `adjusted_price` 的按日分区写侧:`scripts/publish_adjusted_window.py`。它逐会话发布 `adjusted-v2`,并把样本选择排除项作为带原因的受治理 JSON 输入(`--excluded-instruments`),排除会同时作用于发布帧与交叉校验。
 
 两点提醒:
 
 - §6 的 dry-run 只校验请求本身并写 request/state manifest,**不会**去解析上面这些 store;绑定是到 execute 阶段才逐个读取校验的,所以 dry-run 通过不代表可以 execute。
-- 因此"一条命令从零跑到回测"按现有代码还做不到:上面这些类要先产出并落到同一个 `--data-root`。已有生产入口的是:因子(`scripts/publish_factor_partitions.py`)、universe snapshot(`scripts/publish_universe_snapshots.py`)、label set(`scripts/build_label_sets.py`)、sample construction(`scripts/publish_sample_construction.py`,v6)、feature preprocessing(`scripts/publish_feature_preprocessing.py`)、回测市场输入三族(`scripts/publish_backtest_market_data.py`)与 backtest_config 本身(`scripts/publish_backtest_config.py`,评审以 `--quality-decisions-json` 传入,脚本从不自己签);`adjusted_price` 的写侧虽已在 `src/uq/research_chain/owning_contracts.py` 提供,但回测需要的是**覆盖整个窗口**的复权帧,不是按日分区。
+- 因此"一条命令从零跑到回测"按现有代码还做不到:上面这些类要先产出并落到同一个 `--data-root`。已有生产入口的是:因子(`scripts/publish_factor_partitions.py`)、universe snapshot(`scripts/publish_universe_snapshots.py`)、label set(`scripts/build_label_sets.py`)、sample construction(`scripts/publish_sample_construction.py`,v6/v7)、feature preprocessing(`scripts/publish_feature_preprocessing.py`)、回测市场输入三族(`scripts/publish_backtest_market_data.py`)与 backtest_config 本身(`scripts/publish_backtest_config.py`,评审以 `--quality-decisions-json` 传入,脚本从不自己签);`adjusted_price` 的写侧虽已在 `src/uq/research_chain/owning_contracts.py` 提供,但回测需要的是**覆盖整个窗口**的复权帧,不是按日分区。
 
-### 论文执行(v5/v6 请求)的两个额外参数
+### 论文执行(v5–v8 请求)的两个额外参数
 
-`contract_version: 5` 或 `6` 的请求(带 `paper_execution_template`)额外要求两个治理输入,必须成对提供:
+`contract_version: 5`、`6`、`7` 或 `8` 的请求(带 `paper_execution_template`)额外要求两个治理输入,必须成对提供。v7 固定选择 Qlib LightGBM 的 model-definition template v2，以及 portfolio-definition template v2；后者可配置 `top_n_equal_weight` 或温度 softmax `score_weighted`。v8 延续 v7 模型路由，并使用 portfolio-definition template v3，可选择风险平价或行业均衡/上限路由:
 
 ```bash
 .venv/bin/uq-research-run \
   --project-root "$PWD" \
   --data-root "$DATA_ROOT" \
   --mode execute \
-  --request-json /path/to/request-v5.json \
+  --request-json /path/to/request-v7.json \
   --quality-decisions-json /path/to/quality-decisions.json \
-  --scores-json /path/to/scores.json \
   --membership-root "$DATA_ROOT/a500-store" \
   --market-dataset-root "$DATA_ROOT/market-datasets"
 ```

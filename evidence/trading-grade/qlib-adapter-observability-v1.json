@@ -1,0 +1,74 @@
+{
+  "record_version": 1,
+  "kind": "trading_grade_qlib_adapter_observability",
+  "date": "2026-10-30",
+  "git_head": "2d713260eef73d595bf75bb1bd06899a8929dad1",
+  "worktree_status": "uncommitted implementation on the reviewed HEAD",
+  "fingerprint_profile": "source_tree_sha256_v1",
+  "code_fingerprint": "ac927b7b8e676b79b9f4035c16b40258dcff7f7aaa21ca8a4d733a767f9137e2",
+  "environment_lock_digest_sha256": "b55d6204eb3cbb740fdd7466a6b6fe7ccb2ef76967ab911c6cf120aeee3ff5a1",
+  "files": [
+    {
+      "path": "src/uq/research_chain/adapters.py",
+      "sha256": "2b691030323e4e1db9c12f6b9ea404b815363966c3c75adf7b70490824cb8baa"
+    },
+    {
+      "path": "tests/test_research_chain_phase5.py",
+      "sha256": "99b5db68ad8ba175c151634156e08444a3d39093919f37aa811634dab5c7ab79"
+    },
+    {
+      "path": "docs/subsystems/research-chain.md",
+      "sha256": "cf59f1afcbf5ffdf3d36a7c93bab6d00e7cc70484a9d44f8a1a36665b24954f2"
+    },
+    {
+      "path": "docs/subsystems/model-layer.md",
+      "sha256": "14b524632ef697edee43731186fa04f2fa108b6189a271342a54c40be2f365d9"
+    }
+  ],
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1438,
+      "skipped": 33,
+      "elapsed_seconds": 122.55
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "exit_code": 0,
+      "passed": 1470,
+      "skipped": 1,
+      "elapsed_seconds": 185.4
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_research_chain_phase5.py -q",
+      "exit_code": 0
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest tests/test_research_chain_phase5.py -q",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 -m compileall -q src/uq/research_chain/adapters.py tests/test_research_chain_phase5.py",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "scope": {
+    "adapter_substages": [
+      "owner_readback",
+      "receipt_binding",
+      "stage_publication",
+      "conditional_retry_readback"
+    ],
+    "timing_effect_on_result_manifest": "none in short Qlib chain",
+    "receipt_failure": "failed substage and no later model training verified",
+    "real_all_a_performance": "not_run",
+    "historical_data_replay": "not_run",
+    "certification_gate_remote_matrix": "not_run"
+  },
+  "archive_checksum_sha256": "6b9c018cd3abab7c6a427b68605aa6c1199a093ef3f836f268c232d071379892"
+}

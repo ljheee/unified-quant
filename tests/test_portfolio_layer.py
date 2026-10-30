@@ -77,6 +77,49 @@ class TestPortfolioBuilder:
         assert set(frame["instrument"]) == {"A", "B", "C"}
         assert abs(manifest["total_stock_weight"] - 1.0) < 1e-8
 
+    def test_score_weighted_v2_uses_softmax_and_cash_reserve(self):
+        builder = PortfolioBuilder(tempfile.mkdtemp())
+        definition = _make_definition(
+            contract_version=2,
+            schema_version="2.0.0",
+            weight_scheme="score_weighted",
+            scheme_parameters={"n": 2, "temperature": 1.0},
+            constraints={
+                "max_single_weight": 1.0,
+                "max_industry_weight": None,
+                "max_turnover": None,
+                "cash_reserve": 0.1,
+            },
+        )
+        _, frame = builder.build(
+            definition=definition,
+            prediction_generation_id=GEN_B,
+            decision_date="2026-01-05",
+            scores=pd.Series({"A": 2.0, "B": 1.0, "C": -4.0}),
+            universe_instruments=["A", "B", "C"],
+        )
+        weights = frame.set_index("instrument")["weight"]
+        assert set(weights.index) == {"A", "B"}
+        assert weights["A"] / weights["B"] == pytest.approx(np.e, rel=1e-10)
+        assert weights.sum() == pytest.approx(0.9)
+
+    def test_score_weighted_v2_rejects_nonfinite_selected_scores(self):
+        builder = PortfolioBuilder(tempfile.mkdtemp())
+        definition = _make_definition(
+            contract_version=2,
+            schema_version="2.0.0",
+            weight_scheme="score_weighted",
+            scheme_parameters={"n": 2, "temperature": 1.0},
+        )
+        with pytest.raises(ContractError, match="finite scores"):
+            builder.build(
+                definition=definition,
+                prediction_generation_id=GEN_B,
+                decision_date="2026-01-05",
+                scores=pd.Series({"A": np.inf, "B": 1.0}),
+                universe_instruments=["A", "B"],
+            )
+
     def test_single_position_cap(self):
         builder = PortfolioBuilder(tempfile.mkdtemp())
         definition = _make_definition()

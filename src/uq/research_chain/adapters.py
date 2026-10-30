@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -395,10 +396,10 @@ class DatasetStageAdapter:
         membership store is a hard failure rather than a silent fallback to the raw
         partition, which would admit members that were not in the index on that day.
         """
-        if plan.request.get("contract_version") in {4, 5, 6}:
+        if plan.request.get("contract_version") in {4, 5, 6, 7, 8}:
             if self.membership_store is None or self.trading_calendar is None:
                 raise ContractError(
-                    "v4/v5/v6 dataset stage requires a governed membership store and trading calendar"
+                    "v4-v8 dataset stage requires a governed membership store and trading calendar"
                 )
             return filtered_factor_frame(
                 plan.request,
@@ -417,14 +418,14 @@ class DatasetStageAdapter:
         preprocessing binding check needs the same list, and re-deriving it is what
         keeps that check anchored to the store rather than to the request's claim.
         """
-        if plan.request.get("contract_version") not in {4, 5, 6}:
+        if plan.request.get("contract_version") not in {4, 5, 6, 7, 8}:
             raise ContractError(
-                "factor partition set resolution requires a v4/v5/v6 request; earlier "
+                "factor partition set resolution requires a v4-v8 request; earlier "
                 "contracts bind a single factor partition and carry no set"
             )
         if self.membership_store is None or self.trading_calendar is None:
             raise ContractError(
-                "v4/v5/v6 dataset stage requires a governed membership store and trading calendar"
+                "v4-v8 dataset stage requires a governed membership store and trading calendar"
             )
         return verify_request_input_sets(
             plan.request,
@@ -546,7 +547,7 @@ class DatasetStageAdapter:
         # the resolved partition set instead, which is stricter than the old
         # equality -- a set built for a different window or ordering is refused.
         expected_factor_partition_set: dict[str, Any] | None = None
-        if plan.request.get("contract_version") in {4, 5, 6}:
+        if plan.request.get("contract_version") in {4, 5, 6, 7, 8}:
             expected_factor_partition_set = self._factor_partition_set(plan)
             expected_factor_generations = [
                 entry["generation_id"]
@@ -565,7 +566,7 @@ class DatasetStageAdapter:
         input_schema = self.feature_schema_store.read_schema(preprocessing["input_feature_schema_generation_id"])
         output_schema = self.feature_schema_store.read_schema(preprocessing["output_feature_schema_generation_id"])
 
-        if plan.request.get("contract_version") == 6:
+        if plan.request.get("contract_version") in {6, 7, 8}:
             if self.sample_construction_store is None:
                 raise ContractError(
                     "v6 dataset stage requires a governed sample-construction store"
@@ -977,10 +978,11 @@ def _synthesized_portfolio_definition(
     template_keys = {
         "contract_version", "portfolio_name", "weight_scheme", "scheme_parameters",
         "score_policy", "constraints", "rebalance_schedule", "industry_source_binding",
+        "risk_model_binding",
     }
     definition = {
         **{key: value for key, value in template.items() if key in template_keys},
-        "schema_version": "1.0.0",
+        "schema_version": f"{template.get('contract_version', 1)}.0.0",
         "universe_snapshot_generation_id": universe_generation_id,
         "prediction_set_generation_id": prediction_generation_id,
         "run_id": plan.request["run_id"],
@@ -1008,6 +1010,7 @@ class PortfolioStageAdapter:
         prediction_builder: PredictionBuilder,
         backtest_config_store: BacktestConfigStore | None = None,
         market_dataset_store: BacktestMarketDatasetStore | None = None,
+        risk_returns_store: Any | None = None,
     ) -> None:
         self.universe_store = universe_store
         self.portfolio_builder = portfolio_builder
@@ -1019,6 +1022,7 @@ class PortfolioStageAdapter:
         # callers that build weights for a non-backtest context are unaffected.
         self.backtest_config_store = backtest_config_store
         self.market_dataset_store = market_dataset_store
+        self.risk_returns_store = risk_returns_store
         # A resumed run skips this stage, so nothing assigns this attribute
         # in-process. Declaring it here turns a silent AttributeError into an
         # explicit "unavailable" that the runner can recover from by reading the
@@ -1069,6 +1073,35 @@ class PortfolioStageAdapter:
             return universe_instruments
         excluded = set(frame["instrument"].astype(str).unique().tolist())
         return [name for name in universe_instruments if name not in excluded]
+
+    def _industry_facts(self, plan: ResolvedExecutionPlan) -> pd.DataFrame | None:
+        """Read the exact execution-facts generation reviewed by portfolio v3."""
+        binding = plan.request["portfolio_definition_template"].get("industry_source_binding")
+        if binding is None:
+            return None
+        if (binding.get("source_type") != "governed_execution_facts"
+                or binding.get("industry_column") != "industry"
+                or self.backtest_config_store is None):
+            raise ContractError("industry-aware portfolio requires bound execution facts")
+        try:
+            config_binding = _stage_binding(
+                plan, stage="backtest_execution", output_family="backtest_config"
+            )
+        except ContractError as exc:
+            raise ContractError("industry-aware portfolio requires a reviewed backtest config") from exc
+        config = self.backtest_config_store.read_manifest(config_binding.generation_id)
+        facts_binding = config.get("execution_facts_binding")
+        if (not isinstance(facts_binding, dict)
+                or facts_binding.get("generation_id") != binding.get("manifest_generation_id")):
+            raise ContractError("portfolio industry binding differs from the reviewed execution facts")
+        from ..backtest.execution_facts import ExecutionFactsStore, facts_binding as facts_manifest_binding
+
+        facts_manifest, frame = ExecutionFactsStore(self.backtest_config_store.root).read(
+            facts_binding["generation_id"]
+        )
+        if facts_manifest_binding(facts_manifest) != facts_binding:
+            raise ContractError("portfolio execution-facts manifest binding mismatch")
+        return frame
 
     def run(
         self,
@@ -1127,6 +1160,18 @@ class PortfolioStageAdapter:
         bound_definition, _ = PortfolioDefinitionBinding.bind(
             definition, quality_decision=dict(definition_quality_decision)
         )
+        risk_return_frame = None
+        risk_return_calendar_sessions = None
+        risk_binding = plan.request["portfolio_definition_template"].get("risk_model_binding")
+        if risk_binding is not None:
+            if self.risk_returns_store is None:
+                raise ContractError("risk-parity portfolio requires its governed risk-returns store")
+            risk_manifest, risk_return_frame = self.risk_returns_store.read(
+                risk_binding["generation_id"]
+            )
+            if risk_manifest["manifest_digest_sha256"] != risk_binding["manifest_digest_sha256"]:
+                raise ContractError("portfolio risk-returns manifest digest mismatch")
+            risk_return_calendar_sessions = risk_manifest["calendar_sessions"]
         universe_manifest = self.universe_store.read_manifest(universe_binding.generation_id)
         members = self.universe_store.read_members(
             universe_binding.generation_id,
@@ -1147,6 +1192,7 @@ class PortfolioStageAdapter:
         universe_instruments = self._exclude_corporate_actions(
             plan, universe_instruments
         )
+        industry_facts = self._industry_facts(plan)
 
         target_manifests: dict[str, dict[str, Any]] = {}
         target_frames: dict[str, pd.DataFrame] = {}
@@ -1180,6 +1226,22 @@ class PortfolioStageAdapter:
                 # only state allowed to exempt itself from the turnover cap.
                 initial_state=previous_frame is None,
                 quality_decision=None,
+                risk_return_frame=risk_return_frame,
+                risk_return_calendar_sessions=risk_return_calendar_sessions,
+                risk_return_manifest=(
+                    risk_manifest if risk_binding is not None else None
+                ),
+                industry_by_instrument=(
+                    {
+                        str(row.instrument): str(row.industry)
+                        for row in industry_facts.loc[
+                            industry_facts["date"] == decision_date,
+                            ["instrument", "industry"],
+                        ].itertuples(index=False)
+                        if isinstance(row.industry, str) and row.industry.strip()
+                    }
+                    if industry_facts is not None else None
+                ),
             )
             # cr.md 8.65: per-decision-date family, so a mid-loop interruption
             # leaves earlier dates on disk.  Recover them through the readback
@@ -1282,8 +1344,9 @@ class BacktestStageAdapter:
         # price binding), so the provisional identity must be derived under the
         # same schema the config was published with. Hardcoding the v1 schema
         # made a valid v2 config look as though its review did not match.
+        config_version = config.get("contract_version", 1)
         config_schema_name = (
-            "backtest_config_v2" if config.get("contract_version") == 2
+            f"backtest_config_v{config_version}" if config_version in {2, 3}
             else "backtest_config"
         )
         provisional_config_generation, _ = model_manifest_identities(
@@ -1349,10 +1412,20 @@ class BacktestStageAdapter:
                 raise ContractError("portfolio target-weight published binding mismatch")
 
         price_binding = config["price_source_binding"]
-        adjusted_binding = _stage_binding(
-            plan, stage="dataset_preparation", output_family="adjusted_price_dataset"
-        )
-        if config.get("contract_version", 1) >= 2:
+        execution_inputs = {}
+        if config_version == 3:
+            from ..backtest.execution_facts import ExecutionFactsStore, RawExecutionPriceStore, facts_binding
+
+            _, price_frame = RawExecutionPriceStore(self.adjusted_price_store.root).read_window(
+                config["start_date"], config["end_date"], price_binding,
+            )
+            fact_manifest, fact_frame = ExecutionFactsStore(self.backtest_config_store.root).read(
+                config["execution_facts_binding"]["generation_id"]
+            )
+            if facts_binding(fact_manifest) != config["execution_facts_binding"]:
+                raise ContractError("backtest execution facts binding mismatch")
+            execution_inputs["execution_facts"] = fact_frame
+        elif config_version == 2:
             # cr.md 8.63: `price_source_binding` names the window's partition set.
             # A per-session line stays per-session (its invariants -- positive
             # `adj_factor`, restatement equals the vendor value, jump agreement with
@@ -1365,6 +1438,9 @@ class BacktestStageAdapter:
             verify_partition_set_binding(price_binding, price_triples, family="bars_adjusted_adjusted_v2")
             price_frame = self.adjusted_price_store.read_partition_frames(price_triples)
         else:
+            adjusted_binding = _stage_binding(
+                plan, stage="dataset_preparation", output_family="adjusted_price_dataset"
+            )
             if price_binding["dataset_generation_id"] != adjusted_binding.generation_id:
                 raise ContractError("backtest price binding mismatch")
             price_frame = self.adjusted_price_store.read_frame(price_binding["dataset_generation_id"])
@@ -1420,7 +1496,7 @@ class BacktestStageAdapter:
         corporate_action_instruments = set(
             corporate_action_frame.loc[
                 corporate_action_frame["date"].astype(str).isin(
-                    {
+                    set(price_dates) if config_version == 3 else {
                         str(price_dates[price_dates.index(date) + 1])
                         for date in ordered_dates
                         if price_dates.index(date) + 1 < len(price_dates)
@@ -1432,6 +1508,26 @@ class BacktestStageAdapter:
             decision_date: portfolio_stage_result.target_weight_frames[decision_date]
             for decision_date in ordered_dates
         }
+        if config_version == 3:
+            from ..contracts.paths import reject_symlinks_within
+
+            root = self.backtest_config_store.root
+            source = TargetWeightStore(root)
+            for decision_date in ordered_dates:
+                declared = portfolio_stage_result.target_weight_manifests[decision_date]
+                directory = (root / "target_weights" / f"date={decision_date}"
+                             / f"generation={declared['generation_id']}")
+                for name in ("manifest.json", "data.parquet"):
+                    reject_symlinks_within(root, directory / name, label="v3 target weights")
+                owning_manifest, owning_frame = source.read(declared["generation_id"], decision_date)
+                if owning_manifest != declared:
+                    raise ContractError("v3 target-weight handoff manifest differs from its published input")
+                try:
+                    pd.testing.assert_frame_equal(weight_partitions[decision_date], owning_frame,
+                                                  check_dtype=False, check_exact=True)
+                except AssertionError as exc:
+                    raise ContractError("v3 target-weight handoff frame differs from its published input") from exc
+                weight_partitions[decision_date] = owning_frame
         target_weight_generations = [
             {
                 "decision_date": decision_date,
@@ -1451,6 +1547,7 @@ class BacktestStageAdapter:
             suspension_dates=suspension_dates,
             corporate_action_instruments=corporate_action_instruments,
             quality_decision=_decision_payload(quality_decision),
+            **execution_inputs,
         )
         # cr.md 8.65: the result generation is derived from the content, so a retry
         # of a stage that published before it failed names the same bytes.  Recover
@@ -1559,6 +1656,7 @@ class QlibExportStageAdapter:
         receipt_quality_decision: Mapping[str, Any],
         runner_identity: Mapping[str, str],
         created_at: str | None = None,
+        telemetry: Any | None = None,
     ) -> QlibExportStageResult:
         dataset_binding = _stage_binding(plan, stage="dataset_preparation", output_family="model_dataset")
         if dataset_generation_id != dataset_binding.generation_id or dataset_manifest_digest_sha256 != dataset_binding.manifest_digest_sha256:
@@ -1592,62 +1690,73 @@ class QlibExportStageAdapter:
                 instruments=instruments,
                 provider_uri=provider_uri,
                 quality_decision=_decision_payload(export_quality_decision),
+                timing_callback=telemetry.substage if telemetry is not None else None,
             )
         except ContractError as exc:
             if "already exists" not in str(exc):
                 raise
-            export_manifest = self._read_back_published_export(
-                exc, dataset_manifest["dataset_name"], provider_uri=provider_uri,
+            with (telemetry.stage("qlib_export/retry_readback")
+                  if telemetry is not None else nullcontext()):
+                export_manifest = self._read_back_published_export(
+                    exc, dataset_manifest["dataset_name"], provider_uri=provider_uri,
+                )
+        with (telemetry.stage("qlib_export/owner_readback")
+              if telemetry is not None else nullcontext()):
+            verified_export = self.exporter.read(
+                dataset_manifest["dataset_name"], export_manifest["generation_id"])
+            if verified_export[0]["generation_id"] != export_manifest["generation_id"]:
+                raise ContractError("Qlib export readback identity mismatch")
+        with (telemetry.stage("qlib_export/receipt_binding")
+              if telemetry is not None else nullcontext()):
+            cache_before = cache_files_before
+            cache_after = self._cache_files(cache_root) if cache_files_after is None else cache_files_after
+            cache_root_prefix = str(cache_root).rstrip("/") + "/"
+            new_cache_files = cache_after - cache_before
+            if new_cache_files and not any(path.startswith(cache_root_prefix) for path in new_cache_files):
+                raise ContractError("Qlib cache evidence escapes governed cache root")
+            receipt = self.receipt_builder.build(
+                export_manifest=export_manifest,
+                resolved_provider_uri=provider_uri,
+                qlib_import_path=qlib_import_path,
+                qlib_version=qlib_version,
+                cache_root=cache_root,
+                cache_files_before=cache_before,
+                cache_files_after=cache_after,
+                verified_export=verified_export,
+                governance_root=self.run_store.root,
+                quality_decision=_decision_payload(receipt_quality_decision),
             )
-        verified_export = self.exporter.read(dataset_manifest["dataset_name"], export_manifest["generation_id"])
-        if verified_export[0]["generation_id"] != export_manifest["generation_id"]:
-            raise ContractError("Qlib export readback identity mismatch")
-        cache_before = cache_files_before
-        cache_after = self._cache_files(cache_root) if cache_files_after is None else cache_files_after
-        cache_root_prefix = str(cache_root).rstrip("/") + "/"
-        new_cache_files = cache_after - cache_before
-        if new_cache_files and not any(path.startswith(cache_root_prefix) for path in new_cache_files):
-            raise ContractError("Qlib cache evidence escapes governed cache root")
-        receipt = self.receipt_builder.build(
-            export_manifest=export_manifest,
-            resolved_provider_uri=provider_uri,
-            qlib_import_path=qlib_import_path,
-            qlib_version=qlib_version,
-            cache_root=cache_root,
-            cache_files_before=cache_before,
-            cache_files_after=cache_after,
-            verified_export=verified_export,
-            governance_root=self.run_store.root,
-            quality_decision=_decision_payload(receipt_quality_decision),
-        )
-        state = build_stage_state(
-            plan,
-            stage="qlib_export",
-            output_bindings=[{
-                "output_family": "qlib_dataset_export",
-                "generation_id": export_manifest["generation_id"],
-                "manifest_digest_sha256": export_manifest["manifest_digest_sha256"],
-                "data_checksum_sha256": verified_export[0]["manifest_digest_sha256"],
-                "physical_path": verified_export[1].relative_to(self.run_store.root).as_posix(),
-                "quality_decision_checksum_sha256": export_manifest["quality_report_checksum_sha256"],
-                "failure_reason": None,
-            }, {
-                "output_family": "qlib_init_receipt",
-                "generation_id": receipt["generation_id"],
-                "manifest_digest_sha256": receipt["manifest_digest_sha256"],
-                "data_checksum_sha256": receipt["file_list_checksum_sha256"],
-                "physical_path": f"research_exports/{receipt['generation_id']}.json",
-                "quality_decision_checksum_sha256": receipt["quality_report_checksum_sha256"],
-                "failure_reason": None,
-            }],
-            runner_identity=runner_identity,
-            created_at=created_at,
-        )
+        with (telemetry.stage("qlib_export/stage_publication")
+              if telemetry is not None else nullcontext()):
+            state = build_stage_state(
+                plan,
+                stage="qlib_export",
+                output_bindings=[{
+                    "output_family": "qlib_dataset_export",
+                    "generation_id": export_manifest["generation_id"],
+                    "manifest_digest_sha256": export_manifest["manifest_digest_sha256"],
+                    "data_checksum_sha256": verified_export[0]["manifest_digest_sha256"],
+                    "physical_path": verified_export[1].relative_to(self.run_store.root).as_posix(),
+                    "quality_decision_checksum_sha256": export_manifest["quality_report_checksum_sha256"],
+                    "failure_reason": None,
+                }, {
+                    "output_family": "qlib_init_receipt",
+                    "generation_id": receipt["generation_id"],
+                    "manifest_digest_sha256": receipt["manifest_digest_sha256"],
+                    "data_checksum_sha256": receipt["file_list_checksum_sha256"],
+                    "physical_path": f"research_exports/{receipt['generation_id']}.json",
+                    "quality_decision_checksum_sha256": receipt["quality_report_checksum_sha256"],
+                    "failure_reason": None,
+                }],
+                runner_identity=runner_identity,
+                created_at=created_at,
+            )
+            published_state = self.run_store.publish_state(state, stage="qlib_export")
         return QlibExportStageResult(
             manifest=receipt,
             export_manifest=export_manifest,
             snapshot_path=verified_export[1],
-            published_state=self.run_store.publish_state(state, stage="qlib_export"),
+            published_state=published_state,
         )
 
 
