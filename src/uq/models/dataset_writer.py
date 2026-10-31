@@ -21,6 +21,7 @@ from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from .dataset import SplitValidator
 from .feature_preprocessing import FeaturePreprocessorBuilder
+from .factor_neutralization import FactorNeutralizationPreprocessorBuilder
 from .features import FeatureSchemaValidator
 from ..factors.raw_price import logical_fingerprint as frame_logical_fingerprint, verify_logical_fingerprint as verify_frame_logical_fingerprint
 
@@ -43,6 +44,8 @@ class DatasetWriter:
         preprocessing_frame: pd.DataFrame | None = None,
         preprocessing_input_frame: pd.DataFrame | None = None,
         preprocessing_input_feature_schema: dict[str, Any] | None = None,
+        preprocessing_exposure_frame: pd.DataFrame | None = None,
+        preprocessing_exposure_manifest: dict[str, Any] | None = None,
         preprocessing_quality_report: dict[str, Any] | None = None,
     ) -> Path:
         published_manifest = dict(manifest)
@@ -54,6 +57,7 @@ class DatasetWriter:
         self._validate_preprocessing(
             published_manifest, frame, feature_schema, preprocessing_manifest,
             preprocessing_input_frame, preprocessing_input_feature_schema, preprocessing_frame,
+            preprocessing_exposure_frame, preprocessing_exposure_manifest,
         )
         policy = published_manifest["split_policy"]
         trading_dates = sorted({timestamp.strftime("%Y-%m-%d") for timestamp in frame["datetime"]})
@@ -92,18 +96,28 @@ class DatasetWriter:
                 subject_generation_id=preprocessing_manifest["generation_id"],
                 subject_content_sha256=preprocessing_manifest["generation_id"],
             )
+            preprocessing_binding_type = (
+                "feature_preprocessing_v2"
+                if preprocessing_manifest.get("contract_version") == 2
+                else "feature_preprocessing_v1"
+            )
             bound_preprocessing_report, preprocessing_report_checksum = bind_reviewed_quality_decision(
-                preprocessing_quality_report, binding_type="feature_preprocessing_v1",
+                preprocessing_quality_report, binding_type=preprocessing_binding_type,
                 subject_generation_id=preprocessing_manifest["generation_id"],
                 subject_content_sha256=preprocessing_manifest["generation_id"],
             )
             preprocessing_manifest = {**preprocessing_manifest, "quality_report_checksum_sha256": preprocessing_report_checksum}
+            preprocessing_schema_name = (
+                "feature_preprocessing_v2"
+                if preprocessing_manifest.get("contract_version") == 2
+                else "feature_preprocessing"
+            )
             _, preprocessing_manifest["manifest_digest_sha256"] = model_manifest_identities(
                 preprocessing_manifest,
-                schema_name="feature_preprocessing",
+                schema_name=preprocessing_schema_name,
                 exclude_fields={"input_feature_schema_manifest_digest_sha256", "quality_report_checksum_sha256"},
             )
-            ModelContractLoader.validate("feature_preprocessing", preprocessing_manifest)
+            ModelContractLoader.validate(preprocessing_schema_name, preprocessing_manifest)
         published_manifest["generation_id"] = generation_id
         published_manifest["quality_report_checksum_sha256"] = report_checksum
         _, manifest_digest = model_manifest_identities(
@@ -253,7 +267,10 @@ class DatasetWriter:
             raise ContractError(f"incomplete dataset feature schema: {partition}")
         try:
             fs_doc = json.loads(fs_path.read_text())
-            ModelContractLoader.validate("feature_schema", fs_doc)
+            ModelContractLoader.validate(
+                "feature_schema_v2" if fs_doc.get("contract_version") == 2 else "feature_schema",
+                fs_doc,
+            )
         except (json.JSONDecodeError, ContractError) as exc:
             raise ContractError("tampered or malformed feature schema in dataset partition") from exc
         preprocessing_doc: dict[str, Any] | None = None
@@ -263,12 +280,22 @@ class DatasetWriter:
                 raise ContractError(f"incomplete dataset feature preprocessing: {partition}")
             try:
                 preprocessing_doc = json.loads(preprocessing_path.read_text())
-                ModelContractLoader.validate("feature_preprocessing", preprocessing_doc)
+                ModelContractLoader.validate(
+                    "feature_preprocessing_v2"
+                    if preprocessing_doc.get("contract_version") == 2
+                    else "feature_preprocessing",
+                    preprocessing_doc,
+                )
                 input_schema_path = partition / manifest["input_feature_schema_path"]
                 if not input_schema_path.is_file():
                     raise ContractError("dataset input feature schema is unavailable")
                 input_feature_schema = json.loads(input_schema_path.read_text())
-                ModelContractLoader.validate("feature_schema", input_feature_schema)
+                ModelContractLoader.validate(
+                    "feature_schema_v2"
+                    if input_feature_schema.get("contract_version") == 2
+                    else "feature_schema",
+                    input_feature_schema,
+                )
                 self._validate_preprocessing_references(manifest, preprocessing_doc, fs_doc, input_feature_schema)
                 self._validate_preprocessing_quality_report(preprocessing_doc)
             except (json.JSONDecodeError, ContractError) as exc:
@@ -348,6 +375,8 @@ class DatasetWriter:
         preprocessing_input_frame: pd.DataFrame | None,
         preprocessing_input_feature_schema: dict[str, Any] | None,
         preprocessing_frame: pd.DataFrame | None,
+        preprocessing_exposure_frame: pd.DataFrame | None,
+        preprocessing_exposure_manifest: dict[str, Any] | None,
     ) -> None:
         if (manifest.get("feature_preprocessing_generation_id") is None) != (preprocessing_manifest is None):
             raise ContractError("dataset manifest and supplied preprocessing manifest disagree")
@@ -357,7 +386,11 @@ class DatasetWriter:
             raise ContractError("preprocessing manifest requires preprocessing output frame")
         if preprocessing_input_frame is None:
             raise ContractError("preprocessing manifest requires preprocessing input frame")
-        ModelContractLoader.validate("feature_preprocessing", preprocessing_manifest)
+        contract_version = preprocessing_manifest.get("contract_version")
+        preprocessing_schema_name = (
+            "feature_preprocessing_v2" if contract_version == 2 else "feature_preprocessing"
+        )
+        ModelContractLoader.validate(preprocessing_schema_name, preprocessing_manifest)
         if preprocessing_input_feature_schema is None:
             raise ContractError("preprocessing manifest requires input feature schema")
         self._validate_preprocessing_references(
@@ -366,15 +399,33 @@ class DatasetWriter:
         input_fingerprint = FeaturePreprocessorBuilder.frame_fingerprint(preprocessing_input_frame)
         if input_fingerprint != preprocessing_manifest["input_frame_sha256"]:
             raise ContractError("preprocessing input frame fingerprint mismatch")
-        builder = FeaturePreprocessorBuilder(
-            preprocess_name=preprocessing_manifest["preprocess_name"],
-            semantic_version=preprocessing_manifest["semantic_version"],
-            transform=preprocessing_manifest["transform"],
-            min_group_observations=preprocessing_manifest["policy"]["min_group_observations"],
-            code_fingerprint=preprocessing_manifest["code_fingerprint"],
-        )
-        builder.validate_frame_keys(frame)
-        builder.validate_frame_keys(preprocessing_frame)
+        if contract_version == 2:
+            if preprocessing_exposure_frame is None or preprocessing_exposure_manifest is None:
+                raise ContractError("neutralization manifest requires its bound exposure artifact")
+            binding = preprocessing_manifest["factor_exposure_binding"]
+            if (
+                preprocessing_exposure_manifest.get("generation_id") != binding["generation_id"]
+                or preprocessing_exposure_manifest.get("manifest_digest_sha256") != binding["manifest_digest_sha256"]
+                or preprocessing_exposure_manifest.get("data_checksum_sha256") != binding["data_checksum_sha256"]
+                or preprocessing_exposure_manifest.get("quality_report_checksum_sha256") in (None, "0" * 64)
+            ):
+                raise ContractError("neutralization exposure artifact does not match preprocessing binding")
+            builder = FactorNeutralizationPreprocessorBuilder(
+                preprocess_name=preprocessing_manifest["preprocess_name"],
+                semantic_version=preprocessing_manifest["semantic_version"],
+                controls=preprocessing_manifest["policy"]["control_order"],
+                code_fingerprint=preprocessing_manifest["code_fingerprint"],
+            )
+        else:
+            builder = FeaturePreprocessorBuilder(
+                preprocess_name=preprocessing_manifest["preprocess_name"],
+                semantic_version=preprocessing_manifest["semantic_version"],
+                transform=preprocessing_manifest["transform"],
+                min_group_observations=preprocessing_manifest["policy"]["min_group_observations"],
+                code_fingerprint=preprocessing_manifest["code_fingerprint"],
+            )
+            builder.validate_frame_keys(frame)
+            builder.validate_frame_keys(preprocessing_frame)
         ordered_features = preprocessing_manifest["ordered_features"]
         if list(preprocessing_frame.columns) != ["instrument", "datetime", *ordered_features]:
             raise ContractError("preprocessing output columns do not match manifest")
@@ -385,10 +436,17 @@ class DatasetWriter:
         canonical_output = preprocessing_frame.sort_values(
             ["instrument", "datetime"], kind="mergesort"
         ).reset_index(drop=True)
-        expected = builder.transform(preprocessing_input_frame.copy(), ordered_features)
-        pd.testing.assert_frame_equal(
-            canonical_output, expected, check_exact=False, rtol=1e-12, atol=1e-12
+        expected = (
+            builder.transform(preprocessing_input_frame.copy(), preprocessing_exposure_frame)
+            if contract_version == 2
+            else builder.transform(preprocessing_input_frame.copy(), ordered_features)
         )
+        try:
+            pd.testing.assert_frame_equal(
+                canonical_output, expected, check_exact=False, rtol=1e-12, atol=1e-12
+            )
+        except AssertionError as exc:
+            raise ContractError("preprocessing output does not match declared transform") from exc
         if not verify_frame_logical_fingerprint(canonical_output, preprocessing_manifest["output_frame_sha256"]):
             raise ContractError("preprocessing output fingerprint mismatch")
 
@@ -427,7 +485,11 @@ class DatasetWriter:
             raise ContractError("preprocessing ordered features do not match feature schema")
         statuses = {column["name"]: column["transform_status"] for column in feature_schema["columns"]}
         policy_type = preprocessing_manifest.get("transform")
-        expected_status = "standardized" if policy_type == "standardize_cross_section" else "ranked"
+        expected_status = (
+            "neutralized" if policy_type == "neutralize_factor_panel"
+            else "standardized" if policy_type == "standardize_cross_section"
+            else "ranked"
+        )
         for name in ordered_features:
             if statuses.get(name) != expected_status:
                 raise ContractError(f"feature schema transform status mismatch for {name}")
@@ -446,9 +508,17 @@ class DatasetWriter:
         actual_checksum = sha256_json({key: value for key, value in report.items() if key != "report_checksum_sha256"})
         if (
             checksum != actual_checksum
-            or report["binding_type"] != "feature_preprocessing_v1"
+            or report["binding_type"] != (
+                "feature_preprocessing_v2"
+                if preprocessing_manifest.get("contract_version") == 2
+                else "feature_preprocessing_v1"
+            )
             or report["bound_generation_id"] != preprocessing_manifest["generation_id"]
             or report["subject_content_sha256"] != preprocessing_manifest["generation_id"]
-            or report["status"] not in reviewed_allowed_statuses("feature_preprocessing_v1")
+            or report["status"] not in reviewed_allowed_statuses(
+                "feature_preprocessing_v2"
+                if preprocessing_manifest.get("contract_version") == 2
+                else "feature_preprocessing_v1"
+            )
         ):
             raise ContractError("preprocessing quality report rejects read")

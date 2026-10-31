@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report actual position, industry and prior-turnover exposures for a reviewed v3 backtest."""
+"""Report actual position, industry and prior-turnover exposures for a reviewed v3/v4 backtest."""
 from __future__ import annotations
 
 import argparse

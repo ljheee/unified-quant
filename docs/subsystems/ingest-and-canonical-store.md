@@ -20,6 +20,7 @@ It does **not** own adapters, calendar providers, or lifecycle classification; t
 | Governed read path | `src/uq/store/reader.py:15` `ManifestFirstReader.read` |
 | Cross-store symlink guard | `src/uq/contracts/paths.py:32` `reject_symlinks_within` |
 | JSON-Schema contract registry | `src/uq/contracts/gate_contracts.py:40` `validate_contract` over `config/schemas/contracts/*.json` |
+| Raw supplemental Tushare snapshots | `src/uq/contracts/tushare_dependency.py` `TushareDependencyStore`, `config/schemas/contracts/tushare_dependency_snapshot.v1.json` |
 
 `config/datasets/bars_daily.research-v1.yaml` is the currently executable research contract; `config/datasets/bars_daily.v2.yaml` is the production-draft line that carries `status`/`limit_up`/`limit_down`/`adj_factor`.
 
@@ -52,6 +53,8 @@ Two publication implementations coexist: the manifest-version-1 `CanonicalStore`
 Layout is `$DATA_ROOT/canonical/<dataset>/<schema_version>/date=<YYYY-MM-DD>/{data.parquet,manifest.json}`. Manifests are content-addressed: `generation_id` is `sha256` over the manifest without itself, and readers compare `trust_anchor_sha256` to `sha256(generation_id)`. Partitions are immutable; a re-publication requires a new run/partition and produces `publication_conflict` otherwise. A publication lock is taken per `(dataset, schema_version, date)` with `fcntl.flock`.
 
 `bars_daily.research-v1` is keyed `(instrument, datetime)`; `bars_daily.v2` is keyed `(instrument, session_date)`. Raw prices and cumulative `adj_factor` are stored separately, never mixed in one column (`specs/architecture.md:3`).
+
+Supplemental source dependencies such as daily indicators, industry membership, financial statements, seller expectations, money flow, connect holdings, and limit-up/down list details use a separate raw landing store at `$SOURCE_ROOT/tushare_dependencies/<endpoint>/generation=<id>/`. Its snapshot identity binds the endpoint, bounded query, and exact Parquet bytes; readers verify the manifest, row/column shape, and checksum. These raw provider records are not canonical factors, and this store does not assign availability timestamps or source-quality approval. A downstream publisher must normalize provider units, reconstruct a conservative point-in-time cutoff, and publish through its owning reviewed contract.
 
 ## Constraints, Failures, and Compatibility
 

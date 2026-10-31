@@ -28,6 +28,7 @@ from .owning_contracts import (
     AdjustedPriceDatasetStore,
     BacktestConfigStore,
     BacktestMarketDatasetStore,
+    FactorExposureStore,
     FeaturePreprocessingStore,
     FeatureSchemaStore,
     LabelStore,
@@ -195,16 +196,17 @@ class _MappingDecisionProvider:
         self.decisions = decisions
 
     def resolve(self, *, output_family: str, subject_generation_id: str, **_: Any) -> Mapping[str, Any]:
-        decision = self.decisions.get(output_family)
+        binding_type = _BINDING_TYPE_BY_FAMILY.get(output_family, output_family)
+        decision = self.decisions.get(binding_type) or self.decisions.get(output_family)
         if decision is None:
-            raise ContractError(f"missing research chain quality decision: {output_family}")
+            raise ContractError(f"missing research chain quality decision: {binding_type}")
         # cr.md H6: provider mode stores per-family callables in this mapping;
         # invoke them with the resolved subject instead of dict()-ing the
         # callable (aligned with Runner._decision).
         if callable(decision):
             decision = decision(subject_generation_id)
         if not isinstance(decision, Mapping):
-            raise ContractError(f"invalid research chain quality decision: {output_family}")
+            raise ContractError(f"invalid research chain quality decision: {binding_type}")
         return decision
 
 
@@ -451,6 +453,10 @@ def _published_quality_checksum(
             return FeaturePreprocessingStore(data_root / "governed").read_manifest(
                 subject_generation_id
             )["quality_report_checksum_sha256"]
+        if binding_type == "feature_preprocessing_v2":
+            return FeaturePreprocessingStore(data_root / "governed").read_manifest(
+                subject_generation_id
+            )["quality_report_checksum_sha256"]
         if binding_type == "sample_construction_v1":
             return SampleConstructionStore(data_root / "governed").read_manifest(
                 subject_generation_id
@@ -517,6 +523,7 @@ _BINDING_TYPE_BY_FAMILY = {
     "factor_partition": "factor_v1",
     "label_set": "label_set_v1",
     "feature_preprocessing": "feature_preprocessing_v1",
+    "feature_preprocessing_v2": "feature_preprocessing_v2",
     "sample_construction": "sample_construction_v1",
     "model_dataset": "model_dataset_v1",
     "qlib_dataset_export": "qlib_dataset_export_v1",
@@ -585,6 +592,7 @@ def _build_runner(
         universe_store=universe_store,
         feature_schema_store=FeatureSchemaStore(feature_store_root),
         preprocessing_store=FeaturePreprocessingStore(feature_store_root),
+        factor_exposure_store=FactorExposureStore(feature_store_root),
         sample_construction_store=SampleConstructionStore(feature_store_root),
         dataset_writer=DatasetWriter(data_root),
         run_store=run_store,
@@ -776,6 +784,9 @@ def _execute(
             "adjusted_price_dataset": runner.dataset_adapter.adjusted_price_store,
             "label_set": runner.dataset_adapter.label_store,
             "feature_preprocessing": runner.dataset_adapter.preprocessing_store,
+            "factor_exposure_panel": getattr(
+                runner.dataset_adapter, "factor_exposure_store", None
+            ),
             "sample_construction": getattr(
                 runner.dataset_adapter, "sample_construction_store", None
             ),

@@ -4059,16 +4059,138 @@ preflight 缺口：walk-forward 对 v5–v8 在首折前强制 membership/market
 标记停牌时沿用前收，且对可交易标的的无效 close 失败关闭。label audit 未与独立治理日历比对，
 其风险/证据边界已写入审计说明。遥测发布属于成功 run 的关键路径（失败 run 保留原始异常），买侧
 全持仓投影 NAV 检查会因被动越限拒绝当日所有买入；两项均补进子系统页。`evaluate_returns` 不产
-Sharpe/年化波动的范围也已写明。旧验证计数 1462/1494 已从子系统页移除，最终基线 1490/1522
-仍保留；user guide 已补 v8 paper 路由。`AGENTS.md` 仅 claude-mem 时间戳噪音已恢复原值。
+Sharpe/年化波动的范围也已写明。旧验证计数 1462/1494 已从子系统页移除；此前 portfolio v3
+基线为 1490/1522，本轮追加 benchmark 权重构造与中性化算法原语后完整套件为 1523/1555。
+user guide 已补 v8 paper 路由。`AGENTS.md` 仅 claude-mem 时间戳噪音已恢复原值。新增归档回归
+锁确认完整 telemetry 和绝对来源路径都属于 archive checksum 的输入。
 
 runner 源文件受 phase-0 evidence index 摘要保护，代码变更后同步更新并通过摘要核验。
 定向回归 `90 passed, 1 skipped`；针对 validator/evidence index 的补充测试 `6 passed`；
-普通全套 `.venv/bin/python -m pytest` 为 `1500 passed, 33 skipped`；Qlib 全套
-`.venv-qlib/bin/python -m pytest` 为 `1532 passed, 1 skipped`。两套全量有既有 pandas
+归档专项 `.venv/bin/python -m pytest tests/test_experiment_archive.py` 为 `9 passed`；新增
+benchmark/neutralization/factor-screen/archive 专项合计 `43 passed`；普通全套
+`.venv/bin/python -m pytest` 为 `1523 passed, 33 skipped`；Qlib 全套
+`.venv-qlib/bin/python -m pytest` 为 `1555 passed, 1 skipped`。两套全量有既有 pandas
 SettingWithCopyWarning；Qlib 环境另有其依赖包 NumPy timedelta deprecation warning。
 
-维护者裁决仍待：是否认可 `research_run_result.v1.json` 与 `research_run_state.v1.json` 原位纯追加
-contract_version 7/8（v4/v5/v6 有先例，已有兼容性测试）；以及是否保留完整 telemetry 与绝对路径
-进入实验归档 checksum（当前行为使证据身份依赖运行/机器）。新增/变更 LightGBM extra 已改依赖锁，
-因此认证矩阵已失效；当前没有 release 声明，发布前需重跑 `scripts/run_gate.sh`。本轮未运行该门。
+维护者已认可 `research_run_result.v1.json` 与 `research_run_state.v1.json` 原位纯追加
+contract_version 7/8；理由是 v4/v5/v6 的追加先例、纯追加兼容性和现有回归测试。维护者也已确认
+归档 checksum 纳入完整 telemetry 与绝对路径：归档身份绑定单次运行证据，相同 experiment name
+不会被另一运行或机器生成的不同证据覆盖。若未来需要稳定的逻辑身份和多次运行并列，应另做版本化
+设计，不应静默排除这些字段。
+
+新增/变更 LightGBM extra 已改依赖锁，因此认证矩阵已失效；当前没有 release 声明，发布前需重跑
+`scripts/run_gate.sh`。本轮未运行该门。
+
+## 2026-10-31 — 跨折连续 v3 回放复核
+
+新增连续回放入口后，复核了批量 attempt 与折结果的绑定：attempt 只提供折结果索引，逐折
+研究结果中的 `backtest_result` binding 才是回测 generation/digest 的权威来源。回放重新读取
+每折研究结果、v3 回测、经评审目标权重、统一 v3 config 及全部原始行情/执行事实，并在一个
+引擎账户中执行所有 OOS 决策。receipt 再次重验这些 owning records。末折目标在下一 session
+执行，剩余持仓不清算，明确记录为未完成的功能边界；不将此结果称作交易验收。
+
+合成三折集成回归覆盖一次运行跨折携带仓位、完整目标日期、失败 attempt 早期拒绝和同 attempt
+只读幂等重试。专项 walk-forward/归档/benchmark/中性化集合为 `69 passed, 1 skipped`；最终普通
+全量 `.venv/bin/python -m pytest` 为 `1526 passed, 33 skipped`，Qlib 全量
+`.venv-qlib/bin/python -m pytest` 为 `1558 passed, 1 skipped`。`git diff --check` 与连续回放
+CLI `--help` smoke 通过。基点为 `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21` 的未提交工作树；
+没有运行 release gate、远程矩阵、真实年度行情或实盘。`AGENTS.md` 未改动，claude-mem 时间戳噪音
+未进入差异。实现摘要与命令记录见
+`evidence/trading-grade/walk-forward-continuous-implementation-v1.json`。
+
+## 2026-10-31 — PIT 基准权重发布与同配置 v3 回测
+
+基于 HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21` 的未提交工作树，补齐训练计划中
+benchmark 从权重原语到 owning publisher/实际引擎结果的缺口。新增 `benchmark_weight_panel.v1`
+和 `BenchmarkWeightStore`：清单绑定治理 membership snapshot-set、重建日成员面板、策略调仓日与
+universe、v3 config、exposure 和 terminal-liquidation 模式；数据通过逻辑指纹、checksum、逐日
+generation、权重对完整成员集合的精确覆盖与不可变读回核验。
+
+`scripts/run_benchmark_backtest.py` 基于已评审策略 v3 结果复用 config/决策日，通过 owning stores
+重读 PIT membership、行情、执行 facts、停牌与公司行为，再由同一 `BacktestEngine` 发布 benchmark
+`backtest_result.v3`。连续 walk-forward 模式要求对应 receipt，并重验 receipt 指向的结果/config 后
+复用终端清仓尝试。子系统页记录入口、示例和数据限制。
+
+`tests/test_evaluation_benchmark.py` 为 `18 passed`；普通全套 `1541 passed / 33 skipped`，Qlib
+全套 `1573 passed / 1 skipped`；CLI `--help`、模块导入、compileall 和 `git diff --check` 通过。
+未运行 `scripts/run_gate.sh`、远程认证矩阵、真实年度行情或实盘。membership 当前为月度近似 PIT，
+真实历史市值/行业来源缺失，故没有真实 OOS benchmark 结论；factor exposure/preprocessing 的
+trust-anchor 策略也仍待维护者裁决。新增归档 checksum 维护者确认继续覆盖完整 telemetry 和绝对
+来源路径。
+
+## 2026-10-31 — 标签审计日历与标的 horizon 完整性
+
+基于 HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21` 的未提交工作树，修复标签审计从可用 bars
+行直接 `groupby.shift(-5)` 的盲点。现在 CLI 要求显式绑定独立治理 calendar generation/checksum，
+核验 manifest digest、Parquet checksum 和 calendar 内容 generation；窗口 bars 分区日期必须与治理
+sessions 集合完全相同。每一条非空标签还要具备决策 session 到第五个未来治理 session 的全部标的 bars，
+审计计算的 close、下一开盘入场和 T+5/T+6 出场腿按治理 session 索引，而非标的存活行索引。
+同时将训练计划 §2 中参与率、成本/压力、容量、调仓/换手和组合约束从“需新增”校正为 v3 已实现，
+把未完成项限定为真实源完整性和实证校准。
+
+回归分别删掉中间全市场分区、删掉单个标的的中间 session bars，并保留篡改拒绝；历史标签公式和
+generation 未修改。`.venv/bin/python -m pytest tests/test_label_design_audit.py tests/test_build_label_sets.py -q`
+为 `19 passed`；普通全量 `1543 passed / 33 skipped`，Qlib 全量 `1575 passed / 1 skipped`；CLI
+`--help`、`compileall`、`git diff --check` 通过。仍未读取或发布真实数据；历史 v1 审计报告不追溯
+认证，新审计只在以后显式提供治理 calendar 时可用于增强重跑。
+
+## 2026-10-31 — 线性基线与 LightGBM 成对比较
+
+阶段 3 已有 LightGBM 验证候选选择，但缺少受治理的收益对照入口。新增
+`paired_model_backtest_inputs` / `scripts/compare_training_models.py`：它从 passed research result
+追溯双方 request、model dataset 与 backtest，要求线性基线和 LightGBM 候选使用匹配的样本数据字节、
+特征顺序、因子/标签/universe/preprocessing、split、组合模板和请求窗口；窗口必须落在 dataset 的
+test split。两侧 backtest 都须绑定各自请求的经评审 v3 config，随后复用 paired reader 校验成本、执行、
+价格/日历、universe 和风险约束，输出 candidate-minus-baseline 的日收益与可重算指标。
+
+回归覆盖可比较配对，以及标签 generation、特征列和数据 checksum 漂移拒绝；短窗口明确留下
+`one_year_oos_met=false`，不宣称通过模型验收。LightGBM selector 的三候选限制只限单次选择调用，
+全研究程序多重比较预算尚未定义。本轮没有足够真实历史数据运行年度比较，也未提供模拟 regime 标签。
+`.venv/bin/python -m pytest tests/test_model_comparison.py tests/test_walk_forward_runner.py tests/test_experiment_archive.py -q`
+为 `32 passed, 1 skipped`；CLI `--help`、`compileall` 与 `git diff --check` 通过。最终普通全量
+`.venv/bin/python -m pytest` 为 `1547 passed / 33 skipped`，Qlib 全量
+`.venv-qlib/bin/python -m pytest` 为 `1579 passed / 1 skipped`。验证基于未提交工作树、HEAD
+`cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`；未运行 release gate、远程矩阵、真实历史发布或实盘。
+
+## 2026-10-31 — 维护者裁决与交易级功能复核
+
+维护者明确批准两项治理决定：
+
+1. `research_run_result.v1.json` 和 `research_run_state.v1.json` 的
+   `contract_version` enum 采用原位纯追加，支持值增加 7/8，不改变旧值语义；由历史 v4/v5/v6
+   追加先例和 `test_state_and_result_widening_is_compatibility_preserving` 保护。
+2. 实验归档 checksum 覆盖完整 attempt telemetry 及绝对来源路径。归档身份绑定一次具体运行证据，
+   因此相同 experiment name 的另一机器/运行不得覆盖；如需稳定逻辑身份与多次运行并列，需单独版本化。
+
+并批准本轮的 v4 公司行为处理口径：股权登记日收盘持仓确定权益；除息日现金/送股应收计入 NAV
+但不可用于下单；现金在支付日 session 才可用；送股在除息日开始计入价值，上市日入账且上市日不可卖、
+从下一 session 才可卖；碎股权益拒绝；权利发行无可治理完整数据，必须用受评审的全窗口清单排除相应
+标的；缺关键日期、事件输入或完整性覆盖时 fail-closed。v1/v2/v3 行为不变。
+
+同时批准 `factor_exposure_panel_v1` 与 `feature_preprocessing_v2` 的 passed-only review policies
+进入活动 registry，并更新 anchor：registry SHA256 为
+`9287455599efbfb481e9e113aec1ef9b70acb4cd1f7b68d3b2739bd42d63eec4`，已与
+`config/model-quality-reviews.v1.json` 实际字节摘要核对。仓库锚使用测试公钥，生产运行仍由
+`UQ_RUNTIME_MODE=production` 守卫拒绝；策略激活不等于生产签名材料 provisioning。
+
+对 CR 报告的代码问题复核后确认：walk-forward 批预检的 paper-input 版本门现包含 5/6/7/8，并新增
+v7 缺 paper 风险文档的 preflight 拒绝测试；归档发布已有 flock 与并发幂等回归；IC prediction binding
+用规范化后的 generation 且坏 binding 走 `ContractError`，日历统一经 `session_dates` 归一；LightGBM
+seed/thread_count 做严格整数检查；stress 重试以 owning readback 和帧复核识别已发布结果，不依赖异常文案，
+JSON 读入显式 UTF-8；HAC 公共边界拒绝非数值。标签审计已按治理 session 核验完整原始分区和逐标的
+horizon bars grid。review 指出的 plan 绝对 store-root 身份绑定为有意行为，已写明不可移植限制；买侧
+被动风险超限阻断同日所有买入、telemetry 成功运行发布失败属于承重失败、停牌除息日估值使用限价参考
+与普通 last-close 口径不对称均已进入对应子系统页。`evaluate_returns` 不提供 Sharpe/年化波动的范围
+也已写入评估页。Evidence-index 发现 `model_layer.py` 已变更，phase-0 index 已同步摘要并做全索引核查。
+
+已检查的现实边界：v4 stress、benchmark、exposure 由统一 owning reader / 引擎路由；连续跨折 replay 与
+paper-vs-backtest 对账仍只接受 v3，因为后两者没有跨折公司行为应收账本/模拟账户状态模型。没有真实
+全窗口公司行为 source、年度 PIT 数据、真实 regimes、生产 reviewer key 或 broker 服务；本轮 synthetic
+测试不替代这些实证和 provisioning。`uv.lock` 在当前工作树未修改；发布声明仍须遵循项目完整认证矩阵，
+本轮只作本机测试验证，不作 release 声明。
+
+最终顺序全量验证：`.venv/bin/python -m pytest` → `1563 passed, 33 skipped`；
+`.venv-qlib/bin/python -m pytest` → `1595 passed, 1 skipped`。首次并行启动两套环境时，
+`tests/review_key.py` 的共享系统临时 PEM 被并发写入干扰；那次非代码失败后改为顺序执行，最终两套完整
+套件均通过。v4 stress/benchmark 路由回归各新增一例，定向两例通过。`compileall`、相关 CLI `--help` 和
+`git diff --check` 也通过；full release gate/远程矩阵未运行，因此没有作认证或 release 声明。

@@ -14,8 +14,11 @@ from ..factors.raw_price import logical_fingerprint
 class FeatureSchemaBuilder:
     """Build a feature schema subcontract from a factor frame."""
 
-    def __init__(self, *, schema_version: str = "1.0.0") -> None:
+    def __init__(self, *, schema_version: str = "1.0.0", contract_version: int = 1) -> None:
         self.schema_version = schema_version
+        if contract_version not in {1, 2}:
+            raise ContractError("unsupported feature schema contract version")
+        self.contract_version = contract_version
 
     def build(self, frame: pd.DataFrame, *, source_factor_set: str, source_factor_version: str) -> dict[str, Any]:
         if frame.empty:
@@ -42,7 +45,7 @@ class FeatureSchemaBuilder:
                 "fingerprint_normalization": "round_12",
             })
         manifest: dict[str, Any] = {
-            "contract_version": 1,
+            "contract_version": self.contract_version,
             "schema_version": self.schema_version,
             "source_frame_sha256": logical_fingerprint(frame),
             "columns": columns,
@@ -51,17 +54,19 @@ class FeatureSchemaBuilder:
             "generation_id": "0" * 64,
             "manifest_digest_sha256": "0" * 64,
         }
-        generation_id, manifest_digest = model_manifest_identities(manifest, schema_name="feature_schema")
+        family = "feature_schema_v2" if self.contract_version == 2 else "feature_schema"
+        generation_id, manifest_digest = model_manifest_identities(manifest, schema_name=family)
         manifest["generation_id"] = generation_id
         manifest["manifest_digest_sha256"] = manifest_digest
-        ModelContractLoader.validate("feature_schema", manifest)
+        ModelContractLoader.validate(family, manifest)
         return manifest
 
 
 class FeatureSchemaValidator:
     @staticmethod
     def validate_against_frame(schema: dict[str, Any], frame: pd.DataFrame) -> None:
-        ModelContractLoader.validate("feature_schema", schema)
+        family = "feature_schema_v2" if schema.get("contract_version") == 2 else "feature_schema"
+        ModelContractLoader.validate(family, schema)
         expected_names = [col["name"] for col in schema["columns"]]
         key_order = [c for c in frame.columns if c in {"instrument", "datetime"}]
         actual_features = [c for c in frame.columns if c not in {"instrument", "datetime"}]

@@ -236,6 +236,35 @@ class ResearchChainRequestResolver:
                     "store_read_failed", f"owning store read failed: {exc}"
                 ) from exc
 
+            if output_family == "feature_preprocessing" and manifest.get("contract_version") == 2:
+                exposure_store = self.stores_by_output_family.get("factor_exposure_panel")
+                if exposure_store is None:
+                    raise ResearchResolutionError(
+                        "request_invalid", "no owning store is registered for factor exposure panels"
+                    )
+                exposure_binding = manifest.get("factor_exposure_binding")
+                if not isinstance(exposure_binding, Mapping):
+                    raise ResearchResolutionError(
+                        "lineage_mismatch", "neutralization manifest has no exposure binding"
+                    )
+                try:
+                    exposure_manifest, _ = exposure_store.read_frame(
+                        exposure_binding["generation_id"]
+                    )
+                except (ContractError, KeyError, TypeError) as exc:
+                    raise ResearchResolutionError("input_tampered", str(exc)) from exc
+                if (
+                    exposure_manifest.get("manifest_digest_sha256")
+                    != exposure_binding.get("manifest_digest_sha256")
+                    or exposure_manifest.get("data_checksum_sha256")
+                    != exposure_binding.get("data_checksum_sha256")
+                    or exposure_manifest.get("controls")
+                    != manifest.get("policy", {}).get("control_order")
+                ):
+                    raise ResearchResolutionError(
+                        "lineage_mismatch", "neutralization exposure binding does not match its owning panel"
+                    )
+
             # Not every owning family publishes a manifest digest. ``universe_snapshot.v1``
             # carries none -- its identity IS the content hash (re-derived from the
             # document by the store on read) -- yet every research request schema
@@ -260,11 +289,18 @@ class ResearchChainRequestResolver:
                     "lineage_mismatch",
                     f"owning manifest has no data checksum: {output_family}",
                 )
-            if quality_binding_type is not None:
+            resolved_quality_binding_type = quality_binding_type
+            if output_family == "feature_preprocessing":
+                resolved_quality_binding_type = (
+                    "feature_preprocessing_v2"
+                    if manifest.get("contract_version") == 2
+                    else "feature_preprocessing_v1"
+                )
+            if resolved_quality_binding_type is not None:
                 _resolve_quality_decision(
                     quality_provider=quality_provider,
                     provider_config_ref=provider_config_ref,
-                    binding_type=quality_binding_type,
+                    binding_type=resolved_quality_binding_type,
                     subject_generation_id=generation_id,
                     # The content digest a review commits to is the *generation id*,
                     # not the manifest digest. Generation ids are content hashes by
@@ -273,7 +309,7 @@ class ResearchChainRequestResolver:
                     # digest here made the two unverifiable against each other for any
                     # family where digest != generation.
                     subject_manifest_digest_sha256=(
-                        None if quality_binding_type == "factor_v1" else generation_id
+                        None if resolved_quality_binding_type == "factor_v1" else generation_id
                     ),
                     output_family=output_family,
                 )

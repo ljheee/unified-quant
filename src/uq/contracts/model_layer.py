@@ -38,15 +38,21 @@ _SCHEMA_NAMES = {
     "qlib_init_receipt",
     "prediction_set",
     "feature_schema",
+    "feature_schema_v2",
     "feature_preprocessing",
+    "feature_preprocessing_v2",
+    "factor_exposure_panel",
     "sample_construction",
     "portfolio_definition",
     "target_weights",
+    "benchmark_weight_panel",
     "backtest_config",
     "backtest_config_v2",
     "backtest_config_v3",
+    "backtest_config_v4",
     "backtest_result_v2",
     "backtest_result_v3",
+    "backtest_result_v4",
     "backtest_result",
     "execution_config",
     "order_plan",
@@ -60,6 +66,8 @@ _RUN_LOCAL_FIELDS = {"run_id", "created_at"}
 _QUALITY_BOUND_FIELDS = {
     "model_dataset": {"quality_report_checksum_sha256", "logical_fingerprint", "input_feature_schema_manifest_digest_sha256"},
     "feature_preprocessing": {"quality_report_checksum_sha256", "input_feature_schema_manifest_digest_sha256"},
+    "feature_preprocessing_v2": {"quality_report_checksum_sha256", "input_feature_schema_manifest_digest_sha256"},
+    "factor_exposure_panel": {"quality_report_checksum_sha256"},
     "sample_construction": {"quality_report_checksum_sha256"},
     "model_definition": {"quality_report_checksum_sha256", "model_run_content_generation_id"},
     "model_run": {"quality_report_checksum_sha256"},
@@ -365,6 +373,14 @@ def validate_model_contract(schema_name: str, payload: dict[str, Any]) -> None:
         validate_contract("backtest_result.v2.json", payload)
     elif schema_name in {"backtest_config_v3", "backtest_result_v3"}:
         validate_contract(schema_name.replace("_v3", ".v3.json"), payload)
+    elif schema_name in {"backtest_config_v4", "backtest_result_v4"}:
+        validate_contract(schema_name.replace("_v4", ".v4.json"), payload)
+    elif schema_name == "feature_schema_v2":
+        validate_contract("feature_schema.v2.json", payload)
+    elif schema_name == "benchmark_weight_panel":
+        validate_contract("benchmark_weight_panel.v1.json", payload)
+    elif schema_name == "feature_preprocessing_v2":
+        validate_contract("feature_preprocessing.v2.json", payload)
     elif schema_name in _SCHEMA_NAMES:
         validate_contract(f"{schema_name}.v1.json", payload)
     else:
@@ -840,7 +856,7 @@ class ModelContractLoader:
                     raise ContractError("model quality report checksum mismatch")
                 verify_reviewed_quality_report_signature(payload)
             return
-        if schema_name in ("portfolio_definition", "target_weights", "backtest_config", "backtest_config_v2", "backtest_config_v3", "backtest_result", "backtest_result_v2", "backtest_result_v3"):
+        if schema_name in ("portfolio_definition", "target_weights", "backtest_config", "backtest_config_v2", "backtest_config_v3", "backtest_config_v4", "backtest_result", "backtest_result_v2", "backtest_result_v3", "backtest_result_v4"):
             exclude_fields = set()
         else:
             exclude_fields = _QUALITY_BOUND_FIELDS.get(schema_name, {"quality_report_checksum_sha256"}).copy()

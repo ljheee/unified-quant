@@ -13,6 +13,7 @@ from ..contracts.gate_contracts import sha256_json
 from ..contracts.model_layer import ModelContractLoader
 from ..errors import ContractError
 from ..risk.contracts import ORDER_GATE_EXECUTABLE_ACTIONS
+from .corporate_actions import normalize_action_events
 from .execution_facts import execution_facts_fingerprint, normalize_execution_facts
 
 _FILL_COLUMNS = [
@@ -81,8 +82,56 @@ def run_v3(
     suspension_dates: set[tuple[str, str]] | None = None,
     corporate_action_instruments: set[str] | None = None,
     risk_gate: Callable[[dict, dict], dict] | None = None,
+    terminal_liquidation: bool = False,
 ) -> tuple[dict, dict[str, pd.DataFrame]]:
-    ModelContractLoader.validate('backtest_config_v3', config)
+    return _run_versioned(
+        contract_version=3, config=config, portfolio_definition=portfolio_definition,
+        weight_partitions=weight_partitions, price_panel=price_panel,
+        execution_facts=execution_facts, suspension_dates=suspension_dates,
+        corporate_action_instruments=corporate_action_instruments,
+        corporate_action_events=None, risk_gate=risk_gate,
+        terminal_liquidation=terminal_liquidation,
+    )
+
+
+def run_v4(
+    *, config: dict, portfolio_definition: dict, weight_partitions: dict[str, pd.DataFrame],
+    price_panel: pd.DataFrame, execution_facts: pd.DataFrame | None,
+    corporate_action_events: pd.DataFrame,
+    suspension_dates: set[tuple[str, str]] | None = None,
+    risk_gate: Callable[[dict, dict], dict] | None = None,
+    terminal_liquidation: bool = False,
+) -> tuple[dict, dict[str, pd.DataFrame]]:
+    return _run_versioned(
+        contract_version=4, config=config, portfolio_definition=portfolio_definition,
+        weight_partitions=weight_partitions, price_panel=price_panel,
+        execution_facts=execution_facts, suspension_dates=suspension_dates,
+        corporate_action_instruments=None, corporate_action_events=corporate_action_events,
+        risk_gate=risk_gate, terminal_liquidation=terminal_liquidation,
+    )
+
+
+def _run_versioned(
+    *, contract_version: int, config: dict, portfolio_definition: dict,
+    weight_partitions: dict[str, pd.DataFrame], price_panel: pd.DataFrame,
+    execution_facts: pd.DataFrame | None,
+    suspension_dates: set[tuple[str, str]] | None,
+    corporate_action_instruments: set[str] | None,
+    corporate_action_events: pd.DataFrame | None,
+    risk_gate: Callable[[dict, dict], dict] | None,
+    terminal_liquidation: bool,
+) -> tuple[dict, dict[str, pd.DataFrame]]:
+    ModelContractLoader.validate(f'backtest_config_v{contract_version}', config)
+    if config.get('contract_version') != contract_version:
+        raise ContractError('backtest engine and config versions differ')
+    action_schedule = None
+    if contract_version == 4:
+        if corporate_action_events is None or corporate_action_instruments:
+            raise ContractError('v4 requires a reviewed corporate-action event panel')
+    elif corporate_action_events is not None:
+        raise ContractError('corporate-action event accounting requires a v4 backtest config')
+    if type(terminal_liquidation) is not bool:
+        raise ContractError('terminal_liquidation must be a boolean')
     costs = config['cost_model']
     if costs['slippage_bps'] + costs['impact_model']['maximum_bps'] >= 10000:
         raise ContractError('slippage plus maximum impact must remain below 10000 bps')
@@ -99,10 +148,21 @@ def run_v3(
     if (not dates or dates[0] != config['start_date'] or dates[-1] != config['end_date']
             or any(not isinstance(day, str) or not config['start_date'] <= day <= config['end_date'] for day in dates)):
         raise ContractError('v3 price calendar must exactly cover the configured window')
+    if terminal_liquidation and len(dates) < 2:
+        raise ContractError('terminal liquidation requires a prior session for T+1 execution')
     if sorted(set(facts.index.get_level_values('date'))) != dates:
         raise ContractError('v3 execution facts must exactly cover the price calendar')
     if not weight_partitions or not set(weight_partitions) <= set(dates):
         raise ContractError('v3 decisions must be nonempty and inside the price calendar')
+    if contract_version == 4:
+        action_schedule = normalize_action_events(
+            corporate_action_events,
+            start_date=config['start_date'], end_date=config['end_date'],
+            trading_dates=dates,
+        )
+    unsupported_action_instruments = (
+        action_schedule['rights_issue_instruments'] if action_schedule is not None else set()
+    )
     risk = config['risk_constraints']
     drawdown_stop = risk.get('max_drawdown_stop')
     volatility_target = risk.get('volatility_target')
@@ -120,8 +180,9 @@ def run_v3(
         values = frame['weight'].to_numpy(dtype=float)
         if not np.isfinite(values).all() or (values < 0).any() or values.sum() > 1 + 1e-10:
             raise ContractError('v3 target weights must be finite, nonnegative and sum to at most one')
-        if set(frame['instrument']) & (corporate_action_instruments or set()):
-            raise ContractError('corporate-action instruments must remain excluded until position events are modeled')
+        excluded = (corporate_action_instruments or set()) | unsupported_action_instruments
+        if set(frame['instrument']) & excluded:
+            raise ContractError('unsupported corporate-action instruments must remain excluded for the window')
     execution = config['execution_model']
     first_decision = min(dates.index(day) for day in weight_partitions)
     holdings: dict[str, int] = {}
@@ -132,6 +193,24 @@ def run_v3(
     completed_returns: list[float] = []
     drawdown_stop_active = False
     fills, equity, daily = [], [], []
+    action_ledger: list[dict[str, Any]] = []
+    record_shares: dict[str, int] = {}
+    cash_receivables: dict[str, float] = {}
+    stock_receivables: dict[str, int] = {}
+    action_by_id = ({event['event_id']: event for event in action_schedule['dividend_events']}
+                    if action_schedule is not None else {})
+    if action_schedule is not None:
+        for coverage_key, ledger_event in (
+            ('dividend_coverage', 'dividend_source_coverage'),
+            ('rights_issue_coverage', 'rights_issue_exclusion_coverage'),
+        ):
+            coverage = action_schedule[coverage_key]
+            action_ledger.append({
+                'date': config['start_date'], 'event_id': coverage['event_id'],
+                'instrument': coverage['instrument'], 'event': ledger_event,
+                'eligible_record_shares': 0, 'cash_receivable_cny': 0.0,
+                'stock_receivable_shares': 0, 'available_cash_delta_cny': 0.0,
+            })
 
     def fact(day: str, instrument: str) -> pd.Series:
         if (day, instrument) not in facts.index:
@@ -149,16 +228,48 @@ def run_v3(
         for instrument, shares in holdings.items():
             price = market_price(day, instrument, column)
             if price is None:
-                if not fact(day, instrument)['suspended'] or instrument not in last_close:
+                rules = fact(day, instrument)
+                action_ex_date = (
+                    action_schedule is not None
+                    and any(event['instrument'] == instrument
+                            for event in action_schedule['ex_events'].get(day, []))
+                )
+                if bool(rules['suspended']) and action_ex_date:
+                    price = float(rules['limit_reference_price'])
+                elif not rules['suspended'] or instrument not in last_close:
                     raise ContractError(f'no usable {column} for held instrument {instrument} on {day}')
-                price = last_close[instrument]
+                else:
+                    price = last_close[instrument]
             values[instrument] = shares * price
         return values
+
+    def share_receivable_values(day: str, column: str) -> dict[str, float]:
+        values: dict[str, float] = {}
+        for event_id, shares in stock_receivables.items():
+            event = action_by_id[event_id]
+            instrument = event['instrument']
+            price = market_price(day, instrument, column)
+            if price is None:
+                rules = fact(day, instrument)
+                if not rules['suspended']:
+                    raise ContractError(
+                        f'no usable {column} for dividend share receivable {instrument} on {day}'
+                    )
+                if day == event['ex_date'] or instrument not in last_close:
+                    price = float(rules['limit_reference_price'])
+                else:
+                    price = last_close[instrument]
+            values[instrument] = values.get(instrument, 0.0) + shares * price
+        return values
+
+    def total_cash_receivable() -> float:
+        return float(sum(cash_receivables.values()))
 
     for index, day in enumerate(dates):
         decision_day = dates[index - 1] if index else None
         scheduled = (decision_day in weight_partitions and
                      (index - 1 - first_decision) % execution['rebalance_every_n_sessions'] == 0)
+        terminal_liquidation_due = terminal_liquidation and index == len(dates) - 1
         drawdown_stop_triggered = False
         if drawdown_stop is not None and not drawdown_stop_active:
             prior_drawdown = max(0.0, 1.0 - previous_nav / peak_nav)
@@ -167,6 +278,49 @@ def run_v3(
                 drawdown_stop_triggered = True
         traded = 0.
         day_start_holdings = dict(holdings)
+        if action_schedule is not None:
+            for event in action_schedule['ex_events'].get(day, []):
+                event_id = event['event_id']
+                if event_id not in record_shares:
+                    raise ContractError('dividend ex date has no recorded record-date entitlement')
+                eligible_shares = record_shares[event_id]
+                cash_amount = _cent(eligible_shares * event['cash_div_after_tax'])
+                raw_stock_shares = eligible_shares * event['stock_div_per_share']
+                whole_stock_shares = round(raw_stock_shares)
+                if abs(raw_stock_shares - whole_stock_shares) > 1e-9:
+                    raise ContractError('dividend stock entitlement is not a whole number of shares')
+                if cash_amount:
+                    cash_receivables[event_id] = cash_amount
+                if whole_stock_shares:
+                    stock_receivables[event_id] = int(whole_stock_shares)
+                action_ledger.append({
+                    'date': day, 'event_id': event_id, 'instrument': event['instrument'],
+                    'event': 'ex_date_receivable', 'eligible_record_shares': eligible_shares,
+                    'cash_receivable_cny': cash_amount,
+                    'stock_receivable_shares': int(whole_stock_shares),
+                    'available_cash_delta_cny': 0.0,
+                })
+            for event in action_schedule['pay_events'].get(day, []):
+                amount = cash_receivables.pop(event['event_id'], 0.0)
+                if amount:
+                    cash += amount
+                    action_ledger.append({
+                        'date': day, 'event_id': event['event_id'], 'instrument': event['instrument'],
+                        'event': 'cash_paid', 'eligible_record_shares': record_shares[event['event_id']],
+                        'cash_receivable_cny': amount, 'stock_receivable_shares': 0,
+                        'available_cash_delta_cny': amount,
+                    })
+            for event in action_schedule['listing_events'].get(day, []):
+                shares = stock_receivables.pop(event['event_id'], 0)
+                if shares:
+                    holdings[event['instrument']] = holdings.get(event['instrument'], 0) + shares
+                    action_ledger.append({
+                        'date': day, 'event_id': event['event_id'], 'instrument': event['instrument'],
+                        'event': 'shares_listed_t1_locked',
+                        'eligible_record_shares': record_shares[event['event_id']],
+                        'cash_receivable_cny': 0.0, 'stock_receivable_shares': shares,
+                        'available_cash_delta_cny': 0.0,
+                    })
         volatility_estimate = None
         target_exposure_scale = 1.0
         if scheduled and not drawdown_stop_active and volatility_target is not None:
@@ -179,8 +333,8 @@ def run_v3(
                     target_exposure_scale = min(
                         1.0, float(volatility_target['target_annualized']) / volatility_estimate
                     )
-        if scheduled or drawdown_stop_active:
-            targets = ({} if drawdown_stop_active else
+        if scheduled or drawdown_stop_active or terminal_liquidation_due:
+            targets = ({} if drawdown_stop_active or terminal_liquidation_due else
                        weight_partitions[decision_day].set_index('instrument')['weight'].to_dict())
             if target_exposure_scale < 1.0:
                 targets = {instrument: float(weight) * target_exposure_scale
@@ -278,7 +432,10 @@ def run_v3(
                                 actual = _bounded_quantity(actual, lot, band_allowed)
                         if side == 'buy':
                             open_values = position_values(day, 'open')
-                            open_nav = cash + sum(open_values.values())
+                            share_values = share_receivable_values(day, 'open')
+                            for held, value in share_values.items():
+                                open_values[held] = open_values.get(held, 0.0) + value
+                            open_nav = cash + total_cash_receivable() + sum(open_values.values())
                             industry_exposures = {}
                             if risk['max_industry_weight'] is not None:
                                 for held, value in open_values.items():
@@ -296,7 +453,8 @@ def run_v3(
 
                             def single_allowed(shares):
                                 after_nav, _ = projected(shares)
-                                exposures = {**open_values, instrument: (current + shares) * opening}
+                                exposures = dict(open_values)
+                                exposures[instrument] = exposures.get(instrument, 0.0) + shares * opening
                                 return all(value <= risk['max_single_weight'] * after_nav + 1e-9
                                            for value in exposures.values())
 
@@ -344,30 +502,59 @@ def run_v3(
                     'constraint_reasons': ','.join(reasons), 'limit_reference_price': float(rules['limit_reference_price']),
                     'reference_adjustment_bps': (float(rules['limit_reference_price']) / float(rules['raw_previous_close']) - 1) * 10000,
                 })
+        if action_schedule is not None:
+            for event in action_schedule['record_events'].get(day, []):
+                eligible_shares = int(holdings.get(event['instrument'], 0))
+                record_shares[event['event_id']] = eligible_shares
+                action_ledger.append({
+                    'date': day, 'event_id': event['event_id'], 'instrument': event['instrument'],
+                    'event': 'record_date_entitlement_locked',
+                    'eligible_record_shares': eligible_shares,
+                    'cash_receivable_cny': 0.0, 'stock_receivable_shares': 0,
+                    'available_cash_delta_cny': 0.0,
+                })
         values = position_values(day, 'close')
-        nav = cash + sum(values.values())
+        shares_values = share_receivable_values(day, 'close')
+        cash_claim = total_cash_receivable()
+        economic_values = dict(values)
+        for instrument, value in shares_values.items():
+            economic_values[instrument] = economic_values.get(instrument, 0.0) + value
+        nav = cash + cash_claim + sum(economic_values.values())
         if not math.isfinite(nav) or nav <= 0 or cash < -1e-9:
-            raise ContractError('v3 portfolio is insolvent or has non-finite accounting')
+            raise ContractError(f'v{contract_version} portfolio is insolvent or has non-finite accounting')
         industries = {}
-        for instrument, value in values.items():
+        for instrument, value in economic_values.items():
             industry = fact(day, instrument)['industry']
             if risk['max_industry_weight'] is not None and industry is None:
                 raise ContractError('industry cap requires classifications for every traded/held name')
             if industry is not None:
                 industries[industry] = industries.get(industry, 0.) + value
-        breach = (any(value / nav > risk['max_single_weight'] + 1e-10 for value in values.values())
+        breach = (any(value / nav > risk['max_single_weight'] + 1e-10 for value in economic_values.values())
                   or (risk['max_industry_weight'] is not None and any(value / nav > risk['max_industry_weight'] + 1e-10 for value in industries.values()))
                   or cash / nav + 1e-10 < risk['cash_reserve'])
-        equity.append({'date': day, 'portfolio_value': nav, 'cash': cash, 'holdings_value': sum(values.values())})
+        equity_row = {'date': day, 'portfolio_value': nav, 'cash': cash,
+                      'holdings_value': sum(values.values())}
+        if contract_version == 4:
+            equity_row.update({
+                'cash_receivable': cash_claim,
+                'share_receivable_value': sum(shares_values.values()),
+            })
+        equity.append(equity_row)
         daily_return = nav / previous_nav - 1
-        daily.append({'date': day, 'daily_return': daily_return,
+        daily_row = {'date': day, 'daily_return': daily_return,
                       'executed_turnover': traded / (2 * previous_nav), 'cash_ratio': cash / nav,
                       'rebalance_scheduled': bool(scheduled), 'risk_budget_breached': bool(breach),
                       'volatility_target_estimated_annualized': volatility_estimate,
                       'volatility_target_scale': target_exposure_scale,
                       'volatility_target_applied': bool(target_exposure_scale < 1.0),
                       'drawdown_stop_active': bool(drawdown_stop_active),
-                      'drawdown_stop_triggered': bool(drawdown_stop_triggered)})
+                      'drawdown_stop_triggered': bool(drawdown_stop_triggered)}
+        if contract_version == 4:
+            daily_row.update({
+                'cash_receivable': cash_claim,
+                'share_receivable_value': sum(shares_values.values()),
+            })
+        daily.append(daily_row)
         completed_returns.append(daily_return)
         previous_nav = nav
         peak_nav = max(peak_nav, nav)
@@ -375,8 +562,17 @@ def run_v3(
             close = market_price(day, instrument, 'close')
             if close is not None:
                 last_close[instrument] = close
+            elif (action_schedule is not None and fact(day, str(instrument))['suspended']
+                  and any(event['instrument'] == str(instrument)
+                          for event in action_schedule['ex_events'].get(day, []))):
+                last_close[str(instrument)] = float(fact(day, str(instrument))['limit_reference_price'])
     artifacts = {'equity_curve': pd.DataFrame(equity), 'daily_metrics': pd.DataFrame(daily),
                  'fills': pd.DataFrame(fills, columns=_FILL_COLUMNS)}
+    if contract_version == 4:
+        artifacts['corporate_actions'] = pd.DataFrame(action_ledger, columns=[
+            'date', 'event_id', 'instrument', 'event', 'eligible_record_shares',
+            'cash_receivable_cny', 'stock_receivable_shares', 'available_cash_delta_cny',
+        ])
     returns = artifacts['daily_metrics']['daily_return'].to_numpy(dtype=float)
     volatility = float(returns.std(ddof=1)) * math.sqrt(252) if len(returns) > 1 else 0.
     wealth = np.r_[float(config['initial_capital']), artifacts['equity_curve']['portfolio_value'].to_numpy(dtype=float)]
@@ -411,19 +607,38 @@ def run_v3(
         'volatility_target_applied_sessions': int(artifacts['daily_metrics']['volatility_target_applied'].sum()),
         'minimum_volatility_target_scale': float(artifacts['daily_metrics']['volatility_target_scale'].min()),
     }
+    if contract_version == 4:
+        terminal_share_claims = share_receivable_values(dates[-1], 'close')
+        summary.update({
+            'corporate_action_event_count': len(action_schedule['dividend_events']),
+            'terminal_cash_receivable_cny': total_cash_receivable(),
+            'terminal_stock_receivable_shares': int(sum(stock_receivables.values())),
+            'terminal_stock_receivable_value_cny': float(sum(terminal_share_claims.values())),
+        })
     manifest = {
-        'contract_version': 3, 'schema_version': '1.0.0',
+        'contract_version': contract_version, 'schema_version': '1.0.0',
         'backtest_config_generation_id': config['generation_id'],
         'portfolio_definition_generation_id': portfolio_definition['generation_id'],
         'target_weight_bindings': [], 'price_source_binding': config['price_source_binding'],
         'execution_facts_binding': config['execution_facts_binding'],
-        'execution_semantics': 'chronological_raw_daily_t1_v3',
+        'execution_semantics': ('chronological_raw_daily_t1_v4_corporate_actions'
+                                if contract_version == 4 else 'chronological_raw_daily_t1_v3'),
         'period_start': dates[0], 'period_end': dates[-1], 'trading_days': len(dates), 'summary_metrics': summary,
         'run_id': str(uuid.uuid5(uuid.NAMESPACE_URL, sha256_json({'config': config['generation_id'],
                           'portfolio': portfolio_definition['generation_id'], 'summary': summary}))),
         'created_at': '1970-01-01T00:00:00+00:00', 'quality_report_checksum_sha256': '0' * 64,
         'generation_id': '0' * 64, 'manifest_digest_sha256': '0' * 64,
     }
+    if contract_version == 4:
+        manifest['corporate_action_binding'] = config['corporate_action_binding']
+        manifest['corporate_action_semantics'] = {
+            'entitlement_rule': 'record_date_end_of_session_shares',
+            'ex_date_receivables': 'included_in_nav_not_available_for_orders',
+            'cash_settlement': 'spendable_on_pay_date_session',
+            'stock_settlement': 'included_in_nav_on_ex_date_and_sellable_from_session_after_div_listdate',
+            'fractional_stock_entitlement': 'reject',
+            'rights_issue': 'reviewed_complete_window_exclusion_list_required',
+        }
     for name, frame in artifacts.items():
         manifest[name + '_artifact'] = {
             'file': name + '.parquet', 'checksum_sha256': '0' * 64, 'row_count': len(frame),

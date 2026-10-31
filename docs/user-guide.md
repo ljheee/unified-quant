@@ -106,9 +106,32 @@ mkdir -p "$DATA_ROOT"
 
 | 来源 | 取什么 | 访问方式 | 当前状态与限制 |
 |---|---|---|---|
-| Tushare（2000 积分账号） | `daily` 原始 OHLCV、`adj_factor`、`stk_limit`、`suspend_d`、`stock_basic`、`trade_cal`、`index_weight`（部分） | HTTP API，需 `TUSHARE_2K_TOKEN` | **本项目主力源**。CLI 不自动加载 `.env`，需 `env $(grep -E '^TUSHARE' .env \| xargs)` 传入。免费/低积分档限速约 300 次/分钟，一个全 A 交易日约 104 次请求。`income_vip` 类接口不可用。 |
+| Tushare（2000 积分账号） | `daily` 原始 OHLCV、`adj_factor`、`stk_limit`、`suspend_d`、`stock_basic`、`trade_cal`、`index_weight`（部分） | HTTP API，需 `TUSHARE_2K_TOKEN` | **本项目主力源**。CLI 不自动加载 `.env`，需把 token 注入进程环境。2000 积分档官方频次为约 200 次/分钟；端点另有单次行数和日请求上限。`income_vip` 类接口不可用。 |
 | TDX / 通达信（via `mootdx`） | **除权除息事件**（`xdxr`）、行情 `bars`、指数日线 | 原生 TCP 协议，端口 7709 | `xdxr` **实测可用**（默认主机 `115.238.90.165:7709`，实测返回真实事件）。`bars`/`quotes` 在部分网络下被拦截返回空，但 `xdxr` 仍可用——**探测时必须用真正要发的命令**，否则会把"命令族被拦"误判成"服务器不可用"。 |
 | EastMoney | 独立交易日历（指数日线推会话表） | HTTP | 实测可用，但**抖动明显**（约 1/6 概率掉连接），入库与就绪门都带重试。 |
+
+除已有日线、日历和参考端点外，`Tushare2kAdapter.research_data()` 现在可按受限端点清单采集每日指标、申万行业分类/历史成分、三张财报、财务指标、业绩预告/快报、卖方盈利预测、资金流、沪深股通持股和龙虎榜。原始响应进入只追加、带校验和的 `TushareDependencyStore`，默认根为 `data/trading-grade-history/source/`；该落地区不是 canonical 数据，不能直接作为 PIT 因子或回测输入。
+
+使用时将 token 放入进程环境（不会把 token 放到命令参数或报告中）：
+
+```bash
+set -a
+. ./.env
+set +a
+.venv/bin/python scripts/fetch_tushare_dependency.py \
+  --endpoint daily_basic --filter trade_date=20261030
+```
+
+日频端点可以按交易日范围回填，需显式给请求预算；重复执行会校验并跳过已有查询。申万 SW2021 历史成员使用专门入口：
+
+```bash
+.venv/bin/python scripts/fetch_tushare_dependency.py \
+  --endpoint moneyflow --range-start 2025-01-01 --range-end 2025-12-31 \
+  --max-requests 366
+.venv/bin/python scripts/fetch_tushare_industry_history.py --max-requests 700
+```
+
+`daily_basic`、`moneyflow`、`hk_hold` 和 `top_list` 的日数据在收盘后发布或更新，需按端点发布时间滞后一交易日使用；`index_member_all` 提供有效期字段，但没有历史发布版本时间，单靠它不能证明无修订的 transaction-time PIT。`report_rc` 在 2000 积分档官方仅列为每天 10 次的试用权限，不能据此承诺完整历史卖方预期数据。财报与预告必须以公告/报告发布时间截断；归档原始字段不会自动完成这类时点治理。
 
 ### 5.2 复权数据的两条链
 
@@ -167,7 +190,7 @@ mkdir -p "$DATA_ROOT"
 ### 5.4 取不到数据时先查什么
 
 1. **先确认是"命令族被拦"还是"主机不可达"**：TDX 上换 `xdxr` 再试一次。
-2. Tushare 报限流：请求之间加间隔（`scripts/ingest_window.py --session-interval-seconds`，默认 25 秒）。
+2. Tushare 报限流：增加 `scripts/ingest_window.py --session-interval-seconds`。默认 25 秒对低积分档保守；2000 积分档的 500+ 标的单日路径通常是 5 个 Tushare 请求（全市场 `daily` 加三类参考数据和交易日历），可从 3 秒间隔开始。
 3. EastMoney 掉连接：加重试（`--calendar-attempts`）。
 4. 某只股票日线中途消失且不停牌：见 `--excluded-instruments`（供应商停发，属已知缺陷，需要在证据文件里显式剔除）。
 
@@ -290,6 +313,7 @@ execute 的命令形状如下，仅作结构说明：
 | `adjusted_price_binding` | `src/uq/research_chain/owning_contracts.py:89` `AdjustedPriceDatasetStore` | 否:只读 |
 | `sample_construction_binding` (v6) | 同文件 `SampleConstructionStore` | 是:`scripts/publish_sample_construction.py`(factor + label + universe + membership → 按 reviewed 行策略筛选 → 绑定**外部签发**的评审 → 发布最终训练样本) |
 | `feature_preprocessing_binding` | 同文件 `FeatureSchemaStore` + `FeaturePreprocessingStore` | 是:`scripts/publish_feature_preprocessing.py`(读 factor 分区或已评审 sample_construction → 截面变换 → 绑定**外部签发**的评审 → 发布) |
+| v2 中性化的暴露输入（写在预处理 manifest 内，不是额外 request 字段） | 同文件 `FactorExposureStore` | 是:`scripts/publish_factor_exposure_panel.py`(离线 Parquet → 15:00 上海时间 PIT 检查 → 绑定外部评审 → 发布)；passed-only 策略已加入活动 trust-anchor registry；真实 PIT 源和生产 reviewer key 仍须由维护者提供 |
 | `label_binding` | 同文件 `LabelStore` | 是:`scripts/build_label_sets.py`(默认逐标的发布;`--combined` 发布**一份覆盖全部标的**的集合——研究请求只绑一份,所以跑 execute 要用这个开关) |
 | `backtest_config_binding` | 同文件 `BacktestConfigStore` | 否:只读 |
 
@@ -297,7 +321,7 @@ v5–v8 请求额外要求的两类绑定**有**随仓库提供的生产者:
 
 - `index_membership_binding`:`scripts/fetch_index_membership.py`。
 - `paper_execution_template` 的市场数据四族:`scripts/publish_market_datasets.py`。
-- `backtest_config` 绑定的 calendar / suspension / corporate_action 三族(整窗口单一制品,**不是**上面那四族的布局):`scripts/publish_backtest_market_data.py`。来源见 `docs/subsystems/research-chain.md`;除权排除集按 **`ex_date` 而非公告日**判入窗。
+- `backtest_config` 绑定的 calendar / suspension / corporate_action 三族(整窗口单一制品,**不是**上面那四族的布局):`scripts/publish_backtest_market_data.py`。v2/v3 发布粗粒度公司行为排除集；v4 发布完整 `corporate_action_events` 面板，并须提供 dividend-source 完整性与权利发行全窗口排除声明。v4 对权益按登记日持仓计量，在除息日把应收计入 NAV，并分别按现金支付日/送股上市日结算。来源见 `docs/subsystems/portfolio-backtest-risk-execution.md`。
 - `backtest_config_binding` 本身:`scripts/publish_backtest_config.py`。四个绑定全部从已发布制品显式读取,市场三族还会**逐个回读校验**,不会把报告里不一致的 checksum 烙进 config。
 - v3 `backtest_config` 可通过 `scripts/publish_backtest_config.py` 显式配置 `--max-drawdown-stop 0.20`，或用 `--volatility-target-annualized 0.20 --volatility-lookback-sessions 20 --volatility-min-history-sessions 20` 开启目标波动率；这些参数进入受外部评审绑定的回测配置。回撤停止会在后续 session 持续尝试退出；波动率目标只降仓不加杠杆，历史不足时不缩放。它们是确定性回放控制，不代表真实成交或风险预算必然满足。
 - `adjusted_price` 的按日分区写侧:`scripts/publish_adjusted_window.py`。它逐会话发布 `adjusted-v2`,并把样本选择排除项作为带原因的受治理 JSON 输入(`--excluded-instruments`),排除会同时作用于发布帧与交叉校验。
@@ -309,14 +333,14 @@ v5–v8 请求额外要求的两类绑定**有**随仓库提供的生产者:
 
 ### 论文执行(v5–v8 请求)的两个额外参数
 
-`contract_version: 5`、`6`、`7` 或 `8` 的请求(带 `paper_execution_template`)额外要求两个治理输入,必须成对提供。v7 固定选择 Qlib LightGBM 的 model-definition template v2，以及 portfolio-definition template v2；后者可配置 `top_n_equal_weight` 或温度 softmax `score_weighted`。v8 延续 v7 模型路由，并使用 portfolio-definition template v3，可选择风险平价或行业均衡/上限路由:
+`contract_version: 5`、`6`、`7` 或 `8` 的请求(带 `paper_execution_template`)额外要求两个治理输入,必须成对提供。v7 固定选择 Qlib LightGBM 的 model-definition template v2，以及 portfolio-definition template v2；后者可配置 `top_n_equal_weight` 或温度 softmax `score_weighted`。v8 延续 v7 模型路由，并使用 portfolio-definition template v3，可选择风险平价或行业均衡/上限路由。现有 `feature_preprocessing_binding` 也可以绑定 `feature_preprocessing.v2`，其 passed-only review family 已激活并锚定；生产运行仍需经 `UQ_RUNTIME_MODE=production` 接受的 reviewer key，且当前没有真实 PIT 暴露源:
 
 ```bash
 .venv/bin/uq-research-run \
   --project-root "$PWD" \
   --data-root "$DATA_ROOT" \
   --mode execute \
-  --request-json /path/to/request-v7.json \
+  --request-json /path/to/request-v8.json \
   --quality-decisions-json /path/to/quality-decisions.json \
   --membership-root "$DATA_ROOT/a500-store" \
   --market-dataset-root "$DATA_ROOT/market-datasets"
@@ -328,6 +352,26 @@ v5–v8 请求额外要求的两类绑定**有**随仓库提供的生产者:
 只提供其中一个会报 `--membership-root and --market-dataset-root must be provided together`。
 
 日历快照的跨源核对口径:`--skip-independent-calendar` 会把 `independent_source` 记为 `not_checked`、`cross_check_result` 记为 `skipped`(而不是伪报 `agreement`);两家供应商会话列表不一致时直接 fail-closed。
+
+### 线性基线与 LightGBM 对照
+
+已有两份通过的研究结果后，可在相同训练数据、test split、组合模板和已评审 v3 回测成本下生成成对诊断：
+
+```bash
+.venv/bin/python scripts/compare_training_models.py \
+  --data-root "$DATA_ROOT" \
+  --baseline-result-generation <linear-result-generation> \
+  --baseline-result-digest <linear-result-manifest-digest> \
+  --candidate-result-generation <lightgbm-result-generation> \
+  --candidate-result-digest <lightgbm-result-manifest-digest> \
+  --start <test-start> --end <test-end> \
+  --output-root "$DATA_ROOT/evaluations"
+```
+
+程序会通过 owning stores 回读 request、dataset 与回测制品；训练样本字节或 split 不一致、窗口不在 test
+split、模型类型不符、回测成本/约束不一致时会拒绝发布。报告中的策略侧是 LightGBM，基准侧是线性模型，
+所以超额收益和 IR 表示 LightGBM 减线性基线。短期结果仍只是诊断，`one_year_oos_met` 为 false 时不能作为年度
+模型验收；没有经治理的市场状态标签时，也不会推断上涨、下跌或震荡状态。
 
 ## 8. 结果在哪里看
 

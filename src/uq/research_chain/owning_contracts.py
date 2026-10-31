@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import json
+import fcntl
+import io
 import os
 import re
 import shutil
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence, Mapping
 
 import pandas as pd
+import pyarrow as arrow
+import pyarrow.parquet as parquet
 
 from ..contracts.artifacts import QualityReportStore
 from ..contracts.canonical_v2 import file_sha256_bytes, fsync_dir, fsync_tree
@@ -17,6 +21,7 @@ from ..contracts.gate_contracts import sha256_json, validate_contract
 from ..contracts.manifest import validate_canonical_v2_manifest
 from ..contracts.model_layer import (
     ModelContractLoader,
+    ModelQualityReviewRegistry,
     bind_reviewed_quality_decision,
     model_manifest_identities,
     resolve_subject_quality_decision,
@@ -28,6 +33,7 @@ from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
 from ..models.labels import label_row_checksum
 from ..models.sample_construction import serialize_sample_frame
+from ..models.factor_exposures import normalize_exposure_panel
 
 
 class FeatureSchemaStore:
@@ -44,7 +50,10 @@ class FeatureSchemaStore:
         self.root = Path(root)
 
     def read_manifest(self, generation_id: str) -> dict[str, Any]:
-        return _read_manifest(self.root / "feature_schemas", generation_id, "feature_schema")
+        manifest = _read_json(_match_directory(self.root / "feature_schemas", generation_id) / "manifest.json")
+        family = "feature_schema_v2" if manifest.get("contract_version") == 2 else "feature_schema"
+        ModelContractLoader.validate(family, manifest)
+        return manifest
 
     def read_schema(self, generation_id: str) -> dict[str, Any]:
         return self.read_manifest(generation_id)
@@ -63,7 +72,8 @@ class FeatureSchemaStore:
         # itself), so it is called with placeholders, exactly as the other families do.
         payload["generation_id"] = "0" * 64
         payload["manifest_digest_sha256"] = "0" * 64
-        generation, digest = model_manifest_identities(payload, schema_name="feature_schema")
+        family = "feature_schema_v2" if payload.get("contract_version") == 2 else "feature_schema"
+        generation, digest = model_manifest_identities(payload, schema_name=family)
         inbound = manifest.get("generation_id")
         if inbound not in (None, "0" * 64) and inbound != generation:
             raise ContractError(
@@ -72,7 +82,7 @@ class FeatureSchemaStore:
             )
         payload["generation_id"] = generation
         payload["manifest_digest_sha256"] = digest
-        ModelContractLoader.validate("feature_schema", payload)
+        ModelContractLoader.validate(family, payload)
 
         directory = self.root / "feature_schemas" / f"generation={generation}"
         if directory.exists():
@@ -90,6 +100,167 @@ class FeatureSchemaStore:
             staging.rmdir()
             raise
         return payload
+
+
+class FactorExposureStore:
+    """Read and publish independently reviewed point-in-time exposure panels."""
+
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root)
+
+    def _directory(self, generation_id: str) -> Path:
+        directory = _match_directory(self.root / "factor_exposure_panels", generation_id)
+        reject_symlinks_within(self.root, directory, label="factor exposure store path")
+        return directory
+
+    def read_manifest(self, generation_id: str) -> dict[str, Any]:
+        manifest = _read_json(self._directory(generation_id) / "manifest.json")
+        ModelContractLoader.validate("factor_exposure_panel", manifest)
+        expected_generation, expected_digest = model_manifest_identities(
+            manifest,
+            schema_name="factor_exposure_panel",
+            exclude_fields={"quality_report_checksum_sha256"},
+        )
+        if expected_generation != generation_id or expected_digest != manifest.get("manifest_digest_sha256"):
+            raise ContractError("factor exposure panel identity mismatch")
+        checksum = manifest["quality_report_checksum_sha256"]
+        report_path = self.root / "external_quality_reviews" / f"{checksum}.json"
+        if not report_path.is_file() or report_path.is_symlink():
+            raise ContractError("factor exposure quality report is unavailable")
+        report = _read_json(report_path)
+        ModelContractLoader.validate("model_quality_report", report)
+        ModelQualityReviewRegistry().validate_report(report)
+        actual = sha256_json({key: value for key, value in report.items() if key != "report_checksum_sha256"})
+        if (
+            actual != checksum
+            or report.get("binding_type") != "factor_exposure_panel_v1"
+            or report.get("bound_generation_id") != generation_id
+            or report.get("subject_content_sha256") != generation_id
+            or report.get("status") not in reviewed_allowed_statuses("factor_exposure_panel_v1")
+        ):
+            raise ContractError("factor exposure quality report rejects read")
+        return manifest
+
+    def read_frame(self, generation_id: str) -> tuple[dict[str, Any], pd.DataFrame]:
+        manifest = self.read_manifest(generation_id)
+        directory = self._directory(generation_id)
+        data_path = directory / "data.parquet"
+        if not data_path.is_file() or data_path.is_symlink():
+            raise ContractError("factor exposure panel data is unavailable")
+        raw = data_path.read_bytes()
+        if file_sha256_bytes(raw) != manifest["data_checksum_sha256"]:
+            raise ContractError("factor exposure panel checksum mismatch")
+        frame = pd.read_parquet(io.BytesIO(raw))
+        normalized = normalize_exposure_panel(frame, manifest["controls"])
+        if frame.columns.tolist() != manifest["columns"] or len(frame) != manifest["row_count"]:
+            raise ContractError("factor exposure panel shape mismatch")
+        if logical_fingerprint(normalized) != manifest["logical_fingerprint"]:
+            raise ContractError("factor exposure panel logical fingerprint mismatch")
+        return manifest, normalized
+
+    def publish(
+        self,
+        frame: pd.DataFrame,
+        *,
+        controls: Sequence[str],
+        source_id: str,
+        source_approval_ref: str,
+        quality_decision: Any,
+        created_at: str | None = None,
+    ) -> dict[str, Any]:
+        if not isinstance(source_id, str) or not source_id.strip():
+            raise ContractError("factor exposure source_id is required")
+        if not isinstance(source_approval_ref, str) or not source_approval_ref.strip():
+            raise ContractError("factor exposure source approval reference is required")
+        normalized = normalize_exposure_panel(frame, list(controls))
+        table = arrow.Table.from_pandas(normalized, preserve_index=False)
+        sink = arrow.BufferOutputStream()
+        parquet.write_table(table, sink, compression="snappy")
+        artifact = sink.getvalue().to_pybytes()
+        data_checksum = file_sha256_bytes(artifact)
+        now = created_at or datetime.now(timezone.utc).isoformat()
+        manifest: dict[str, Any] = {
+            "contract_version": 1,
+            "source_id": source_id.strip(),
+            "source_approval_ref": source_approval_ref.strip(),
+            "controls": list(controls),
+            "decision_time_policy": "session_close_asia_shanghai_v1",
+            "coverage_start_date": normalized["datetime"].min(),
+            "coverage_end_date": normalized["datetime"].max(),
+            "columns": normalized.columns.tolist(),
+            "row_count": len(normalized),
+            "data_checksum_sha256": data_checksum,
+            "logical_fingerprint": logical_fingerprint(normalized),
+            "serialization_profile_id": "parquet-snappy-v1",
+            "quality_report_checksum_sha256": "0" * 64,
+            "run_id": str(uuid.uuid4()),
+            "created_at": now,
+            "generation_id": "0" * 64,
+            "manifest_digest_sha256": "0" * 64,
+        }
+        generation, _ = model_manifest_identities(
+            manifest,
+            schema_name="factor_exposure_panel",
+            exclude_fields={"quality_report_checksum_sha256"},
+        )
+        manifest["generation_id"] = generation
+        quality_decision = resolve_subject_quality_decision(
+            quality_decision,
+            subject_generation_id=generation,
+            subject_content_sha256=generation,
+        )
+        report, report_checksum = bind_reviewed_quality_decision(
+            quality_decision,
+            binding_type="factor_exposure_panel_v1",
+            subject_generation_id=generation,
+            subject_content_sha256=generation,
+        )
+        manifest["quality_report_checksum_sha256"] = report_checksum
+        _, digest = model_manifest_identities(
+            manifest,
+            schema_name="factor_exposure_panel",
+            exclude_fields={"quality_report_checksum_sha256"},
+        )
+        manifest["manifest_digest_sha256"] = digest
+        ModelContractLoader.validate("factor_exposure_panel", manifest)
+        family_root = self.root / "factor_exposure_panels"
+        directory = family_root / f"generation={generation}"
+        lock_path = family_root / "publication.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            if directory.exists():
+                raise ContractError(f"immutable factor exposure panel already published: {directory}")
+            staging = family_root / f".staging_{uuid.uuid4().hex}"
+            staging.mkdir()
+            try:
+                (staging / "data.parquet").write_bytes(artifact)
+                (staging / "manifest.json").write_text(
+                    json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+                )
+                fsync_tree(staging)
+                self._publish_quality_report(report_checksum, report)
+                staging.replace(directory)
+                fsync_dir(family_root)
+            except Exception:
+                shutil.rmtree(staging, ignore_errors=True)
+                raise
+        return manifest
+
+    def _publish_quality_report(self, checksum: str, report: dict[str, Any]) -> None:
+        root = self.root / "external_quality_reviews"
+        root.mkdir(parents=True, exist_ok=True)
+        if root.is_symlink() or not root.is_dir():
+            raise ContractError("external quality review root is unsafe")
+        path = root / f"{checksum}.json"
+        if path.is_symlink():
+            raise ContractError("external quality review path cannot be a symbolic link")
+        if path.exists():
+            existing = _read_json(path)
+            if existing != report:
+                raise ContractError("immutable quality report checksum collision")
+            return
+        path.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
 class AdjustedPriceDatasetStore:
@@ -316,6 +487,11 @@ class BacktestMarketDatasetStore:
         frame = pd.read_parquet(data_path)
         if list(frame.columns) != manifest.get("columns"):
             raise ContractError(f"{dataset_type} dataset column mismatch")
+        if dataset_type == "corporate_action_events":
+            from ..backtest.corporate_actions import ACTION_EVENT_COLUMNS
+
+            if frame.columns.tolist() != ACTION_EVENT_COLUMNS:
+                raise ContractError("corporate_action_events dataset has an invalid event schema")
         if len(frame) != manifest.get("row_count"):
             raise ContractError(f"{dataset_type} dataset row count mismatch")
         if required_columns is not None and not required_columns.issubset(frame.columns):
@@ -353,16 +529,25 @@ class BacktestMarketDatasetStore:
         """
         if not isinstance(frame, pd.DataFrame) or frame.empty:
             raise ContractError(f"{dataset_type} dataset requires a non-empty frame")
-        for column in ("date", "instrument"):
-            if column not in frame.columns:
-                raise ContractError(f"{dataset_type} dataset requires a {column} column")
-        ordered = frame.sort_values(["date", "instrument"], kind="mergesort").reset_index(drop=True)
+        if dataset_type == "corporate_action_events":
+            from ..backtest.corporate_actions import ACTION_EVENT_COLUMNS
+
+            if frame.columns.tolist() != ACTION_EVENT_COLUMNS:
+                raise ContractError("corporate_action_events dataset has an invalid event schema")
+            sort_columns = ["event_type", "event_id", "instrument"]
+        else:
+            for column in ("date", "instrument"):
+                if column not in frame.columns:
+                    raise ContractError(f"{dataset_type} dataset requires a {column} column")
+            sort_columns = ["date", "instrument"]
+        ordered = frame.sort_values(sort_columns, kind="mergesort").reset_index(drop=True)
+        rows = ordered.astype(object).where(pd.notna(ordered), None).to_dict(orient="records")
         generation = sha256_json({
             "dataset_type": dataset_type,
             "window_start": window_start.isoformat(),
             "window_end": window_end.isoformat(),
             "columns": list(ordered.columns),
-            "rows": ordered.to_dict(orient="records"),
+            "rows": rows,
         })
         directory = self.root / "backtest_market_data" / f"dataset={generation}"
         if directory.is_dir():
@@ -473,9 +658,40 @@ class FeaturePreprocessingStore:
         self.root = Path(root)
 
     def read_manifest(self, generation_id: str) -> dict[str, Any]:
-        manifest = _read_manifest(self.root / "feature_preprocessing", generation_id, "feature_preprocessing")
+        manifest = _read_json(_match_directory(
+            self.root / "feature_preprocessing", generation_id
+        ) / "manifest.json")
+        family = "feature_preprocessing_v2" if manifest.get("contract_version") == 2 else "feature_preprocessing"
+        ModelContractLoader.validate(family, manifest)
         if manifest.get("quality_report_checksum_sha256") in (None, "0" * 64):
             raise ContractError("feature preprocessing is missing a quality report binding")
+        if family == "feature_preprocessing_v2":
+            expected_generation, expected_digest = model_manifest_identities(
+                manifest,
+                schema_name=family,
+                exclude_fields={
+                    "input_feature_schema_manifest_digest_sha256",
+                    "quality_report_checksum_sha256",
+                },
+            )
+            if expected_generation != generation_id or expected_digest != manifest.get("manifest_digest_sha256"):
+                raise ContractError("feature preprocessing v2 identity mismatch")
+            checksum = manifest["quality_report_checksum_sha256"]
+            report_path = self.root / "external_quality_reviews" / f"{checksum}.json"
+            if not report_path.is_file() or report_path.is_symlink():
+                raise ContractError("feature preprocessing v2 quality report is unavailable")
+            report = _read_json(report_path)
+            ModelContractLoader.validate("model_quality_report", report)
+            ModelQualityReviewRegistry().validate_report(report)
+            actual = sha256_json({key: value for key, value in report.items() if key != "report_checksum_sha256"})
+            if (
+                actual != checksum
+                or report.get("binding_type") != "feature_preprocessing_v2"
+                or report.get("bound_generation_id") != generation_id
+                or report.get("subject_content_sha256") != generation_id
+                or report.get("status") not in reviewed_allowed_statuses("feature_preprocessing_v2")
+            ):
+                raise ContractError("feature preprocessing v2 quality report rejects read")
         return manifest
 
     def publish(
@@ -510,9 +726,17 @@ class FeaturePreprocessingStore:
             subject_generation_id=generation,
             subject_content_sha256=generation,
         )
+        if manifest.get("contract_version") == 2:
+            schema_name = "feature_preprocessing_v2"
+            binding_type = "feature_preprocessing_v2"
+        elif manifest.get("contract_version") == 1:
+            schema_name = "feature_preprocessing"
+            binding_type = "feature_preprocessing_v1"
+        else:
+            raise ContractError("unsupported feature preprocessing contract version")
         bound_report, report_checksum = bind_reviewed_quality_decision(
             quality_decision,
-            binding_type="feature_preprocessing_v1",
+            binding_type=binding_type,
             subject_generation_id=generation,
             subject_content_sha256=generation,
         )
@@ -524,14 +748,14 @@ class FeaturePreprocessingStore:
         exclude = {"input_feature_schema_manifest_digest_sha256",
                    "quality_report_checksum_sha256"}
         regenerated, digest = model_manifest_identities(
-            published, schema_name="feature_preprocessing", exclude_fields=exclude
+            published, schema_name=schema_name, exclude_fields=exclude
         )
         if regenerated != generation:
             raise ContractError(
                 "feature preprocessing generation moved when the review was bound"
             )
         published["manifest_digest_sha256"] = digest
-        ModelContractLoader.validate("feature_preprocessing", published)
+        ModelContractLoader.validate(schema_name, published)
 
         directory = self.root / "feature_preprocessing" / f"generation={generation}"
         if directory.exists():
@@ -543,9 +767,14 @@ class FeaturePreprocessingStore:
                 json.dumps(published, sort_keys=True) + "\n", encoding="utf-8"
             )
             (self.root / "external_quality_reviews").mkdir(parents=True, exist_ok=True)
-            (self.root / "external_quality_reviews" / f"{report_checksum}.json").write_text(
-                json.dumps(bound_report, sort_keys=True) + "\n", encoding="utf-8"
-            )
+            report_path = self.root / "external_quality_reviews" / f"{report_checksum}.json"
+            if report_path.exists():
+                if _read_json(report_path) != bound_report:
+                    raise ContractError("immutable quality report checksum collision")
+            else:
+                report_path.write_text(
+                    json.dumps(bound_report, sort_keys=True) + "\n", encoding="utf-8"
+                )
             staging.replace(directory)
         except Exception:
             for path in staging.glob("*"):
@@ -729,7 +958,7 @@ class BacktestConfigStore:
         contract_version = payload.get("contract_version")
         if contract_version in (None, 1):
             schema_name = "backtest_config"
-        elif contract_version in {2, 3}:
+        elif contract_version in {2, 3, 4}:
             schema_name = f"backtest_config_v{contract_version}"
         else:
             raise ContractError(
@@ -798,7 +1027,7 @@ class BacktestConfigStore:
                 # manifest names its own `contract_version`, so validation follows
                 # it; hardcoding one schema made a published v2 config unreadable.
                 ModelContractLoader.validate(
-                    f"backtest_config_v{manifest['contract_version']}" if manifest.get("contract_version") in {2, 3}
+                    f"backtest_config_v{manifest['contract_version']}" if manifest.get("contract_version") in {2, 3, 4}
                     else "backtest_config",
                     manifest,
                 )

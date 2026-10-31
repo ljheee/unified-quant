@@ -28,6 +28,8 @@ from ..models.predictions import PredictionBuilder
 from ..models.trainer import ModelRunBuilder
 from ..models.dataset_writer import DatasetWriter
 from ..models.feature_preprocessing import FeaturePreprocessorBuilder, complete_rows
+from ..models.factor_neutralization import FactorNeutralizationPreprocessorBuilder
+from ..models.factor_exposures import align_exposure_panel
 from ..models.features import FeatureSchemaBuilder, FeatureSchemaValidator
 from ..models.sample_construction import select_training_sample
 from ..portfolio.builder import PortfolioBuilder, PortfolioDefinitionBinding, TargetWeightStore
@@ -38,6 +40,7 @@ from .owning_contracts import (
     AdjustedPriceDatasetStore,
     BacktestConfigStore,
     BacktestMarketDatasetStore,
+    FactorExposureStore,
     FeaturePreprocessingStore,
     FeatureSchemaStore,
     LabelStore,
@@ -254,6 +257,7 @@ def _prepare_preprocessed_frame(
     output_schema: Mapping[str, Any],
     *,
     label_generation_id: str,
+    exposure_frame: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     if not isinstance(factor_frame, pd.DataFrame) or factor_frame.empty:
         raise ContractError("factor artifact is empty")
@@ -261,22 +265,36 @@ def _prepare_preprocessed_frame(
     expected_input_columns = ["instrument", "datetime", *ordered_features]
     if factor_frame.columns.tolist() != expected_input_columns:
         raise ContractError("factor frame columns do not match preprocessing input schema")
-    builder = FeaturePreprocessorBuilder(
-        preprocess_name=preprocessing["preprocess_name"],
-        semantic_version=preprocessing["semantic_version"],
-        transform=preprocessing["transform"],
-        min_group_observations=preprocessing["policy"]["min_group_observations"],
-        code_fingerprint=preprocessing["code_fingerprint"],
-    )
+    if preprocessing.get("contract_version") == 2:
+        if exposure_frame is None:
+            raise ContractError("neutralization preprocessing requires its bound PIT exposures")
+        builder = FactorNeutralizationPreprocessorBuilder(
+            preprocess_name=preprocessing["preprocess_name"],
+            semantic_version=preprocessing["semantic_version"],
+            controls=preprocessing["policy"]["control_order"],
+            code_fingerprint=preprocessing["code_fingerprint"],
+        )
+    else:
+        builder = FeaturePreprocessorBuilder(
+            preprocess_name=preprocessing["preprocess_name"],
+            semantic_version=preprocessing["semantic_version"],
+            transform=preprocessing["transform"],
+            min_group_observations=preprocessing["policy"]["min_group_observations"],
+            code_fingerprint=preprocessing["code_fingerprint"],
+        )
     input_frame = factor_frame.sort_values(
         ["instrument", "datetime"], kind="mergesort"
     ).reset_index(drop=True)
-    if builder.frame_fingerprint(input_frame) != preprocessing["input_frame_sha256"]:
+    if FeaturePreprocessorBuilder.frame_fingerprint(input_frame) != preprocessing["input_frame_sha256"]:
         raise ContractError("preprocessing input frame fingerprint mismatch")
     FeatureSchemaValidator.validate_against_frame(dict(input_schema), input_frame)
     if input_schema["generation_id"] != preprocessing["input_feature_schema_generation_id"]:
         raise ContractError("preprocessing input feature schema mismatch")
-    output_frame = builder.transform(input_frame, ordered_features)
+    output_frame = (
+        builder.transform(input_frame, exposure_frame)
+        if preprocessing.get("contract_version") == 2
+        else builder.transform(input_frame, ordered_features)
+    )
     output_frame_fingerprint = FeaturePreprocessorBuilder.frame_fingerprint(output_frame)
     if output_frame_fingerprint != preprocessing["output_frame_sha256"]:
         raise ContractError("preprocessing output frame fingerprint mismatch")
@@ -286,6 +304,15 @@ def _prepare_preprocessed_frame(
     if output_frame.empty:
         raise ContractError(f"preprocessed dataset has no rows for label generation {label_generation_id}")
     return input_frame, output_frame
+
+
+def _align_exposures_to_factor_frame(
+    factor_frame: pd.DataFrame,
+    exposure_panel: pd.DataFrame,
+    controls: Sequence[str],
+) -> pd.DataFrame:
+    """Select the approved exposure rows matching the exact preprocessing keys."""
+    return align_exposure_panel(factor_frame, exposure_panel, controls)
 
 
 def unlabeled_keys(label_frame: pd.DataFrame) -> pd.DataFrame:
@@ -370,6 +397,7 @@ class DatasetStageAdapter:
         universe_store: UniverseSnapshotStore,
         feature_schema_store: FeatureSchemaStore,
         preprocessing_store: FeaturePreprocessingStore,
+        factor_exposure_store: FactorExposureStore | None = None,
         dataset_writer: DatasetWriter,
         run_store: FileResearchRunStore,
         sample_construction_store: SampleConstructionStore | None = None,
@@ -382,6 +410,7 @@ class DatasetStageAdapter:
         self.universe_store = universe_store
         self.feature_schema_store = feature_schema_store
         self.preprocessing_store = preprocessing_store
+        self.factor_exposure_store = factor_exposure_store
         self.sample_construction_store = sample_construction_store
         self.dataset_writer = dataset_writer
         self.run_store = run_store
@@ -529,7 +558,11 @@ class DatasetStageAdapter:
             raise ContractError("preprocessing binding manifest digest mismatch")
         _, expected_preprocessing_checksum = bind_reviewed_quality_decision(
             dict(preprocessing_quality_decision),
-            binding_type="feature_preprocessing_v1",
+            binding_type=(
+                "feature_preprocessing_v2"
+                if preprocessing.get("contract_version") == 2
+                else "feature_preprocessing_v1"
+            ),
             subject_generation_id=preprocessing["generation_id"],
             subject_content_sha256=preprocessing["generation_id"],
         )
@@ -565,6 +598,20 @@ class DatasetStageAdapter:
             )
         input_schema = self.feature_schema_store.read_schema(preprocessing["input_feature_schema_generation_id"])
         output_schema = self.feature_schema_store.read_schema(preprocessing["output_feature_schema_generation_id"])
+        exposure_manifest: dict[str, Any] | None = None
+        exposure_panel: pd.DataFrame | None = None
+        if preprocessing.get("contract_version") == 2:
+            if self.factor_exposure_store is None:
+                raise ContractError("neutralization requires a governed factor exposure store")
+            exposure_binding = preprocessing["factor_exposure_binding"]
+            exposure_manifest, exposure_panel = self.factor_exposure_store.read_frame(
+                exposure_binding["generation_id"]
+            )
+            if (
+                exposure_manifest["manifest_digest_sha256"] != exposure_binding["manifest_digest_sha256"]
+                or exposure_manifest["data_checksum_sha256"] != exposure_binding["data_checksum_sha256"]
+            ):
+                raise ContractError("neutralization exposure binding mismatch")
 
         if plan.request.get("contract_version") in {6, 7, 8}:
             if self.sample_construction_store is None:
@@ -694,12 +741,18 @@ class DatasetStageAdapter:
             factor_frame, dropped_labels = drop_unlabelled_factor_rows(
                 factor_frame, label_frame
             )
+        preprocessing_exposure_frame: pd.DataFrame | None = None
+        if exposure_panel is not None:
+            preprocessing_exposure_frame = _align_exposures_to_factor_frame(
+                factor_frame, exposure_panel, preprocessing["policy"]["control_order"]
+            )
         _, preprocessed_frame = _prepare_preprocessed_frame(
             factor_frame,
             preprocessing,
             input_schema,
             output_schema,
             label_generation_id=label_binding.generation_id,
+            exposure_frame=preprocessing_exposure_frame,
         )
         dataset_frame = _merge_labels(
             preprocessed_frame,
@@ -774,6 +827,8 @@ class DatasetStageAdapter:
                 preprocessing_input_frame=factor_frame,
                 preprocessing_frame=preprocessed_frame,
                 preprocessing_input_feature_schema=input_schema,
+                preprocessing_exposure_frame=preprocessing_exposure_frame,
+                preprocessing_exposure_manifest=exposure_manifest,
                 preprocessing_quality_report=dict(preprocessing_quality_decision),
             )
         except ContractError as exc:
@@ -1064,14 +1119,34 @@ class PortfolioStageAdapter:
         checksum = binding.get("data_checksum_sha256")
         if not generation_id or not checksum:
             return universe_instruments
-        frame = self.market_dataset_store.read_frame(
-            generation_id, checksum,
-            dataset_type="corporate_action",
-            required_columns={"date", "instrument"},
-        )
-        if frame.empty:
-            return universe_instruments
-        excluded = set(frame["instrument"].astype(str).unique().tolist())
+        version = config.get("contract_version", 1)
+        if version == 4:
+            from ..backtest.corporate_actions import ACTION_EVENT_COLUMNS, normalize_action_events
+
+            frame = self.market_dataset_store.read_frame(
+                generation_id, checksum, dataset_type="corporate_action_events",
+                required_columns=set(ACTION_EVENT_COLUMNS),
+            )
+            calendar = self.market_dataset_store.read_frame(
+                config["calendar_binding"]["generation_id"],
+                config["calendar_binding"]["checksum_sha256"],
+                dataset_type="calendar", required_columns={"date"},
+            )
+            sessions = sorted(calendar["date"].astype(str).unique().tolist())
+            schedule = normalize_action_events(
+                frame, start_date=config["start_date"], end_date=config["end_date"],
+                trading_dates=sessions,
+            )
+            excluded = schedule["rights_issue_instruments"]
+        else:
+            frame = self.market_dataset_store.read_frame(
+                generation_id, checksum,
+                dataset_type="corporate_action",
+                required_columns={"date", "instrument"},
+            )
+            if frame.empty:
+                return universe_instruments
+            excluded = set(frame["instrument"].astype(str).unique().tolist())
         return [name for name in universe_instruments if name not in excluded]
 
     def _industry_facts(self, plan: ResolvedExecutionPlan) -> pd.DataFrame | None:
@@ -1346,7 +1421,7 @@ class BacktestStageAdapter:
         # made a valid v2 config look as though its review did not match.
         config_version = config.get("contract_version", 1)
         config_schema_name = (
-            f"backtest_config_v{config_version}" if config_version in {2, 3}
+            f"backtest_config_v{config_version}" if config_version in {2, 3, 4}
             else "backtest_config"
         )
         provisional_config_generation, _ = model_manifest_identities(
@@ -1413,7 +1488,7 @@ class BacktestStageAdapter:
 
         price_binding = config["price_source_binding"]
         execution_inputs = {}
-        if config_version == 3:
+        if config_version in {3, 4}:
             from ..backtest.execution_facts import ExecutionFactsStore, RawExecutionPriceStore, facts_binding
 
             _, price_frame = RawExecutionPriceStore(self.adjusted_price_store.root).read_window(
@@ -1487,28 +1562,40 @@ class BacktestStageAdapter:
             (str(row.date), str(row.instrument))
             for row in suspension_frame.loc[suspension_frame["suspended"].astype(bool)].itertuples(index=False)
         }
-        corporate_action_frame = self.market_dataset_store.read_frame(
-            config["corporate_action_binding"]["dataset_generation_id"],
-            config["corporate_action_binding"]["data_checksum_sha256"],
-            dataset_type="corporate_action",
-            required_columns={"date", "instrument"},
-        )
-        corporate_action_instruments = set(
-            corporate_action_frame.loc[
-                corporate_action_frame["date"].astype(str).isin(
-                    set(price_dates) if config_version == 3 else {
-                        str(price_dates[price_dates.index(date) + 1])
-                        for date in ordered_dates
-                        if price_dates.index(date) + 1 < len(price_dates)
-                    }
-                ), "instrument"
-            ].astype(str).unique().tolist()
-        )
+        corporate_action_instruments = set()
+        if config_version == 4:
+            from ..backtest.corporate_actions import ACTION_EVENT_COLUMNS
+
+            corporate_action_frame = self.market_dataset_store.read_frame(
+                config["corporate_action_binding"]["dataset_generation_id"],
+                config["corporate_action_binding"]["data_checksum_sha256"],
+                dataset_type="corporate_action_events",
+                required_columns=set(ACTION_EVENT_COLUMNS),
+            )
+            execution_inputs["corporate_action_events"] = corporate_action_frame
+        else:
+            corporate_action_frame = self.market_dataset_store.read_frame(
+                config["corporate_action_binding"]["dataset_generation_id"],
+                config["corporate_action_binding"]["data_checksum_sha256"],
+                dataset_type="corporate_action",
+                required_columns={"date", "instrument"},
+            )
+            corporate_action_instruments = set(
+                corporate_action_frame.loc[
+                    corporate_action_frame["date"].astype(str).isin(
+                        set(price_dates) if config_version == 3 else {
+                            str(price_dates[price_dates.index(date) + 1])
+                            for date in ordered_dates
+                            if price_dates.index(date) + 1 < len(price_dates)
+                        }
+                    ), "instrument"
+                ].astype(str).unique().tolist()
+            )
         weight_partitions = {
             decision_date: portfolio_stage_result.target_weight_frames[decision_date]
             for decision_date in ordered_dates
         }
-        if config_version == 3:
+        if config_version in {3, 4}:
             from ..contracts.paths import reject_symlinks_within
 
             root = self.backtest_config_store.root

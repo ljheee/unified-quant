@@ -1,6 +1,6 @@
 # Portfolio, Backtest, Risk Control Plane, and Paper Execution
 
-> Current behavior reference. Last checked: `2026-10-30` against the uncommitted worktree rooted at HEAD `2d713260eef73d595bf75bb1bd06899a8929dad1`. Based on source code, configuration, and tests; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-10-31` against the uncommitted worktree based on HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`. v4 company-action behavior is synthetic-test verified only; no real event-source review has been performed. Based on source code, configuration, and tests; unverified items are marked `UNKNOWN`.
 
 ## Responsibilities and Boundaries
 
@@ -42,7 +42,38 @@ Portfolio v3 also implements `industry_neutral`: after score-based top-N selecti
 
 **Backtest v1/v2.** Per session: mark to market, then, on decision dates, compute target shares from T-close NAV at the next session's open with slippage and board-lot flooring, and execute. Side is classified from the **day-start** position and grouped sell → buy → hold: this is a settlement rule, not a comment — a single alphabetical pass once let an early-lettered buy consume cash a later sell had not yet freed and record `skipped_insufficient_cash` in a fundable run. A weight partition containing a corporate-action instrument is refused outright; such instruments must be removed at universe-filtering time.
 
+**Backtest v4 company actions.** v4 is additive; v1/v2/v3 manifests and their
+exclusion semantics remain unchanged. A v4 config binds a complete reviewed
+`corporate_action_events` panel for its exact date window. The panel must attest
+both dividend-source coverage and a complete rights-issue exclusion scan. A
+rights-issue instrument listed in that panel is excluded from the entire
+backtest window. Implemented dividends bind source record identity, approval
+reference, announcement/implementation visibility, record/ex/pay/list dates,
+and after-tax cash plus stock shares. Entitlement uses end-of-session record-date
+shares. Cash and stock receivables enter NAV on the ex-date but cannot fund
+orders; cash becomes spendable on the first governed session on/after pay date.
+Stock is valued on ex-date, transfers to holdings on the first governed session
+on/after listing date, and remains unsellable that session under day-start T+1.
+Fractional stock entitlements, missing dates, incomplete coverage, or invalid
+event bindings fail closed. The result publishes a separate company-action
+ledger and terminal receivable summary. This models reviewed dividend cash/stock
+events; it does not model rights subscriptions, taxes beyond the supplied
+after-tax amount, or live corporate-action corrections. See
+`src/uq/backtest/corporate_actions.py`, `src/uq/backtest/engine_v3.py` (`run_v4`),
+and `tests/test_backtest_v4_corporate_action_engine.py`.
+
 **Backtest v3 risk controls.** The reviewed config may set `risk_constraints.max_drawdown_stop` and/or `risk_constraints.volatility_target`. Drawdown is measured from the highest close-marked NAV since the run began; crossing the configured threshold latches a stop, replaces desired weights with cash, and retries liquidation on each later session. Volatility targeting estimates sample standard deviation from completed daily portfolio returns over the configured lookback, annualizes by `sqrt(252)`, and scales target weights by `min(1, target / estimate)` only after the minimum history is available. It never increases exposure. Both controls are visible in daily metrics and summary fields. The stop cannot promise immediate liquidation when price bands, suspensions, participation or turnover prevent a fill. These are reviewed backtest/replay controls and do not replace the separate Risk Control Plane's policy/state/action governance or prove live risk.
+
+**Continuous walk-forward terminal liquidation.** The shared-capital OOS replay calls
+`BacktestEngine.run(..., terminal_liquidation=True)` after requiring two sessions after
+the final OOS decision: one to execute its target at the next open, and a later one
+to attempt selling all remaining day-start shares at the final open. The attempt uses
+the same v3 price bands, T+1, suspension, participation, risk and fee rules; it is not
+a bypass or guaranteed fill. The `walk_forward_continuous_backtest` receipt version 2
+binds the decision/execution dates, remaining close-marked holdings value and any
+unfilled statuses, and sets `terminal_liquidation` only when the final holdings value
+is zero. Version 1 receipts remain readable and retain their prior no-liquidation
+semantics. This is a post-OOS diagnostic session and is not counted as an OOS decision.
 
 **Valuing a held name across a suspension.** A per-session vendor panel carries only the rows the vendor returned, so a genuinely suspended name has *no row at all* — a `status`-only read cannot see it. The engine therefore keeps a `last_close_prices` map (distinct from `prev_close_prices`, which answers a different question: the next session's limit-test reference, cr.md FC-M7). A held name absent from the session is valued at its last traded close, which is what keeps the equity curve continuous while the execution branch records `skipped_suspended` for it (cr.md 8.64). Two fail-closed cases remain: the panel carries the name but its close is unusable, and the panel never carried it at all — the latter is defensive only, since a holding can only exist after a fill, which needs a valid open, and a session with a valid open for that name would have supplied a close.
 
@@ -104,9 +135,10 @@ Single-name, industry and cash checks use projected opening NAV after costs;
 industry limits require visible classifications for every relevant holding.
 Passive close-price moves can breach a budget; daily evidence and summary
 count those breaches. There is no claim of forced liquidation or guaranteed
-close-time risk compliance. Corporate-action names remain excluded until
-position/cash events are modeled. These are assumed daily fills, not market
-calibration or broker evidence.
+close-time risk compliance. v3 continues to exclude corporate-action names for
+the full window; v4 supports the reviewed dividend ledger described above and
+still excludes rights-issue instruments. These are assumed daily fills, not
+market calibration or broker evidence.
 
 On a buy, single-name and industry checks test every held position against the
 projected NAV. A passive breach already present in the opening portfolio can
@@ -114,11 +146,16 @@ therefore block all buys for that session, including an otherwise unrelated
 name. The daily `risk_budget_breached` field reports the resulting end-of-day
 state; it is distinct from the buy-side rejection reason.
 
-`scripts/evaluate_portfolio_exposures.py` reads the reviewed v3 result and raw
+`scripts/evaluate_portfolio_exposures.py` reads the reviewed v3/v4 result and raw
 price/fact bindings, rebuilds actual shares from fills and reconciles their
-close-marked value with the equity curve. It reports end-of-day single-name,
-industry and cash concentration plus a prior-session turnover liquidity proxy;
-missing classifications and prior liquidity remain explicit. This is a
+close-marked value with the equity curve. For v4 it also replays cash and stock
+receivables and reconciles their NAV value before reporting economic exposure.
+It reports end-of-day single-name, industry and cash concentration plus a
+prior-session turnover liquidity proxy; missing classifications and prior
+liquidity remain explicit. When an ex-date close is unavailable for a suspended
+holding, v4 uses the published limit-reference price for action valuation; this
+is intentionally distinct from ordinary suspended-day last-close valuation.
+This is a
 read-only diagnostic, documented in
 [training-evaluation.md](training-evaluation.md#actual-portfolio-exposures).
 
@@ -133,7 +170,9 @@ The read-only `scripts/reconcile_paper_backtest.py` compares a reviewed paper
 execution result with the next-session fills from a reviewed v3 backtest using
 the exact same published target-weight identity. Its window mode requires one
 paper result per backtest decision date, checks all published execution pairs,
-and rejects omitted dates or extra backtest fills. It reads the paper config
+and rejects omitted dates or extra backtest fills. v4 backtests are not accepted
+by this comparator because the paper account has no dividend receivable ledger;
+the version guard fails closed. It reads the paper config
 and order plan as well as the result, and reports unmatched orders and quantity,
 price and fee differences against explicit budgets. It does not change paper
 state or backtest artifacts, and it does not infer real fills; see
@@ -168,7 +207,7 @@ A `ConfigPublicationBinding` is single-use: once it has authorized a config publ
 - Risk: `tests/test_risk_control_plane_phase0.py`–`phase4.py`.
 - Paper execution: `tests/test_paper_execution_contracts.py`, `tests/test_paper_execution_phase1.py`–`phase5.py`, `tests/test_paper_execution_market_source.py`, `tests/test_publish_market_datasets.py`.
 - Portfolio v2 score weighting: `tests/test_portfolio_layer.py`; portfolio v3 risk-parity solver and data-store routing: `tests/test_portfolio_risk_model.py` and `tests/test_research_v8_risk_parity.py`.
-- Verification after this CR on the worktree based at HEAD `2d713260eef73d595bf75bb1bd06899a8929dad1`: `.venv/bin/python -m pytest` → 1500 passed / 33 skipped; `.venv-qlib/bin/python -m pytest` → 1532 passed / 1 skipped. Qlib and pandas emit existing dependency/deprecation warnings; no real risk-return or industry-history panel was available, so weights were verified on governed test fixtures only.
+- Historical verification at HEAD `2d713260eef73d595bf75bb1bd06899a8929dad1`: 1500 passed / 33 skipped and 1532 passed / 1 skipped. After v4 company-action work and review fixes, sequential full suites at HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21` passed with `.venv/bin/python -m pytest` → 1563 passed / 33 skipped and `.venv-qlib/bin/python -m pytest` → 1595 passed / 1 skipped. Qlib and pandas emit existing dependency/deprecation warnings; no real corporate-action event, risk-return or industry-history panel was available, so those paths were verified with governed synthetic fixtures only.
 - Research-chain paper integration: `tests/test_paper_execution_research_integration_phase0.py`–`phase3.py`, `tests/test_paper_execution_research_stage_runner.py`, `tests/test_paper_execution_research_integration_evidence.py`, `tests/test_paper_execution_research_integration_release.py`.
 - Golden identity vectors: `evidence/paper-execution/phase-0/identity-golden-vectors.json`, consumed by `tests/test_paper_execution_contracts.py`.
 

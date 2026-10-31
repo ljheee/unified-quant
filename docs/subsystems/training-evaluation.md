@@ -13,11 +13,26 @@ order gate. This is additional evidence, not a production approval.
 - `scripts/evaluate_training.py`: CLI over the owning read-side stores.
 - `src/uq/evaluation/report.py`: `paired_backtest_inputs`,
   `published_ic_inputs`, `EvaluationReportStore`.
+- `scripts/compare_training_models.py`, `evaluation/model_comparison.py`:
+  compare one passed `qlib_linear` run with one passed `qlib_lightgbm` run only
+  after verifying the same owning dataset bytes, features, labels, split,
+  portfolio template, test window and reviewed v3 backtest economics.
 - `src/uq/evaluation/metrics.py`: pure return and cross-sectional IC calculations.
+- `src/uq/evaluation/benchmark.py`: point-in-time equal-weight,
+  market-cap-weighted, and industry-neutral benchmark target weights;
+  `BenchmarkWeightStore` publishes immutable panels bound to PIT membership,
+  exposure, config and strategy rebalance-schedule inputs.
+- `scripts/run_benchmark_backtest.py`, `evaluation/benchmark_backtest.py`:
+  publish a benchmark backtest on a reviewed strategy result's v3 config and
+  rebalance dates (including a continuous walk-forward result), re-reading raw
+  prices, calendar, execution facts and market guards through their owning stores.
 - `config/schemas/contracts/research_evaluation.v1.json`: new diagnostic
   contract. Existing backtest, dataset and prediction contracts are unchanged.
 - `scripts/run_walk_forward.py`, `walk_forward.py`, `walk_forward_runner.py`:
   session-based rolling/expanding plans and execution of pre-reviewed requests.
+- `scripts/run_walk_forward_continuous_backtest.py`,
+  `evaluation/walk_forward_continuous.py`: re-read verified OOS targets and replay
+  them through one shared-capital v3 backtest with an immutable evidence receipt.
 - `scripts/run_backtest_stress.py`, `evaluation/stress.py`: externally reviewed
   v3 cost/capital replays and recomputable `backtest_stress.v1` diagnostics.
 - `scripts/reconcile_paper_backtest.py`, `evaluation/paper_reconciliation.py`:
@@ -31,14 +46,58 @@ order gate. This is additional evidence, not a production approval.
   daily cross-sectional Spearman collinearity, and top-N membership turnover
   proxy over explicitly bound factor, label and calendar generations; an
   optional reviewed v3 config adds a bounded fee/slippage/impact cost proxy.
+- `scripts/build_tushare_factor_candidates.py`,
+  `models/tushare_factor_candidates.py`, and
+  `tushare_factor_candidate.v1.json`: immutable diagnostic candidates derived
+  from exact-date `daily_basic` and `moneyflow` snapshots, with canonical
+  calendar and raw snapshot lineage.
+- `scripts/screen_tushare_factor_candidates.py` and
+  `evaluation/tushare_factor_screening.py`: recompute the existing IC/RankIC,
+  HAC, collinearity and turnover diagnostics over one candidate bundle and a
+  published label generation. A reviewed v3 cost config is optional for the
+  report and required by the starter selection policy.
+- `scripts/select_factor_candidates.py`,
+  `evaluation/factor_screening.py::select_factor_candidates`, and
+  `factor_selection_shortlist.v1.json`: apply a JSON-configured validation-only
+  filter, direction adjustment, collinearity de-duplication and candidate cap.
+  It does not modify reviewed factor definitions or authorize model use.
 - `scripts/audit_label_design.py`, `evaluation/label_audit.py`: read-only
   comparison of a published close label with the next-open entry and later
-  open exit on the same raw bars; the baseline audit is documented in
+  open exit on the same raw bars and an independently bound governed calendar;
+  the baseline audit is documented in
   [`trading-grade-label-audit.md`](../trading-grade-label-audit.md).
 - `scripts/archive_trading_experiment.py`, `evaluation/experiment_archive.py`,
   `trading_experiment_archive.v1.json`: immutable experiment names and evidence
   index over a passed research run, source-bound telemetry, an environment
   receipt and a recomputable paired evaluation.
+
+## Label Design Audit
+
+`audit_label_design.py` requires the independent `BacktestMarketDatasetStore`
+calendar generation and byte checksum in addition to raw bars and the published
+label. Readback verifies the calendar manifest digest, data checksum and content
+generation; raw partition dates in the requested window must exactly equal the
+governed sessions. For every non-null label, all instrument bars from decision
+session through the fifth governed future session must exist. Label and execution
+legs are then aligned by calendar offsets (`T+1`, `T+5`, `T+6`), not by shifting
+whatever rows happened to survive for each instrument. This rejects both a
+missing whole-market partition and a security-specific hole that would stretch
+the nominal five-session horizon.
+
+Get `calendar_generation_id` and `data_checksum_sha256` from the
+`publish_backtest_market_data.py` report's `bindings.calendar_binding`, then run:
+
+```sh
+.venv/bin/python scripts/audit_label_design.py \
+  --bars-root <market-data-root> --label-root <label-store> \
+  --label-generation <label-generation> --start <YYYY-MM-DD> --end <YYYY-MM-DD> \
+  --calendar-generation-id <calendar-generation> \
+  --calendar-checksum <calendar-data-checksum>
+```
+
+The report is a version 2 read-only diagnostic. The historical v1 baseline
+evidence remains unchanged; this strengthened auditor does not retroactively
+certify its old window.
 
 ## Experiment Archive
 
@@ -72,10 +131,96 @@ has a self-checksum and immutable publisher path; it is not externally signed,
 so a party with direct write access can alter a limitation and recompute the
 self-checksum. It is therefore not a production approval or tamper-proof vault.
 The current checksum also covers the complete telemetry record and absolute
-source locations, including wall-clock times and data-root paths. Equivalent
-archive evidence is consequently run- and machine-specific; whether to retain
-those fields in the archive identity or separate them is pending maintainer
-confirmation.
+source locations, including wall-clock times and data-root paths. The maintainer
+confirmed this design: the archive identifies one run's evidence, so equivalent
+experiments from another run or machine have different checksums and cannot
+replace an existing same-name archive. Stable cross-run experiment identity
+would require a separate versioned design.
+
+## Linear and LightGBM Comparison
+
+`compare_training_models.py` reads both passed research results and their saved
+requests. The baseline must use `qlib_linear`, and the candidate must use
+`qlib_lightgbm`. Both must resolve to dataset manifests whose feature order,
+factor and label lineage, PIT universe, preprocessing, split, row count, logical
+fingerprint and data checksum match. Each dataset is also read through
+`DatasetWriter` so the comparison verifies its Parquet payload. The requested
+date window must lie inside the shared test split. Each result's backtest must
+match its request's reviewed config; `paired_backtest_inputs` then checks cost,
+execution, calendar, prices, universe, corporate actions, suspensions, facts,
+capital and risk constraints before producing daily candidate-minus-baseline
+returns.
+
+```sh
+.venv/bin/python scripts/compare_training_models.py \
+  --data-root <research-store> \
+  --baseline-result-generation <linear-result> \
+  --baseline-result-digest <linear-result-digest> \
+  --candidate-result-generation <lightgbm-result> \
+  --candidate-result-digest <lightgbm-result-digest> \
+  --start <test-start> --end <test-end> --output-root <evaluation-store>
+```
+
+An optional `--regimes-json` maps every evaluated session to `up`, `down`, or
+`sideways`; it is checked for exact date coverage by the return evaluator. The
+published report's `strategy` side is the LightGBM candidate and its
+`benchmark` side is the linear baseline, so excess and information-ratio fields
+are candidate-minus-baseline. `one_year_oos_met` is only a duration check. The
+report neither proves three-state coverage when regimes were omitted nor
+authorizes model promotion. The LightGBM selector still caps candidates within
+one call; a program-wide multiple-comparison budget remains unspecified.
+
+## Benchmark Weight Construction
+
+`build_benchmark_weight_partitions` accepts one row per `(date, instrument)` in
+the already resolved point-in-time membership set. Equal weight divides each
+session's budget across its members; market-cap weighting normalizes the
+provided positive finite capitalization values; industry-neutral weighting
+gives each represented industry an equal budget, then divides that budget
+equally among its members. Membership may change by session. Missing point-in-time
+capitalization or industry for any member, duplicate keys, malformed dates, or
+invalid weights fail closed.
+
+`read_pit_benchmark_membership` builds that membership panel from the governed
+calendar window and `IndexMembershipStore.as_of`, verifies the complete snapshot
+set before returning rows, and retains snapshot generations, manifest digests,
+and member checksums. The store declares `monthly_approximation` precision; the
+reader preserves and does not strengthen that limitation. `BenchmarkWeightStore`
+adds immutable content/readback identity for the derived panel. The benchmark
+publisher reuses the strategy's approved v3 or v4 config and rebalance dates,
+requires the benchmark constituents to fit the same configured universe, applies
+the same period-wide corporate-action exclusions for v3; v4 applies the reviewed
+dividend event ledger and excludes only rights-issue instruments. It executes
+through `BacktestEngine` before publishing a reviewed result of the matching
+version. For a continuous
+walk-forward result, `--walk-forward-root` verifies the matching receipt and
+replays its terminal-liquidation attempt under the same engine guard.
+
+Example for an already published strategy result and reviewed execution inputs:
+
+```sh
+.venv/bin/python scripts/run_benchmark_backtest.py \
+  --data-root <strategy-store> --benchmark-root <benchmark-store> \
+  --membership-root <pit-membership-store> \
+  --strategy-result-generation <reviewed-v3-result-generation> \
+  --scheme equal_weight --quality-decisions-json <review-decisions.json>
+```
+
+For a continuous walk-forward result, also pass
+`--walk-forward-root <continuous-receipt-store>`. Market-cap and industry-neutral schemes additionally
+require `--exposure-root` and `--exposure-generation` for a reviewed PIT exposure
+panel. The command publishes a weight panel and a separate reviewed
+`backtest_result.v3`; neither publication establishes historical source completeness.
+
+The returned `{decision_date: [instrument, weight]}` frames can be passed to
+`BacktestEngine.run`; the CLI performs that replay under the same reviewed config,
+costs, price/calendar bindings, and execution rules as the strategy result it
+names. The publisher does not fetch or approve sources: it requires owning PIT
+membership and exposure readers. It records the membership source's monthly
+precision and does not certify historical completeness. Market-cap/industry
+publication additionally requires a reviewed PIT exposure panel; the newly added
+factor-exposure review family remains unavailable until its trust-anchor policy
+is approved.
 
 Archive example (all inputs must already be published):
 
@@ -189,7 +334,7 @@ For a complete backtest window, pass `--paper-generations-json` instead of
 `--paper-generation`. This file is a JSON array of paper result IDs; order does
 not matter. The comparator requires one unique paper result for every published
 backtest target-weight decision date, verifies each T+1 session and refuses
-backtest fills outside those decision/execution pairs. It reads the v3 result
+backtest fills outside those decision/execution pairs. It reads a v3 result
 and calendar once, groups fills by decision/execution pair, then reports each
 day plus aggregate unmatched orders, share gaps, maximum price gap and total
 fee gap. The same five thresholds apply to the **aggregate**. It lists days
@@ -317,6 +462,66 @@ the publisher never overwrites an existing report. These screens do not infer
 factor direction or auto-select/drop factors, establish incremental value, or
 replace point-in-time data and out-of-sample testing.
 
+### Tushare Candidate Factors and Validation Shortlist
+
+`build_tushare_factor_candidates.py` consumes only immutable exact-date
+`daily_basic` and `moneyflow` responses plus the canonical `bars_daily/v2`
+session partitions. For decision session T, it uses the previous governed
+session's provider rows and records availability at T's 15:00 Shanghai close.
+The manifest pins every raw generation/checksum/fetch timestamp and every
+calendar generation/checksum, and the reader can re-verify those bindings
+against the owning stores. The derived factors are earnings yield, book-to-price,
+sales yield, TTM dividend yield, free-float turnover, volume ratio, net money
+flow/market-cap, and large-order net flow/market-cap. The companion exposure
+panel carries prior-session total market value and free-float turnover rate.
+Provider units and each formula are included in the manifest.
+
+These bundles always declare `strict_pit_eligible=false` and
+`historical_vintage_verified=false`. The local historical snapshots were fetched
+after the represented sessions; exact-date keys and a one-session lag do not
+prove that the provider preserved the original values or that each historical
+revision was visible then. The visibility mapping is a conservative research
+assumption. Tushare documents `daily_basic` as updating between 15:00 and 17:00
+and labels `dv_ttm` in percent and `total_mv` in 10k CNY; `moneyflow` reports
+amounts in 10k CNY. See the [daily indicators endpoint](https://tushare.pro/document/2?doc_id=32)
+and [money-flow endpoint](https://tushare.pro/document/2?doc_id=170). Historical
+vintage verification and source approval are still required before any bundle
+can be promoted to a production PIT panel.
+
+The market-cap/liquidity Parquet is shaped for the existing
+`publish_factor_exposure_panel.py` entry point. Promotion still requires a
+maintainer-approved source reference and a passed external quality decision;
+the source approval reference should cite the candidate generation. The existing
+Research Chain then reads the reviewed `factor_exposure_panel.v1` through its
+`feature_preprocessing.v2` binding and recomputes neutralization. Candidate
+factor values remain in the diagnostic path until a reviewed factor definition
+and a factor owning-store publication are available.
+
+`screen_tushare_factor_candidates.py` binds the candidate bundle, published
+labels, canonical sessions, source lineage and environment. It can also bind a
+reviewed v3 backtest config for the same bounded turnover cost proxy as the
+standard factor screener. Run it on the validation window only, then pass its
+content-addressed report and a policy JSON to `select_factor_candidates.py`.
+The starter policy at `config/factor-selection/tushare-candidate-policy.v1.json`
+requires cost evidence, at least 60 valid RankIC sessions, 60 pairwise sessions,
+minimum coverage and positive directional RankIC, caps the shortlist at three,
+and de-duplicates by mean absolute daily Spearman correlation. If a configured
+cost ceiling is present but no reviewed cost config was bound, the factor is
+rejected for missing cost evidence. Direction values are research hypotheses
+that must be fixed before inspecting the validation labels. The shortlist is
+not a multiple-testing correction, does not prove incremental value, and does
+not replace the held-out OOS comparison with existing factors.
+
+`tests/test_tushare_factor_candidates.py` covers field/unit formulas, strict
+previous-session joins, exposure availability normalization, missing-source
+refusal, raw/calendar lineage re-verification, candidate screen bindings,
+direction-adjusted selection, collinearity de-duplication and insufficient
+correlation-history refusal. On the current uncommitted worktree based on HEAD
+`cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`, the ordinary full suite passed
+(`1593 passed, 33 skipped`) and the Qlib full suite passed
+(`1625 passed, 1 skipped`). These test fixtures verify the mechanisms, not
+provider historical vintages or strategy value.
+
 `tests/test_factor_screening.py` covers direct/inverse IC, collinearity,
 membership turnover, reviewed-config cost calculation, missing-calendar
 transitions, invalid inputs, and a published-generation integration with report
@@ -335,11 +540,34 @@ idempotence and root-alias/internal-symlink boundaries. An isolated in-memory
 mutation disables comparability and overlap-lag guards; all five corresponding
 regressions then fail.
 
-These diagnostics do not yet supply one-year historical OOS evidence,
-historical delisting/universe audit, governed market-cap exposure, calibrated
-cost assumptions, new benchmark portfolios or real execution evidence. The trading-grade
-objective remains open until those and the other plan stages are implemented
-and verified.
+`tests/test_evaluation_benchmark.py` covers changing daily membership, all three
+weighting rules, normalization, and refusal of missing/invalid point-in-time
+exposures. `tests/test_factor_neutralization.py` covers row-aligned same-session
+OLS residualization, null preservation, zero liquidity, unsupported controls,
+rank deficiency, malformed exposures, PIT exposure store publication/readback,
+preprocessing-v2 dataset replay and tamper rejection. The active quality registry
+registers both passed-only review families, and the active trust anchor pins the
+registry digest. Reviewed publication is enabled when approved source data and
+quality decisions are supplied; no real PIT panel is available. The 2026-10-31 worktree ran the four
+related suites (`test_evaluation_benchmark`, `test_factor_neutralization`,
+`test_factor_screening`, `test_experiment_archive`) with `43 passed`; the
+continuous replay related suites had `69 passed, 1 skipped`. After adding the
+PIT membership reader, its benchmark/index-membership suites passed `37` tests,
+and the benchmark-stage full suites passed with `.venv/bin/python -m pytest`
+(`1541 passed, 33 skipped`) and `.venv-qlib/bin/python -m pytest`
+(`1573 passed, 1 skipped`) at HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`. Following
+trust-anchor activation and review fixes, final sequential suites on the same HEAD
+passed with `1563 passed, 33 skipped` and `1595 passed, 1 skipped`, respectively.
+
+The benchmark path now has immutable panel publication and a reviewed same-config
+v3/v4 backtest CLI. Synthetic tests verify the panel and runner handoff; no real
+annual benchmark has been published because the required historical PIT sources
+are absent. Factor residualization now has an active preprocessing-v2 review
+policy and dataset replay. These paths do not yet supply
+one-year historical OOS evidence, a historical delisting/universe audit,
+governed market-cap exposure, calibrated cost assumptions or real execution
+evidence. The trading-grade objective remains open until those and the other
+plan stages are implemented and verified.
 
 ## Walk-forward Protocol and Execution
 
@@ -401,6 +629,11 @@ the execution-facts table and checks their complete fold calendar before any
 fitting starts. Risk constraints must remain fixed across folds.
 The shared request-plan check is a static validator, so batch preflight does
 not initialize or exercise the rest of the single-runner object.
+The current adapter calls the runner's static `_validate_plan` with a
+request-only `SimpleNamespace`; this is valid while that helper reads only
+`plan.request`. If the validator begins depending on runner state, it must be
+extracted as a pure request validator rather than silently making preflight
+construct a runner.
 
 After a fold, verification re-reads request/result identities, the complete
 dataset payload, declared splits and label binding, all test-date predictions,
@@ -411,10 +644,43 @@ and label semantics must stay fixed across folds. A failure stops later folds
 and records the verified prefix plus failing fold/request/run/data-root context.
 
 Each fold retains independent initial capital and its existing backtest result.
-No concatenated return, portfolio-state continuity or cross-fold terminal
-liquidation is asserted. Continuous-carry OOS portfolio evaluation is still
-required before the trading plan's full acceptance; the runner emits
-`trading_acceptance: not_certified_by_fold_execution`.
+After all folds pass, `run_walk_forward_continuous_backtest.py` can re-read their
+research results, reviewed backtests and target-weight partitions, then send
+the ordered OOS targets through one `BacktestEngine` v3 run. Cash and holdings
+carry across fold boundaries; independent fold PnL is not concatenated.
+
+Continuous replay requires a separately published and reviewed v3 config in
+the backtest root. Its calendar, raw prices, execution facts, suspension data
+and corporate-action data must cover the contiguous OOS decision sessions plus
+two following sessions: the first executes the last OOS target, and the second
+is the terminal liquidation attempt. Cost, execution, initial-capital and risk
+settings must match every fold config. The replay result gets its own
+external quality decision; the orchestration layer never creates one. The
+immutable receipt binds the plan, passed attempt, result, composite target
+sequence and each source target-weight store. Receipt reads re-verify fold
+research/backtest lineage and target sources through their owning stores.
+
+The final session forces a zero target at its open while retaining T+1
+sellability, price-band, suspension, participation, risk and cost guards. The
+receipt records the attempt, terminal holdings value and any unfilled statuses;
+`terminal_liquidation` is true only when close-marked holdings reach zero.
+Incomplete liquidation is reported as such, and trading acceptance remains
+uncertified. This path does not prove one-year data completeness, coverage of
+three market states, PIT universe completeness, calibrated costs or strategy
+profitability.
+
+```sh
+.venv/bin/python scripts/run_walk_forward_continuous_backtest.py \
+  --walk-forward-root <evidence-store> --attempt-json <passed-attempt.json> \
+  --backtest-root <v3-market-store> --backtest-config-generation <reviewed-config-id> \
+  --quality-decision-json <external-result-review.json>
+```
+
+The command refuses a failed or incomplete attempt, mismatched source lineage,
+missing target date, economics drift or incomplete replay window. An identical
+retry reads and verifies the existing receipt, result and target-weight sources
+without re-entering the backtest engine. A new attempt or config identity creates
+a different target-sequence identity.
 
 Completed-result retry is explicit: the adapter discovers one immutable result
 for the original request/run and reads it before entering any publisher, then
@@ -448,8 +714,12 @@ guards make their respective regression tests fail.
 
 - A one-year historical multi-fold run from newly published fold inputs has not
   been executed; historical onboarding and PIT-universe evidence remain pending.
-- Continuous capital/holdings, terminal liquidation costs and a shared benchmark
-  across all fold scores still need implementation and verification.
+- Terminal liquidation is attempted under the v3 guards and verified in the
+  receipt, but suspended/limited/participation-blocked shares can remain. Costs
+  are the same configured model assumptions and are not calibrated. The benchmark
+  CLI can now consume the continuous walk-forward backtest result and receipt to
+  reuse its fold-wide rebalance schedule and terminal liquidation. A real
+  multi-fold strategy/benchmark comparison still needs historical PIT data.
 - The legacy `backtest_result.v1` schema rejects `sharpe_ratio: null`, even when
   the engine legitimately produces no holdings/return variance. This is captured
   by `test_legacy_v1_cash_only_fold_exposes_undefined_sharpe_contract_gap`.

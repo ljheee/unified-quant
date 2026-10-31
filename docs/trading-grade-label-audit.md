@@ -9,9 +9,13 @@
 `ManifestFirstReader` 核验 schema、manifest trust anchor 和数据 checksum；旧分区
 清单版本为 1，该读法不重验新版 canonical-v2 质量报告。此审计只读原数据根；证据
 文件写入仓库。它不是重新训练或交易收益验证。
-审计会检查窗口两端分区并记录实际分区集合，但当前不会把窗口分区日期与独立的受治理
-交易日历逐一比对；窗口中间缺失分区时，实际观察的交易日 horizon 可能被拉长，
-`raw_partition_count` 与集合摘要只能暴露输入集合变化，不能证明交易日历完整。
+这份冻结的历史审计证据使用报告 v1，只检查窗口两端并记录实际分区集合；当时没有将
+分区日期与独立受治理交易日历逐一比对，因此它本身不能证明窗口 session 完整，也不能
+排除缺失分区拉长 horizon。当前 `audit_label_design.py` 已升为报告 v2，要求绑定
+`BacktestMarketDatasetStore` calendar generation/checksum，精确核对窗口所有原始分区，
+并要求每个非空标签标的从决策日到第 5 个治理 session 均有 bars；标签与 T+1/T+5/T+6
+观察腿按治理日历偏移重算。历史 v1 指标未被重写或追溯认证；要增强原样本证据，需在
+可读的旧数据根中发布/读取同窗口治理日历后显式重跑审计。
 
 ## 五日重叠与有效样本
 

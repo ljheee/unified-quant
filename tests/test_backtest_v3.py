@@ -73,6 +73,24 @@ def test_both_sides_pay_slippage_and_minimum_commission_and_nav_reconciles(tmp_p
     assert artifacts['daily_metrics']['executed_turnover'].iloc[1] == pytest.approx(.05)
 
 
+def test_explicit_terminal_liquidation_sells_at_final_session_open_under_t1_rules(tmp_path):
+    config, prices, facts = inputs(tmp_path)
+    _, artifacts = run(
+        tmp_path, config, prices, facts, targets={DAYS[0]: weights(.1)},
+        terminal_liquidation=True,
+    )
+
+    assert artifacts['fills']['date'].tolist() == [DAYS[1], DAYS[2]]
+    assert artifacts['fills']['filled_shares'].tolist() == [100, 100]
+    assert artifacts['equity_curve']['holdings_value'].iloc[-1] == 0.
+
+
+def test_terminal_liquidation_flag_requires_a_boolean(tmp_path):
+    config, prices, facts = inputs(tmp_path)
+    with pytest.raises(ContractError, match='must be a boolean'):
+        run(tmp_path, config, prices, facts, terminal_liquidation=1)
+
+
 def test_volume_participation_uses_prior_session_not_future_liquidity_and_partially_fills_both_sides(tmp_path):
     config, prices, facts = inputs(tmp_path, volume=1000.)
     targets = {DAYS[0]: weights(.9), DAYS[1]: weights(0.)}

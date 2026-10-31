@@ -29,6 +29,8 @@
         "model_run_v1",
         "model_artifact_v1",
         "feature_preprocessing_v1",
+        "feature_preprocessing_v2",
+        "factor_exposure_panel_v1",
         "sample_construction_v1",
         "qlib_dataset_export_v1",
         "qlib_init_receipt_v1",

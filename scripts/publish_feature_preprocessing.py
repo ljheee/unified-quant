@@ -50,9 +50,12 @@ from uq.contracts.model_layer import ModelContractLoader, model_manifest_identit
 from uq.errors import ContractError
 from uq.factors.store import FactorStore
 from uq.models.feature_preprocessing import FeaturePreprocessorBuilder, complete_rows
+from uq.models.factor_neutralization import FactorNeutralizationPreprocessorBuilder
+from uq.models.factor_exposures import align_exposure_panel
 from uq.models.features import FeatureSchemaBuilder
 from uq.research_chain.owning_contracts import (
     FeaturePreprocessingStore,
+    FactorExposureStore,
     FeatureSchemaStore,
 )
 
@@ -130,9 +133,9 @@ def _load_decision(path: Path, family: str, subject_generation_id: str) -> dict[
 
 def _output_feature_schema(
     frame: pd.DataFrame, *, source_factor_set: str, source_factor_version: str,
-    expected_status: str,
+    expected_status: str, contract_version: int = 1,
 ) -> dict[str, Any]:
-    schema = FeatureSchemaBuilder().build(
+    schema = FeatureSchemaBuilder(contract_version=contract_version).build(
         frame, source_factor_set=source_factor_set, source_factor_version=source_factor_version
     )
     for column in schema["columns"]:
@@ -141,7 +144,7 @@ def _output_feature_schema(
         column["transform_status"] = expected_status
         column["source_factor"] = column["name"]
     schema["generation_id"], schema["manifest_digest_sha256"] = model_manifest_identities(
-        schema, schema_name="feature_schema"
+        schema, schema_name="feature_schema_v2" if contract_version == 2 else "feature_schema"
     )
     return schema
 
@@ -168,8 +171,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--preprocess-name", required=True)
     parser.add_argument("--semantic-version", required=True)
     parser.add_argument("--transform", required=True,
-                        choices=("standardize_cross_section", "rank_cross_section"))
+                        choices=("standardize_cross_section", "rank_cross_section", "neutralize_factor_panel"))
     parser.add_argument("--min-group-observations", type=int, default=2)
+    parser.add_argument("--factor-exposure-root", type=Path, default=None)
+    parser.add_argument("--factor-exposure-generation", default=None)
+    parser.add_argument("--neutralization-control", action="append", default=None,
+                        choices=("industry", "market_cap", "liquidity"))
     parser.add_argument(
         "--partition-set",
         type=Path,
@@ -210,6 +217,20 @@ def main(argv: list[str] | None = None) -> int:
                         help="externally signed decisions; the script never signs its own review")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
+
+    neutralization_controls = args.neutralization_control or []
+    if args.transform == "neutralize_factor_panel":
+        if args.factor_exposure_root is None or args.factor_exposure_generation is None:
+            return _refuse(
+                "neutralize_factor_panel requires --factor-exposure-root and --factor-exposure-generation"
+            )
+        canonical = [name for name in ("industry", "market_cap", "liquidity") if name in neutralization_controls]
+        if not canonical or canonical != neutralization_controls:
+            return _refuse("neutralization controls must be unique and use canonical order")
+    elif args.factor_exposure_root is not None or args.factor_exposure_generation is not None or neutralization_controls:
+        return _refuse("factor exposure options are only valid for neutralize_factor_panel")
+    elif args.min_group_observations != 2:
+        return _refuse("--min-group-observations is only valid for standardize/rank transforms")
 
     if (args.sample_construction_root is None) != (args.sample_construction_generation is None):
         return _refuse(
@@ -328,13 +349,31 @@ def main(argv: list[str] | None = None) -> int:
             f"{counts}"
         )
 
-    builder = FeaturePreprocessorBuilder(
-        preprocess_name=args.preprocess_name,
-        semantic_version=args.semantic_version,
-        transform=args.transform,
-        min_group_observations=args.min_group_observations,
-    )
-    transformed = builder.transform(factor_frame, ordered_features)
+    exposure_manifest: dict[str, Any] | None = None
+    exposure_frame: pd.DataFrame | None = None
+    if args.transform == "neutralize_factor_panel":
+        exposure_manifest, exposure_panel = FactorExposureStore(
+            args.factor_exposure_root
+        ).read_frame(args.factor_exposure_generation)
+        if exposure_manifest["controls"] != neutralization_controls:
+            return _refuse("neutralization controls do not match the published exposure panel")
+        exposure_frame = align_exposure_panel(
+            factor_frame, exposure_panel, neutralization_controls
+        )
+        builder = FactorNeutralizationPreprocessorBuilder(
+            preprocess_name=args.preprocess_name,
+            semantic_version=args.semantic_version,
+            controls=neutralization_controls,
+        )
+        transformed = builder.transform(factor_frame, exposure_frame)
+    else:
+        builder = FeaturePreprocessorBuilder(
+            preprocess_name=args.preprocess_name,
+            semantic_version=args.semantic_version,
+            transform=args.transform,
+            min_group_observations=args.min_group_observations,
+        )
+        transformed = builder.transform(factor_frame, ordered_features)
 
     source_factor_set = manifests[0]["factor_set"]
     source_factor_version = manifests[0]["factor_version"]
@@ -351,28 +390,38 @@ def main(argv: list[str] | None = None) -> int:
             transformed, source_factor_set=source_factor_set,
             source_factor_version=source_factor_version,
             expected_status=(
-                "standardized" if args.transform == "standardize_cross_section" else "ranked"
+                "neutralized" if args.transform == "neutralize_factor_panel"
+                else "standardized" if args.transform == "standardize_cross_section" else "ranked"
             ),
+            contract_version=2 if args.transform == "neutralize_factor_panel" else 1,
         ),
     )
 
     try:
-        manifest = builder.build(
-            factor_frame, transformed,
-            input_factor_set=source_factor_set,
-            input_factor_version=source_factor_version,
-            input_factor_generation_ids=partition_ids,
-            ordered_features=ordered_features,
-            input_feature_schema=input_schema,
-            output_feature_schema=output_schema,
-        )
+        build_arguments = {
+            "input_factor_set": source_factor_set,
+            "input_factor_version": source_factor_version,
+            "input_factor_generation_ids": partition_ids,
+            "ordered_features": ordered_features,
+            "input_feature_schema": input_schema,
+            "output_feature_schema": output_schema,
+        }
+        if exposure_manifest is not None and exposure_frame is not None:
+            manifest = builder.build(
+                factor_frame, transformed, **build_arguments,
+                exposure_manifest=exposure_manifest, exposure_frame=exposure_frame,
+            )
+        else:
+            manifest = builder.build(factor_frame, transformed, **build_arguments)
     except ContractError as exc:
         return _refuse(f"preprocessing build refused: {exc}")
 
     try:
         decision = _load_decision(
             args.quality_decisions_json,
-            "feature_preprocessing",
+            "feature_preprocessing_v2"
+            if args.transform == "neutralize_factor_panel"
+            else "feature_preprocessing",
             manifest["generation_id"],
         )
     except ContractError as exc:
@@ -406,6 +455,13 @@ def main(argv: list[str] | None = None) -> int:
         "factor": {"set": source_factor_set, "version": source_factor_version,
                    "generation_ids": partition_ids},
         "transform": args.transform,
+        "factor_exposure": None if exposure_manifest is None else {
+            "generation_id": exposure_manifest["generation_id"],
+            "manifest_digest_sha256": exposure_manifest["manifest_digest_sha256"],
+            "data_checksum_sha256": exposure_manifest["data_checksum_sha256"],
+            "source_id": exposure_manifest["source_id"],
+            "source_approval_ref": exposure_manifest["source_approval_ref"],
+        },
         "preprocess_name": args.preprocess_name,
         "semantic_version": args.semantic_version,
         "ordered_features": ordered_features,

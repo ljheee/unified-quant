@@ -6,14 +6,14 @@
 
 | 范围 | 当前证据 | 尚待完成 |
 | --- | --- | --- |
-| 贯穿前置：数据 onboarding、PIT、依赖与生产评审 | 历史数据默认根目录约定为被 gitignore 的 `data/trading-grade-history/`；LightGBM 4.7 进入 `gbdt` extra 与 `dev` 锁定测试环境 | 该目录尚未创建、无历史行情；市值/行业/财报/预期/资金数据契约与 adapter；分析师预期源暂缺；历史退市及新股完整性证据；生产锚 provisioning |
+| 贯穿前置：数据 onboarding、PIT、依赖与生产评审 | gitignore 的 `data/trading-grade-history/` 已含 2024-01-01..2026-10-30：4 类全市场日频 raw Tushare 输入、SW2021 Y/N 行业成员、37 个 `csi-all` 月度成分快照和 683 个 v2 canonical bars 分区；7 类财报/预测端点已做单股真实权限试查；新增 immutable Tushare candidate builder，可复核源快照与治理日历绑定 | readiness 阻断：17 个成员行情缺口不能被 `suspend_d` 解释，2 个标的不足 60 个行情日；14/17 当前出现在退市名单但缺历史退市日期，不能据此豁免。新候选历史快照未保存当时 provider vintage，清单明确 strict PIT=false，尚无经审评的 PIT exposure/factor panels；SW 有效期不等于 transaction-time PIT；`report_rc` 无法支持完整面板；生产 reviewer key provisioning |
 | 阶段 0：冻结原基线 | `evidence/trading-grade/baseline-v1.json` 保存真实 request/run/result、split、特征、模型、成本、制品摘要和数据根；原回测三份制品经 store 读回核验 | 原执行代码/锁摘要为零、原上市日期映射未保存，旧结果仍不能宣称可从零复现；修复后全 A 性能基线尚未测量 |
 | 阶段 0：绑定机制 | `provenance.py` 核验 CLI 实际源码/配置和锁文件；`listing_snapshot.py` 保存可离线重放的上市日期映射；`telemetry.py` 保存独立 attempt 与导出文件写入、清单校验、评审绑定、发布前/owning 读回、receipt 绑定和阶段发布计时；新增不可变实验归档入口，读回核验研究结果、配对评估和环境/计时绑定 | 真实全 A 实验归档、性能基线和源码字节完整重放验证 |
-| 阶段 1：可信评估 | 原基线已冻结；新增配对已扣成本回测的超额/IR、两种胜率、年度/指定市场状态、回撤恢复、换手及重叠修正 IC/RankIC；报告归档输入并读时重算；新增滚动/扩展 fold 规划、时间隔离、一年覆盖门槛、已评审 request 批量执行/读回与完成结果重试；真实 Qlib 短单折集成已测；标签三问的书面审计与原始行情逐值核算已记录；新增 v3 实际持仓的单票/行业/现金暴露和前日成交额流动性代理诊断 | 扩展历史及真实暖机数据；退市 PIT 源/退出价格/样本缺口解释；至少一年、三状态的真实多折实验；跨 fold 连续资本/持仓与统一基准；等权/市值/行业中性基准构造；受治理历史市值暴露与行业/流动性来源核准；完整 OOS/PIT 证据 |
-| 阶段 2：交易与成本 | v3 原始价格和可见执行事实契约；显式参与度与双边部分成交、历史板块/ST/除权参考限价、冲击/最低佣金、行业/单票/现金/调仓/换手限制；已评审基线重放与三种成本压力、资金网格容量诊断入口；旧版本保留 | 历史执行事实源的维护者裁决及真实数据 onboarding；冲击/成交假设校准；真实保守成本下结论稳定性与可承载资金证据；公司行为持仓/现金事件仍未建模，相关标的继续排除 |
-| 阶段 3：模型 | `qlib_linear` 保留；LightGBM 已有 model-definition v2、Qlib 训练、受治理 artifact store、日期推理读取；Research Chain v7 request/template 现可选择 LightGBM；另有最多三个候选的验证段 RankIC 选择器 | 与线性基线同特征、样本、split、成本和组合约束比较；至少一年 OOS 的 IR、超额和贡献分散证据 |
-| 阶段 4：因子 | 保留 157 个 Alpha158 特征；新增受治理因子日频 IC/RankIC + HAC 稳定性、横截面 Spearman 共线性、top-N 成员换手及绑定已评审 v3 成本配置的成本代理（均为诊断，不自动筛选） | 按披露时间的估值/盈利/成长/杠杆及预期修正/资金流/北向/龙虎榜等数据源；分析师预期数据当前不具备；行业/市值/流动性中性化；单因子增量、实际成交成本和跨时期样本外贡献 |
-| 阶段 5：组合与风险 | v1 等权兼容；v2 softmax 分数加权；v3 风险平价（历史样本协方差、严格前序收益、完整窗口/正定校验）与行业中性（top-N 内行业等额预算、行业内等权）已接入；离线收益源绑定交易日历，行业来源绑定 v3 回测配置的开盘前可见 execution facts；v3 industry cap 按比例缩减并留存现金；Research Chain v8 使用 portfolio-definition template v3；v3 最大回撤停止与目标波动率控制可选启用 | 当前无真实历史风险收益面板；实际 PIT 行业源质量和覆盖审计；风险平价/行业平衡在真实成本和多期样本下验收；风险预算与回撤/波动控制的年度实证效果 |
+| 阶段 1：可信评估 | 原基线已冻结；新增配对已扣成本回测的超额/IR、两种胜率、年度/指定市场状态、回撤恢复、换手及重叠修正 IC/RankIC；报告归档输入并读时重算；新增滚动/扩展 fold 规划、时间隔离、一年覆盖门槛、已评审 request 批量执行/读回与完成结果重试；真实 Qlib 短单折集成已测；标签三问书面审计；`audit_label_design.py` v2 绑定独立治理日历、逐日核对原始分区并验证每个非空标签的精确五 session bars grid；新增 v3/v4 实际持仓单票/行业/现金暴露与前日成交额流动性代理；新增等权/市值/行业中性 benchmark owning panel 与同配置 v3/v4 发布入口；连续共享账户 OOS 回放与期末清仓当前限定 v3 | 新 2024-2026 canonical bars 上的 readiness/质量复核通过后，重发 factor/label/export 并完成至少一年、三状态的真实多折实验；退市 PIT 源/退出价格/样本缺口解释；停牌/涨跌停/参与率下未完成清仓时的真实历史处置验收；受治理历史市值暴露与行业/流动性来源核准；完整 OOS/PIT 证据 |
+| 阶段 2：交易与成本 | v3 原始价格和可见执行事实契约；显式参与率与双边部分成交、历史板块/ST/除权参考限价、冲击/最低佣金、行业/单票/现金/调仓/换手限制；已评审基线重放与三种成本压力、资金网格容量诊断入口；新增 v4 公司行为事件面板：除息日应收入 NAV、支付日现金可用、送股上市日入账且次 session 才可卖，权利发行标的全窗口排除，缺覆盖/关键日期/碎股 fail-closed；旧版本保留 | 历史执行事实、分红与权利发行源的真实全窗口审计；冲击/成交假设校准；真实保守成本下结论稳定性与可承载资金证据；v4 仅 synthetic 验证，未有真实事件源验收；paper 对账与连续跨折回放仍限 v3 |
+| 阶段 3：模型 | `qlib_linear` 保留；LightGBM 已有 model-definition v2、Qlib 训练、受治理 artifact store、日期推理读取；Research Chain v7 request/template 现可选择 LightGBM；另有最多三个候选的验证段 RankIC 选择器；新增 `compare_training_models.py`，验证共享数据 checksum、特征、标签、split、组合模板和同成本 v3 回测，再发布 candidate-minus-baseline 诊断 | 至少一年真实 OOS 的 IR、超额和贡献分散证据；整个研究程序的多重比较预算仍未定义 |
+| 阶段 4：因子 | 保留 157 个 Alpha158 特征；新增已有受治理因子 IC/RankIC + HAC、Spearman 共线性、top-N 换手和 v3 成本代理；新增 Tushare 8 个估值/换手/量比/资金流候选特征及 market-cap/liquidity exposure 物化，绑定逐日 raw generations 与 canonical 日历；新增候选 IC/HAC screen 与基于 JSON policy 的验证集 shortlist；现有 PIT exposure panel owning store、`feature_preprocessing.v2`/`feature_schema.v2` 和 Research Chain 重算链路保留 | Tushare 历史响应没有原始 provider vintage，候选 bundle 严格 PIT=false，不能升级到 owning store或用于 OOS 结论；需要历史公告时间与全市场基本面覆盖、分析师预期来源、行业 transaction-time PIT、外部源质量批准后才可发布；单因子增量、真实成本和跨时期样本外贡献仍待验收 |
+| 阶段 5：组合与风险 | v1 等权兼容；v2 softmax 分数加权；v3 风险平价（历史样本协方差、严格前序收益、完整窗口/正定校验）与行业中性（top-N 内行业等额预算、行业内等权）已接入；离线收益源绑定交易日历，行业来源绑定 v3 回测配置的开盘前可见 execution facts；v3 industry cap 按比例缩减并留存现金；Research Chain v8 使用 portfolio-definition template v3；v3 最大回撤停止与目标波动率控制可选启用 | 新 bars 尚未转成并通过质量审评的历史收益/exposure panels；实际 PIT 行业源质量与覆盖审计；风险平价/行业平衡在真实成本和多期样本下验收；风险预算与回撤/波动控制的年度实证效果 |
 | 阶段 6：执行验证 | 现有确定性 paper 回放保留；新增单日及完整窗口 paper/v3 回测成交差异入口，要求同一目标权重、完整决策日覆盖、下一交易日和五项显式预算 | 使用真实历史同源结果进行逐日对账与预算裁决；生产评审 provisioning；小资金真实成交率/滑点/冲击/权重偏差证据（broker/live 路径仍受既有禁止规则约束，不能自行开放） |
 | 性能与总体完成定义 | 已有粗粒度阶段计时入口，计时不改变逻辑结果 | 当前 HEAD 全 A 基线与可重复加速；一年多状态稳定超额、容量和风险合格、标签审计、paper 与小资金验证及下一轮调仓结论全部成立 |
 
@@ -489,3 +489,268 @@ v3 按比例缩减超限行业并留作现金；如果 turnover blending 会重�
 
 本轮和风险平价共用 Research Chain v8 与 portfolio v3；仍没有真实历史分类面板供行业收益或
 行业风险预算验收，因此只证明功能路径，不证明数据源全面或 OOS 行业效果。
+
+## 第二十一轮：基准权重构造与因子中性化算法原语
+
+新增 `build_benchmark_weight_partitions`，按每日 point-in-time membership 生成全成员等权、
+正市值归一权重或“行业等预算、行业内等权”权重；它拒绝重复成员、非法日期、缺失的成员
+暴露及非正/非有限市值，结果形状可直接传给 `BacktestEngine.run`。调用方必须通过 owning
+readers 提供 PIT 成员、市值和行业面板；本轮没有新增市值/行业数据 adapter，也没有发布真实
+benchmark 回测。
+
+新增 `neutralize_factor_panel`，同一 session 内按行业哑变量、log 市值和 log1p 流动性做 OLS
+残差化。因子/暴露键必须精确相同，缺失暴露、非数值值、控制矩阵不满秩或残差自由度不足都会
+拒绝；因子空值保留。该原语尚未接入已评审 `feature_preprocessing`：暴露契约/清单绑定和
+Research Chain 新版本路由仍待实现，当前不能把其输出当作已治理训练输入。
+
+专项回归 `tests/test_evaluation_benchmark.py`、`tests/test_factor_neutralization.py`、
+`tests/test_factor_screening.py`、`tests/test_experiment_archive.py` 合计 `43 passed`。
+最终全量：`.venv/bin/python -m pytest` 为 `1523 passed / 33 skipped`；
+`.venv-qlib/bin/python -m pytest` 为 `1555 passed / 1 skipped`；`git diff --check` 通过。
+归档 checksum 回归同时锁定完整 telemetry 与绝对来源路径。全 A 年度数据、市场市值/行业
+source onboarding、训练链中性化集成、benchmark owning publisher、跨 fold 末期清仓、真实
+OOS/PIT 证据和执行验证仍未完成；本轮未运行 release gate 或远程矩阵。
+
+## 第二十二轮：跨折连续 v3 回放
+
+新增 `scripts/run_walk_forward_continuous_backtest.py` 与
+`evaluation/walk_forward_continuous.py`。入口只接受完整 passed attempt；逐折读取已通过的
+研究结果、v3 回测和经评审 target-weight 分区，通过 owning readers 核对结果 lineage 与每个
+OOS session 的唯一权重。统一 v3 配置必须由外部评审，覆盖连续 OOS 决策窗口和末折后一个
+执行 session，并与所有折的成本、执行、初始资金、风险设置完全一致。输入日历、原始行情、
+execution facts、停牌和公司行为表全部从配置绑定的 owning stores 读回校验。
+
+回放由单次 `BacktestEngine` 执行，现金与持仓跨 fold 延续；新不可变 receipt 绑定 plan、attempt、
+统一配置/结果、综合目标序列及每个源 target-weight store。receipt readback 重新校验逐折研究/回测
+ lineage、权重源、回测制品和外部质量评审。相同 attempt 重试读取既有 receipt/result，不重复运行
+引擎。末折最后决策在下一 session 开盘执行，但期末剩余持仓不自动清仓；receipt 显式标记
+`terminal_liquidation: false`，不代表策略已获交易验收。
+
+合成三折回归证明一次连续引擎运行跨折保留账户状态、准确覆盖所有决策日，并可经 owning stores
+读回及幂等重试；失败 attempt 在读取目标权重前拒绝。专项 `tests/test_walk_forward_continuous.py`
+为 `3 passed`，相关 walk-forward/归档/benchmark/中性化集合为 `69 passed, 1 skipped`。完成年度
+真实历史多折、末期清仓协议、统一 benchmark、PIT 数据完整性和成本容量校准仍待真实数据与后续
+功能设计；本轮没有碰真实数据根、实时源或实盘。
+
+最终全量验证：`.venv/bin/python -m pytest` 为 `1526 passed / 33 skipped`；
+`.venv-qlib/bin/python -m pytest` 为 `1558 passed / 1 skipped`。`git diff --check` 和
+`scripts/run_walk_forward_continuous_backtest.py --help` 均通过。精确 HEAD 为
+`cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`，这些结果针对其未提交工作树；没有运行认证 gate、
+远程矩阵、年度真实数据或实盘验证。实现文件摘要与命令记录见
+[`walk-forward-continuous-implementation-v1.json`](../evidence/trading-grade/walk-forward-continuous-implementation-v1.json)。
+
+## 第二十三轮：基准 PIT 成员读取
+
+`read_pit_benchmark_membership` 新增 owning-store 读取路径：要求有序、唯一的治理日历及合法
+窗口端点，逐 session 使用 `IndexMembershipStore.as_of` 构造当日成员，并在返回前重验完整
+membership-set 及其 snapshot generation、manifest digest 与成员 checksum。来源合同将精度声明为
+`monthly_approximation`，该 helper 明确保留此限制，不声称逐日历史成分真实。
+
+回归覆盖月度 snapshot 切换、不可见 snapshot、窗口端点不在日历和错误排序。定向运行
+`.venv/bin/python -m pytest tests/test_evaluation_benchmark.py tests/test_index_membership.py -q`
+为 `37 passed`。普通全套 `.venv/bin/python -m pytest` 为 `1529 passed / 33 skipped`；
+Qlib 全套 `.venv-qlib/bin/python -m pytest` 为 `1561 passed / 1 skipped`。两套全量有既有
+pandas `SettingWithCopyWarning`；Qlib 另有其依赖包 NumPy timedelta deprecation warning。
+`git diff --check` 通过。benchmark 不可变发布与 v3 回测入口、历史 PIT 市值输入、真实同成本
+benchmark 比较仍待完成；当前真实数据根没有这些数据，本轮没有生成模拟行情。
+
+## 第二十四轮：跨折连续回放的期末清仓
+
+连续 walk-forward 回放现在要求 OOS 最后一个决策日之后有两个 governed sessions：第一日执行末折
+最后权重，第二日用 v3 引擎的 T+1 开盘流程强制目标清零。终端出售仍执行原有停牌、价格带、参与率、
+风险和费用约束，不绕开任何保护；停牌或其他约束导致未成交时，receipt 的 `terminal_liquidation`
+为 false，并保存剩余收盘持仓市值与未成交状态。该状态随 portfolio-sequence generation 和结果身份绑定。
+
+连续回放 receipt 升至 v2，记录清仓决策/执行日期、是否尝试、最终剩余持仓及未成交状态；v1 receipt
+仍可按旧的单一后续 session 语义读回。回归覆盖完整退出、终端停牌未退出、v1 receipt 兼容、T+1 日期
+与同 attempt 幂等重试。
+
+专项 `.venv/bin/python -m pytest tests/test_backtest_v3.py tests/test_walk_forward_continuous.py -q`：
+41 passed。普通全套 `.venv/bin/python -m pytest`：1533 passed / 33 skipped；Qlib 全套
+`.venv-qlib/bin/python -m pytest`：1565 passed / 1 skipped。既有 pandas `SettingWithCopyWarning`
+与 Qlib NumPy timedelta deprecation warning 仍存在。真实历史停牌/涨跌停清仓成功率和退出成本尚未实证；
+这项模拟回放不构成真实成交保证。
+
+## 第二十五轮：PIT 暴露与预处理 v2 接入
+
+新增 `factor_exposure_panel.v1` owning store 和离线 Parquet 发布入口。面板按
+`(datetime, instrument)` 精确键、规范控制列、有限正值和行业标签校验；`available_at` 必须带时区且不晚于
+该 session 上海时间 15:00。`feature_preprocessing.v2` 绑定暴露 generation、manifest digest、数据
+checksum 和控制顺序，产出 `feature_schema.v2` 的 `neutralized` 状态。Research Chain 的 resolver、stage
+runner 和 dataset writer 已按预处理清单版本分流；dataset 发布时重新读取暴露并重算 OLS，不能只信任
+预处理输出帧。
+
+新增集成回归覆盖暴露发布/读回、v2 manifest 发布/读回、schema v2、adapter replay、DatasetWriter 重算、
+篡改拒绝及 PIT 时间边界。测试临时注册新 review policies；活动 `model-quality-reviews.v1.json` 与
+trust-anchor 摘要保持不变，因此真实发布仍 fail-closed，待维护者批准 `factor_exposure_panel_v1` 和
+`feature_preprocessing_v2` 策略及锚摘要更新。仓库仍没有真实 PIT 市值/行业/流动性源；测试数据不代表历史
+暴露，不构成 OOS 结果。
+
+本轮首次全量普通测试曾发现并修复 CLI 决策映射的未定义变量及旧测试运行时缺少可选 exposure store 的
+兼容性问题；关联 evidence-index 的源码摘要已同步。最终 `.venv/bin/python -m pytest` 为
+`1537 passed / 33 skipped`，`.venv-qlib/bin/python -m pytest` 为 `1569 passed / 1 skipped`；两环境仍有
+既有 pandas `SettingWithCopyWarning`，Qlib 环境另有依赖包 NumPy timedelta deprecation warning。没有运行
+release gate、远程矩阵、真实年度行情或实盘验证。
+
+## 第二十六轮：基准权重不可变发布与 v3 回测
+
+新增 `benchmark_weight_panel.v1` 和 `BenchmarkWeightStore`，将 benchmark 权重、
+membership snapshot-set 与重建的日成员面板摘要、策略调仓序列、universe、已评审 v3 config、
+暴露 generation 和期末清仓模式绑定到不可变制品；读回核验 schema、内容 checksum、逻辑指纹、
+逐日 partition 身份及成员归属。发布使用文件锁与原子目录切换；同一 generation 重试读回核对，
+已存在但不一致时拒绝。
+
+新增 `scripts/run_benchmark_backtest.py`。它从已评审策略 v3 结果读取 config 和决策日，按
+治理 calendar 及 `IndexMembershipStore` 重建逐日 PIT membership，在策略 universe 和公司行为
+过滤后生成等权、市值权重或行业等预算权重，再以同一 v3 引擎、价格、执行事实、费用和风险限制
+发布独立 `backtest_result.v3`。连续 walk-forward 输入必须带对应 v2 receipt；publisher 先经
+owning reader 重验 receipt、结果与 config 绑定，再按相同引擎约束尝试期末清仓。子系统页新增
+CLI 示例与参数说明。
+
+新增集成回归以真实合成行情执行 v3 引擎，覆盖普通同配置发布、连续回放 receipt 的终端清仓、
+不可变 panel 读回/幂等/tamper、完整 PIT 成员覆盖以及缺失 PIT 暴露拒绝。定向
+`tests/test_evaluation_benchmark.py` 为 `18 passed`。普通完整测试 `.venv/bin/python -m pytest`
+为 `1541 passed / 33 skipped`；Qlib 完整测试 `.venv-qlib/bin/python -m pytest` 为
+`1573 passed / 1 skipped`。另外
+`compileall`、CLI `--help`、CLI 模块导入及 `git diff --check` 均通过。测试警告为既有 pandas
+`SettingWithCopyWarning` 与 Qlib NumPy timedelta deprecation warning。
+
+membership 源仍明确声明 `monthly_approximation`，没有可用历史 PIT 市值/行业源；因此本轮未发布
+真实基准、未跑年度同成本 OOS。新的 exposure/preprocessing review family 尚未获得 trust-anchor
+维护者批准，相关生产发布仍 fail-closed。验证基于 HEAD
+`cd1befb4b5fcbe954e16aea148cc2332dbc1dc21` 的未提交工作树；没有运行认证 gate、远程矩阵、真实历史
+行情或实盘。
+
+## 第二十七轮：标签审计绑定独立治理日历
+
+`audit_label_design.py` / `audit_label_legs` 升为审计报告 v2，CLI 要求提供已发布
+`BacktestMarketDatasetStore` calendar generation 与 data checksum。审计重验日历 manifest digest、
+数据 checksum 和基于行内容的 generation；请求窗口内的原始 bars 分区必须逐 session 与治理日历
+完全一致。每条非空标签还必须有连续 `T..T+5` 五个后续 session 所对应的标的行，防止证券级数据
+缺口被 `groupby.shift(-5)` 静默解释成五日 horizon。close 标签及 `T+1`/`T+5`/`T+6` 价格腿现按
+治理日历 session 位移重算，不按存活行位移。
+
+同时校正计划 §2 的状态：v3 显式参与率、冲击/最低佣金、容量网格、调仓/换手及组合约束已实现；
+剩下的是历史事实源审计、行业数据质量与真实成本/资金校准，不再把已有引擎功能列为“需要新增”。
+
+回归覆盖内部分区缺失、标的单日 bars 缺口、篡改 bars checksum，以及 calendar binding 和版本化报告
+字段。相关 `.venv/bin/python -m pytest tests/test_label_design_audit.py tests/test_build_label_sets.py -q`
+为 `19 passed`；CLI `--help`、`compileall`、`git diff --check` 通过。普通全量为
+`1543 passed / 33 skipped`；Qlib 全量为 `1575 passed / 1 skipped`。两套仍有既有 schema 表达式
+`SettingWithCopyWarning`；NumPy generic timedelta 相关 deprecation 来自依赖/测试环境。
+
+历史 `label-design-baseline-v1.json` 未用新审计器重跑，也未触碰历史数据根；增强代码不能追溯
+认证旧报告。原始 bars 仍由旧 `ManifestFirstReader` 读回，PIT 退市状态完整性仍未证明。当前验证
+针对 HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21` 的未提交工作树；未运行 release gate、远程
+矩阵或真实数据发布。
+
+## 第二十八轮：同样本线性与 LightGBM 成本比较
+
+新增 `paired_model_backtest_inputs` 与 `scripts/compare_training_models.py`。入口只接受
+`qlib_linear` 基线和 `qlib_lightgbm` 候选；从双方 passed research result 追溯 owning request、
+model dataset 与 backtest。两份 dataset 都经 `DatasetWriter.read` 校验 Parquet 和 sidecar，且必须对齐
+特征顺序、因子/标签/PIT universe/preprocessing、split、样本行数、逻辑 fingerprint 和数据 checksum。
+OOS 窗口必须位于共同 test split，回测绑定必须回到各自 request 的 reviewed config；随后调用现有
+paired reader 强制比较成本、执行模型、市场数据、universe 和风险字段。报告把 candidate 作为
+strategy 侧、linear 作为 baseline 侧，故超额收益和 IR 方向明确为 candidate 减 baseline，并留下
+`one_year_oos_met` 时长标志。
+
+回归覆盖同协议可比较及标签、特征、数据 checksum 漂移拒绝。完整真实年度运行尚不可做：本地缺少足够
+历史数据和稳定 regime 标签；`one_year_oos_met` 只检验时间跨度/交易 session 数，不代表三态覆盖。
+LightGBM 的最多三候选限制仅约束一次 selector 调用，研究程序级的多重比较预算仍是未定义项。
+定向模型比较/批预检/归档集合为 `32 passed, 1 skipped`；普通全量 `.venv/bin/python -m pytest`
+为 `1547 passed / 33 skipped`，Qlib 全量 `.venv-qlib/bin/python -m pytest` 为
+`1579 passed / 1 skipped`。模型比较 CLI `--help`、`compileall` 和 `git diff --check` 通过；未运行
+认证 gate、远程矩阵、真实历史数据或实盘。验证基于未提交工作树 HEAD
+`cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`。
+
+## 第二十九轮：v4 公司行为口径、维护者裁决与最终复核
+
+维护者批准 v4 公司行为账务规则并明确签批两项既有治理决定：研究 state/result schema 的版本枚举
+7/8 原位纯追加；实验归档 checksum 覆盖完整 telemetry 与绝对来源路径。另批准
+`factor_exposure_panel_v1`、`feature_preprocessing_v2` 的 passed-only review policies，并更新
+model-quality trust-anchor 摘要至 `9287455599efbfb481e9e113aec1ef9b70acb4cd1f7b68d3b2739bd42d63eec4`。
+
+v4 配置绑定完整窗口 `corporate_action_events`：登记日收盘持仓确定分红权益；除息日现金/送股应收计入
+NAV 且不可下单；现金到 pay-date session 才可用；送股除息日开始计价，listing session 入账且该 session
+仍受 T+1 限制；碎股、缺关键日期、缺覆盖声明一律拒绝；权利发行无支持的完整数据，必须显式传入经审阅的
+全窗口排除清单。此功能为新 contract v4，旧 v1/v2/v3 不改语义。v4 的 benchmark 与 stress runner 现在
+也分别有事件面板路由回归；连续跨折 replay 与 paper/v3 对账仍限 v3，因为两者没有应收账本状态模型。
+
+回归新增/修复包括 v7 paper risk documents 的整批 preflight 拒绝、v4 登记日/除息/支付/送股上市/T+1
+流程、v4 benchmark/stress 事件面板输入、活动 trust-anchor digest 锁定，以及 evidence-index 中
+`model_layer.py` 的摘要同步。`report.py` 的 IC binding 走规范化 generation 与日期、LightGBM 参数有严格类型
+边界、stress retry 不依赖错误文案。当前该批测试为：普通全量 `.venv/bin/python -m pytest` →
+`1563 passed, 33 skipped`；Qlib 全量 `.venv-qlib/bin/python -m pytest` → `1595 passed, 1 skipped`。
+两环境按顺序运行，因为 test reviewer PEM 使用共享系统临时路径；并行执行曾发生测试文件竞态，最终顺序结果
+已全部通过。环境存在既有 pandas `SettingWithCopyWarning` 与 Qlib/NumPy timedelta deprecation warnings。
+
+最终验证绑定未提交工作树 HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`。真实公司行为源、全年历史 PIT
+覆盖、多状态 OOS、真实成本校准、生产 reviewer key provisioning 和 broker 小资金实测仍未具备；当前仅完成
+接口/机制/合成数据测试，不能将训练计划的交易收益验收标为完成。未运行 `scripts/run_gate.sh`、远程矩阵、
+真实数据发布或实盘；当前无 release 声明。
+
+## 第三十轮：真实历史 readiness 复核与停牌行语义
+
+本机真实 Tushare readiness 复核读取 2024-01-01..2026-10-30 的 683 个交易日、5,430 个 PIT 月度近似
+universe 成员和已发布 canonical bars。`suspend_d` 逐日查询 683 次，间隔 0.5 秒；全量 required bar
+字段 null rate 均为 0。报告仍为 `blocked`：17 个成员缺少必要 bar sessions，且 `suspend_d` 无法解释；
+`300096.XSHE`、`300205.XSHE` 仅有 47/46 个可交易行情 session，达不到 60 日最低要求。
+
+只读复核 `stock_basic(list_status=D)` 显示 17 个缺口中有 14 个当前列为退市，另外 3 个不在当前退市集。
+该接口未给出历史退市日期，因此不能把它作为中途缺口的有效解释，也没有静默排除这些标的。真实报告
+在 gitignored 的 `data/trading-grade-history/reports/readiness-csiall-20240101-20261030.json`。
+
+为确认是否只是全市场 `daily` 响应漏行，对 17 个缺口标的和 2 个短历史标的共发起 19 次按
+`ts_code` 的历史 `daily` 只读查询，并逐日对照本地所需 session；19 个查询都没有返回任何 canonical
+缺失日的可补数据。未向现有不可变分区写入修补行。TDX 日线适配器的一次抽查在 31 秒内未完成并被中断，
+所以没有 TDX 可用性结论或数据写入。
+
+修正 readiness 冲突规则：当 `suspend_d` 标记某标的停牌时，canonical 行 `status=suspended` 视为一致；
+`trading`、`unknown` 等其他状态仍报冲突。新增回归覆盖合法的 suspended 零成交量行，并保留对
+`trading` 行的冲突回归。修正后真实报告不再包含此前 `603056.XSHG` 的误报。
+
+token 仅从本机 `.env` 读入当前启动包装进程，再通过 `TUSHARE_2K_TOKEN` 环境变量传给子进程；没有
+出现在 argv、终端输出或报告。`.env` 与 `data/trading-grade-history/` 经 `git check-ignore` 确认忽略，
+也未被 Git 跟踪。
+
+定向 `.venv/bin/python -m pytest tests/test_training_readiness.py -q` 通过；全量
+`.venv/bin/python -m pytest` 为 `1588 passed, 33 skipped`（86.57 秒），
+`.venv-qlib/bin/python -m pytest` 为 `1620 passed, 1 skipped`（140.84 秒）。两套仍有既有
+pandas `SettingWithCopyWarning`；Qlib 环境另有 Qlib/NumPy timedelta deprecation warnings。验证针对
+未提交工作树 HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`。年度 OOS readiness、完整历史 PIT
+退市/新股覆盖、因子与标签重发、生产评审凭证、策略收益验收及小资金验证仍未完成；未运行认证 gate、
+远程矩阵或发布。
+
+## 第三十一轮：raw Tushare 因子候选构造与验证集 shortlist
+
+新增 `TushareFactorCandidateStore` 与 `build_tushare_factor_candidates.py`：从逐日 immutable
+`daily_basic` / `moneyflow` 响应和 canonical `bars_daily/v2` 日历构造 8 个候选值/换手/量比/资金流特征，
+以及基于 `total_mv`、`turnover_rate_f` 的 market-cap/liquidity 暴露。每个候选 bundle 都绑定逐日源
+generation、checksum、抓取时间和日历 generation/checksum；读回会重新校验 owning stores 与 raw artifact。
+因子公式、来源字段、单位、builder 源码 SHA 和 lock SHA 写入内容身份。暴露 Parquet 符合已有离线
+`publish_factor_exposure_panel.py` 的输入形状；发布仍须 source approval reference 与外部 passed review。
+经该 owning store 发布后，已有 `feature_preprocessing.v2` / Research Chain dataset adapter 可重读并复算 OLS。
+
+候选数据默认用前一 governed session 的 provider rows，并将 `available_at` 设为决策 session 15:00 上海时间，
+但清单强制 `historical_vintage_verified=false` 与 `strict_pit_eligible=false`。本地历史响应是在事后抓取，
+没有 provider 原始 vintage；日滞后是假设，不证明供应商当时发布的确切值。Tushare `daily_basic` 文档显示
+15:00–17:00 更新、`dv_ttm` 为百分比、`total_mv` 为万元；`moneyflow` 金额也以万元计。申万历史仍仅有
+有效期，财报/预期历史覆盖也不足；本轮不把这些转换成严格 PIT，也没有把候选 factors 发布给研究训练链。
+
+真实本地快照只读物化窗口 `2026-10-15..2026-10-30`，覆盖 12 个 session，`factors.parquet` 和
+`exposures.parquet` 各 66,817 行，generation
+`6b3b56d9c166f489fd1e190c7dce9e37c3c410dc069815fea3c4c01cf2a788dc`。数据与 receipt 留在
+gitignored `data/trading-grade-history/derived/`。新增 candidate screen CLI 绑定候选 bundle、已发布 labels、
+源/日历和环境；可选绑定 reviewed v3 成本配置。新增验证集 shortlist 协议：按显式方向、RankIC/HAC、正向
+频率、覆盖、pairwise history 和相关性去重；配置的成本门槛缺 reviewed 成本报告时 fail-closed，最多保留三项。
+Shortlist 不自动改 factor definition，不是跨研究程序的多重比较校正，也不能替代 withheld OOS 增量实验。
+新的历史 labels 尚未就绪，readiness 仍 blocked，因此本轮没有生成或声称真实因子筛选/OOS 成果。
+
+回归新增 Tushare 候选公式与 T+1 calendar alignment、缺失依赖拒绝、source/calendar lineage readback、
+候选 screening report binding、方向反转、相关候选去重与 correlation history 缺失拒绝。最终工作树验证：
+`.venv/bin/python -m pytest` → `1593 passed, 33 skipped`；
+`.venv-qlib/bin/python -m pytest` → `1625 passed, 1 skipped`；相关 CLI `--help` 与 `git diff --check`
+通过。两套仍有既有 `SettingWithCopyWarning`；Qlib/Pandas 有 NumPy timedelta deprecation warning。本轮未调用
+vendor 网络、未读取 `.env`、未发布 exposure/factor owning artifacts、未运行认证 gate/远程矩阵/实盘。源码和
+文档验证基于未提交工作树 HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`。

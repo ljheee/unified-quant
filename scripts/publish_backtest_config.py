@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--end", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--backtest-name", required=True)
-    parser.add_argument("--contract-version", type=int, choices=(2, 3), default=2)
+    parser.add_argument("--contract-version", type=int, choices=(2, 3, 4), default=2)
     parser.add_argument("--commission-bps", type=float, default=2.5)
     parser.add_argument("--stamp-duty-bps", type=float, default=5.0)
     parser.add_argument("--slippage-bps", type=float, default=1.0)
@@ -180,11 +180,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.start > args.end:
         parser.error("--start must not follow --end")
-    if args.contract_version == 3:
+    if args.contract_version in {3, 4}:
         for name in ("execution_facts_generation", "volume_participation_cap", "minimum_commission_cny",
                      "impact_coefficient_bps", "impact_maximum_bps"):
             if getattr(args, name) is None:
-                parser.error("v3 requires --" + name.replace("_", "-"))
+                parser.error(f"v{args.contract_version} requires --" + name.replace("_", "-"))
         if args.limit_ratio is not None:
             parser.error("v3 uses published price bands; --limit-ratio is v2 only")
         if args.slippage_bps + args.impact_maximum_bps >= 10000:
@@ -200,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("volatility session counts must satisfy 2 <= min-history <= lookback <= 756")
         elif args.volatility_lookback_sessions is not None or args.volatility_min_history_sessions is not None:
             parser.error("volatility session counts require --volatility-target-annualized")
-    elif any(value is not None for value in (args.execution_facts_generation, args.minimum_commission_cny,
+    elif args.contract_version == 2 and (any(value is not None for value in (args.execution_facts_generation, args.minimum_commission_cny,
                                              args.impact_coefficient_bps, args.impact_maximum_bps,
                                              args.max_industry_weight, args.max_turnover,
                                              args.max_drawdown_stop, args.volatility_target_annualized,
@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
                                              args.volatility_min_history_sessions)) or (
         args.fill_rate_multiplier != 1 or args.rebalance_every_n_sessions != 1
         or args.max_single_weight != 1 or args.cash_reserve != 0
-    ):
+    )):
         parser.error("execution facts, extended costs and risk constraints require v3")
 
     market = _market_bindings(args.market_inputs)
@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     # Reading the frame through its store re-verifies the parquet bytes against the
     # manifest's checksum, so a name that does not resolve -- or a partition whose
     # bytes drifted -- is refused here rather than baked into the config.
-    if args.contract_version == 3:
+    if args.contract_version in {3, 4}:
         from uq.backtest.execution_facts import ExecutionFactsStore, RawExecutionPriceStore, facts_binding
 
         price_source_binding, price_frame = RawExecutionPriceStore(args.data_root).read_window(
@@ -263,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     for name, dataset_type in (
         ("calendar_binding", "calendar"),
         ("suspension_binding", "suspension"),
-        ("corporate_action_binding", "corporate_action"),
+        ("corporate_action_binding", "corporate_action_events" if args.contract_version == 4 else "corporate_action"),
     ):
         binding = market[name]
         generation = binding.get("dataset_generation_id") or binding.get("generation_id")
@@ -272,13 +272,22 @@ def main(argv: list[str] | None = None) -> int:
         # so a market-inputs report that does not match the store is refused here
         # rather than being baked into the config.
         market_frame = market_store.read_frame(generation, checksum, dataset_type=dataset_type)
-        if dataset_type == "calendar" and args.contract_version == 3:
+        if dataset_type == "calendar" and args.contract_version in {3, 4}:
             calendar_dates = sorted(pd.to_datetime(market_frame["date"]).dt.strftime("%Y-%m-%d").tolist())
             if (calendar_dates != price_dates or price_dates[0] != args.start.isoformat()
                     or price_dates[-1] != args.end.isoformat()):
                 raise ContractError("v3 raw prices must exactly cover the governed calendar/window")
             if sorted(fact_frame["date"].unique().tolist()) != calendar_dates:
                 raise ContractError("v3 execution facts must exactly cover the governed calendar")
+        if dataset_type == "corporate_action_events":
+            from uq.backtest.corporate_actions import ACTION_EVENT_COLUMNS, normalize_action_events
+
+            normalize_action_events(
+                market_frame, start_date=args.start.isoformat(), end_date=args.end.isoformat(),
+                trading_dates=price_dates,
+            )
+            if market_frame.columns.tolist() != ACTION_EVENT_COLUMNS:
+                raise ContractError("v4 corporate-action panel columns are not canonical")
 
     manifest = {
         # cr.md 8.63: v2 names the window's partition set instead of one
@@ -325,13 +334,14 @@ def main(argv: list[str] | None = None) -> int:
         "corporate_action_binding": {
             "dataset_generation_id": market["corporate_action_binding"]["dataset_generation_id"],
             "data_checksum_sha256": market["corporate_action_binding"]["data_checksum_sha256"],
+            **({"dataset_type": "corporate_action_events"} if args.contract_version == 4 else {}),
         },
         "suspension_binding": {
             "dataset_generation_id": market["suspension_binding"]["dataset_generation_id"],
             "data_checksum_sha256": market["suspension_binding"]["data_checksum_sha256"],
         },
     }
-    if args.contract_version == 3:
+    if args.contract_version in {3, 4}:
         manifest["execution_model"] = {
             "type": "daily_t1_open", "sellable_quantity_rule": "prior_day_holding_only",
             "lot_rule_source": "execution_facts", "volume_participation_cap": args.volume_participation_cap,
@@ -358,6 +368,15 @@ def main(argv: list[str] | None = None) -> int:
                 "lookback_sessions": args.volatility_lookback_sessions,
                 "min_history_sessions": args.volatility_min_history_sessions,
             }
+    if args.contract_version == 4:
+        manifest["corporate_action_model"] = {
+            "entitlement_rule": "record_date_end_of_session_shares",
+            "ex_date_receivables": "included_in_nav_not_available_for_orders",
+            "cash_settlement": "spendable_on_pay_date_session",
+            "stock_settlement": "included_in_nav_on_ex_date_and_sellable_from_session_after_div_listdate",
+            "fractional_stock_entitlement": "reject",
+            "rights_issue": "reviewed_complete_window_exclusion_list_required",
+        }
     published = BacktestConfigStore(args.data_root).publish(
         manifest,
         quality_decision=_load_decision(

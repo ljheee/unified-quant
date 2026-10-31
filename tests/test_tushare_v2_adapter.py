@@ -288,3 +288,33 @@ def test_instrument_halted_for_the_whole_window_is_not_reported_as_missing():
     assert halted.status is FetchStatus.SUCCESS
     assert halted.rows["instrument"].tolist() == ["600000.XSHG"]
     assert not [warning for warning in halted.warnings if "omitted" in warning]
+
+
+class _MarketDayClient:
+    def __init__(self, rows: int = 2):
+        self.rows = rows
+        self.calls = 0
+
+    def daily(self, *, trade_date):
+        self.calls += 1
+        return pd.DataFrame({
+            "ts_code": [f"600{i:03d}.SH" for i in range(self.rows)],
+            "trade_date": [trade_date] * self.rows,
+        })
+
+
+def test_full_market_day_fetch_filters_to_requested_instruments():
+    client = _MarketDayClient()
+    frame = TushareAdapter._daily_session(
+        client,
+        "2026-10-30",
+        ["600000.XSHG", "600001.XSHG", "000001.XSHE"],
+    )
+    assert frame["ts_code"].tolist() == ["600000.SH", "600001.SH"]
+    assert client.calls == 1
+
+
+def test_full_market_day_fetch_refuses_possible_vendor_truncation():
+    client = _MarketDayClient(rows=6000)
+    with pytest.raises(RuntimeError, match="possibly truncated"):
+        TushareAdapter._daily_session(client, "2026-10-30", ["600000.XSHG"])

@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -78,6 +79,8 @@ def _suspensions_for_gaps(
     members_by_session: dict[dt.date, list[str]],
     bars: pd.DataFrame,
     notes: dict[str, Any],
+    *,
+    request_interval_seconds: float = 0.5,
 ) -> dict[str, list[dt.date]]:
     """Query suspend_d for the sessions where at least one instrument lacks bars.
 
@@ -98,7 +101,9 @@ def _suspensions_for_gaps(
         notes["suspension_sessions"] = []
         return {}
     suspensions: dict[str, list[dt.date]] = {}
-    for day in gap_days:
+    for index, day in enumerate(gap_days):
+        if index and request_interval_seconds:
+            time.sleep(request_interval_seconds)
         frame = adapter.suspension(trade_date=day.strftime("%Y%m%d"))
         if frame.empty:
             continue
@@ -161,6 +166,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--label-horizon", type=int, default=5)
     parser.add_argument("--max-null-rate", type=float, default=0.0)
     parser.add_argument(
+        "--suspension-interval-seconds",
+        type=float,
+        default=0.5,
+        help="pause between suspend_d gap-session queries (default 0.5s stays under the 200/min 2000-point cap)",
+    )
+    parser.add_argument(
         "--skip-suspensions",
         action="store_true",
         help="do not query suspend_d; bar gaps are then reported without an explained/unexplained verdict",
@@ -199,6 +210,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
+    if args.suspension_interval_seconds < 0:
+        raise SystemExit("--suspension-interval-seconds must not be negative")
 
     schema = load_schema(args.schema)
     adapter = Tushare2kAdapter()
@@ -211,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         "min_sessions_per_instrument": args.min_sessions,
         "label_horizon_sessions": args.label_horizon,
         "max_null_rate": args.max_null_rate,
+        "suspension_interval_seconds": args.suspension_interval_seconds,
         "skip_suspensions": args.skip_suspensions,
         "skip_delistings": args.skip_delistings,
     }
@@ -256,7 +270,14 @@ def main(argv: list[str] | None = None) -> int:
         # An upstream failure here must look like what it is - a gate that
         # could not run - not like a blocked verdict with no report behind it.
         try:
-            suspensions = _suspensions_for_gaps(adapter, sessions, membership, bars, notes)
+            suspensions = _suspensions_for_gaps(
+                adapter,
+                sessions,
+                membership,
+                bars,
+                notes,
+                request_interval_seconds=args.suspension_interval_seconds,
+            )
         except ContractError as exc:
             print(json.dumps({"status": "configuration_failure", "error": str(exc)}, ensure_ascii=False))
             return 2

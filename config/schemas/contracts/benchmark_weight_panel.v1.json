@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/benchmark_weight_panel.v1.json",
+  "title": "Immutable point-in-time benchmark target-weight panel v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "schema_version",
+    "scheme",
+    "universe_id",
+    "index_code",
+    "window_start",
+    "window_end",
+    "backtest_config_binding",
+    "strategy_schedule_binding",
+    "strategy_universe_binding",
+    "terminal_liquidation",
+    "membership_set",
+    "membership_panel_checksum_sha256",
+    "exposure_binding",
+    "decision_dates",
+    "partitions",
+    "weights_file",
+    "weights_checksum_sha256",
+    "weights_logical_fingerprint",
+    "row_count",
+    "columns",
+    "generation_id",
+    "manifest_digest_sha256"
+  ],
+  "properties": {
+    "contract_version": {"const": 1},
+    "schema_version": {"const": "1.0.0"},
+    "scheme": {
+      "enum": ["equal_weight", "market_cap_weighted", "industry_neutral"]
+    },
+    "universe_id": {"type": "string", "minLength": 1},
+    "index_code": {"type": "string", "minLength": 1},
+    "window_start": {"$ref": "#/$defs/date"},
+    "window_end": {"$ref": "#/$defs/date"},
+    "backtest_config_binding": {"$ref": "#/$defs/identity_binding"},
+    "strategy_schedule_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation_id", "manifest_digest_sha256", "decision_dates"],
+      "properties": {
+        "generation_id": {"$ref": "#/$defs/sha256"},
+        "manifest_digest_sha256": {"$ref": "#/$defs/sha256"},
+        "decision_dates": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/date"}
+        }
+      }
+    },
+    "strategy_universe_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation_id", "universe_id", "members_checksum_sha256"],
+      "properties": {
+        "generation_id": {"$ref": "#/$defs/sha256"},
+        "universe_id": {"type": "string", "minLength": 1},
+        "members_checksum_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "terminal_liquidation": {"type": "boolean"},
+    "membership_set": {
+      "type": "object",
+      "required": [
+        "binding_type", "universe_id", "index_code", "window_start", "window_end",
+        "snapshots", "set_digest_sha256"
+      ],
+      "properties": {
+        "binding_type": {"const": "index_membership_set"},
+        "universe_id": {"type": "string", "minLength": 1},
+        "index_code": {"type": "string", "minLength": 1},
+        "window_start": {"$ref": "#/$defs/date"},
+        "window_end": {"$ref": "#/$defs/date"},
+        "snapshots": {"type": "array", "minItems": 1},
+        "set_digest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "membership_panel_checksum_sha256": {"$ref": "#/$defs/sha256"},
+    "exposure_binding": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "generation_id", "manifest_digest_sha256", "data_checksum_sha256",
+            "controls", "source_id", "source_approval_ref"
+          ],
+          "properties": {
+            "generation_id": {"$ref": "#/$defs/sha256"},
+            "manifest_digest_sha256": {"$ref": "#/$defs/sha256"},
+            "data_checksum_sha256": {"$ref": "#/$defs/sha256"},
+            "controls": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"enum": ["industry", "market_cap", "liquidity"]}
+            },
+            "source_id": {"type": "string", "minLength": 1},
+            "source_approval_ref": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "decision_dates": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/date"}
+    },
+    "partitions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["decision_date", "generation_id", "manifest_digest_sha256", "data_checksum_sha256", "row_count"],
+        "properties": {
+          "decision_date": {"$ref": "#/$defs/date"},
+          "generation_id": {"$ref": "#/$defs/sha256"},
+          "manifest_digest_sha256": {"$ref": "#/$defs/sha256"},
+          "data_checksum_sha256": {"$ref": "#/$defs/sha256"},
+          "row_count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "weights_file": {"const": "weights.parquet"},
+    "weights_checksum_sha256": {"$ref": "#/$defs/sha256"},
+    "weights_logical_fingerprint": {"$ref": "#/$defs/sha256"},
+    "row_count": {"type": "integer", "minimum": 1},
+    "columns": {"const": ["date", "instrument", "weight"]},
+    "generation_id": {"$ref": "#/$defs/sha256"},
+    "manifest_digest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "date": {"type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "identity_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation_id", "manifest_digest_sha256"],
+      "properties": {
+        "generation_id": {"$ref": "#/$defs/sha256"},
+        "manifest_digest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

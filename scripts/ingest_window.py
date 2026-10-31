@@ -155,11 +155,12 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=25.0,
         help=(
-            "pause between sessions. One full-A session costs about 104 Tushare "
-            "requests (50-code batches plus the whole-market reference calls) and "
-            "the free tier caps daily at 300/min, so a back-to-back loop trips the "
-            "limit on the second session; 25s keeps a session's request burst under "
-            "the documented rate."
+            "pause between sessions. A single session for 500+ names uses one "
+            "date-shaped daily request plus trade_cal, adj_factor, stk_limit and "
+            "suspend_d (five source requests); smaller universes use batched daily "
+            "requests. The default 25s remains conservative for lower-tier accounts. "
+            "For the measured 2000-point path, 3s keeps the normal five-request "
+            "session below the documented 200 requests/minute."
         ),
     )
     args = parser.parse_args(argv)

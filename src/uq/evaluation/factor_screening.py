@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from ..errors import ContractError
+from ..contracts.gate_contracts import sha256_json
 from .metrics import information_coefficients, session_dates
 
 
@@ -227,6 +228,224 @@ def screen_factor_panel(
         "pairwise_collinearity": pairwise,
         "daily": daily_rows,
     }
+
+
+def select_factor_candidates(
+    screening_report: dict[str, Any],
+    *,
+    policy: dict[str, Any],
+) -> dict[str, Any]:
+    """Create a validation-only shortlist from a factor screen report.
+
+    This does not edit a reviewed factor set or authorize research-chain use.
+    Candidates are filtered on explicitly configured validation metrics, then
+    high-collinearity candidates are de-duplicated by a deterministic priority.
+    Any pair with insufficient correlation history blocks both members.
+    """
+    required_policy = {
+        "protocol_version", "score_directions", "minimum_valid_rank_ic_sessions",
+        "minimum_rank_ic_t_statistic", "minimum_positive_rank_ic_fraction",
+        "minimum_coverage_fraction", "minimum_pairwise_sessions",
+        "maximum_absolute_daily_spearman", "maximum_mean_turnover_cost_bps",
+        "maximum_selected_features",
+    }
+    if not isinstance(policy, dict) or set(policy) != required_policy:
+        raise ContractError("factor selection policy fields do not match the v1 protocol")
+    if policy["protocol_version"] != 1:
+        raise ContractError("unsupported factor selection protocol version")
+    integer_fields = (
+        "minimum_valid_rank_ic_sessions", "minimum_pairwise_sessions",
+        "maximum_selected_features",
+    )
+    if any(type(policy[name]) is not int or policy[name] < 1 for name in integer_fields):
+        raise ContractError("factor selection count thresholds must be positive integers")
+    for name in (
+        "minimum_rank_ic_t_statistic", "minimum_positive_rank_ic_fraction",
+        "minimum_coverage_fraction", "maximum_absolute_daily_spearman",
+    ):
+        value = policy[name]
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not np.isfinite(float(value))):
+            raise ContractError(f"factor selection threshold must be finite: {name}")
+    if not 0 <= float(policy["minimum_positive_rank_ic_fraction"]) <= 1:
+        raise ContractError("minimum positive RankIC fraction must be in [0, 1]")
+    if float(policy["minimum_rank_ic_t_statistic"]) < 0:
+        raise ContractError("minimum RankIC t-statistic threshold cannot be negative")
+    if not 0 <= float(policy["minimum_coverage_fraction"]) <= 1:
+        raise ContractError("minimum coverage fraction must be in [0, 1]")
+    if not 0 < float(policy["maximum_absolute_daily_spearman"]) <= 1:
+        raise ContractError("maximum absolute Spearman threshold must be in (0, 1]")
+    maximum_cost = policy["maximum_mean_turnover_cost_bps"]
+    if maximum_cost is not None and (
+        isinstance(maximum_cost, bool) or not isinstance(maximum_cost, (int, float))
+        or not np.isfinite(float(maximum_cost)) or maximum_cost < 0
+    ):
+        raise ContractError("maximum turnover cost must be null or finite and non-negative")
+    directions = policy["score_directions"]
+    if (not isinstance(directions, dict) or not directions
+            or any(not isinstance(name, str) or not name.strip() for name in directions)
+            or any(type(direction) is not int or direction not in {-1, 1}
+                   for direction in directions.values())):
+        raise ContractError("factor score directions must map each name to -1 or 1")
+    if not isinstance(screening_report, dict):
+        raise ContractError("factor screening report must be an object")
+    window = screening_report.get("window")
+    summaries = screening_report.get("feature_summary")
+    pairwise = screening_report.get("pairwise_collinearity")
+    if (not isinstance(window, dict) or type(window.get("session_count")) is not int
+            or window["session_count"] < 1 or not isinstance(summaries, list)
+            or not isinstance(pairwise, list)):
+        raise ContractError("factor screening report lacks selection inputs")
+    report_generation = screening_report.get("generation_id")
+    if (not isinstance(report_generation, str) or len(report_generation) != 64
+            or any(char not in "0123456789abcdef" for char in report_generation)):
+        raise ContractError("factor selection requires a content-addressed screening report")
+    if sha256_json({key: value for key, value in screening_report.items()
+                    if key != "generation_id"}) != report_generation:
+        raise ContractError("factor screening report content identity mismatch")
+    summary_by_name = {item.get("feature"): item for item in summaries if isinstance(item, dict)}
+    if set(summary_by_name) != set(directions) or len(summary_by_name) != len(summaries):
+        raise ContractError("selection score directions must exactly cover screened features")
+
+    def finite_metric(summary: dict[str, Any], key: str) -> float | None:
+        value = summary.get(key)
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not np.isfinite(float(value)):
+            raise ContractError(f"factor screen metric is invalid: {key}")
+        return float(value)
+
+    window_sessions = window["session_count"]
+    decisions: dict[str, dict[str, Any]] = {}
+    priority: dict[str, tuple[float, float, float, str]] = {}
+    for name in sorted(directions):
+        summary = summary_by_name[name]
+        direction = directions[name]
+        valid_sessions = summary.get("valid_rank_ic_sessions")
+        if type(valid_sessions) is not int or valid_sessions < 0:
+            raise ContractError(f"factor screen valid RankIC count is invalid: {name}")
+        mean = finite_metric(summary, "mean_rank_ic")
+        t_stat = finite_metric(summary, "rank_ic_t_statistic")
+        positive_fraction = finite_metric(summary, "positive_rank_ic_fraction")
+        coverage = finite_metric(summary, "feature_coverage_sessions")
+        cost = finite_metric(summary, "mean_turnover_cost_proxy_bps_of_nav")
+        if coverage is None:
+            coverage_fraction = 0.0
+        else:
+            if type(summary.get("feature_coverage_sessions")) is not int or not 0 <= coverage <= window_sessions:
+                raise ContractError(f"factor screen coverage count is invalid: {name}")
+            coverage_fraction = coverage / window_sessions
+        adjusted_mean = None if mean is None else mean * direction
+        adjusted_t = None if t_stat is None else t_stat * direction
+        adjusted_positive = (
+            None if positive_fraction is None
+            else positive_fraction if direction == 1 else 1.0 - positive_fraction
+        )
+        reasons: list[str] = []
+        if valid_sessions < policy["minimum_valid_rank_ic_sessions"]:
+            reasons.append("insufficient_rank_ic_sessions")
+        if adjusted_mean is None or adjusted_mean <= 0:
+            reasons.append("non_positive_direction_adjusted_mean_rank_ic")
+        if adjusted_t is None or adjusted_t < float(policy["minimum_rank_ic_t_statistic"]):
+            reasons.append("rank_ic_t_statistic_below_threshold")
+        if (adjusted_positive is None
+                or adjusted_positive < float(policy["minimum_positive_rank_ic_fraction"])):
+            reasons.append("positive_rank_ic_fraction_below_threshold")
+        if adjusted_positive is not None and not 0 <= adjusted_positive <= 1:
+            raise ContractError(f"factor positive RankIC fraction is invalid: {name}")
+        if coverage_fraction < float(policy["minimum_coverage_fraction"]):
+            reasons.append("feature_coverage_below_threshold")
+        if maximum_cost is not None and (
+            cost is None or cost > float(maximum_cost)
+        ):
+            reasons.append("turnover_cost_proxy_missing_or_above_threshold")
+        decisions[name] = {
+            "score_direction": direction,
+            "adjusted_mean_rank_ic": adjusted_mean,
+            "adjusted_rank_ic_t_statistic": adjusted_t,
+            "adjusted_positive_rank_ic_fraction": adjusted_positive,
+            "feature_coverage_fraction": coverage_fraction,
+            "mean_turnover_cost_proxy_bps_of_nav": cost,
+            "status": "eligible" if not reasons else "rejected",
+            "reasons": reasons,
+        }
+        priority[name] = (
+            -(adjusted_t if adjusted_t is not None else float("-inf")),
+            -(adjusted_mean if adjusted_mean is not None else float("-inf")),
+            cost if cost is not None else float("inf"),
+            name,
+        )
+
+    pair_map: dict[frozenset[str], dict[str, Any]] = {}
+    for pair in pairwise:
+        if not isinstance(pair, dict):
+            raise ContractError("factor screen collinearity entry is invalid")
+        left, right = pair.get("feature_left"), pair.get("feature_right")
+        if left not in directions or right not in directions or left == right:
+            raise ContractError("factor screen collinearity pair does not match selected features")
+        pair_key = frozenset((left, right))
+        if pair_key in pair_map:
+            raise ContractError("factor screen contains duplicate collinearity pairs")
+        pair_map[pair_key] = pair
+    expected_pairs = len(directions) * (len(directions) - 1) // 2
+    if len(pair_map) != expected_pairs:
+        raise ContractError("factor screen does not cover every candidate collinearity pair")
+    for (left, right), pair in (
+        ((a, b), pair_map[frozenset((a, b))])
+        for index, a in enumerate(sorted(directions))
+        for b in sorted(directions)[index + 1:]
+    ):
+        valid = pair.get("valid_sessions")
+        correlation = finite_metric(pair, "mean_absolute_daily_spearman")
+        if type(valid) is not int or valid < 0 or valid > window_sessions:
+            raise ContractError("factor screen pairwise valid-session count is invalid")
+        if correlation is not None and not 0 <= correlation <= 1:
+            raise ContractError("factor screen absolute Spearman metric is outside [0, 1]")
+        if type(valid) is not int or valid < policy["minimum_pairwise_sessions"] or correlation is None:
+            for name in (left, right):
+                if "pairwise_collinearity_unmeasured" not in decisions[name]["reasons"]:
+                    decisions[name]["reasons"].append("pairwise_collinearity_unmeasured")
+                    decisions[name]["status"] = "rejected"
+
+    ranked_eligible = sorted(
+        (name for name, decision in decisions.items() if decision["status"] == "eligible"),
+        key=lambda name: priority[name],
+    )
+    selected: list[str] = []
+    for name in ranked_eligible:
+        conflict = None
+        for chosen in selected:
+            pair = pair_map[frozenset((name, chosen))]
+            correlation = pair["mean_absolute_daily_spearman"]
+            if correlation >= float(policy["maximum_absolute_daily_spearman"]):
+                conflict = chosen
+                break
+        if conflict is not None:
+            decisions[name]["status"] = "deprioritized"
+            decisions[name]["reasons"].append(f"collinear_with_higher_priority:{conflict}")
+        elif len(selected) >= policy["maximum_selected_features"]:
+            decisions[name]["status"] = "deprioritized"
+            decisions[name]["reasons"].append("maximum_selected_features_reached")
+        else:
+            selected.append(name)
+
+    document = {
+        "record_version": 1,
+        "kind": "factor_selection_shortlist",
+        "publication_scope": "validation_only_shortlist_no_factor_promotion",
+        "screen_report_generation_id": report_generation,
+        "validation_window": dict(window),
+        "policy": dict(policy),
+        "selected_candidates": selected,
+        "decisions": [decisions[name] | {"feature": name} for name in sorted(decisions)],
+        "limitations": [
+            "validation-only selection; do not use this window as final out-of-sample evidence",
+            "no multiple-testing correction across research programs",
+            "shortlist does not alter reviewed factor definitions or authorize production use",
+        ],
+    }
+    document["generation_id"] = sha256_json(document)
+    return document
 
 
 def _optional_float(value: Any) -> float | None:

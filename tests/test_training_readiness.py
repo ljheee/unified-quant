@@ -203,6 +203,24 @@ def test_bars_on_a_suspended_session_are_reported_as_a_conflict():
     assert [item.code for item in report.findings] == ["suspension_bar_conflict"]
 
 
+def test_suspended_status_row_agrees_with_the_suspension_source():
+    bars = _bars(
+        instruments=["600000.XSHG"],
+        mutate=lambda instrument, session: (
+            {"status": "suspended", "volume": 0.0}
+            if session == SESSIONS[3]
+            else {}
+        ),
+    )
+    report = _assess(
+        bars,
+        _members(["600000.XSHG"]),
+        suspensions={"600000.XSHG": SESSIONS[3:4]},
+    )
+    assert report.status == "passed", report.findings
+    assert not any(item.code == "suspension_bar_conflict" for item in report.findings)
+
+
 def test_tradable_history_below_the_minimum_is_a_distinct_verdict():
     halted = SESSIONS[15:]
     bars = _bars(instruments=["600000.XSHG"], sessions=SESSIONS[:15])
@@ -522,11 +540,13 @@ class _ScriptAdapter:
     def __init__(self, sessions, *, fail: str | None = None):
         self._sessions = sessions
         self._fail = fail
+        self.suspension_dates = []
 
     def trade_dates(self, start, end, exchange="SSE"):
         return set(self._sessions)
 
     def suspension(self, *, trade_date, suspend_type="S"):
+        self.suspension_dates.append(trade_date)
         if self._fail == "suspension":
             raise ContractError("suspend_d failed: simulated upstream failure")
         return pd.DataFrame()
@@ -562,6 +582,34 @@ def test_script_reports_configuration_failure_when_the_suspension_source_fails(t
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "configuration_failure"
     assert "suspend_d" in payload["error"]
+
+
+def test_suspension_gap_queries_are_throttled_between_requests(monkeypatch):
+    adapter = _ScriptAdapter(_SCRIPT_SESSIONS)
+    pauses = []
+    monkeypatch.setattr(script.time, "sleep", pauses.append)
+    members = {session: ["600000.XSHG", "000001.XSHE"] for session in _SCRIPT_SESSIONS}
+    bars = pd.DataFrame({
+        "instrument": ["600000.XSHG"],
+        "session_date": [pd.Timestamp(_SCRIPT_SESSIONS[0])],
+    })
+    notes = {}
+
+    script._suspensions_for_gaps(
+        adapter,
+        _SCRIPT_SESSIONS,
+        members,
+        bars,
+        notes,
+        request_interval_seconds=0.5,
+    )
+
+    assert adapter.suspension_dates == [
+        _SCRIPT_SESSIONS[0].strftime("%Y%m%d"),
+        _SCRIPT_SESSIONS[1].strftime("%Y%m%d"),
+    ]
+    assert pauses == [0.5]
+    assert notes["suspension_sessions"] == [day.isoformat() for day in _SCRIPT_SESSIONS]
 
 
 def test_script_reports_configuration_failure_when_the_delisting_source_fails(tmp_path, monkeypatch, capsys):

@@ -35,6 +35,32 @@
       ],
       "policy": "cross_sectional_stateless_v1"
     },
+    "factor_exposure_panel_v1": {
+      "allowed_checks": [
+        "key_uniqueness",
+        "control_values_valid",
+        "pit_visibility_valid",
+        "source_approval_present",
+        "readback_checksum"
+      ],
+      "allowed_statuses": [
+        "passed"
+      ],
+      "policy": "reject_all"
+    },
+    "feature_preprocessing_v2": {
+      "allowed_checks": [
+        "key_reconciliation",
+        "row_count_reconciliation",
+        "exposure_binding_reconciliation",
+        "pit_visibility_reconciliation",
+        "output_readback"
+      ],
+      "allowed_statuses": [
+        "passed"
+      ],
+      "policy": "pit_factor_neutralization_v1"
+    },
     "sample_construction_v1": {
       "allowed_checks": [
         "key_reconciliation",

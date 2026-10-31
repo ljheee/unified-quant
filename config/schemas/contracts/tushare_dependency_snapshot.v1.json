@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/tushare_dependency_snapshot.v1.json",
+  "title": "Immutable raw Tushare dependency snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "snapshot_version",
+    "dataset",
+    "source",
+    "query",
+    "source_fetched_at",
+    "row_count",
+    "columns",
+    "data_artifact",
+    "generation_id"
+  ],
+  "properties": {
+    "snapshot_version": {"const": 1},
+    "dataset": {
+      "enum": [
+        "daily_basic",
+        "index_classify",
+        "index_member_all",
+        "income",
+        "balancesheet",
+        "cashflow",
+        "fina_indicator",
+        "forecast",
+        "express",
+        "report_rc",
+        "moneyflow",
+        "hk_hold",
+        "top_list"
+      ]
+    },
+    "source": {"const": "tushare"},
+    "query": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": ["string", "integer", "number", "boolean"]
+      }
+    },
+    "source_fetched_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "row_count": {"type": "integer", "minimum": 0},
+    "columns": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "data_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "checksum_sha256"],
+      "properties": {
+        "path": {"const": "data.parquet"},
+        "checksum_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "generation_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

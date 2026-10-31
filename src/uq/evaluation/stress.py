@@ -92,8 +92,8 @@ def _grid(values: list[float]) -> list[float]:
 
 
 def _inputs(root: Path, base: dict, config: dict) -> dict:
-    if config['contract_version'] != 3:
-        raise ContractError('cost/capacity stress requires a v3 raw execution baseline')
+    if config['contract_version'] not in {3, 4}:
+        raise ContractError('cost/capacity stress requires a v3 or v4 raw execution baseline')
     _, raw = RawExecutionPriceStore(root).read_window(config['start_date'], config['end_date'],
                                                     config['price_source_binding'])
     raw['date'] = pd.to_datetime(raw['session_date']).dt.strftime('%Y-%m-%d')
@@ -109,9 +109,18 @@ def _inputs(root: Path, base: dict, config: dict) -> dict:
     suspension = market.read_frame(config['suspension_binding']['dataset_generation_id'],
         config['suspension_binding']['data_checksum_sha256'], dataset_type='suspension',
         required_columns={'date', 'instrument', 'suspended'})
-    corporate = market.read_frame(config['corporate_action_binding']['dataset_generation_id'],
-        config['corporate_action_binding']['data_checksum_sha256'], dataset_type='corporate_action',
-        required_columns={'date', 'instrument'})
+    if config['contract_version'] == 4:
+        from ..backtest.corporate_actions import ACTION_EVENT_COLUMNS
+
+        corporate = market.read_frame(
+            config['corporate_action_binding']['dataset_generation_id'],
+            config['corporate_action_binding']['data_checksum_sha256'],
+            dataset_type='corporate_action_events', required_columns=set(ACTION_EVENT_COLUMNS),
+        )
+    else:
+        corporate = market.read_frame(config['corporate_action_binding']['dataset_generation_id'],
+            config['corporate_action_binding']['data_checksum_sha256'], dataset_type='corporate_action',
+            required_columns={'date', 'instrument'})
     weights = {}
     store = TargetWeightStore(root)
     for binding in base['target_weight_bindings']:
@@ -127,18 +136,27 @@ def _inputs(root: Path, base: dict, config: dict) -> dict:
                 or target['decision_date'] != day):
             raise ContractError('stress target-weight lineage disagrees with baseline')
         weights[day] = frame
-    return {
+    inputs = {
         'portfolio_definition': {'generation_id': base['portfolio_definition_generation_id']},
         'weight_partitions': weights, 'price_panel': panel, 'execution_facts': facts,
         'suspension_dates': {(str(row.date), str(row.instrument)) for row in
                              suspension.loc[suspension['suspended'].astype(bool)].itertuples(index=False)},
-        'corporate_action_instruments': set(corporate['instrument'].astype(str)),
     }
+    if config['contract_version'] == 4:
+        inputs['corporate_action_events'] = corporate
+    else:
+        inputs['corporate_action_instruments'] = set(corporate['instrument'].astype(str))
+    return inputs
 
 
 def _same_frames(left: dict, right: dict) -> None:
     try:
-        for name in ('equity_curve', 'daily_metrics', 'fills'):
+        names = ('equity_curve', 'daily_metrics', 'fills', 'corporate_actions')
+        for name in names:
+            if name not in left and name not in right:
+                continue
+            if name not in left or name not in right:
+                raise AssertionError(f'artifact presence differs for {name}')
             pd.testing.assert_frame_equal(left[name].reset_index(drop=True), right[name].reset_index(drop=True),
                                           check_dtype=False, check_exact=True)
     except AssertionError as exc:
@@ -186,7 +204,8 @@ def _reviewed_config(root: Path, payload: dict, decision) -> dict:
             raise ContractError('stress config catalogue contains unreadable input') from exc
         if _content(candidate) == _content(payload):
             candidate = BacktestConfigStore(root).read_manifest(path.parent.name.removeprefix('generation='))
-            _verify_review(root, candidate, 'backtest_config_v3', 'backtest_config_v1')
+            family = f"backtest_config_v{candidate['contract_version']}"
+            _verify_review(root, candidate, family, 'backtest_config_v1')
             matches.append(candidate)
     if len(matches) > 1:
         raise ContractError('ambiguous reviewed stress config')
@@ -210,7 +229,7 @@ def _publish_result(root: Path, manifest: dict, frames: dict, targets: list, dec
 
 def _derive(root: Path, baseline_binding: dict, grid: list, policy: dict, bindings: list) -> tuple[list, dict]:
     base, config, base_frames = _verified_result(root, baseline_binding['generation_id'])
-    if _binding(base) != baseline_binding or config['contract_version'] != 3:
+    if _binding(base) != baseline_binding or config['contract_version'] not in {3, 4}:
         raise ContractError('stress baseline binding/version mismatch')
     expected_names = list(_COST_CASES) + [f'capital_{index}' for index in range(len(grid))]
     if [binding['name'] for binding in bindings] != expected_names:
@@ -265,7 +284,7 @@ def run_backtest_stress(
                  for index, capital in enumerate(grid)]
     from ..contracts.model_layer import validate_model_contract
     for _, variant in variants:
-        validate_model_contract('backtest_config_v3', variant)
+        validate_model_contract(f"backtest_config_v{variant['contract_version']}", variant)
     bindings = []
     for name, variant in variants:
         approved = _reviewed_config(root, variant, config_quality_decision)

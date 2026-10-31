@@ -108,6 +108,31 @@ def test_archive_publishes_immutable_name_and_reverifies_owning_sources(tmp_path
         archive.publish(**{**inputs, 'limitations': ['another limitation']})
 
 
+def test_archive_checksum_binds_complete_telemetry_and_absolute_source_paths(tmp_path):
+    archive, inputs = _sources(tmp_path)
+    record = archive.publish(**inputs)
+
+    source_locations = record['source_locations']
+    assert source_locations['data_root'] == str(Path(inputs['data_root']).absolute())
+    assert source_locations['benchmark_root'] == str(Path(inputs['benchmark_root']).absolute())
+    assert source_locations['evaluation_root'] == str(Path(inputs['evaluation_root']).absolute())
+    assert source_locations['telemetry_path'] == str(Path(inputs['telemetry_path']).absolute())
+    assert record['telemetry']
+    assert record['archive_checksum_sha256'] == sha256_json({
+        key: value for key, value in record.items() if key != 'archive_checksum_sha256'
+    })
+
+    altered_telemetry = copy.deepcopy(record)
+    altered_telemetry['telemetry']['elapsed_seconds'] += 1
+    altered_locations = copy.deepcopy(record)
+    altered_locations['source_locations']['data_root'] += '-other-machine'
+    for altered in (altered_telemetry, altered_locations):
+        altered_checksum = sha256_json({
+            name: value for name, value in altered.items() if name != 'archive_checksum_sha256'
+        })
+        assert altered_checksum != record['archive_checksum_sha256']
+
+
 def test_concurrent_same_name_archive_publications_are_idempotent(tmp_path):
     archive, inputs = _sources(tmp_path)
     with ThreadPoolExecutor(max_workers=2) as executor:

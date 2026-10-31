@@ -1,0 +1,21 @@
+{
+  "protocol_version": 1,
+  "score_directions": {
+    "earnings_yield_ttm": 1,
+    "book_to_price": 1,
+    "sales_yield_ttm": 1,
+    "dividend_yield_ttm": 1,
+    "turnover_rate_free_float": 1,
+    "volume_ratio": 1,
+    "moneyflow_net_to_market_cap": 1,
+    "large_order_net_to_market_cap": 1
+  },
+  "minimum_valid_rank_ic_sessions": 60,
+  "minimum_rank_ic_t_statistic": 1.0,
+  "minimum_positive_rank_ic_fraction": 0.55,
+  "minimum_coverage_fraction": 0.8,
+  "minimum_pairwise_sessions": 60,
+  "maximum_absolute_daily_spearman": 0.9,
+  "maximum_mean_turnover_cost_bps": 15.0,
+  "maximum_selected_features": 3
+}

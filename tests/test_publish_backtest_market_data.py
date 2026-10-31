@@ -11,6 +11,7 @@ backtest stage uses.
 from __future__ import annotations
 
 import datetime as dt
+import importlib.util
 import json
 import subprocess
 import sys
@@ -369,3 +370,58 @@ def test_an_instrument_absent_from_a_session_is_recorded_as_suspended(tmp_path: 
     assert set(absent["date"]) == {SESSIONS[1].isoformat()}
     # the session it does trade on is not marked
     assert SESSIONS[0].isoformat() not in set(absent["date"])
+
+
+def test_v4_publishes_complete_implemented_dividend_and_rights_coverage_panel(tmp_path: Path) -> None:
+    from uq.backtest.corporate_actions import normalize_action_events
+    from uq.contracts.dividend_events import DividendEventStore
+
+    announcement = dt.date(2026, 1, 2)
+    event_root = tmp_path / "dividend-store"
+    DividendEventStore(event_root).publish(
+        ann_date=announcement, source="test:dividend",
+        source_fetched_at=dt.datetime(2026, 1, 2, 9, tzinfo=dt.timezone(dt.timedelta(hours=8))),
+        frame=pd.DataFrame([{
+            "ts_code": "600000.SH", "end_date": "2025-12-31", "div_proc": "实施",
+            "ex_date": "2026-01-06", "record_date": "2026-01-05",
+            "pay_date": "2026-01-07", "div_listdate": "2026-01-07",
+            "cash_div": 0.02, "cash_div_tax": 0.02, "stk_div": 0.0,
+            "stk_bo_rate": 0.0, "stk_co_rate": 0.0,
+            "ann_date": announcement.isoformat(), "imp_ann_date": announcement.isoformat(),
+        }]),
+    )
+    review = tmp_path / "corporate-action-review.json"
+    review.write_text(json.dumps({
+        "window_start": SESSIONS[0].isoformat(), "window_end": SESSIONS[2].isoformat(),
+        "coverage_complete": True, "source_approval_ref": "rights-review-2026-01",
+        "dividend_coverage_complete": True,
+        "dividend_source_approval_ref": "dividend-coverage-review-2026-01",
+        "exclusions": [],
+    }), encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("publish_backtest_market_data", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    panel = module._corporate_action_events_frame(
+        event_root, SESSIONS[0], SESSIONS[2], SESSIONS, review,
+    )
+    manifest = BacktestMarketDatasetStore(tmp_path).publish(
+        panel, dataset_type="corporate_action_events", window_start=SESSIONS[0],
+        window_end=SESSIONS[2], sources={"primary": "DividendEventStore"}, producer="test",
+    )
+    readback = BacktestMarketDatasetStore(tmp_path).read_frame(
+        manifest["generation_id"], manifest["data_checksum_sha256"],
+        dataset_type="corporate_action_events",
+    )
+    schedule = normalize_action_events(
+        readback, start_date=SESSIONS[0].isoformat(), end_date=SESSIONS[2].isoformat(),
+        trading_dates=[item.isoformat() for item in SESSIONS],
+    )
+    assert len(schedule["dividend_events"]) == 1
+    assert schedule["rights_issue_instruments"] == set()
+    assert set(readback["event_type"]) == {"dividend", "dividend_coverage", "rights_issue_coverage"}
+
+    incomplete = json.loads(review.read_text(encoding="utf-8"))
+    incomplete["dividend_coverage_complete"] = False
+    review.write_text(json.dumps(incomplete), encoding="utf-8")
+    with pytest.raises(ContractError, match="complete dividend and rights coverage"):
+        module._corporate_action_events_frame(event_root, SESSIONS[0], SESSIONS[2], SESSIONS, review)

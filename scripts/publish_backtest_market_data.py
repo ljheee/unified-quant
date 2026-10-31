@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Publish the three window-level market inputs a `backtest_config.v1` binds.
+"""Publish window-level market inputs bound by versioned backtest configs.
 
 `BacktestMarketDatasetStore.read_frame` had no writer: only
 `tests/test_research_chain_phase4.py` ever produced its
 `backtest_market_data/dataset=<generation>` layout, so no real run could supply
-the calendar, suspension or corporate-action input that `backtest_config.v1`
-references as one `{generation_id, checksum_sha256}` pair per family
+the calendar, suspension or corporate-action input that backtest configs
+reference as one `{generation_id, checksum_sha256}` pair per family
 (`specs/layers/paper-execution-research-integration-plan.md` phase 0.5 names this
 gap: "They exist as binding names only ... Real runs need publishers").
 
@@ -26,8 +26,9 @@ in the same data root -- no new vendor, no live API call:
                       store's implemented records, the same `DividendEventStore`
                       the adjustment chain derives factors from.
 
-Each family is one immutable whole-window artifact, matching the binding shape
-`backtest_config.v1` declares.  That is deliberately *not* the paper path's
+Each family is one immutable whole-window artifact, matching the owning config
+contract. v4 adds a detailed dividend-event panel and a complete-window
+rights-issue exclusion attestation. This is deliberately *not* the paper path's
 per-session `partition_set` layout, so this script does not write
 `market-datasets/`; see `docs/subsystems/research-chain.md`.
 
@@ -56,8 +57,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import pandas as pd
 
 from uq.contracts.dividend_events import DividendEventStore
+from uq.contracts.gate_contracts import sha256_json
 from uq.errors import ContractError
 from uq.research_chain.owning_contracts import BacktestMarketDatasetStore
+from uq.backtest.corporate_actions import (
+    ACTION_EVENT_COLUMNS,
+    dividend_coverage_row,
+    normalize_action_events,
+    rights_issue_coverage_row,
+)
 
 PRODUCER = "scripts/publish_backtest_market_data.py"
 
@@ -193,12 +201,144 @@ def _corporate_action_frame(dividend_root: Path, start: dt.date, end: dt.date) -
     ).reset_index(drop=True)
 
 
+def _corporate_action_events_frame(
+    dividend_root: Path, start: dt.date, end: dt.date, sessions: list[dt.date],
+    rights_document_path: Path,
+) -> pd.DataFrame:
+    """Build the reviewed v4 settlement panel from implemented disclosures.
+
+    Rights issues have no governed source, so v4 requires a separately reviewed,
+    complete-window exclusion document. Dividend revisions are selected by the
+    latest announcement visible by ex-date; conflicting latest rows fail closed.
+    """
+    try:
+        document = json.loads(rights_document_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ContractError("rights-issue exclusion document is unavailable or malformed") from exc
+    if not isinstance(document, dict):
+        raise ContractError("rights-issue exclusion document must be an object")
+    approval_ref = document.get("source_approval_ref")
+    dividend_approval_ref = document.get("dividend_source_approval_ref")
+    exclusions = document.get("exclusions")
+    if (document.get("window_start") != start.isoformat()
+            or document.get("window_end") != end.isoformat()
+            or document.get("coverage_complete") is not True
+            or document.get("dividend_coverage_complete") is not True
+            or not isinstance(dividend_approval_ref, str) or not dividend_approval_ref.strip()
+            or not isinstance(exclusions, list)):
+        raise ContractError("corporate-action review does not attest complete dividend and rights coverage")
+    rows: list[dict[str, Any]] = []
+    store = DividendEventStore(dividend_root)
+    candidates: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for announcement in store.list_partitions():
+        events = store.read_events(announcement)
+        implemented = events.loc[events["div_proc"].astype(str) == "实施"]
+        for source in implemented.to_dict(orient="records"):
+            ex_date = source.get("ex_date")
+            if not ex_date or not start.isoformat() <= str(ex_date) <= end.isoformat():
+                continue
+            if announcement.isoformat() > str(ex_date):
+                raise ContractError("implemented dividend was announced after its ex-date")
+            implementation_date = source.get("imp_ann_date")
+            if not implementation_date or str(implementation_date) > str(ex_date):
+                raise ContractError("implemented dividend lacks an implementation announcement visible by ex-date")
+            if source.get("record_date") and str(source["record_date"]) < start.isoformat():
+                # The backtest starts in cash, so a record date before the run
+                # cannot create an entitlement for its holdings.
+                continue
+            key = (str(source["instrument"]), str(ex_date))
+            candidates.setdefault(key, []).append({**source, "_announcement": announcement.isoformat()})
+
+    for (instrument, ex_date), revisions in sorted(candidates.items()):
+        latest_date = max(row["_announcement"] for row in revisions)
+        latest = [row for row in revisions if row["_announcement"] == latest_date]
+        economics = set()
+        for row in latest:
+            required = ("record_date", "cash_div", "stk_div",
+                        "stk_bo_rate", "stk_co_rate")
+            if any(row.get(field) in (None, "") for field in required):
+                raise ContractError("implemented dividend lacks a required date or amount")
+            cash = float(row["cash_div"])
+            reported_stock = float(row["stk_div"])
+            stock_components = float(row["stk_bo_rate"]) + float(row["stk_co_rate"])
+            if (not all(map(lambda value: pd.notna(value) and value >= 0,
+                            (cash, reported_stock, stock_components)))
+                    or abs(reported_stock - stock_components) > 1e-9):
+                raise ContractError("implemented dividend distribution amounts are incomplete or inconsistent")
+            economics.add((row["record_date"], row["pay_date"], row["div_listdate"],
+                           cash, reported_stock, row["record_id"], row["_announcement"]))
+        if len(economics) != 1:
+            raise ContractError(f"ambiguous latest implemented dividend on {ex_date} for {instrument}")
+        row = latest[0]
+        if not row.get("record_date"):
+            raise ContractError("implemented dividend lacks record date")
+        if float(row["cash_div"]) > 0 and not row.get("pay_date"):
+            raise ContractError("cash dividend lacks payment date")
+        if float(row["stk_div"]) > 0 and not row.get("div_listdate"):
+            raise ContractError("stock dividend lacks listing date")
+        rows.append({
+            "event_type": "dividend", "event_id": row["record_id"],
+            "instrument": instrument, "record_date": row["record_date"],
+            "ex_date": ex_date, "pay_date": row["pay_date"],
+            "div_listdate": row["div_listdate"],
+            "cash_div_after_tax": float(row["cash_div"]),
+            "stock_div_per_share": float(row["stk_div"]),
+            "source_announcement_date": row["_announcement"],
+            "implementation_announcement_date": row["imp_ann_date"],
+            "source_record_id": row["record_id"], "source_approval_ref": dividend_approval_ref,
+            "reason": "implemented_dividend", "window_start": None,
+            "window_end": None, "coverage_complete": None,
+        })
+
+    coverage = rights_issue_coverage_row(
+        start_date=start.isoformat(), end_date=end.isoformat(),
+        source_approval_ref=approval_ref,
+    )
+    rows.extend([
+        coverage,
+        dividend_coverage_row(
+            start_date=start.isoformat(), end_date=end.isoformat(),
+            source_approval_ref=dividend_approval_ref,
+        ),
+    ])
+    seen: set[str] = set()
+    for exclusion in exclusions:
+        if (not isinstance(exclusion, dict)
+                or set(exclusion) != {"instrument", "reason"}
+                or not isinstance(exclusion["instrument"], str)
+                or not exclusion["instrument"]
+                or not isinstance(exclusion["reason"], str)
+                or not exclusion["reason"].strip()
+                or exclusion["instrument"] in seen):
+            raise ContractError("rights-issue exclusion rows must have unique instruments and reasons")
+        seen.add(exclusion["instrument"])
+        identity = sha256_json({
+            "event_type": "rights_issue_exclusion", "instrument": exclusion["instrument"],
+            "source_approval_ref": approval_ref, "reason": exclusion["reason"],
+            "window_start": start.isoformat(), "window_end": end.isoformat(),
+        })
+        rows.append({
+            **coverage, "event_type": "rights_issue_exclusion", "event_id": identity,
+            "instrument": exclusion["instrument"], "source_record_id": None,
+            "reason": exclusion["reason"],
+        })
+    frame = pd.DataFrame(rows, columns=ACTION_EVENT_COLUMNS)
+    normalize_action_events(
+        frame, start_date=start.isoformat(), end_date=end.isoformat(),
+        trading_dates=[session.isoformat() for session in sessions],
+    )
+    return frame
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=Path, required=True,
                         help="store root holding canonical/bars_daily/v2")
     parser.add_argument("--dividend-root", type=Path, required=True,
                         help="published DividendEventStore root")
+    parser.add_argument("--contract-version", type=int, choices=(2, 3, 4), default=3)
+    parser.add_argument("--rights-issue-exclusions-json", type=Path,
+                        help="v4 reviewed complete-window rights issue exclusion attestation")
     parser.add_argument("--start", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--end", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--out", type=Path, default=None,
@@ -207,10 +347,21 @@ def main(argv: list[str] | None = None) -> int:
 
     sessions = _canonical_sessions(args.data_root, args.start, args.end)
     store = BacktestMarketDatasetStore(args.data_root)
+    if args.contract_version == 4 and args.rights_issue_exclusions_json is None:
+        parser.error("v4 requires --rights-issue-exclusions-json")
+    if args.contract_version != 4 and args.rights_issue_exclusions_json is not None:
+        parser.error("--rights-issue-exclusions-json is only valid for v4")
+    corporate_actions = (
+        _corporate_action_events_frame(args.dividend_root, args.start, args.end, sessions,
+                                       args.rights_issue_exclusions_json)
+        if args.contract_version == 4
+        else _corporate_action_frame(args.dividend_root, args.start, args.end)
+    )
+    corporate_action_type = "corporate_action_events" if args.contract_version == 4 else "corporate_action"
     frames = {
         "calendar": _calendar_frame(sessions),
         "suspension": _suspension_frame(args.data_root, sessions),
-        "corporate_action": _corporate_action_frame(args.dividend_root, args.start, args.end),
+        corporate_action_type: corporate_actions,
     }
     sources = {
         "calendar": {
@@ -222,7 +373,7 @@ def main(argv: list[str] | None = None) -> int:
             "reconciliation": "tushare_suspend_d",
             "note": "bars status is the primary source; suspend_d reconciles, it is not a second truth",
         },
-        "corporate_action": {
+        corporate_action_type: {
             "primary": "DividendEventStore:implemented_ex_date",
             "note": "the same disclosure store the adjustment chain derives factors from",
         },
@@ -252,8 +403,9 @@ def main(argv: list[str] | None = None) -> int:
                 "data_checksum_sha256": manifests["suspension"]["data_checksum_sha256"],
             },
             "corporate_action_binding": {
-                "dataset_generation_id": manifests["corporate_action"]["generation_id"],
-                "data_checksum_sha256": manifests["corporate_action"]["data_checksum_sha256"],
+                "dataset_generation_id": manifests[corporate_action_type]["generation_id"],
+                "data_checksum_sha256": manifests[corporate_action_type]["data_checksum_sha256"],
+                **({"dataset_type": corporate_action_type} if args.contract_version == 4 else {}),
             },
         },
         "row_counts": {key: int(value["row_count"]) for key, value in manifests.items()},

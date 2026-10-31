@@ -170,7 +170,11 @@ def test_v7_missing_paper_risk_documents_are_rejected_by_batch_preflight(tmp_pat
         request['request_content_generation_id'], request['manifest_digest_sha256'] = (
             research_contract_identities(request, schema_name='research_run_request_v7')
         )
-        jobs.append(ResearchFoldJob(request, tmp_path / fold['fold_id'], {'quality_decisions': {}}))
+        jobs.append(ResearchFoldJob(
+            request, tmp_path / fold['fold_id'], {'quality_decisions': {}},
+            membership_root=tmp_path / 'membership',
+            market_dataset_root=tmp_path / 'market',
+        ))
 
     with pytest.raises(ContractError, match='v5-v8 requires membership, market and paper risk documents'):
         run_walk_forward(

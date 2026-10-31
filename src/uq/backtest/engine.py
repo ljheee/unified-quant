@@ -65,6 +65,8 @@ class BacktestEngine:
         quality_decision: dict[str, Any] | None = None,
         risk_gate: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
         execution_facts: pd.DataFrame | None = None,
+        corporate_action_events: pd.DataFrame | None = None,
+        terminal_liquidation: bool = False,
     ) -> tuple[dict[str, Any], dict[str, pd.DataFrame]]:
         """Run a deterministic daily backtest.
 
@@ -82,18 +84,31 @@ class BacktestEngine:
             (manifest, artifacts) where artifacts has keys equity_curve,
             daily_metrics, fills.
         """
-        if config.get("contract_version") == 3:
+        if config.get("contract_version") in {3, 4}:
             from .engine_v3 import run_v3
-            return run_v3(
+            arguments = dict(
                 config=config, portfolio_definition=portfolio_definition,
                 weight_partitions=weight_partitions, price_panel=price_panel,
                 execution_facts=execution_facts, suspension_dates=suspension_dates,
-                corporate_action_instruments=corporate_action_instruments, risk_gate=risk_gate,
+                risk_gate=risk_gate,
+                terminal_liquidation=terminal_liquidation,
             )
+            if config.get("contract_version") == 4:
+                from .engine_v3 import run_v4
+                if corporate_action_events is None or corporate_action_instruments:
+                    raise ContractError("v4 backtest requires its reviewed corporate-action event panel")
+                return run_v4(**arguments, corporate_action_events=corporate_action_events)
+            if corporate_action_events is not None:
+                raise ContractError("corporate-action event accounting requires a v4 backtest config")
+            return run_v3(**arguments, corporate_action_instruments=corporate_action_instruments)
+        if terminal_liquidation:
+            raise ContractError("terminal liquidation requires a v3 backtest config")
         if config.get("contract_version", 1) not in {1, 2}:
             raise ContractError("unsupported backtest config version")
         if execution_facts is not None:
             raise ContractError("execution facts require a v3 backtest config")
+        if corporate_action_events is not None:
+            raise ContractError("corporate-action event accounting requires a v4 backtest config")
         cost_model = config["cost_model"]
         commission_rate = cost_model["commission_bps"] / 10000.0
         stamp_duty_rate = cost_model["stamp_duty_bps"] / 10000.0
@@ -614,13 +629,16 @@ class BacktestResultStore:
             "daily_metrics": artifacts["daily_metrics"],
             "fills": artifacts["fills"],
         }
+        if contract_version == 4:
+            artifact_files["corporate_actions"] = manifest["corporate_actions_artifact"]
+            artifact_frames["corporate_actions"] = artifacts["corporate_actions"]
         serialized: dict[str, bytes] = {}
         for key, meta in artifact_files.items():
             data, checksum = self._serialize(artifact_frames[key])
             serialized[key] = data
             meta["checksum_sha256"] = checksum
 
-        schema_name = f"backtest_result_v{contract_version}" if contract_version in {2, 3} else "backtest_result"
+        schema_name = f"backtest_result_v{contract_version}" if contract_version in {2, 3, 4} else "backtest_result"
         provisional_gen, _ = model_manifest_identities(
             {**manifest, "quality_report_checksum_sha256": "0" * 64,
              "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
@@ -685,7 +703,7 @@ class BacktestResultStore:
         # copies the config's `price_source_binding`, so a v2 config's result
         # carries the partition-set shape the v1 schema rejects.
         ModelContractLoader.validate(
-            f"backtest_result_v{manifest['contract_version']}" if manifest.get("contract_version") in {2, 3} else "backtest_result",
+            f"backtest_result_v{manifest['contract_version']}" if manifest.get("contract_version") in {2, 3, 4} else "backtest_result",
             manifest,
         )
         if manifest["generation_id"] != result_generation_id:
@@ -717,7 +735,7 @@ class BacktestResultStore:
         # cr.md 8.63: a result's contract version follows the config it reports on,
         # so validation and identity follow the manifest's own `contract_version`.
         manifest_version = manifest.get("contract_version", 1)
-        schema_name = f"backtest_result_v{manifest_version}" if manifest_version in {2, 3} else "backtest_result"
+        schema_name = f"backtest_result_v{manifest_version}" if manifest_version in {2, 3, 4} else "backtest_result"
         prov_gen, _ = model_manifest_identities(
             {**manifest, "quality_report_checksum_sha256": "0" * 64,
              "generation_id": "0" * 64, "manifest_digest_sha256": "0" * 64},
@@ -732,6 +750,8 @@ class BacktestResultStore:
             ("daily_metrics", manifest["daily_metrics_artifact"]),
             ("fills", manifest["fills_artifact"]),
         ]
+        if manifest_version == 4:
+            artifact_metas.append(("corporate_actions", manifest["corporate_actions_artifact"]))
         for key, meta in artifact_metas:
             file_path = partition / meta["file"]
             if not file_path.is_file():

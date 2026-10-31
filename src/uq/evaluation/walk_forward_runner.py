@@ -90,7 +90,7 @@ class ResearchFoldExecutor:
             config = BacktestConfigStore(job.data_root).read_manifest(
                 job.request['backtest_config_binding']['generation_id'])
             version = config['contract_version']
-            family = f'backtest_config_v{version}' if version in {2, 3} else 'backtest_config'
+            family = f'backtest_config_v{version}' if version in {2, 3, 4} else 'backtest_config'
             _verify_review(job.data_root, config, family, 'backtest_config_v1')
             if config['manifest_digest_sha256'] != job.request['backtest_config_binding']['manifest_digest_sha256']:
                 raise ContractError('walk-forward backtest config digest mismatch')
@@ -260,6 +260,7 @@ class ResearchFoldExecutor:
             'factor_set': dataset['factor_set'], 'factor_version': dataset['factor_version'],
             'label_set_name': dataset['label_set_name'], 'prediction_bindings': predictions,
             'backtest_generation_id': backtest['generation_id'],
+            'backtest_manifest_digest_sha256': backtest['manifest_digest_sha256'],
             'capital_semantics': 'independent_fold_backtest; no_stitched_pnl',
         }
 

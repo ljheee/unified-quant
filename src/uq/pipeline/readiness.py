@@ -270,10 +270,18 @@ def assess_readiness(
         conflicts: list[str] = []
         excused_delisted: list[str] = []
         excused_excluded: list[str] = []
+        non_suspended_sessions = (
+            sessions_by_instrument(frame.loc[frame["status"].astype(str) != "suspended"])
+            if "status" in frame.columns
+            else {}
+        )
         for instrument in sorted(set(members) | set(with_bars)):
             present = present_sessions.get(instrument, set())
             suspended = suspended_by_instrument.get(instrument, set())
-            if suspended & present:
+            # bars_daily.v2 may preserve an explicit zero-volume row for a
+            # suspension. That row agrees with suspend_d; only a canonical row
+            # classified as anything else contradicts the suspension source.
+            if suspended & non_suspended_sessions.get(instrument, set()):
                 conflicts.append(instrument)
             required = required_by_instrument[instrument]
             missing = {value for value in required if value not in suspended} - present
@@ -334,8 +342,8 @@ def assess_readiness(
             findings.append(
                 ReadinessFinding(
                     "suspension_bar_conflict",
-                    f"{len(conflicts)} instruments have bars on sessions the suspension source marks "
-                    f"suspended ({suspension_provenance})",
+                    f"{len(conflicts)} instruments have canonical rows not marked suspended on sessions "
+                    f"the suspension source marks suspended ({suspension_provenance})",
                     tuple(conflicts[:50]),
                 )
             )

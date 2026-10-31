@@ -44,7 +44,7 @@
     },
     {
       "path": "src/uq/contracts/model_layer.py",
-      "sha256": "c30592a1e4d3f3945e627a57785afe8671926fe5be45d99895c5634a7fd230d8"
+      "sha256": "6ddbba3d407508575b25873d866cd0828c096e332f747b3d25a3f7036e41ff32"
     },
     {
       "path": "src/uq/models/definition.py",

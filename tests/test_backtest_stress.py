@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import pandas as pd
 
 from uq.backtest.engine import BacktestEngine, BacktestResultStore
 from uq.contracts.gate_contracts import sha256_json
@@ -68,6 +69,88 @@ def test_result_retry_does_not_depend_on_publisher_error_wording(tmp_path, monke
     restored = _publish_result(
         tmp_path, stored, frames, stored['target_weight_bindings'], _result_decision())
     assert restored == stored
+
+
+def test_v4_stress_inputs_replay_the_bound_dividend_event_panel(tmp_path, monkeypatch):
+    import uq.evaluation.stress as module
+    from tests.test_backtest_v4_corporate_action_engine import DAYS, _action_panel
+
+    config = {
+        "contract_version": 4, "start_date": DAYS[0], "end_date": DAYS[1],
+        "price_source_binding": {"set_digest_sha256": "a" * 64},
+        "execution_facts_binding": {"generation_id": "b" * 64},
+        "calendar_binding": {"generation_id": "c" * 64, "checksum_sha256": "d" * 64},
+        "suspension_binding": {"dataset_generation_id": "e" * 64,
+                               "data_checksum_sha256": "f" * 64},
+        "corporate_action_binding": {"dataset_generation_id": "1" * 64,
+                                     "data_checksum_sha256": "2" * 64},
+        "universe_binding": {"snapshot_generation_id": "3" * 64},
+    }
+    base = {
+        "portfolio_definition_generation_id": "4" * 64,
+        "target_weight_bindings": [{
+            "decision_date": DAYS[0], "generation_id": "5" * 64,
+            "manifest_digest_sha256": "6" * 64,
+        }],
+    }
+    events = _action_panel().loc[lambda frame: frame["event_type"].isin(
+        ["rights_issue_coverage", "dividend_coverage"]
+    )].reset_index(drop=True)
+
+    class PriceStore:
+        def __init__(self, _root):
+            pass
+
+        def read_window(self, *_args):
+            return config["price_source_binding"], pd.DataFrame([
+                {"session_date": day, "instrument": "600000.XSHG", "open": 10.,
+                 "close": 10., "volume": 1000.}
+                for day in DAYS[:2]
+            ])
+
+    class FactStore:
+        def __init__(self, _root):
+            pass
+
+        def read(self, _generation):
+            return {"manifest": "synthetic"}, pd.DataFrame()
+
+    class MarketStore:
+        def __init__(self, _root):
+            pass
+
+        def read_frame(self, _generation, _checksum, *, dataset_type, required_columns):
+            if dataset_type == "calendar":
+                return pd.DataFrame({"date": DAYS[:2]})
+            if dataset_type == "suspension":
+                return pd.DataFrame(columns=["date", "instrument", "suspended"])
+            assert dataset_type == "corporate_action_events"
+            assert set(required_columns) <= set(events.columns)
+            return events
+
+    class WeightStore:
+        def __init__(self, _root):
+            pass
+
+        def read(self, _generation, _day):
+            return {
+                "manifest_digest_sha256": "6" * 64,
+                "portfolio_definition_generation_id": base["portfolio_definition_generation_id"],
+                "universe_snapshot_generation_id": config["universe_binding"]["snapshot_generation_id"],
+                "decision_date": DAYS[0],
+            }, pd.DataFrame({"instrument": ["600000.XSHG"], "weight": [0.1]})
+
+    monkeypatch.setattr(module, "RawExecutionPriceStore", PriceStore)
+    monkeypatch.setattr(module, "ExecutionFactsStore", FactStore)
+    monkeypatch.setattr(module, "BacktestMarketDatasetStore", MarketStore)
+    monkeypatch.setattr(module, "TargetWeightStore", WeightStore)
+    monkeypatch.setattr(module, "facts_binding", lambda _manifest: config["execution_facts_binding"])
+    monkeypatch.setattr(module, "reject_symlinks_within", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "_verify_review", lambda *_args, **_kwargs: None)
+
+    replay = module._inputs(tmp_path, base, config)
+    pd.testing.assert_frame_equal(replay["corporate_action_events"], events)
+    assert "corporate_action_instruments" not in replay
 
 
 def test_half_fill_stress_actually_changes_fills_and_is_not_assumed_to_reduce_profit(tmp_path):

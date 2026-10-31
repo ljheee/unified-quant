@@ -1,0 +1,124 @@
+{
+  "checks": [
+    {
+      "command": ".venv/bin/python -m pytest tests/test_backtest_v3.py tests/test_walk_forward_continuous.py -q",
+      "exit_code": 0,
+      "passed": 41
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/test_evaluation_benchmark.py tests/test_index_membership.py -q",
+      "exit_code": 0,
+      "passed": 37
+    },
+    {
+      "command": ".venv/bin/python -m pytest",
+      "elapsed_seconds": 93.08,
+      "exit_code": 0,
+      "passed": 1533,
+      "skipped": 33
+    },
+    {
+      "command": ".venv-qlib/bin/python -m pytest",
+      "elapsed_seconds": 144.92,
+      "exit_code": 0,
+      "passed": 1565,
+      "skipped": 1
+    },
+    {
+      "command": ".venv/bin/python scripts/run_walk_forward_continuous_backtest.py --help",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "date": "2026-10-31",
+  "git_head": "cd1befb4b5fcbe954e16aea148cc2332dbc1dc21",
+  "implementation_files": [
+    {
+      "path": "src/uq/evaluation/walk_forward_continuous.py",
+      "sha256": "95e8c6f093077ebcfaec6a420c79015ba2d565625bccae37d4a03a0a8998a243"
+    },
+    {
+      "path": "src/uq/evaluation/walk_forward_runner.py",
+      "sha256": "2438565c04372c092ab69abebf0dbadd1fc1ff555568e8bd2eef57d4049c28ff"
+    },
+    {
+      "path": "scripts/run_walk_forward_continuous_backtest.py",
+      "sha256": "c7334f376183b679ea7cfc216f3743f103334b174e67f4c1f97c4c2ec85486bc"
+    },
+    {
+      "path": "src/uq/evaluation/benchmark.py",
+      "sha256": "ddc583545a96936804198f218d317b7e96683d97e3fa354b2839cedd71ce290d"
+    },
+    {
+      "path": "src/uq/models/factor_neutralization.py",
+      "sha256": "f4a21d5f3e61ecc033c684fc5c6caac9bbe00fcc3ae4ee95f5f161be57e562e7"
+    },
+    {
+      "path": "src/uq/backtest/engine.py",
+      "sha256": "d2d36fc1e207d058e582f60fd46325fe96ad3fa62a390988a0a1c77007f6ba0d"
+    },
+    {
+      "path": "src/uq/backtest/engine_v3.py",
+      "sha256": "07493f5cefcfc23f4d8c9fe1e96b723ab276258f7e693bec6f7e7070337751dc"
+    }
+  ],
+  "kind": "trading_grade_walk_forward_continuous_implementation_verification",
+  "known_limits": [
+    "no one-year real historical multi-fold run, PIT completeness proof, or three-state coverage",
+    "benchmark owning-source publication and real same-cost benchmark replay remain pending",
+    "factor neutralization is not wired to a reviewed preprocessing contract or research request version",
+    "no calibrated live costs, real paper reconciliation, or broker/live execution verification",
+    "certification gate and remote CI matrix were not run",
+    "terminal liquidation can remain incomplete when v3 suspension, price-band, participation, or risk guards block the exit"
+  ],
+  "record_checksum_sha256": "e63b511dbf93a6f67ff1c5944779b12ec46cd270b8108a7988140964ba02fc88",
+  "record_version": 1,
+  "release_or_quality_authorization": false,
+  "test_files": [
+    {
+      "path": "tests/test_walk_forward_continuous.py",
+      "sha256": "5471627bd17718fc1d607e88302e9cd96f629331a96f6ca16de96b389b13d526"
+    },
+    {
+      "path": "tests/test_walk_forward.py",
+      "sha256": "e07561da5e93c37ef31c9ad75cdd4edaddd59dfe8884745b296b05f4b9ff581b"
+    },
+    {
+      "path": "tests/test_walk_forward_runner.py",
+      "sha256": "9f2a31fc97a61e8b9c90efc9ef5f22af76f11cb16d8a189c72540e949f6ee908"
+    },
+    {
+      "path": "tests/test_evaluation_benchmark.py",
+      "sha256": "51802f84da7228cf3eca34cb2be114017b27badeef8be6f29e3723c5f423b7cb"
+    },
+    {
+      "path": "tests/test_factor_neutralization.py",
+      "sha256": "825e4c977c274b99372e86eec5633f2d7200143fca2d7c82d1d9d9657a2b28f3"
+    },
+    {
+      "path": "tests/test_experiment_archive.py",
+      "sha256": "68f5dce1edf06a7ebf229a7b375ec5f1dc70726ce7a96e377a8388f435cfc2ba"
+    },
+    {
+      "path": "tests/test_backtest_v3.py",
+      "sha256": "ea464b58c30c4fadfe43e762a3b2a127b937a9947123b836ac10d4c624f64943"
+    }
+  ],
+  "uncommitted_worktree": true,
+  "verified_behaviors": [
+    "single v3 engine run carries cash and holdings across walk-forward fold boundaries",
+    "fold result and target-weight lineage is reread through owning stores",
+    "continuous replay receipt rereads fold, config, result, and target-weight sources",
+    "identical attempt retry reads the existing reviewed result without rerunning the engine",
+    "archive checksum binds complete telemetry and absolute source locations",
+    "PIT benchmark membership is read session-by-session through the owning monthly snapshot store with a verified membership-set binding",
+    "continuous terminal liquidation is attempted under v3 T+1 guards and receipts distinguish complete from blocked exits"
+  ],
+  "warnings": [
+    "existing pandas SettingWithCopyWarning in schema expression evaluation",
+    "Qlib dependency emits NumPy timedelta generic-unit deprecation warnings"
+  ]
+}

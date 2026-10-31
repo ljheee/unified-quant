@@ -12,6 +12,42 @@ from ..sources.fetch import FetchResult, FetchStatus
 _EXCHANGE_SUFFIXES = {"SH": "XSHG", "SZ": "XSHE", "BJ": "XBSE"}
 _INSTRUMENT_SUFFIXES = {value: key for key, value in _EXCHANGE_SUFFIXES.items()}
 
+# Tushare endpoints that supply the still-missing trading-grade research inputs.
+# These are intentionally separate from ``fetch``'s canonical ``bars_daily``
+# capability: raw provider records must pass through an owning dataset contract
+# before a factor or execution path can consume them.
+TUSHARE_RESEARCH_ENDPOINTS = frozenset({
+    "daily_basic",
+    "index_classify",
+    "index_member_all",
+    "income",
+    "balancesheet",
+    "cashflow",
+    "fina_indicator",
+    "forecast",
+    "express",
+    "report_rc",
+    "moneyflow",
+    "hk_hold",
+    "top_list",
+})
+
+_RESEARCH_QUERY_FILTERS: dict[str, frozenset[str]] = {
+    "daily_basic": frozenset({"trade_date", "ts_code"}),
+    "index_classify": frozenset({"level", "index_code", "parent_code"}),
+    "index_member_all": frozenset({"ts_code", "l1_code", "l2_code", "l3_code"}),
+    "income": frozenset({"ts_code", "ann_date", "period", "start_date"}),
+    "balancesheet": frozenset({"ts_code", "ann_date", "period", "start_date"}),
+    "cashflow": frozenset({"ts_code", "ann_date", "period", "start_date"}),
+    "fina_indicator": frozenset({"ts_code", "ann_date", "period", "start_date"}),
+    "forecast": frozenset({"ts_code", "ann_date", "period", "start_date"}),
+    "express": frozenset({"ts_code", "ann_date", "period", "start_date"}),
+    "report_rc": frozenset({"ts_code", "report_date", "start_date"}),
+    "moneyflow": frozenset({"ts_code", "trade_date"}),
+    "hk_hold": frozenset({"ts_code", "trade_date"}),
+    "top_list": frozenset({"trade_date"}),
+}
+
 
 def _to_instrument(ts_code: str) -> str:
     code, _, exchange = ts_code.partition(".")
@@ -159,6 +195,44 @@ class TushareAdapter:
     def stock_basic(self, *, exchange: str = "", list_status: str = "L") -> pd.DataFrame:
         return self._call("stock_basic", exchange=exchange, list_status=list_status)
 
+    def research_data(self, endpoint: str, **params: Any) -> pd.DataFrame:
+        """Fetch one bounded raw Tushare research-data query.
+
+        This is an acquisition boundary for the additional datasets named by the
+        trading-grade plan. It does not normalize source semantics or make the
+        returned rows canonical. The endpoint allowlist and required query scope
+        prevent accidentally issuing an unbounded whole-market historical query.
+        The caller must publish the response to an owning immutable store and
+        apply the endpoint's point-in-time availability rule before use.
+        """
+        if endpoint not in TUSHARE_RESEARCH_ENDPOINTS:
+            raise ContractError(f"unsupported Tushare research endpoint: {endpoint}")
+        if not isinstance(params, dict) or not params:
+            raise ContractError(f"{endpoint} query requires at least one bounded filter")
+        allowed = _RESEARCH_QUERY_FILTERS[endpoint] | {
+            "end_date", "is_new", "fields", "src"
+        }
+        unknown = set(params) - allowed
+        if unknown:
+            raise ContractError(
+                f"unsupported {endpoint} query filters: {sorted(unknown)}"
+            )
+        scoped = {
+            key for key, value in params.items()
+            if key in _RESEARCH_QUERY_FILTERS[endpoint]
+            and value is not None
+            and str(value).strip()
+        }
+        if not scoped:
+            raise ContractError(f"{endpoint} query requires a non-empty scope filter")
+        if endpoint == "top_list" and "trade_date" not in scoped:
+            raise ContractError("top_list query requires trade_date")
+        if endpoint == "report_rc" and "start_date" in scoped and not params.get("end_date"):
+            raise ContractError("report_rc start_date query also requires end_date")
+        if "end_date" in params and "start_date" not in params:
+            raise ContractError(f"{endpoint} end_date requires start_date")
+        return self._call(endpoint, **params)
+
     def delisted_instruments(self) -> set[str]:
         """Instruments the provider marks as delisted as of now (``list_status='D'``).
 
@@ -228,6 +302,32 @@ class TushareAdapter:
             f"daily returned no rows for batch {batch[0]}..{batch[-1]} ({len(batch)} codes)"
         )
 
+    @staticmethod
+    def _daily_session(client, trade_date: str, instruments: list[str]) -> pd.DataFrame:
+        """Fetch the full-market session once, then restrict it to requested names.
+
+        Tushare's date-shaped ``daily`` query returned 5,571 rows in a measured
+        full-market session, below its 6,000-row response ceiling. For governed
+        universes of 500+ names this avoids one request per 50-code batch while
+        retaining the exact requested universe in the delivered frame. A response
+        at the vendor ceiling is refused because truncation cannot be ruled out.
+        """
+        response: pd.DataFrame | None = None
+        for _ in range(2):
+            response = client.daily(trade_date=trade_date.replace("-", ""))
+            if response is not None and not response.empty:
+                break
+        if response is None or response.empty:
+            raise RuntimeError(f"daily returned no rows for market session {trade_date}")
+        if len(response) >= 6000:
+            raise RuntimeError(
+                f"daily returned {len(response)} rows for {trade_date}, reaching the 6000-row limit; "
+                "refusing a possibly truncated full-market session"
+            )
+        wanted = set(instruments)
+        mapped = response["ts_code"].map(_to_instrument)
+        return response.loc[mapped.isin(wanted)].reset_index(drop=True)
+
     def _reference_frames(self, start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, set[tuple[str, object]]]:
         """Whole-market adjustment factors, price limits and suspensions for the window days."""
         days = sorted(self.trade_dates(start, end))
@@ -283,14 +383,21 @@ class TushareAdapter:
         errors: list[str] = []
         provider_codes = [_to_provider_code(instrument) for instrument in instruments]
         batches = [provider_codes[index:index + self.BATCH_SIZE] for index in range(0, len(provider_codes), self.BATCH_SIZE)] or [[]]
-        for batch in batches:
-            codes = ",".join(batch)
+        if len(instruments) >= 500 and start.replace("-", "") == end.replace("-", ""):
             try:
-                response = self._daily_batch(client, codes, batch, start, end)
-                raw_parts.append(response)
+                raw_parts.append(self._daily_session(client, start, instruments))
             except Exception as exc:
                 status, retryable, message = self._map_error(exc)
                 return FetchResult(pd.DataFrame(), status, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=retryable, errors=(message,))
+        else:
+            for batch in batches:
+                codes = ",".join(batch)
+                try:
+                    response = self._daily_batch(client, codes, batch, start, end)
+                    raw_parts.append(response)
+                except Exception as exc:
+                    status, retryable, message = self._map_error(exc)
+                    return FetchResult(pd.DataFrame(), status, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=retryable, errors=(message,))
         raw = pd.concat(raw_parts, ignore_index=True) if raw_parts else pd.DataFrame()
         if schema_version == "v2":
             try:

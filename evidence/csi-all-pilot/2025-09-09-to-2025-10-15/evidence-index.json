@@ -18,11 +18,11 @@
     },
     {
       "path": "scripts/ingest_window.py",
-      "sha256": "3e0ab8e257019b6b7d1e04c3c3ccaca4736e20bdeba9f1b261aef33e7934b4a5"
+      "sha256": "b423a8b24a300d24f4b3a716f0fa18de4bf7c9aaa7884ba2524668933d119074"
     },
     {
       "path": "scripts/validate_training_readiness.py",
-      "sha256": "19b331a010ee39b60fde50c18fda374e6392de8dc9170793ab3a229415e6e4cd"
+      "sha256": "4a48610d90fd6473f0a455b773f02250f12b9726fc47ff03abac747ac6c42844"
     }
   ]
 }

@@ -22,7 +22,7 @@
     },
     {
       "path": "src/uq/contracts/model_layer.py",
-      "sha256": "ef97b2acfd273724f873f73ae5c91c00e520781f6a90f49bdb0cfb1c6752cf2a"
+      "sha256": "6ddbba3d407508575b25873d866cd0828c096e332f747b3d25a3f7036e41ff32"
     },
     {
       "path": "src/uq/research_chain/adapters.py",

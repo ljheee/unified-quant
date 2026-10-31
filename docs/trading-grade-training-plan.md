@@ -3,7 +3,7 @@
 > 目标不是“链路跑通”，而是让训练结果具备交易决策价值：样本外、扣成本、可复现、可解释、可风控，并且结论能指导下一轮调仓。
 已知约束：2000积分的tushare token，获取指数成本只能提供月度PIT，使用月度近似替代日维度即可。
 >
-> 本文基于 2026-10-27 的真实全 A 结果制定。当前链路已闭合，但结果仍不足以作为交易依据。
+> 本文基于 2026-10-27 的真实全 A 结果制定。原基线链路已闭合，但新增历史数据的 readiness 尚未通过，年度 OOS 训练链尚未重发，当前结果仍不足以作为交易依据。
 
 ## 1. 当前基线
 
@@ -59,10 +59,10 @@
 
 以下依赖在多个阶段反复出现，单列一次，各阶段引用不再展开：
 
-- **新数据类**：市值数据（市值加权基准、市值中性化）、行业分类（行业中性基准、行业集中度约束）、基本面财报（估值/盈利质量/成长/杠杆）、分析师预期/资金流/北向/龙虎榜——当前 canonical 一概不承载（字段表连 `listing_date` 都没有）。每接入一类都需要：新 adapter、canonical 字段或契约扩展（语义变更出新版本）、维护者对数据源的裁决。
-- **离线历史数据根**：约定仓库忽略目录 `data/trading-grade-history/` 作为历史数据根路径；它只是一个本机目录位置，不会自动下载或填充行情。该目录当前尚未创建、也没有历史数据。需要把受治理的历史 store 放到该路径或在命令中显式传入实际路径。目前已有本地行情窗口不足一年，尚不能完成年度 OOS 验收。分析师预期数据源目前不具备，相应特征保持缺失，不得用合成值替代。
-- **PIT 纪律**：基本面与预期类数据按公告日/披露日对齐；历史 universe 必须核验窗口内退市股完整包含（PIT snapshot 机制已具备，写成验收项而不是留作假设）。
-- **新依赖治理**：新依赖需维护者裁决；`uv.lock` 变动使现有认证矩阵失效，需完整重跑 `scripts/run_gate.sh` 与远程矩阵，计入排期。
+- **新数据类接入状态**：`TushareAdapter.research_data()` 与不可变 `TushareDependencyStore` 已承接 `daily_basic`、SW 行业、标准财报/指标、业绩预告/快报、`report_rc`、资金流、沪深股通持股和龙虎榜；原始响应不等同 canonical 因子或质量批准。实际 2000 积分端点调用、行数与时间范围见 [`trading-grade-progress.md`](trading-grade-progress.md)；分析师预期的 `report_rc` 仅有每日 10 次试用权限，单股查询成功不构成全市场 PIT 面板，相关特征继续缺失，不得用合成值替代。
+- **离线历史数据根**：仓库忽略目录 `data/trading-grade-history/` 已作为本机历史根并填充 2024-01-01 至 2026-10-30 的 raw Tushare 依赖快照、月度 `csi-all` 成分和 `bars_daily.v2` canonical 行情。readiness 已在 683 个 session 上实查 `suspend_d`，仍报告 17 个未解释的成员行情缺口和 2 个不足 60 个行情日的成员，因此新窗口目前不能用于训练。14 个缺口标的当前出现在 Tushare 退市名单中，但接口无历史退市日期，不能用当前状态解释窗口中途缺口；19 次按代码查询也未从 Tushare `daily` 找回缺失日，TDX 日线抽查未完成。成分为月度近似 PIT；原始市值/行业/财报等仍未转成受评审 exposure/factor panel。旧基线的 factor/label/export 仍绑定其原有 2025 窗口，需要基于新行情和通过质量门禁后重发才能开展年度 OOS。
+- **PIT 纪律**：每日指标/资金流/沪深股通/龙虎榜盘后可见，决策使用至少滞后一 session；基本面与预期按公告/披露时点对齐。SW `index_member_all` 的 `in_date/out_date` 是有效期字段，但没有供应商历史发布时间，不能宣称严格 transaction-time PIT。历史 universe 仍需核验退市股、停牌与新股覆盖。
+- **新依赖治理**：本次数据接入复用既有 Tushare 与 Parquet 依赖，未修改 `uv.lock`；若后续依赖锁变更，现有认证矩阵仍须完整重跑 `scripts/run_gate.sh` 与远程矩阵。
 - **生产评审路径**：生产 trust anchor 与外部质量评审流程的 provisioning 是维护者决策项，是阶段 6 的硬前置。
 
 ### 阶段 0：冻结基线（必须先做）
@@ -90,17 +90,20 @@
 
 **动作**
 
-1. **前置：扩展数据窗口。** 当前 export 日历止于 `2025-12-24`，全 A 数据也只覆盖 2025 年；仅改 split 无法得到 1 年样本外，必须先补齐历史数据并重新发布 factor/label/export。注意 Alpha158 需要约 60 个交易日的暖机 lead-in，历史数据起点必须早于训练起点至少一个暖机窗口。
+1. **前置：扩展数据窗口。** 原 export 日历止于 `2025-12-24`。目前已接入 2024-01-01 至 2026-10-30 的 canonical bars 和月度近似 PIT 成分，但 readiness 被 17 个未解释缺口与 2 个不足 60 session 的成员阻断；核实覆盖后仍须重新发布 factor/label/export。Alpha158 需要约 60 个交易日暖机 lead-in，历史数据起点必须早于训练起点至少一个暖机窗口。
 2. **前置：标签设计审计。** 当前标签是 `return_5d`（5 日前向收益、收盘决策、governed adjusted close 基准，eligibility 剔除 delisting/limit/suspension/上市未满 60 天）。延长样本外之前必须先书面回答三个问题：
    - 5 日重叠标签的自相关：728,880 行的有效样本量远小于名义值，IC/RankIC 显著性不按重叠标签调整就会被高估。
    - 标签腿 close(T)→close(T+5) 与可执行路径 open(T+1)→卖出之间差一段 close→open，标签里包含一段不可交易的收益；量化这段缺口，或改用可执行口径的标签。
    - `delisting: exclude` 是“决策日时点可知”（PIT 安全）还是事后回溯剔除（训练标签里的幸存者偏差）。
+   - `audit_label_design.py` v2 现在必须绑定独立治理日历，核对窗口原始分区与治理 session 完全一致，并要求每个非空标签标的从 T 到 T+5 的 bars grid 完整；历史基线的 v1 审计值尚未用增强版重跑。
 3. 将 test split 从 11 个交易日扩展到至少 6–12 个月。
 4. 采用 walk-forward 或滚动训练/验证/测试，而不是一次性固定 split。
+   - 已实现逐折结果的统一 v3 回放入口：重新读取每折经评审的 OOS 目标权重，并在共享现金/持仓的一次引擎运行中执行；成本、成交、初始资金与风险设置必须和各折一致。末折最后目标后增加两个 session，依次完成该目标的 T+1 执行和期末强制清仓尝试；清仓仍受停牌、涨跌停、参与率和风控约束，receipt 记录是否清零，交易验收仍需真实数据另做。
 5. 增加基准（数据依赖见“贯穿前置”一节）：
    - 全 A 等权
    - 市值加权
    - 行业中性基准
+   - `read_pit_benchmark_membership` 从 owning `IndexMembershipStore` 按治理日历逐日回读成员，并保留 snapshot-set generation/digest/checksum；当前源精度为月度近似 PIT。`BenchmarkWeightStore` 不可变发布权重面板，`scripts/run_benchmark_backtest.py` 复用策略的已评审 v3/v4 配置和调仓日，经同一 T+1 引擎发布基准回测；真实 PIT 市值/行业源及真实同成本验收仍待完成。
 6. 增加评估指标：
    - 超额年化收益
    - 信息比率
@@ -126,20 +129,11 @@
 **动作**
 
 - **已具备、已核验**：真实运行使用的 config（generation `c67a48fd…`）确认为 `daily_t1_open`、`board_lot=100`、`prior_day_holding_only`、佣金 2.5bps/印花税 5bps/滑点 1bps。
-- **隐含默认需显式化**：`volume_participation_cap` 在 schema 中存在、config 未设置，但引擎缺省静默套用 0.10——基线结果已经在 10% 参与度上限下产出。动作是显式化并校准，不是“新增”。
-- **已具备、但保真不足，需升级**（按“语义变更出新契约版本”规则执行）：
-  - 涨跌停当前是单一 `limit_ratio=0.1`：全 A 中 688/300 为 20%、北证 92x 为 30%、ST 为 5%，需按板块分档。
-  - 除权日的涨跌停基准是除权参考价，而当前 `prev_close_source=raw_prev_close`；需评估除权日限价带宽的失真幅度。
-- **需要新增**：
-  - 冲击成本模型
-  - 容量分析
-  - 行业和单票集中度约束（依赖行业分类数据，见“贯穿前置”）
-  - 调仓频率与换手约束
-  - 佣金最低收费（如 5 元/笔）：1M 资金下几乎不咬合，但阶段 6 的小资金场景会硬咬合
-- 做成本敏感性：
-  - 佣金 ×2
-  - 滑点 ×2
-  - 成交率下降 50%
+- **历史基线限制**：v1/v2 基线 config 未显式保存参与率上限，引擎旧缺省为 0.10；冻结基线不改写。v3 config 将 `volume_participation_cap`、fill-rate multiplier 和调仓间隔设为必填字段，避免新结果继承隐式执行假设。
+- **v3 执行与成本功能已实现**：离线执行事实逐日绑定历史板块/ST/停牌、涨跌停状态与价格、限价参考、整手规则；引擎检查原始开盘及滑点/冲击后价格是否越带。线性/平方根冲击、最低佣金、双边滑点、卖出税、成交率/参与率部分成交、调仓间隔、实际换手上限、单票/行业/现金预算均已由 v3 config 与同版本引擎处理。对应行为和失败边界见 [`portfolio-backtest-risk-execution.md`](subsystems/portfolio-backtest-risk-execution.md) 与 `tests/test_backtest_v3.py`。
+- **成本敏感性与资金网格已实现**：`scripts/run_backtest_stress.py` 在同一目标权重和 owning 数据上分别评估佣金翻倍（含最低费）、滑点翻倍、成交率减半及明确资金网格；各派生 config/result 单独通过外部质量评审并复算 readback。网格的最高合格资金只代表被测点，不等同于经市场校准的容量。
+- **公司行为 v4 已实现，真实源核验仍未完成**：配置绑定 exact-window `corporate_action_events` 面板及 dividend/rights completeness approval。除息日按股权登记日收盘持股形成税后现金和送股应收并计入 NAV、不可用于下单；现金仅在支付日可用；送股在上市日入账并遵守当日不可卖的 T+1；权利发行覆盖清单内标的全窗口排除；碎股和关键日期/覆盖不完整时拒绝。v1/v2/v3 行为保持不变。v4 逻辑有 synthetic engine/store/publisher/exposure、benchmark/stress 回归；无真实分红/权利发行源和历史全窗审计。paper 对账及跨折连续 OOS 回放仍只接受 v3。
+- **其余数据依赖和实证仍未完成**：执行事实已有读取/发布契约，但历史来源和规则覆盖尚未获得真实全窗口审计；`reference_adjustment_bps` 会留证除权参考相对原始前收的调整幅度，但没有实际校准误差证据。行业约束需要真实、开盘前可见的行业分类。压力场景未在一年 OOS 数据上证明策略结论不反转，容量网格也没有实盘流动性校准。
 
 **验收**
 
@@ -153,7 +147,7 @@
 **动作**
 
 1. 保留 `qlib_linear` 作为基线。
-2. 先定义模型选择协议：同一特征、同一 split、同一成本下，只用验证集选择一个候选进入样本外测试，避免三个模型在测试集上择优；并给整个实验程序设多重比较纪律（如 deflated Sharpe 或等价的实验预算），避免“因子 × 模型 × 参数”的组合试探把样本外噪音当成发现。现已实现最多三个 LightGBM 候选、按验证段日均截面 RankIC 选择，测试标签不参与选择；完整收益比较仍需用同一回测/成本/组合流程完成。
+2. 先定义模型选择协议：同一特征、同一 split、同一成本下，只用验证集选择一个候选进入样本外测试，避免三个模型在测试集上择优。现已实现最多三个 LightGBM 候选、按验证段日均截面 RankIC 选择，测试标签不参与选择；`scripts/compare_training_models.py` 现在校验线性与 LightGBM 运行绑定同一实际数据制品、特征、标签、切分、组合模板与已评审回测成本后，发布 candidate-minus-baseline 指标。这个比较仍只是诊断，不能自动替换模型。候选上限只作用于单次选择调用；整个研究程序的多重比较预算尚未定义，不能把它说成已控制。
 3. 接入 LightGBM；依赖通过 `gbdt` extra 提供，并在 dev 测试环境安装。Research Chain v7 已能通过 model-definition template v2 选择并训练 Qlib LightGBM。XGBoost/CatBoost 未纳入本次范围。
 4. 统一：
    - 特征集
@@ -196,7 +190,9 @@
   - 共线性
   - 换手成本
 
-阶段 4 的诊断入口现已覆盖已有受治理因子：逐因子日频 IC/RankIC 与 HAC 稳定性、日频横截面 Spearman 共线性、等权 top-N 成员变动换手代理，以及绑定已评审 v3 成本配置的换手成本代理。成本代理按参与率上限估算冲击，仅计比例佣金、印花税、滑点和冲击；不计最低佣金、真实成交、持仓约束或市场容量，因此不能替代回测成本。入口不自动选择/删除因子。新基本面、分析师预期和资金类因子仍须先接入按当时可见时间治理的数据；单因子增量和跨期 OOS 验收仍未完成。
+阶段 4 的诊断入口现已覆盖已有受治理因子：逐因子日频 IC/RankIC 与 HAC 稳定性、日频横截面 Spearman 共线性、等权 top-N 成员变动换手代理，以及绑定已评审 v3 成本配置的换手成本代理。新增 `build_tushare_factor_candidates.py` 从逐日 `daily_basic`/`moneyflow` 原始快照派生 8 个候选值因子及市值/流动性暴露；清单绑定各快照和 canonical 日历。它明确标记 `historical_vintage_verified=false`、`strict_pit_eligible=false`，只能用于研发诊断，不能冒充严格 PIT 或发布到生产 owning store。`screen_tushare_factor_candidates.py` 可对候选面板重算 IC/RankIC/HAC、共线性和换手成本代理；`select_factor_candidates.py` 按 `config/factor-selection/tushare-candidate-policy.v1.json` 对验证窗口生成最多三个候选的 shortlist，按显式方向、有效期数、RankIC、覆盖、共线性和成本阈值筛选，不自动改变已评审 factor set。成本代理按参与率上限估算冲击，仅计比例佣金、印花税、滑点和冲击；不计最低佣金、真实成交、持仓约束或市场容量，因此不能替代回测成本。日历/快照绑定与验证集 shortlist 的算法路径已实现；严格 PIT 源审查、经评审 exposure/factor 发布、单因子增量和跨期 OOS 验收仍未完成。
+
+中性化的代码路径已补齐：新增 `factor_exposure_panel.v1` owning store 和离线 Parquet 发布入口，记录 source approval reference；`available_at` 必须带时区且不晚于当日上海时间 15:00。`feature_preprocessing.v2` 把暴露 generation、manifest digest、数据 checksum 与 OLS 控制顺序写入清单，`feature_schema.v2` 标记 `neutralized`；Research Chain 使用现有预处理 binding 按清单版本选择，并在 dataset stage 重读暴露、复算变换。维护者已批准 `factor_exposure_panel_v1` 与 `feature_preprocessing_v2` 的 passed-only review policies，活动 trust anchor 已更新并核验 digest。真实行业/市值/流动性 PIT 源仍不存在；测试夹具不是历史数据，不可用于实证验收。
 
 **验收**
 
@@ -215,11 +211,8 @@
   - 风险平价（v3 算法与 Research Chain v8 路由已实现；真实收益源和成本下验收待完成）
   - 行业中性组合（v3 已实现组合内等行业预算和 PIT execution-facts 绑定；真实行业源验收待完成）
 - 增加：
-  - 最大回撤停止（v3 已实现；年度实证效果待真实历史窗口）
-  - 波动率目标（v3 已实现；年度实证效果待真实历史窗口）
-  - 换手上限
-  - 单票和行业上限
-  - 现金管理
+  - 最大回撤停止与波动率目标（v3 已实现；年度实证效果待真实历史窗口）
+  - 换手上限、单票和行业上限、现金管理（portfolio/backtest v3 已实现；行业数据质量与 OOS 效果待真实源）
 
 **验收**
 
@@ -278,8 +271,8 @@
 
 ### 下一步 C：建立模型比较实验
 
-- 线性基线 vs LightGBM。
-- 同一特征、样本、split、成本和组合约束。
+- 运行 `scripts/compare_training_models.py` 比较线性基线与 LightGBM；入口拒绝训练数据或成本/组合配置不一致的结果。
+- 使用至少一年真实样本外窗口，并报告 regime 覆盖、IR、超额收益及收益贡献分散性。
 - 只在样本外、扣成本后稳定优于基线时替换。
 
 ## 6. 明确不做的事

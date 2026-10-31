@@ -35,11 +35,19 @@ DATES = pd.bdate_range("2026-01-05", periods=12)
 INSTRUMENTS = ("600000.XSHG", "000001.XSHE")
 
 
-def _publish_bars(root: Path, instruments=INSTRUMENTS, listing_dates=None, open_offset=0.1):
+def _publish_bars(
+    root: Path,
+    instruments=INSTRUMENTS,
+    listing_dates=None,
+    open_offset=0.1,
+    skip_pairs=(),
+):
     schema = load_schema("config/schemas/bars_daily.v2.yaml")
     rows = []
     for index, instrument in enumerate(instruments):
         for position, day in enumerate(DATES):
+            if (instrument, day.date().isoformat()) in skip_pairs:
+                continue
             close = 10.0 + position * 0.1 + index
             rows.append({
                 "instrument": instrument, "session_date": day,

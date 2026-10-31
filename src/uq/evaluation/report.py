@@ -20,7 +20,7 @@ from ..contracts.gate_contracts import canonical_json, sha256_json, validate_con
 from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from ..models.predictions import PredictionBuilder
-from ..research_chain.owning_contracts import BacktestConfigStore, LabelStore
+from ..research_chain.owning_contracts import BacktestConfigStore, BacktestMarketDatasetStore, LabelStore
 from .metrics import evaluate_returns, information_coefficients, session_dates
 
 _COMPARABLE_CONFIG_FIELDS = (
@@ -50,14 +50,15 @@ def _verified_result(root: Path, generation: str) -> tuple[dict, dict, dict[str,
     _identity(generation)
     partition = root / 'backtest_results' / f'result={generation}'
     reject_symlinks_within(root, partition, label='evaluation backtest input')
-    for name in ('manifest.json', 'equity_curve.parquet', 'daily_metrics.parquet', 'fills.parquet'):
+    for name in ('manifest.json', 'equity_curve.parquet', 'daily_metrics.parquet', 'fills.parquet',
+                 'corporate_actions.parquet'):
         reject_symlinks_within(root, partition / name, label='evaluation backtest input')
     manifest, artifacts = BacktestResultStore(root).read(generation)
     # The backtest reader verifies payload hashes/review binding. Also pin the
     # public generation/digest itself through the same identity rule as the writer.
     from ..contracts.model_layer import model_manifest_identities
     version = manifest['contract_version']
-    family = f'backtest_result_v{version}' if version in {2, 3} else 'backtest_result'
+    family = f'backtest_result_v{version}' if version in {2, 3, 4} else 'backtest_result'
     expected = model_manifest_identities(manifest, schema_name=family)
     if expected != (generation, manifest['manifest_digest_sha256']):
         raise ContractError('evaluation backtest manifest identity mismatch')
@@ -65,20 +66,40 @@ def _verified_result(root: Path, generation: str) -> tuple[dict, dict, dict[str,
     config_path = root / 'backtest_configs' / f"generation={config['generation_id']}" / 'manifest.json'
     reject_symlinks_within(root, config_path, label='evaluation config input')
     config_version = config['contract_version']
-    config_family = f'backtest_config_v{config_version}' if config_version in {2, 3} else 'backtest_config'
+    config_family = f'backtest_config_v{config_version}' if config_version in {2, 3, 4} else 'backtest_config'
     _verify_review(root, manifest, family, 'backtest_result_v1')
     _verify_review(root, config, config_family, 'backtest_config_v1')
     if manifest['price_source_binding'] != config['price_source_binding']:
         raise ContractError('backtest price lineage disagrees with its config')
     if version != config_version:
         raise ContractError('backtest contract version disagrees with its config')
-    if version == 3:
+    if version in {3, 4}:
         from ..backtest.execution_facts import ExecutionFactsStore, facts_binding
 
         facts, _ = ExecutionFactsStore(root).read(config['execution_facts_binding']['generation_id'])
         if (facts_binding(facts) != config['execution_facts_binding']
                 or manifest['execution_facts_binding'] != config['execution_facts_binding']):
             raise ContractError('backtest execution facts lineage disagrees with its config')
+    if version == 4 and manifest.get('corporate_action_binding') != config.get('corporate_action_binding'):
+        raise ContractError('backtest corporate-action lineage disagrees with its config')
+    if version == 4:
+        from ..backtest.corporate_actions import ACTION_EVENT_COLUMNS, normalize_action_events
+
+        binding = config['corporate_action_binding']
+        events = BacktestMarketDatasetStore(root).read_frame(
+            binding['dataset_generation_id'], binding['data_checksum_sha256'],
+            dataset_type='corporate_action_events', required_columns=set(ACTION_EVENT_COLUMNS),
+        )
+        calendar = BacktestMarketDatasetStore(root).read_frame(
+            config['calendar_binding']['generation_id'], config['calendar_binding']['checksum_sha256'],
+            dataset_type='calendar', required_columns={'date'},
+        )
+        normalize_action_events(
+            events, start_date=config['start_date'], end_date=config['end_date'],
+            trading_dates=sorted(calendar['date'].astype(str).unique().tolist()),
+        )
+        if manifest.get('corporate_action_semantics') != config.get('corporate_action_model'):
+            raise ContractError('backtest corporate-action semantics disagree with its config')
     if (manifest['period_start'], manifest['period_end']) != (config['start_date'], config['end_date']):
         raise ContractError('backtest period disagrees with its config')
     return manifest, config, artifacts
@@ -235,7 +256,7 @@ def published_ic_inputs(
         direction = manifest['score_semantics']['direction']
         score = frame[column].astype(float) * (1 if direction == 'higher_better' else -1)
         pieces.append(pd.DataFrame({'decision_date': day, 'instrument': frame['instrument'], 'score': score}))
-        bindings.append({'generation_id': binding['generation_id'], 'decision_date': day,
+        bindings.append({'generation_id': generation, 'decision_date': day,
                          'manifest_digest_sha256': manifest['manifest_digest_sha256'],
                          'data_checksum_sha256': manifest['data_checksum_sha256'],
                          'input_dataset_generation_id': dataset_generation,

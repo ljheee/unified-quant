@@ -560,6 +560,14 @@ class ResearchChainRunner:
         # the writer, which resolves providers against the derived generation.
         label_binding = self._binding(plan, "label_set")
         preprocessing_binding = self._binding(plan, "feature_preprocessing")
+        preprocessing_manifest = self.dataset_adapter.preprocessing_store.read_manifest(
+            preprocessing_binding.generation_id
+        )
+        preprocessing_quality_family = (
+            "feature_preprocessing_v2"
+            if preprocessing_manifest.get("contract_version") == 2
+            else "feature_preprocessing"
+        )
         sample_binding = (
             self._binding(plan, "sample_construction")
             if plan.request.get("contract_version") in {6, 7, 8}
@@ -570,7 +578,7 @@ class ResearchChainRunner:
             runner_identity=dict(runner_identity),
             quality_decision=self._subject_decision(quality_decisions, "model_dataset"),
             preprocessing_quality_decision=self._decision(
-                quality_decisions, "feature_preprocessing",
+                quality_decisions, preprocessing_quality_family,
                 preprocessing_binding.generation_id,
             ),
             sample_construction_quality_decision=(
