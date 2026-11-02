@@ -134,3 +134,61 @@ def test_each_partition_is_stamped_with_its_own_fetch_time(tmp_path, monkeypatch
     second = _manifest(tmp_path, NEXT)["source_fetched_at"]
     assert first == "2026-09-01T09:00:00+08:00"
     assert second == "2026-09-01T09:00:01+08:00"
+
+
+def test_report_records_the_queried_window_and_empty_announcement_dates(
+    tmp_path, monkeypatch, capsys
+):
+    code, summary, _ = _run(tmp_path, monkeypatch, {DAY.isoformat(): _frame()}, capsys)
+    assert code == 0
+    assert summary["query_window"] == {
+        "start": DAY.isoformat(),
+        "end": NEXT.isoformat(),
+    }
+    assert summary["queried_days"] == 2
+    assert summary["empty_days"] == [NEXT.isoformat()]
+
+
+def test_checkpoint_resumes_after_the_last_successful_query(tmp_path, monkeypatch, capsys):
+    import sys
+
+    checkpoint = tmp_path / "coverage.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "fetch_dividend_events.py",
+            "--start", DAY.isoformat(),
+            "--end", NEXT.isoformat(),
+            "--store", str(tmp_path / "store"),
+            "--checkpoint", str(checkpoint),
+        ],
+    )
+
+    class _TimeoutAfterFirstDay:
+        def __init__(self):
+            self.calls = []
+
+        def dividend(self, *, ann_date):
+            self.calls.append(ann_date)
+            if ann_date == NEXT.isoformat():
+                raise TimeoutError("temporary vendor timeout")
+            return _frame(ann_date=DAY)
+
+    first_adapter = _TimeoutAfterFirstDay()
+    monkeypatch.setattr(script, "Tushare2kAdapter", lambda: first_adapter)
+    with pytest.raises(TimeoutError, match="temporary vendor timeout"):
+        script.main()
+    checkpoint_after_failure = json.loads(checkpoint.read_text(encoding="utf-8"))
+    assert checkpoint_after_failure["status"] == "running"
+    assert checkpoint_after_failure["last_completed_date"] == DAY.isoformat()
+    assert checkpoint_after_failure["queried_days"] == 1
+
+    second_adapter = _Adapter({NEXT.isoformat(): _frame(ann_date=NEXT)})
+    monkeypatch.setattr(script, "Tushare2kAdapter", lambda: second_adapter)
+    assert script.main() == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert first_adapter.calls == [DAY.isoformat(), NEXT.isoformat()]
+    assert summary["status"] == "completed"
+    assert summary["queried_days"] == 2
+    assert summary["last_completed_date"] == NEXT.isoformat()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -151,6 +152,35 @@ def test_build_candidate_bundle_rejects_missing_prior_session_source(tmp_path):
             start_date=decision,
             end_date=decision,
         )
+
+
+def test_staged_candidate_payloads_are_read_back_before_rename(tmp_path, monkeypatch):
+    bars_root = tmp_path / "bars"
+    first, decision = date(2024, 1, 2), date(2024, 1, 3)
+    _calendar_partition(bars_root, first)
+    _calendar_partition(bars_root, decision)
+    source_root = tmp_path / "source"
+    _raw_store(source_root, "20240102")
+    bundle = build_tushare_factor_candidates(
+        source_root=source_root,
+        bars_root=bars_root,
+        start_date=decision,
+        end_date=decision,
+    )
+    store = TushareFactorCandidateStore(tmp_path / "candidate-store")
+    original_write_bytes = Path.write_bytes
+
+    def corrupt_staged_payload(path: Path, payload: bytes) -> int:
+        if path.parent.name.startswith(".staging_") and path.name == "factors.parquet":
+            payload = b"corrupt staged payload"
+        return original_write_bytes(path, payload)
+
+    monkeypatch.setattr(Path, "write_bytes", corrupt_staged_payload)
+    with pytest.raises(ContractError, match="candidate panel artifact checksum mismatch"):
+        store.publish(bundle)
+    family = tmp_path / "candidate-store" / "tushare_factor_candidates"
+    assert not list(family.glob("generation=*"))
+    assert not list(family.glob(".staging_*"))
 
 
 def _screen_report():

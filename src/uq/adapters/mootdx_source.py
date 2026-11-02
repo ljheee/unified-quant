@@ -11,24 +11,37 @@ from ..sources.fetch import FetchResult, FetchStatus
 
 
 class MootdxSourceAdapter:
-    """Research adapter for TDX standard quote servers via mootdx.
+    """Research adapter for TDX MAC daily bars and standard-protocol XDXR.
 
-    Server and command availability note (2026-10-16, measured):
+    Server and command availability evidence:
 
-    * ``DEFAULT_SERVERS`` is NOT dead.  ``115.238.90.165:7709`` answers ``xdxr``
-      with real data.  An earlier conclusion that "all TDX servers are
-      unreachable" came from probing with ``bars``, which is the wrong probe for
-      this adapter's purpose.
-    * on the hosts measured, ``bars`` and ``quotes`` return empty while ``xdxr``
-      returns 88 rows, so a host that fails a quote-shaped probe must never be
-      treated as unavailable, and a quote probe must not decide whether an
-      ``xdxr`` request may run.
+    * ``DEFAULT_MAC_SERVERS`` each returned 800 rows for ``600000`` on
+      2026-11-02 through easy_tdx 1.1.0's MAC client. This is a dated live
+      measurement, not a permanent availability claim. Candidate servers are
+      tested by requesting actual bars; a successful TCP handshake is not enough.
+    * ``DEFAULT_SERVERS`` remains the mootdx standard-protocol pool for XDXR.
+      XDXR returned 88 rows on two known hosts on 2026-11-01. Bars and XDXR
+      have separate clients, server pools, and health checks.
+    * TDX offsets count backward from the latest session. A short offset is not
+      a valid historical-coverage probe, so connection and health probes
+      request the configured full page size, matching ``fetch``.
     """
 
+    # Standard protocol remains in use for the XDXR endpoint, which is still
+    # served by mootdx on these hosts.
     DEFAULT_SERVERS: tuple[tuple[str, int], ...] = (
         ("115.238.90.165", 7709),
         ("180.153.18.170", 7709),
         ("119.147.212.81", 7709),
+    )
+    DEFAULT_MAC_SERVERS: tuple[tuple[str, int], ...] = (
+        ("121.37.207.165", 7709),
+        ("121.36.248.138", 7709),
+        ("123.60.47.136", 7709),
+    )
+    DAILY_PERIOD = 4
+    REQUIRED_MAC_BAR_COLUMNS = frozenset(
+        {"datetime", "open", "high", "low", "close", "vol", "amount"}
     )
 
     def __init__(
@@ -39,11 +52,23 @@ class MootdxSourceAdapter:
         servers: tuple[tuple[str, int], ...] | None = None,
         retries: int = 1,
         retry_backoff_seconds: float = 0.25,
+        bar_servers: tuple[tuple[str, int], ...] | None = None,
     ):
         self.source_name = "tdx"
         self.servers = servers or ((server,) if server else self.DEFAULT_SERVERS)
         if not self.servers:
             raise ValueError("at least one TDX server is required")
+        if bar_servers is not None:
+            self.bar_servers = bar_servers
+        elif server is not None:
+            self.bar_servers = (server,)
+        elif servers is not None:
+            # Preserve the explicit-server test and caller override convention.
+            self.bar_servers = servers
+        else:
+            self.bar_servers = self.DEFAULT_MAC_SERVERS
+        if not self.bar_servers:
+            raise ValueError("at least one TDX MAC bars server is required")
         self.timeout = timeout
         if not 1 <= page_size <= 800:
             raise ValueError("page_size must be between 1 and 800")
@@ -54,39 +79,60 @@ class MootdxSourceAdapter:
             raise ValueError("retry_backoff_seconds must not be negative")
         self.retries = retries
         self.retry_backoff_seconds = retry_backoff_seconds
-        self.server = self.servers[0]
+        self.server = self.bar_servers[0]
         self.active_server: tuple[str, int] | None = None
 
     @property
     def connected_server(self) -> tuple[str, int]:
-        """The host that actually answered, falling back to the requested one.
+        """The last host that returned real bars or XDXR, if one has answered.
 
-        ``active_server`` is set only by a probe that returned real data; until
-        then (no client built yet) this reports the first configured server,
-        which is what the caller asked for. There is no fallback beyond the
-        configured ``servers``: when every one of them is dead the client builder
-        raises rather than silently trying another list.
+        Before a client is built, this reports the first configured MAC server.
+        Bar and XDXR requests retain separate pools; the property reports the
+        most recently validated command-family host for existing publishers.
         """
         return self.active_server or self.server
 
     def _client(self):
         try:
-            from mootdx.quotes import Quotes
+            from easy_tdx import MacClient
         except ImportError as exc:
-            raise RuntimeError("optional dependency mootdx is not installed") from exc
+            raise RuntimeError("optional dependency easy-tdx is not installed") from exc
         failures: list[str] = []
-        for candidate in self.servers:
+        for candidate in self.bar_servers:
+            client = None
             try:
-                client = Quotes.factory(market="std", server=candidate, timeout=self.timeout)
-                probe = client.bars(symbol="600000", frequency=9, start=0, offset=1)
-                if probe is not None and not probe.empty:
+                client = MacClient(
+                    host=candidate[0],
+                    port=candidate[1],
+                    timeout=self.timeout,
+                    auto_reconnect=False,
+                    heartbeat_interval=0,
+                )
+                client.connect()
+                probe = client.get_stock_kline(
+                    market=1,
+                    code="600000",
+                    period=self.DAILY_PERIOD,
+                    start=0,
+                    count=self.page_size,
+                )
+                if (
+                    probe is not None
+                    and not probe.empty
+                    and self.REQUIRED_MAC_BAR_COLUMNS.issubset(probe.columns)
+                ):
                     self.active_server = candidate
                     self.server = candidate
                     return client
-                failures.append(f"{candidate}: empty probe")
+                failures.append(f"{candidate}: empty or malformed bars probe")
             except Exception as exc:
                 failures.append(f"{candidate}: {exc}")
-        raise RuntimeError("all TDX servers failed: " + "; ".join(failures))
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+        raise RuntimeError("all TDX MAC bars servers failed: " + "; ".join(failures))
 
     def _xdxr_client(self):
         """A client validated by the ``xdxr`` command, not by ``bars``.
@@ -106,7 +152,6 @@ class MootdxSourceAdapter:
                 probe = client.xdxr(symbol="600000")
                 if probe is not None and not probe.empty:
                     self.active_server = candidate
-                    self.server = candidate
                     return client
                 failures.append(f"{candidate}: empty xdxr probe")
             except Exception as exc:
@@ -180,9 +225,16 @@ class MootdxSourceAdapter:
 
     def health_probe(self, symbols: tuple[str, ...] = ("600000", "000001")) -> dict[str, object]:
         fetched_at = datetime.now().isoformat()
-        report: dict[str, object] = {"server": self.server, "fetched_at": fetched_at, "checks": {}}
+        report: dict[str, object] = {
+            "server": self.server,
+            "bars_server": self.server,
+            "fetched_at": fetched_at,
+            "checks": {},
+        }
         try:
             client = self._client()
+            report["server"] = self.server
+            report["bars_server"] = self.server
         except Exception as exc:
             report["ok"] = False
             report["error"] = f"client unavailable: {exc}"
@@ -190,7 +242,14 @@ class MootdxSourceAdapter:
         ok_checks: list[bool] = []
         for symbol in symbols:
             try:
-                bars = client.bars(symbol=symbol, frequency=9, start=0, offset=10)
+                code = str(symbol).split(".", 1)[0]
+                bars = client.get_stock_kline(
+                    market=self.market_for(code),
+                    code=code,
+                    period=self.DAILY_PERIOD,
+                    start=0,
+                    count=self.page_size,
+                )
                 ok = bars is not None and not bars.empty
                 ok_checks.append(ok)
                 report["checks"][symbol] = {"ok": ok, "shape": None if bars is None else bars.shape}
@@ -198,18 +257,26 @@ class MootdxSourceAdapter:
                 ok_checks.append(False)
                 report["checks"][symbol] = {"ok": False, "error": repr(exc)}
         try:
-            xdxr = client.xdxr(symbol=symbols[0])
+            client.close()
+        except Exception:
+            pass
+        try:
+            xdxr_client = self._xdxr_client()
+            xdxr = xdxr_client.xdxr(symbol=symbols[0])
             xdxr_ok = xdxr is not None and not xdxr.empty
             report["xdxr"] = {"ok": xdxr_ok, "shape": None if xdxr is None else xdxr.shape}
+            report["xdxr_server"] = self.active_server
             ok_checks.append(xdxr_ok)
         except Exception as exc:
             report["xdxr"] = {"ok": False, "error": repr(exc)}
             ok_checks.append(False)
+        finally:
+            if "xdxr_client" in locals():
+                try:
+                    xdxr_client.close()
+                except Exception:
+                    pass
         report["ok"] = all(ok_checks)
-        try:
-            client.close()
-        except Exception:
-            pass
         return report
 
     def _requested_bar_estimate(self, start: str, end: str) -> int | None:
@@ -289,7 +356,13 @@ class MootdxSourceAdapter:
                         attempts = 0
                         while True:
                             try:
-                                page = client.bars(symbol=code, frequency=9, start=offset, offset=size)
+                                page = client.get_stock_kline(
+                                    market=self.market_for(code),
+                                    code=code,
+                                    period=self.DAILY_PERIOD,
+                                    start=offset,
+                                    count=size,
+                                )
                                 break
                             except Exception as exc:
                                 attempts += 1
@@ -331,7 +404,7 @@ class MootdxSourceAdapter:
         raw = pd.concat(frames, ignore_index=False)
         raw_payload = raw.to_csv(index=True, index_label="__source_index").encode("utf-8")
         try:
-            normalized = self._normalize(raw, start, end)
+            normalized = self._normalize(raw, start, end, volume_multiplier=1.0)
         except Exception as exc:
             return FetchResult(pd.DataFrame(), FetchStatus.UPSTREAM_ERROR, self.source_name, dataset, schema_version, frozenset(fields), frozenset(), fetched_at, retryable=False, errors=(f"normalization failed: {exc}",), metadata={"server": getattr(self, "server", self.servers[0])})
         # cr.md latent B13: a full page proves that more history exists beyond what
@@ -374,9 +447,21 @@ class MootdxSourceAdapter:
         )
 
     @staticmethod
-    def _normalize(raw: pd.DataFrame, start: str, end: str) -> pd.DataFrame:
+    def _normalize(
+        raw: pd.DataFrame,
+        start: str,
+        end: str,
+        *,
+        volume_multiplier: float = 100.0,
+    ) -> pd.DataFrame:
+        """Normalize TDX bars into canonical OHLCV units.
+
+        The legacy standard-protocol mootdx volume is in lots, so its callers
+        retain the 100x default. The MAC endpoint used by ``fetch`` reports
+        shares directly and passes ``volume_multiplier=1``.
+        """
         if "instrument" not in raw.columns:
-            raise ValueError("mootdx response has no instrument column")
+            raise ValueError("TDX response has no instrument column")
         if "datetime" in raw.columns:
             normalized = raw.reset_index(drop=True).copy()
             normalized["datetime"] = pd.to_datetime(normalized["datetime"], errors="raise").dt.normalize()
@@ -393,7 +478,7 @@ class MootdxSourceAdapter:
         required = ("open", "high", "low", "close", "vol", "amount")
         missing = [column for column in required if column not in normalized.columns]
         if missing:
-            raise ValueError(f"mootdx response has missing columns: {missing}")
+            raise ValueError(f"TDX response has missing columns: {missing}")
         result = pd.DataFrame({
             "instrument": normalized["instrument"],
             "datetime": normalized["datetime"],
@@ -401,7 +486,7 @@ class MootdxSourceAdapter:
             "high": pd.to_numeric(normalized["high"]),
             "low": pd.to_numeric(normalized["low"]),
             "close": pd.to_numeric(normalized["close"]),
-            "volume": pd.to_numeric(normalized["vol"]) * 100.0,
+            "volume": pd.to_numeric(normalized["vol"]) * volume_multiplier,
             "amount": pd.to_numeric(normalized["amount"]),
         })
         if start:

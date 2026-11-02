@@ -113,7 +113,10 @@ def verify_logical_fingerprint(frame: pd.DataFrame, expected: str | None, *, tol
     """
     if not expected:
         return False
+    # New writes always use the latest fingerprint. Check that common case first;
+    # only legacy artifacts pay the cost of trying earlier algorithms.
+    versions = tuple(sorted(KNOWN_FINGERPRINT_VERSIONS, reverse=True))
     return any(
         logical_fingerprint(frame, tolerance=tolerance, version=version) == expected
-        for version in KNOWN_FINGERPRINT_VERSIONS
+        for version in versions
     )

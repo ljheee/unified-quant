@@ -4,11 +4,13 @@ import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
+import numpy as np
 import pandas as pd
 
 from ..contracts.model_layer import ModelContractLoader, model_manifest_identities, sha256_json
+from ..contracts.gate_contracts import canonical_json
 from ..errors import ContractError
 from ..factors.raw_price import logical_fingerprint
 
@@ -25,17 +27,53 @@ def label_row_checksum(frame: pd.DataFrame) -> str:
     governed reader rejects (cr.md OBS-F).
     """
     ordered = frame.sort_values(["instrument", "decision_date"], kind="mergesort")
-    return sha256_json({"rows": [
-        [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2])]
+    return _sha256_rows(
+        [str(row[0]), pd.Timestamp(row[1]).isoformat(),
+         None if pd.isna(row[2]) else float(row[2])]
         for row in ordered.itertuples(index=False)
-    ]})
+    )
+
+
+def _sha256_rows(rows) -> str:
+    """Hash canonical JSON rows incrementally to keep full-universe labels bounded."""
+    digest = hashlib.sha256()
+    digest.update(b'{"rows":[')
+    first = True
+    for row in rows:
+        if not first:
+            digest.update(b",")
+        digest.update(canonical_json(row))
+        first = False
+    digest.update(b"]}")
+    return digest.hexdigest()
+
+
+def adjusted_price_input_checksum(frame: pd.DataFrame) -> str:
+    """Bind every price and eligibility input that can affect published labels."""
+    columns = [
+        "instrument", "datetime", "close", "adj_factor", "suspended", "listing_date",
+        "limit_up", "limit_down", "delisted",
+    ]
+    missing = sorted(set(columns) - set(frame.columns))
+    if missing:
+        raise ContractError(f"adjusted price input missing checksum columns: {missing}")
+    ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort")
+    return _sha256_rows(
+        [str(row[0]), pd.Timestamp(row[1]).isoformat(),
+         None if pd.isna(row[2]) else float(row[2]),
+         None if pd.isna(row[3]) else float(row[3]), bool(row[4]),
+         str(pd.Timestamp(row[5]).date()), bool(row[6]), bool(row[7]), bool(row[8])]
+        for row in ordered[columns].itertuples(index=False)
+    )
 
 _LABEL_HORIZON = 5
 
 
 def _validate_adjusted_price_frame(frame: pd.DataFrame) -> None:
     required = {"instrument", "datetime", "close", "adj_factor"}
-    eligibility_required = {"suspended", "listing_date"}
+    eligibility_required = {
+        "suspended", "listing_date", "limit_up", "limit_down", "delisted",
+    }
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ContractError(f"adjusted price input missing columns: {missing}")
@@ -46,20 +84,29 @@ def _validate_adjusted_price_frame(frame: pd.DataFrame) -> None:
     missing_eligibility = sorted(eligibility_required - set(frame.columns))
     if missing_eligibility:
         raise ContractError(f"adjusted price input missing columns: {missing_eligibility}")
-    if frame["close"].isna().any() or frame["adj_factor"].isna().any() or frame["listing_date"].isna().any():
-        raise ContractError("null close/adj_factor in adjusted price input")
+    if (frame["close"].isna().any() or frame["adj_factor"].isna().any()
+            or frame["listing_date"].isna().any()
+            or frame[["suspended", "limit_up", "limit_down", "delisted"]].isna().any().any()):
+        raise ContractError("null price or eligibility input")
 
 
-def _formula_sha256(horizon: int) -> str:
+def _formula_sha256(horizon: int, *, governed_calendar: bool = False) -> str:
     # cr.md latent B2: the row basis is part of the formula identity.  D counts
     # per-instrument trading rows of the *unfiltered* series and eligibility removes
     # rows afterwards.  An earlier build shifted the already filtered frame, which
     # silently made the horizon "the Nth surviving row" while the manifest went on
     # declaring horizon_trading_days.
-    formula = (
-        f"adjusted_close[D+{horizon}] / adjusted_close[D] - 1; "
-        "D counts per-instrument trading rows before eligibility filtering"
-    )
+    if governed_calendar:
+        formula = (
+            f"adjusted_close[D+{horizon}] / adjusted_close[D] - 1; "
+            f"D+{horizon} uses governed exchange sessions; the complete instrument "
+            f"bar grid from D through D+{horizon} is required; eligibility is applied after"
+        )
+    else:
+        formula = (
+            f"adjusted_close[D+{horizon}] / adjusted_close[D] - 1; "
+            "D counts per-instrument trading rows before eligibility filtering"
+        )
     return hashlib.sha256(formula.encode("utf-8")).hexdigest()
 
 
@@ -74,6 +121,9 @@ class LabelBuilder:
         horizon: int = _LABEL_HORIZON,
         adjustment_basis: str = "governed_adjusted_close",
         code_fingerprint: str | None = None,
+        eligibility_provenance: Mapping[str, Any] | None = None,
+        calendar_dates: Sequence[str] | None = None,
+        calendar_binding: Mapping[str, Any] | None = None,
     ) -> None:
         if horizon < 1:
             raise ContractError("label horizon must be positive")
@@ -82,6 +132,24 @@ class LabelBuilder:
         self.horizon = horizon
         self.adjustment_basis = adjustment_basis
         self.code_fingerprint = code_fingerprint or sha256_json({"component": "LabelBuilder", "version": 1})
+        self.eligibility_provenance = dict(eligibility_provenance or {})
+        if calendar_dates is None:
+            if calendar_binding is not None:
+                raise ContractError("calendar binding requires governed calendar dates")
+            self.calendar_dates = None
+            self.calendar_binding = None
+        else:
+            normalized = pd.to_datetime(list(calendar_dates), errors="raise").strftime("%Y-%m-%d").tolist()
+            if not normalized or normalized != sorted(set(normalized)):
+                raise ContractError("label calendar dates must be nonempty, sorted and unique")
+            if (not isinstance(calendar_binding, Mapping)
+                    or not isinstance(calendar_binding.get("generation_id"), str)
+                    or len(calendar_binding["generation_id"]) != 64
+                    or not isinstance(calendar_binding.get("data_checksum_sha256"), str)
+                    or len(calendar_binding["data_checksum_sha256"]) != 64):
+                raise ContractError("calendar-based labels require a generation and data checksum")
+            self.calendar_dates = normalized
+            self.calendar_binding = dict(calendar_binding)
 
     def build_with_frame(
         self,
@@ -122,13 +190,7 @@ class LabelBuilder:
             if not isinstance(binding.get("data_checksum_sha256"), str) or len(binding["data_checksum_sha256"]) != 64:
                 raise ContractError("invalid upstream data checksum in binding")
 
-        input_checksum = sha256_json({"rows": [
-            [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2]),
-             None if pd.isna(row[3]) else float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
-            for row in frame[[
-                "instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"
-            ]].sort_values(["instrument", "datetime"], kind="mergesort").itertuples(index=False)
-        ]})
+        input_checksum = adjusted_price_input_checksum(frame)
         for binding in upstream_bindings:
             if binding["data_checksum_sha256"] != input_checksum:
                 raise ContractError("upstream adjusted-price checksum does not match label input")
@@ -153,10 +215,32 @@ class LabelBuilder:
         # redefine the horizon, or a five-session suspension quietly turns a 5-day
         # forward return into a 10-day one, instrument by instrument.
         adjusted_close = ordered["close"].astype(float) * ordered["adj_factor"].astype(float)
-        ordered["label"] = (
-            adjusted_close.groupby(ordered["instrument"], sort=False)
-            .transform(lambda values: values.shift(-self.horizon) / values - 1)
-        )
+        if self.calendar_dates is None:
+            ordered["label"] = (
+                adjusted_close.groupby(ordered["instrument"], sort=False)
+                .transform(lambda values: values.shift(-self.horizon) / values - 1)
+            )
+        else:
+            ordered["_session"] = pd.to_datetime(ordered["datetime"]).dt.strftime("%Y-%m-%d")
+            if not set(ordered["_session"]) <= set(self.calendar_dates):
+                raise ContractError("label input contains dates outside the governed calendar")
+            ordered["_adjusted_close"] = adjusted_close.to_numpy()
+            prices = ordered.pivot(index="_session", columns="instrument", values="_adjusted_close")
+            prices = prices.reindex(self.calendar_dates)
+            future = prices.shift(-self.horizon)
+            complete_grid = (
+                prices.notna().rolling(self.horizon + 1, min_periods=self.horizon + 1)
+                .sum().shift(-self.horizon).eq(self.horizon + 1)
+            )
+            returns = future.div(prices) - 1
+            instrument_codes = pd.Categorical(ordered["instrument"], categories=prices.columns).codes
+            date_codes = pd.Index(self.calendar_dates).get_indexer(ordered["_session"])
+            if (instrument_codes < 0).any() or (date_codes < 0).any():
+                raise ContractError("label calendar index cannot resolve an input row")
+            return_values = returns.to_numpy()[date_codes, instrument_codes]
+            complete_values = complete_grid.to_numpy()[date_codes, instrument_codes]
+            ordered["label"] = np.where(complete_values, return_values, np.nan)
+            ordered.drop(columns=["_session", "_adjusted_close"], inplace=True)
         if not eligible.all():
             ordered = ordered.loc[eligible].copy().reset_index(drop=True)
         # Rows without complete future observations remain null.
@@ -169,15 +253,19 @@ class LabelBuilder:
             "primary_key": ["instrument", "decision_date"],
             "decision_time_convention": "trading_close_asia_shanghai",
             "horizon_trading_days": self.horizon,
-            "formula_sha256": _formula_sha256(self.horizon),
+            "formula_sha256": _formula_sha256(
+                self.horizon, governed_calendar=self.calendar_dates is not None
+            ),
             "adjustment_basis": self.adjustment_basis,
             "benchmark_binding": None,
             "upstream_adjusted_price_bindings": upstream_bindings,
             "eligibility": {"rules": {
                 "suspension": "exclude",
                 "listing_age_minimum_days": 60,
-                "limit_events": "exclude",
-                "delisting": "exclude",
+                "limit_events": "exclude_when_close_equals_reported_limit_price",
+                "delisting": "exclude_on_or_after_effective_delist_date",
+                **self.eligibility_provenance,
+                **({"session_calendar": self.calendar_binding} if self.calendar_binding else {}),
             }},
             "terminal_return_policy": None,
             "null_policy": {"insufficient_future": "null"},

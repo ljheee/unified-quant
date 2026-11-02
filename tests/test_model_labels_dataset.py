@@ -7,7 +7,7 @@ import pytest
 from uq.contracts.model_layer import ModelContractLoader, sha256_json
 from uq.errors import ContractError
 from uq.models.dataset import DatasetBuilder, SplitValidator
-from uq.models.labels import LabelBuilder, LabelValidator
+from uq.models.labels import LabelBuilder, LabelValidator, adjusted_price_input_checksum
 
 DIGEST = "0" * 64
 
@@ -32,11 +32,7 @@ def _adjusted_frame(n_instruments: int = 2, n_days: int = 10) -> pd.DataFrame:
 
 
 def _adjusted_price_checksum(frame: pd.DataFrame) -> str:
-    ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort")
-    return sha256_json({"rows": [
-        [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
-        for row in ordered[["instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"]].itertuples(index=False)
-    ]})
+    return adjusted_price_input_checksum(frame)
 
 
 def _binding(frame: pd.DataFrame | None = None) -> dict:
@@ -52,6 +48,19 @@ def _binding(frame: pd.DataFrame | None = None) -> dict:
 
 
 class TestLabelBuilder:
+    def test_streamed_adjusted_input_checksum_matches_canonical_json_contract(self) -> None:
+        frame = _adjusted_frame()
+        ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort")
+        expected = sha256_json({"rows": [
+            [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]),
+             bool(row[4]), str(pd.Timestamp(row[5]).date()), bool(row[6]), bool(row[7]), bool(row[8])]
+            for row in ordered[[
+                "instrument", "datetime", "close", "adj_factor", "suspended", "listing_date",
+                "limit_up", "limit_down", "delisted",
+            ]].itertuples(index=False)
+        ]})
+        assert adjusted_price_input_checksum(frame) == expected
+
     def test_build_produces_valid_manifest(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")
         frame = _adjusted_frame()
@@ -80,6 +89,16 @@ class TestLabelBuilder:
         duplicated = pd.concat([frame, frame.iloc[[0]]], ignore_index=True)
         with pytest.raises(ContractError, match="duplicate"):
             builder.build(duplicated, upstream_bindings=[_binding(duplicated)])
+
+    @pytest.mark.parametrize("field", ["limit_up", "limit_down", "delisted"])
+    def test_upstream_checksum_binds_eligibility_flags(self, field: str) -> None:
+        frame = _adjusted_frame()
+        binding = _binding(frame)
+        frame.loc[0, field] = True
+        with pytest.raises(ContractError, match="checksum does not match"):
+            LabelBuilder(name="return_5d", semantic_version="1.0.0").build(
+                frame, upstream_bindings=[binding]
+            )
 
     def test_run_metadata_change_stable_generation(self) -> None:
         builder = LabelBuilder(name="return_5d", semantic_version="1.0.0")

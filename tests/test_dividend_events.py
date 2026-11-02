@@ -130,13 +130,23 @@ def test_pre_disclosure_stage_is_a_disclosure_record():
     assert records[0]["div_proc"] == "预披露"
 
 
+@pytest.mark.parametrize("stage", ["未通过", "停止实施", "股东大会未通过", "取消"])
+def test_non_implementation_stages_are_preserved_without_becoming_actions(stage):
+    records = normalize_dividend_event_rows(
+        _frame(_row(div_proc=stage)), ann_date=dt.date(2025, 8, 29)
+    )
+    assert len(records) == 1
+    assert records[0]["div_proc"] == stage
+    assert records[0]["ex_date"] is None
+
+
 @pytest.mark.parametrize(
     "mutate, message",
     [
         ({"cash_div": -0.1}, "negative"),
         ({"stk_div": "-1"}, "negative"),
         ({"cash_div": "abc"}, "not numeric"),
-        ({"div_proc": "取消"}, "unknown dividend disclosure stage"),
+        ({"div_proc": ""}, "stage must be a non-empty string"),
         ({"ex_date": "20250828"}, "precedes ann_date"),
         ({"imp_ann_date": "20250801"}, "precedes ann_date"),
         ({"ann_date": "20250828"}, "does not match partition"),

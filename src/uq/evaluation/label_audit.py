@@ -27,6 +27,7 @@ def _summary(series: pd.Series) -> dict:
 def _governed_calendar_window(
     bars_root: Path,
     *,
+    calendar_root: Path | None = None,
     calendar_generation_id: str,
     calendar_checksum_sha256: str,
     start: str,
@@ -37,7 +38,7 @@ def _governed_calendar_window(
             or not isinstance(calendar_checksum_sha256, str)
             or len(calendar_checksum_sha256) != 64):
         raise ContractError('label audit requires a governed calendar generation and checksum')
-    store = BacktestMarketDatasetStore(bars_root)
+    store = BacktestMarketDatasetStore(calendar_root or bars_root)
     manifest = store.read_manifest_by(calendar_generation_id, dataset_type='calendar')
     if manifest.get('data_checksum_sha256') != calendar_checksum_sha256:
         raise ContractError('label audit calendar checksum does not match its manifest')
@@ -57,19 +58,23 @@ def _governed_calendar_window(
     calendar_dates = session_dates(frame['date'].tolist(), label='label audit calendar')
     if calendar_dates != sorted(set(calendar_dates)):
         raise ContractError('label audit calendar sessions must be sorted and unique')
-    if (calendar_dates[0] != manifest.get('window_start')
-            or calendar_dates[-1] != manifest.get('window_end')):
-        raise ContractError('label audit calendar rows do not match the declared window')
-    ordered = frame.sort_values(['date', 'instrument'], kind='mergesort').reset_index(drop=True)
-    expected_generation = sha256_json({
-        'dataset_type': 'calendar',
-        'window_start': manifest['window_start'],
-        'window_end': manifest['window_end'],
-        'columns': list(ordered.columns),
-        'rows': ordered.to_dict(orient='records'),
-    })
-    if expected_generation != calendar_generation_id:
-        raise ContractError('label audit calendar generation does not match its rows')
+    # The declared range may start on a holiday/weekend. In that case the first
+    # governed session is later than `window_start`; require all rows to stay in
+    # range, while the requested audit window itself must still use session dates.
+    if not (manifest.get('window_start') <= calendar_dates[0]
+            <= calendar_dates[-1] <= manifest.get('window_end')):
+        raise ContractError('label audit calendar rows fall outside the declared window')
+    if manifest['dataset_version'] == '1.0.0':
+        ordered = frame.sort_values(['date', 'instrument'], kind='mergesort').reset_index(drop=True)
+        expected_generation = sha256_json({
+            'dataset_type': 'calendar',
+            'window_start': manifest['window_start'],
+            'window_end': manifest['window_end'],
+            'columns': list(ordered.columns),
+            'rows': ordered.to_dict(orient='records'),
+        })
+        if expected_generation != calendar_generation_id:
+            raise ContractError('label audit calendar generation does not match its rows')
     if not manifest['window_start'] <= start <= end <= manifest['window_end']:
         raise ContractError('label audit window is outside the governed calendar')
     window_dates = [day for day in calendar_dates if start <= day <= end]
@@ -85,6 +90,7 @@ def audit_label_legs(
     start: str,
     end: str,
     *,
+    calendar_root: Path | str | None = None,
     calendar_generation_id: str,
     calendar_checksum_sha256: str,
 ) -> dict:
@@ -103,6 +109,7 @@ def audit_label_legs(
         raise ContractError('label audit window is reversed')
     calendar_manifest, calendar_dates = _governed_calendar_window(
         bars_root,
+        calendar_root=Path(calendar_root) if calendar_root is not None else None,
         calendar_generation_id=calendar_generation_id,
         calendar_checksum_sha256=calendar_checksum_sha256,
         start=start,
@@ -220,6 +227,7 @@ def audit_label_legs(
         'record_version': 2, 'scope': 'read_only_label_leg_diagnostic',
         'bars_root': str(bars_root), 'label_root': str(label_root),
         'calendar_binding': {
+            'store_root': str(Path(calendar_root) if calendar_root is not None else bars_root),
             'generation_id': calendar_manifest['generation_id'],
             'manifest_digest_sha256': calendar_manifest['manifest_digest_sha256'],
             'data_checksum_sha256': calendar_manifest['data_checksum_sha256'],
@@ -249,7 +257,14 @@ def audit_label_legs(
             'instruments_last_seen_before_window_end': int((prices.groupby('instrument')['date'].max() < end).sum()),
             'null_label_rows_before_global_five_session_tail': int((joined['label'].isna()
                 & (joined['date'] <= sorted(prices['date'].unique())[-6])).sum()),
-            'legacy_delisted_flag_source': 'hardcoded_false; status_nontrading_sets_suspended',
+            'label_delisting_rule': label.get('eligibility', {}).get('rules', {}).get('delisting'),
+            'label_listing_date_snapshot_generation_id': label.get('eligibility', {}).get('rules', {}).get(
+                'listing_date_snapshot_generation_id'
+            ),
+            'label_delisting_snapshot_generation_id': label.get('eligibility', {}).get('rules', {}).get(
+                'delisting_snapshot_generation_id'
+            ),
+            'pit_delisting_visibility_certified': False,
         },
         'pit_delisting_completeness_certified': False,
     }

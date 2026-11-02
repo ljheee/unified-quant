@@ -20,6 +20,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from uq.contracts.canonical_v2 import file_sha256_bytes
+from uq.contracts.gate_contracts import sha256_json
 from uq.errors import ContractError
 from uq.research_chain.owning_contracts import BacktestMarketDatasetStore
 
@@ -216,6 +218,84 @@ def test_the_store_refuses_an_empty_frame(tmp_path: Path) -> None:
             dataset_type="calendar", window_start=SESSIONS[0], window_end=SESSIONS[-1],
             sources={"primary": "x"}, producer="test",
         )
+
+
+def test_nullable_market_dataset_uses_versioned_null_identity_and_reads_back(tmp_path: Path) -> None:
+    store = BacktestMarketDatasetStore(tmp_path)
+    frame = pd.DataFrame({
+        "date": ["2026-01-05"],
+        "instrument": ["600000.XSHG"],
+        "source_reason": [float("nan")],
+    })
+    manifest = store.publish(
+        frame,
+        dataset_type="suspension",
+        window_start=SESSIONS[0],
+        window_end=SESSIONS[0],
+        sources={"fixture": "nullable-source-row"},
+        producer="test",
+    )
+
+    assert manifest["dataset_version"] == "2.0.0"
+    assert manifest["identity_profile"] == "rows-null-normalized-dtypes-v2"
+    loaded = store.read_frame(
+        manifest["generation_id"], manifest["data_checksum_sha256"],
+        dataset_type="suspension",
+    )
+    assert pd.isna(loaded.loc[0, "source_reason"])
+
+    object_null_frame = frame.assign(source_reason=pd.Series([None], dtype=object))
+    object_null_manifest = store.publish(
+        object_null_frame,
+        dataset_type="suspension",
+        window_start=SESSIONS[0],
+        window_end=SESSIONS[0],
+        sources={"fixture": "nullable-source-row"},
+        producer="test",
+    )
+    assert object_null_manifest["generation_id"] != manifest["generation_id"]
+    store.read_frame(
+        object_null_manifest["generation_id"], object_null_manifest["data_checksum_sha256"],
+        dataset_type="suspension",
+    )
+
+
+def test_backtest_market_dataset_v1_manifest_remains_readable(tmp_path: Path) -> None:
+    frame = pd.DataFrame({
+        "date": ["2026-01-05"],
+        "instrument": ["600000.XSHG"],
+    })
+    generation = sha256_json({
+        "dataset_type": "calendar",
+        "window_start": SESSIONS[0].isoformat(),
+        "window_end": SESSIONS[0].isoformat(),
+        "columns": list(frame.columns),
+        "rows": frame.to_dict(orient="records"),
+    })
+    directory = tmp_path / "backtest_market_data" / f"dataset={generation}"
+    directory.mkdir(parents=True)
+    data_path = directory / "data.parquet"
+    frame.to_parquet(data_path, index=False)
+    manifest = {
+        "dataset_version": "1.0.0",
+        "dataset_type": "calendar",
+        "generation_id": generation,
+        "window_start": SESSIONS[0].isoformat(),
+        "window_end": SESSIONS[0].isoformat(),
+        "columns": list(frame.columns),
+        "row_count": len(frame),
+        "data_checksum_sha256": file_sha256_bytes(data_path.read_bytes()),
+        "sources": {"fixture": "historical-v1"},
+        "producer": "test-v1-compatibility",
+        "serialization_profile": "parquet-v1",
+    }
+    manifest["manifest_digest_sha256"] = sha256_json(manifest)
+    (directory / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    loaded = BacktestMarketDatasetStore(tmp_path).read_frame(
+        generation, manifest["data_checksum_sha256"], dataset_type="calendar"
+    )
+    pd.testing.assert_frame_equal(loaded, frame)
 
 
 def test_the_store_refuses_a_frame_without_the_key_columns(tmp_path: Path) -> None:

@@ -12,12 +12,11 @@ forced by the reviewed definition rather than chosen here:
   statistics over 60 sessions, so the whole window has to be computed in one
   Qlib call and then split by date. Per-day calls would be both wrong (no
   history) and 220 times slower.
-* **A complete instrument/date panel.** `QlibFactorAdapter` refuses a panel that
-  is not the full cartesian product, and the canonical store has holes every
-  session (suspensions, listings, delistings). This publisher therefore keeps
-  only the instruments present on *every* session of the window -- the
-  "complete-panel" rule -- and reports exactly which ones it dropped. On the
-  2025 full-A window that is 5073 -> 5019 (1.1%), recorded in the output report.
+* **Sparse, observed input rows.** The Qlib calendar is the governed session set,
+  while its per-instrument price arrays retain missing values for dates with no
+  canonical row. We do not select a full-window survivor universe. A factor row is
+  published only when every reviewed expression is finite on that date; missing
+  rows and their per-session counts stay visible in the publication report.
 
 Usage:
   scripts/publish_qlib_factor_partitions.py \
@@ -169,15 +168,14 @@ def main(argv: list[str] | None = None) -> int:
         manifests[day] = manifest
     panel = pd.concat(frames, ignore_index=True)
 
-    # Complete-panel rule: QlibFactorAdapter refuses anything else, and the
-    # canonical store has holes on every session. Keep only instruments present
-    # on every session and report the exclusion rather than hiding it.
-    counts = panel.groupby("instrument").size()
-    instruments = sorted(counts[counts == len(target_days)].index)
-    dropped = sorted(set(panel["instrument"].unique()) - set(instruments))
+    # Keep all observed names and let Qlib's governed session calendar represent
+    # absent price rows as NaN. A full-window complete-panel filter would choose
+    # the universe using future survival and exclude later listings/delistings.
+    instruments = sorted(panel["instrument"].astype(str).unique())
     if not instruments:
-        return _refuse("no instrument has a complete panel across the window")
-    panel = panel[panel["instrument"].isin(instruments)].reset_index(drop=True)
+        return _refuse("canonical bars window contains no instrument rows")
+    expected_pairs = len(instruments) * len(target_days)
+    missing_input_pairs = expected_pairs - len(panel)
 
     adapter = QlibFactorAdapter(
         PROJECT_ROOT / "config" / "factor-sets"
@@ -205,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
     published: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
+    incomplete_factor_rows: list[dict[str, Any]] = []
     # Alpha158's longest expressions look back `minimum_history` sessions, so the
     # first (minimum_history - 1) sessions of the window cannot produce a complete
     # factor vector: those factors are legitimately NaN and the reviewed policy is
@@ -228,6 +227,18 @@ def main(argv: list[str] | None = None) -> int:
         frame = computed[computed["datetime"] == pd.Timestamp(day)].reset_index(drop=True)
         if frame.empty:
             skipped.append({"session": day.isoformat(), "reason": "no_factor_rows"})
+            continue
+        complete = frame[adapter.factor_names].notna().all(axis=1)
+        excluded = frame.loc[~complete, "instrument"].astype(str).tolist()
+        if excluded:
+            incomplete_factor_rows.append({
+                "session": day.isoformat(),
+                "rows_excluded": len(excluded),
+                "instrument_sample": sorted(excluded)[:20],
+            })
+        frame = frame.loc[complete].reset_index(drop=True)
+        if frame.empty:
+            skipped.append({"session": day.isoformat(), "reason": "no_complete_factor_rows"})
             continue
         bar_manifest = manifests[day]
         upstream_created_at = (
@@ -358,9 +369,9 @@ def main(argv: list[str] | None = None) -> int:
         "panel": {
             "rows": int(len(panel)),
             "instruments": len(instruments),
-            "excluded_incomplete_instruments": len(dropped),
-            "excluded_sample": dropped[:20],
+            "missing_instrument_session_pairs": missing_input_pairs,
         },
+        "factor_row_exclusions": incomplete_factor_rows,
         "published": published,
         "skipped": skipped,
         "failed": failed,
@@ -377,7 +388,8 @@ def main(argv: list[str] | None = None) -> int:
         "skipped": len(skipped),
         "failed": len(failed),
         "instruments": len(instruments),
-        "excluded_incomplete": len(dropped),
+        "missing_input_pairs": missing_input_pairs,
+        "sessions_with_incomplete_factor_rows": len(incomplete_factor_rows),
     }))
     return 0 if status != "failed" else 1
 

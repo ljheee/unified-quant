@@ -22,6 +22,7 @@ from uq.contracts.config import load_dataset_contract
 from uq.contracts.gate_contracts import adjustment_snapshot_generation, validate_contract
 from uq.contracts.schema import ContractError, load_schema
 from uq.errors import ContractError as StoreContractError
+import uq.factors.raw_price as factor_raw_price
 from uq.factors.raw_price import logical_fingerprint, verify_logical_fingerprint
 from uq.market.adjustment import XdxrAdjustmentDeriver
 from uq.pipeline.daily import DailyIngestPipeline
@@ -163,6 +164,21 @@ def test_fingerprint_read_path_accepts_all_known_versions():
     assert not verify_logical_fingerprint(_factor_frame(2.5), h11_pin)
     assert not verify_logical_fingerprint(frame, None)
     assert not verify_logical_fingerprint(frame, "")
+
+
+def test_fingerprint_reader_checks_latest_algorithm_before_legacy_versions(monkeypatch):
+    calls = []
+
+    def fingerprint(_frame, *, tolerance=1e-12, version=3):
+        calls.append(version)
+        return f"v{version}"
+
+    monkeypatch.setattr(factor_raw_price, "logical_fingerprint", fingerprint)
+    assert verify_logical_fingerprint(_factor_frame(1.5), "v3")
+    assert calls == [3]
+    calls.clear()
+    assert verify_logical_fingerprint(_factor_frame(1.5), "v2")
+    assert calls == [3, 2]
 
 
 def _craft_legacy_v1_snapshot(tmp_path: Path) -> str:

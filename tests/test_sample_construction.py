@@ -14,6 +14,7 @@ cross-sectional transform is shared by learning and inference.
 from __future__ import annotations
 
 import json
+import importlib.util
 from pathlib import Path
 
 import pandas as pd
@@ -27,6 +28,13 @@ from uq.models.sample_construction import (
 )
 from uq.research_chain.owning_contracts import SampleConstructionStore
 from tests.review_key import REVIEWER_PRIVATE_KEY
+
+_ROOT = Path(__file__).resolve().parents[1]
+_SPEC = importlib.util.spec_from_file_location(
+    "publish_sample_construction", _ROOT / "scripts" / "publish_sample_construction.py"
+)
+_PUBLISH_SCRIPT = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_PUBLISH_SCRIPT)
 
 
 def _factor_frame() -> pd.DataFrame:
@@ -187,6 +195,52 @@ def test_sample_construction_publishes_a_governed_frame(tmp_path: Path) -> None:
     assert read_manifest["rows_before_selection"] == 5
     assert read_manifest["quality_report_checksum_sha256"]
     pd.testing.assert_frame_equal(read_frame, selected)
+
+
+def test_review_candidate_is_checksummed_but_not_published(tmp_path: Path) -> None:
+    selected, dropped_rows, dropped_labels = select_training_sample(
+        _factor_frame(), _labels(), ordered_features=["f1", "f2"],
+        missing_policy="drop_unlabeled_rows",
+    )
+    manifest = SampleConstructionBuilder(
+        sample_name="sample-v1", semantic_version="1.0.0"
+    ).build(
+        selected,
+        window_start="2026-01-05",
+        window_end="2026-01-07",
+        source_factor_set="basic",
+        source_factor_version="2.0.0",
+        source_factor_generation_ids=["a" * 64],
+        source_factor_partition_set_digest_sha256="b" * 64,
+        source_label_set_name="return_5d",
+        source_label_generation_id="c" * 64,
+        source_label_manifest_digest_sha256="d" * 64,
+        source_label_data_checksum_sha256="e" * 64,
+        source_universe_snapshot_generation_id="f" * 64,
+        source_index_membership_set_digest_sha256="1" * 64,
+        ordered_features=["f1", "f2"],
+        missing_policy="drop_unlabeled_rows",
+        rows_before_selection=5,
+        dropped_rows=dropped_rows,
+        dropped_labels=dropped_labels,
+    )
+    report_path = tmp_path / "review" / "candidate.json"
+    frame_path = tmp_path / "review" / "candidate.parquet"
+    report = _PUBLISH_SCRIPT._write_review_candidate(
+        report_path=report_path,
+        frame_path=frame_path,
+        manifest=manifest,
+        frame=selected,
+        dropped_rows=dropped_rows,
+        dropped_labels=dropped_labels,
+    )
+    persisted = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["review_status"] == "pending_external_quality_decision"
+    assert persisted["required_decision"]["bound_generation_id"] == manifest["generation_id"]
+    assert persisted["frame_artifact"]["data_checksum_sha256"] == manifest["data_checksum_sha256"]
+    assert persisted["review_summary"]["non_finite_feature_values"] == 0
+    assert len(pd.read_parquet(frame_path)) == len(selected)
+    assert not (tmp_path / "sample_construction").exists()
 
 
 def test_a_tampered_sample_frame_is_refused(tmp_path: Path) -> None:

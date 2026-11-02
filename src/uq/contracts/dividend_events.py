@@ -54,7 +54,9 @@ EVENT_COLUMNS = [
 ]
 NUMERIC_COLUMNS = ("stk_div", "stk_bo_rate", "stk_co_rate", "cash_div", "cash_div_tax")
 DATE_COLUMNS = ("end_date", "ann_date", "record_date", "ex_date", "pay_date", "div_listdate", "imp_ann_date")
-EVENT_STAGES = ("预披露", "预案", "股东大会通过", "实施")
+# Tushare has returned both terminal non-implementation states in live history.
+# Preserve them as disclosures; consumers that create action schedules must
+# continue to select exactly ``实施``.
 FIELD_UNITS = {
     "stk_div": "shares per share, bonus plus capitalization (股/股)",
     "stk_bo_rate": "bonus shares per share (股/股)",
@@ -137,9 +139,14 @@ def normalize_dividend_event_rows(frame: pd.DataFrame, *, ann_date: dt.date) -> 
         for column in NUMERIC_COLUMNS:
             record[column] = _optional_float(row[column], column)
         stage = row["div_proc"]
-        if stage is None or (isinstance(stage, float) and math.isnan(stage)) or str(stage).strip() not in EVENT_STAGES:
-            raise ContractError(f"unknown dividend disclosure stage: {stage!r}")
-        record["div_proc"] = str(stage).strip()
+        if stage is None or (isinstance(stage, float) and math.isnan(stage)):
+            raise ContractError("dividend disclosure stage must be a non-empty string")
+        if not isinstance(stage, str) or not stage.strip():
+            raise ContractError("dividend disclosure stage must be a non-empty string")
+        # This is a raw disclosure store, not an action schedule. Preserve new
+        # vendor progress states verbatim; downstream action builders match the
+        # exact implemented state ``实施`` and therefore fail closed.
+        record["div_proc"] = stage.strip()
         if record["ann_date"] != partition:
             raise ContractError(
                 f"dividend row ann_date {record['ann_date']!r} does not match partition {partition}"

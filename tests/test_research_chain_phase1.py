@@ -374,7 +374,7 @@ def test_adjusted_price_store_rejects_report_directory_symlink(tmp_path: Path) -
     report_path.rename(tmp_path / "reports" / "canonical_v2" / "moved")
     report_path.symlink_to(tmp_path / "reports" / "canonical_v2" / "moved", target_is_directory=True)
 
-    with pytest.raises(ContractError, match="unsafe quality report directory"):
+    with pytest.raises(ContractError, match="symbolic links are forbidden"):
         AdjustedPriceDatasetStore(tmp_path).read_manifest(generation)
 
 
@@ -662,6 +662,27 @@ def test_mapping_decision_provider_invokes_callable_per_subject() -> None:
     decision = mapping.resolve(output_family="label_set", subject_generation_id="a" * 64)
     assert calls == ["a" * 64]
     assert decision["subject_generation_id"] == "a" * 64
+
+    v2_calls: list[str] = []
+    versioned = _MappingDecisionProvider({
+        "feature_preprocessing": lambda subject: {"binding_type": "feature_preprocessing_v1"},
+        "feature_preprocessing_v2": lambda subject: (
+            v2_calls.append(subject) or {"binding_type": "feature_preprocessing_v2"}
+        ),
+    })
+    v2_decision = versioned.resolve(
+        binding_type="feature_preprocessing_v2",
+        output_family="feature_preprocessing",
+        subject_generation_id="c" * 64,
+    )
+    assert v2_calls == ["c" * 64]
+    assert v2_decision["binding_type"] == "feature_preprocessing_v2"
+    with pytest.raises(ContractError, match="missing research chain quality decision: feature_preprocessing_v2"):
+        _MappingDecisionProvider({"feature_preprocessing": {"binding_type": "feature_preprocessing_v1"}}).resolve(
+            binding_type="feature_preprocessing_v2",
+            output_family="feature_preprocessing",
+            subject_generation_id="d" * 64,
+        )
 
     with pytest.raises(ContractError, match="missing research chain quality decision"):
         mapping.resolve(output_family="factor_partition", subject_generation_id="b" * 64)

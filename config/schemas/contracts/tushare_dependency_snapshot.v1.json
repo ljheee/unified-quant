@@ -19,6 +19,8 @@
     "snapshot_version": {"const": 1},
     "dataset": {
       "enum": [
+        "stock_basic",
+        "suspend_d",
         "daily_basic",
         "index_classify",
         "index_member_all",

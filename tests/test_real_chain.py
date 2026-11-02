@@ -19,7 +19,7 @@ class FakeMootdxAdapter(MootdxSourceAdapter):
     def _client(self):
         class Client:
             def __init__(self, page): self.page = page
-            def bars(self, symbol, frequency, start, offset):
+            def get_stock_kline(self, market, code, period, start, count):
                 frame = self.page.copy(); frame.index.name = "datetime"; return frame
             def close(self): pass
         return Client(self.page)
@@ -27,7 +27,8 @@ class FakeMootdxAdapter(MootdxSourceAdapter):
 def mootdx_page():
     frame = pd.DataFrame({
         "open": [10.0], "close": [10.2], "high": [10.3], "low": [9.9],
-        "vol": [100.0], "amount": [102000.0],
+        # easy_tdx MAC reports volume in shares, not standard-protocol lots.
+        "vol": [10000.0], "amount": [102000.0],
     }, index=pd.to_datetime(["2026-08-21"]))
     frame["instrument"] = "600000.XSHG"
     return frame
@@ -47,7 +48,7 @@ def test_tushare_normalizes_units_and_symbols():
     assert out.iloc[0]["volume"] == 10000.0
     assert out.iloc[0]["amount"] == 102000.0
 
-def test_mootdx_normalizes_lot_volume_and_date_range():
+def test_tdx_mac_normalizes_share_volume_and_date_range():
     adapter = FakeMootdxAdapter(mootdx_page())
     result = adapter.fetch("bars_daily", ["600000.XSHG"], "2026-08-20", "2026-08-21", ["instrument", "datetime", "open", "high", "low", "close", "volume", "amount"])
     assert result.status == FetchStatus.SUCCESS
@@ -88,7 +89,7 @@ class _FixedPageMootdxAdapter(MootdxSourceAdapter):
         page = self._page
 
         class Client:
-            def bars(self, symbol, frequency, start, offset):
+            def get_stock_kline(self, market, code, period, start, count):
                 frame = page.copy()
                 frame.index.name = "datetime"
                 return frame

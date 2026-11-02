@@ -19,6 +19,11 @@ published, and the report names how many rows are null per instrument
 Usage:
   scripts/build_label_sets.py --bars-root data/bars-a500-store \
       --label-root data/label-store \
+      --delisting-snapshot-root data/tushare-dependencies \
+      --delisting-snapshot-generation <stock-basic-D-generation> \
+      --calendar-root data/backtest-market \
+      --calendar-generation <governed-calendar-generation> \
+      --calendar-checksum <governed-calendar-data-checksum> \
       --start 2025-08-29 --end 2025-09-30 \
       --out evidence/.../label-sets.json
 """
@@ -36,10 +41,12 @@ import pandas as pd
 from uq.adapters.tushare_2k import Tushare2kAdapter
 from uq.contracts.model_layer import sha256_json
 from uq.contracts.schema import load_schema
+from uq.contracts.tushare_dependency import TushareDependencyStore
 from uq.errors import ContractError
 from uq.models.label_store_writer import LabelSetWriter
-from uq.models.labels import LabelBuilder
+from uq.models.labels import LabelBuilder, adjusted_price_input_checksum
 from uq.models.listing_snapshot import ListingDateSnapshotStore
+from uq.research_chain.owning_contracts import BacktestMarketDatasetStore
 from uq.store.reader import ManifestFirstReader
 
 _HORIZON = 5
@@ -110,20 +117,104 @@ def _listing_dates(instruments: list[str]) -> dict[str, dt.date]:
     return out
 
 
-def _eligibility_columns(bars: pd.DataFrame, listing_dates: dict[str, dt.date]) -> pd.DataFrame:
-    """Fill the label builder's eligibility columns.
+def _instrument_from_ts_code(code: str) -> str | None:
+    # Tushare uses a leading T for Shanghai B-share codes (for example
+    # T600018.SH). They cannot match this A-share canonical instrument key.
+    if len(code) == 10 and code.startswith("T") and code[1:7].isdigit() and code[7:] == ".SH":
+        return None
+    try:
+        number, exchange = code.rsplit(".", 1)
+        suffix = {"SH": "XSHG", "SZ": "XSHE", "BJ": "XBSE"}[exchange]
+    except (ValueError, KeyError) as exc:
+        raise ContractError(f"invalid Tushare security code in delisting snapshot: {code!r}") from exc
+    if len(number) != 6 or not number.isdigit():
+        raise ContractError(f"invalid Tushare security code in delisting snapshot: {code!r}")
+    return f"{number}.{suffix}"
 
-    ``limit_up``/``limit_down`` are booleans in the label contract but the canonical
-    v2 partition carries them as prices, so an actual limit event cannot be
-    recognised here and both stay False (no limit event excluded).  ``suspended``
-    is derived from ``status``.  This is a deliberate narrowing, recorded in the
-    run report rather than presented as full eligibility.
-    """
+
+def _delisting_dates(root: Path, generation_id: str) -> tuple[dict[str, dt.date], dict[str, Any]]:
+    """Read delisting dates from one checksum-verified stock_basic(D) snapshot."""
+    manifest, frame = TushareDependencyStore(root).read_frame(
+        generation_id, dataset="stock_basic"
+    )
+    query = manifest.get("query", {})
+    fields = {field.strip() for field in str(query.get("fields", "")).split(",")}
+    required = {"ts_code", "list_status", "delist_date"}
+    if (query.get("list_status") != "D" or not required <= fields
+            or not required <= set(frame.columns)):
+        raise ContractError("delisting snapshot must be stock_basic(D) with ts_code,list_status,delist_date")
+    dates: dict[str, dt.date] = {}
+    for code, status, raw_value in frame[["ts_code", "list_status", "delist_date"]].itertuples(index=False):
+        if str(status) != "D" or pd.isna(raw_value) or not str(raw_value).strip():
+            continue
+        raw = str(raw_value).strip()
+        try:
+            day = (dt.date.fromisoformat(raw) if "-" in raw
+                   else dt.datetime.strptime(raw, "%Y%m%d").date())
+        except ValueError as exc:
+            raise ContractError(f"invalid delist_date for {code}: {raw!r}") from exc
+        instrument = _instrument_from_ts_code(str(code))
+        if instrument is None:
+            continue
+        if instrument in dates and dates[instrument] != day:
+            raise ContractError(f"conflicting delist_date rows for {instrument}")
+        dates[instrument] = day
+    return dates, manifest
+
+
+def _governed_calendar(
+    root: Path,
+    generation_id: str,
+    checksum: str,
+    *,
+    start: dt.date,
+    end: dt.date,
+) -> tuple[list[str], dict[str, Any]]:
+    store = BacktestMarketDatasetStore(root)
+    manifest = store.read_manifest_by(generation_id, dataset_type="calendar")
+    if manifest.get("data_checksum_sha256") != checksum:
+        raise ContractError("label calendar checksum does not match its manifest")
+    expected_digest = sha256_json({
+        key: value for key, value in manifest.items() if key != "manifest_digest_sha256"
+    })
+    if manifest.get("manifest_digest_sha256") != expected_digest:
+        raise ContractError("label calendar manifest digest mismatch")
+    frame = store.read_frame(
+        generation_id, checksum, dataset_type="calendar",
+        required_columns={"date", "instrument"},
+    )
+    if frame.empty or frame["instrument"].astype(str).tolist() != ["CALENDAR"] * len(frame):
+        raise ContractError("label calendar must contain one CALENDAR row per session")
+    dates = pd.to_datetime(frame["date"], errors="raise").dt.strftime("%Y-%m-%d").tolist()
+    if dates != sorted(set(dates)):
+        raise ContractError("label calendar sessions must be sorted and unique")
+    if not (manifest["window_start"] <= start.isoformat()
+            and end.isoformat() <= manifest["window_end"]):
+        raise ContractError("label window is outside the governed calendar")
+    return dates, manifest
+
+
+def _eligibility_columns(
+    bars: pd.DataFrame,
+    listing_dates: dict[str, dt.date],
+    delisting_dates: dict[str, dt.date],
+) -> pd.DataFrame:
+    """Derive eligibility flags from raw canonical prices and pinned lifecycle data."""
     frame = bars.copy()
     frame["suspended"] = frame["status"] != "trading"
-    frame["limit_up"] = False
-    frame["limit_down"] = False
-    frame["delisted"] = False
+    close = pd.to_numeric(frame["close"], errors="raise").astype(float)
+    limit_up = pd.to_numeric(frame["limit_up"], errors="coerce").astype(float)
+    limit_down = pd.to_numeric(frame["limit_down"], errors="coerce").astype(float)
+    # Both values use raw CNY; tolerance is well below one fen and only absorbs
+    # floating-point representation noise.
+    frame["limit_up"] = limit_up.notna() & (close - limit_up).abs().le(1e-8)
+    frame["limit_down"] = limit_down.notna() & (close - limit_down).abs().le(1e-8)
+    date_column = "datetime" if "datetime" in frame else "session_date"
+    session_dates = pd.to_datetime(frame[date_column], errors="raise").dt.date
+    frame["delisted"] = [
+        instrument in delisting_dates and day >= delisting_dates[instrument]
+        for instrument, day in zip(frame["instrument"], session_dates)
+    ]
     frame["listing_date"] = [
         pd.Timestamp(listing_dates[instrument], tz="UTC") for instrument in frame["instrument"]
     ]
@@ -135,13 +226,7 @@ def _binding(frame: pd.DataFrame, instrument: str, schema: str) -> dict[str, Any
     # Must be the same function `LabelBuilder` verifies the binding against
     # (`sha256_json` over canonical JSON), or every publish would be refused on a
     # checksum that was computed a different way.
-    checksum = sha256_json({"rows": [
-        [str(row[0]), pd.Timestamp(row[1]).isoformat(), None if pd.isna(row[2]) else float(row[2]),
-         None if pd.isna(row[3]) else float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
-        for row in ordered[
-            ["instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"]
-        ].itertuples(index=False)
-    ]})
+    checksum = adjusted_price_input_checksum(ordered)
     # `label_set.v1` closes the binding object: no `instrument` field, and
     # `visible_cutoff` is required. The cutoff is the session close in Shanghai
     # time, which is when the bars this label is built from became knowable.
@@ -164,11 +249,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--end", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--schema", type=Path, default=Path("config/schemas/bars_daily.v2.yaml"))
     parser.add_argument("--name", default="return_5d")
-    parser.add_argument("--semantic-version", default="1.0.0")
+    parser.add_argument("--semantic-version", default="2.0.0")
     parser.add_argument(
         "--listing-snapshot-generation",
         help="reuse a pinned listing-date map in --label-root without any vendor call",
     )
+    parser.add_argument("--delisting-snapshot-root", type=Path,
+                        help="Tushare dependency store with a stock_basic(D) snapshot")
+    parser.add_argument("--delisting-snapshot-generation",
+                        help="checksum-verified stock_basic(D) snapshot generation")
+    parser.add_argument("--calendar-root", type=Path,
+                        help="BacktestMarketDatasetStore with an independently checked calendar")
+    parser.add_argument("--calendar-generation", help="governed calendar generation")
+    parser.add_argument("--calendar-checksum", help="governed calendar data checksum")
     parser.add_argument("--instrument", action="append", default=None,
                         help="restrict the DEFAULT per-instrument publication to these names")
     parser.add_argument(
@@ -218,6 +311,20 @@ def main(argv: list[str] | None = None) -> int:
         snapshot = snapshot_store.publish(
             listing_dates, source="tushare:stock_basic(list_date;list_status=L,D)"
         )
+    if (args.delisting_snapshot_root is None) != (args.delisting_snapshot_generation is None):
+        raise ContractError("delisting snapshot root and generation must be supplied together")
+    if args.delisting_snapshot_root is None:
+        raise ContractError("label publication requires a pinned stock_basic(D) delisting snapshot")
+    delisting_dates, delisting_manifest = _delisting_dates(
+        args.delisting_snapshot_root, args.delisting_snapshot_generation
+    )
+    if (args.calendar_root is None or args.calendar_generation is None
+            or args.calendar_checksum is None):
+        raise ContractError("label publication requires a governed calendar root, generation, and checksum")
+    calendar_dates, calendar_manifest = _governed_calendar(
+        args.calendar_root, args.calendar_generation, args.calendar_checksum,
+        start=sessions[0], end=sessions[-1],
+    )
     # A restricted publication must not ask eligibility to resolve unselected names.
     bars = bars[bars["instrument"].isin(instruments)].copy()
     # The label contract is keyed on `datetime`; the canonical v2 partition names
@@ -225,10 +332,27 @@ def main(argv: list[str] | None = None) -> int:
     # contract, the same rename the factor layer makes.
     if "datetime" not in bars.columns and "session_date" in bars.columns:
         bars = bars.rename(columns={"session_date": "datetime"})
-    eligibility = _eligibility_columns(bars, listing_dates)
+    bar_dates = pd.to_datetime(bars["datetime"], errors="raise").dt.strftime("%Y-%m-%d")
+    if not set(bar_dates) <= set(calendar_dates):
+        raise ContractError("label input contains a bar date absent from the governed calendar")
+    eligibility = _eligibility_columns(bars, listing_dates, delisting_dates)
 
     writer = LabelSetWriter(args.label_root)
-    builder = LabelBuilder(name=args.name, semantic_version=args.semantic_version)
+    builder = LabelBuilder(
+        name=args.name,
+        semantic_version=args.semantic_version,
+        eligibility_provenance={
+            "listing_date_snapshot_generation_id": snapshot["generation_id"],
+            "delisting_snapshot_generation_id": delisting_manifest["generation_id"],
+            "delisting_snapshot_data_checksum_sha256": delisting_manifest["data_artifact"]["checksum_sha256"],
+        },
+        calendar_dates=calendar_dates,
+        calendar_binding={
+            "generation_id": calendar_manifest["generation_id"],
+            "data_checksum_sha256": calendar_manifest["data_checksum_sha256"],
+            "manifest_digest_sha256": calendar_manifest["manifest_digest_sha256"],
+        },
+    )
     published: list[dict[str, Any]] = []
     refused: list[dict[str, Any]] = []
 
@@ -247,65 +371,59 @@ def main(argv: list[str] | None = None) -> int:
             refused.append({"instrument": instrument, "reason": str(exc)})
             return None
 
-    # A research request binds exactly one label set for its whole universe, so the
-    # per-instrument sets this script publishes by default can never be bound by a
-    # v5 execute: `LabelStore` is keyed on one generation id and
-    # `upstream_adjusted_price_bindings` is a list of adjusted-price bindings, not of
-    # label sets. `--combined` therefore builds per instrument first and publishes the
-    # concatenation of the survivors as a single set.
-    #
-    # Building per instrument is not wasteful ceremony. `LabelBuilder` filters rows
-    # by eligibility (suspension, 60-day listing age, limit, delisting) *after* it
-    # computes the grid, so an instrument ineligible on every date yields a zero-row
-    # set. Per-instrument mode reports that as a named refusal; concatenating the
-    # *input* frames first would drop it silently and still exit 0, so the refusal
-    # would never reach the report. The combined set is the concatenation of the
-    # frames that actually produced labels, and every dropped instrument stays named.
-    folded: list[pd.DataFrame] = []
-    for instrument in instruments:
-        frame = eligibility[eligibility["instrument"] == instrument]
-        if frame.empty:
-            # Unreachable while `instruments` is derived from the bars frame; kept
-            # so the guard survives that assumption changing.
-            refused.append({"instrument": instrument, "reason": "no bars in window"})
-            continue
-        built = _build(instrument, frame)
-        if built is None:
-            continue
-        _manifest, output = built
-        if output.empty:
-            refused.append({
-                "instrument": instrument,
-                "reason": "no eligible label rows after eligibility filtering",
-            })
-            continue
-        if args.combined:
-            folded.append(frame)
-        else:
-            identity = writer.publish(_manifest, output)
+    # A research request binds one label set for the whole universe. The combined
+    # path computes the calendar grid once; previously it scanned the full market
+    # frame once per instrument, built thousands of small label sets, then rebuilt
+    # their concatenation. Keep the explicit per-instrument mode, but group once so
+    # that path also scales linearly with the input rows.
+    if args.combined:
+        built = _build("<combined>", eligibility)
+        if built is not None:
+            manifest, output = built
+            eligible_instruments = set(output["instrument"].astype(str).unique())
+            refused.extend(
+                {
+                    "instrument": instrument,
+                    "reason": "no eligible label rows after eligibility filtering",
+                }
+                for instrument in instruments
+                if instrument not in eligible_instruments
+            )
+            if not output.empty:
+                identity = writer.publish(manifest, output)
+                published.append({
+                    "instrument": "<combined>",
+                    "label_generation_id": identity["generation_id"],
+                    "rows": identity["rows"],
+                    "null_labels": int(output["label"].isna().sum()),
+                })
+    else:
+        grouped_frames = {
+            str(instrument): group
+            for instrument, group in eligibility.groupby("instrument", sort=False)
+        }
+        for instrument in instruments:
+            frame = grouped_frames.get(instrument)
+            if frame is None or frame.empty:
+                refused.append({"instrument": instrument, "reason": "no bars in window"})
+                continue
+            built = _build(instrument, frame)
+            if built is None:
+                continue
+            manifest, output = built
+            if output.empty:
+                refused.append({
+                    "instrument": instrument,
+                    "reason": "no eligible label rows after eligibility filtering",
+                })
+                continue
+            identity = writer.publish(manifest, output)
             published.append({
                 "instrument": instrument,
                 "label_generation_id": identity["generation_id"],
                 "rows": identity["rows"],
                 "null_labels": int(output["label"].isna().sum()),
             })
-
-    if args.combined:
-        if not folded:
-            raise SystemExit("no instrument in the window produced an eligible label row")
-        # One build over the concatenation is what makes the binding honest: the
-        # checksum covers the same rows the manifest's `row_count` describes, and
-        # the identity is the identity of this frame rather than of some instrument.
-        combined = pd.concat(folded, ignore_index=True)
-        manifest, output = _build("<combined>", combined)
-        assert manifest is not None  # a refused concatenation was already recorded
-        identity = writer.publish(manifest, output)
-        published.append({
-            "instrument": "<combined>",
-            "label_generation_id": identity["generation_id"],
-            "rows": identity["rows"],
-            "null_labels": int(output["label"].isna().sum()),
-        })
 
     report = {
         "record_version": 1,
@@ -326,12 +444,24 @@ def main(argv: list[str] | None = None) -> int:
                 "generation_id": snapshot["generation_id"],
                 "path": str(snapshot_store.path_for(snapshot["generation_id"])),
             },
-            "limit_events": "not recognised; limit_up/limit_down are prices in the "
-                            "canonical field list, so no limit day is excluded",
+            "limit_events": "recognised when close equals canonical raw limit_up or limit_down",
+            "delisting_snapshot": {
+                "generation_id": delisting_manifest["generation_id"],
+                "data_checksum_sha256": delisting_manifest["data_artifact"]["checksum_sha256"],
+                "source_fetched_at": delisting_manifest["source_fetched_at"],
+            },
+            "calendar_binding": {
+                "generation_id": calendar_manifest["generation_id"],
+                "data_checksum_sha256": calendar_manifest["data_checksum_sha256"],
+                "manifest_digest_sha256": calendar_manifest["manifest_digest_sha256"],
+            },
             "reproducibility_note": (
-                "the upstream binding checksum covers listing_date; the exact map "
+                "the label manifest binds the governed session calendar and the "
+                "upstream checksum covers listing_date and derived suspension/limit/"
+                "delisting flags; the exact listing map "
                 "is preserved in the immutable listing_date_snapshot. Replay with "
-                "--listing-snapshot-generation to avoid a live security-master fetch. "
+                "--listing-snapshot-generation, the pinned delisting snapshot, and "
+                "the calendar generation/checksum to avoid live source calls. "
                 "This map does not certify historical PIT universe completeness."
             ),
         },

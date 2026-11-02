@@ -20,7 +20,7 @@ from uq.models.feature_preprocessing import FeaturePreprocessorBuilder, complete
 from uq.models.features import FeatureSchemaBuilder
 from uq.research_chain import DatasetStageAdapter
 from uq.research_chain.owning_contracts import AdjustedPriceDatasetStore, FeaturePreprocessingStore, FeatureSchemaStore, LabelStore
-from uq.models.labels import LabelBuilder
+from uq.models.labels import LabelBuilder, adjusted_price_input_checksum
 from tests.review_key import REVIEWER_PRIVATE_KEY
 from uq.errors import ContractError
 from uq.factors.store import FactorStore
@@ -450,10 +450,7 @@ def _prepare_dataset_store(
     label_frame = pd.concat([label_frame, tail], ignore_index=True).sort_values(
         ["instrument", "datetime"], kind="mergesort"
     ).reset_index(drop=True)
-    label_checksum = sha256_json({"rows": [
-        [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
-        for row in label_frame.sort_values(["instrument", "datetime"], kind="mergesort")[["instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"]].itertuples(index=False)
-    ]})
+    label_checksum = adjusted_price_input_checksum(label_frame)
     binding = {
         "binding": "adjusted_price", "dataset": "bars_adjusted", "schema_version": "adjusted-v1",
         "partition_date": "2026-01-30", "generation_id": adjusted_manifest["generation_id"],

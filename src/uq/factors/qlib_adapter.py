@@ -240,8 +240,6 @@ class QlibFactorAdapter:
         qlib_dates = pd.DatetimeIndex(sorted(dates.unique()))
         if not len(qlib_dates):
             raise ContractError("cannot compute qlib factors from an empty panel")
-        if len(panel) != len(instruments) * len(qlib_dates):
-            raise ContractError("qlib input panel is not a complete instrument/date panel")
         maximum_history = max(int(factor["minimum_history"]) for factor in self.definition["factors"])
         if len(qlib_dates) < maximum_history:
             raise ContractError(
@@ -274,10 +272,17 @@ class QlibFactorAdapter:
                     f"{qlib_dates[-1].strftime('%Y-%m-%d')}\n"
                 )
 
+        # Group once. Filtering the full market panel once per instrument makes
+        # this O(instruments * rows); for a 5k-name window it scans billions of
+        # rows before writing any Qlib input.
+        instrument_groups = {
+            str(instrument): group
+            for instrument, group in panel.groupby("instrument", sort=False)
+        }
         for instrument in instruments:
             feature_dir = qlib_dir / "features" / instrument.lower()
             feature_dir.mkdir(parents=True)
-            instrument_data = panel[panel["instrument"] == instrument].copy()
+            instrument_data = instrument_groups[instrument].copy()
             instrument_data["datetime"] = pd.to_datetime(instrument_data["datetime"])
             instrument_data = instrument_data.set_index("datetime")
             for column in _QLIB_INPUT_COLUMNS:
@@ -296,21 +301,34 @@ class QlibFactorAdapter:
         expected_columns = ["instrument", "datetime", *self.factor_names]
         if list(result.columns) != expected_columns:
             raise ContractError("qlib result columns do not match reviewed factor set")
-        expected_dates = pd.to_datetime(panel["datetime"]).dt.strftime("%Y-%m-%d")
-        expected_keys = {
-            (instrument, date_value)
-            for instrument in instruments
-            for date_value in sorted(expected_dates.unique())
-            if start_date <= date_value <= end_date
-        }
-        # cr.md H9: the result keeps canonical datetime64; compare on normalized
-        # date strings instead of raw column values.
-        actual_dates = pd.to_datetime(result["datetime"]).dt.strftime("%Y-%m-%d")
-        actual_keys = set(zip(result["instrument"].astype(str), actual_dates))
-        if actual_keys != expected_keys or len(result) != len(expected_keys):
+        dates = sorted(pd.to_datetime(panel["datetime"]).dt.strftime("%Y-%m-%d").unique())
+        expected_dates = np.asarray(
+            [day for day in dates if start_date <= day <= end_date], dtype=object
+        )
+        expected_instruments = np.asarray(sorted(instruments), dtype=object)
+        expected_size = len(expected_instruments) * len(expected_dates)
+        if len(result) != expected_size:
             raise ContractError("qlib result keys do not match governed input panel")
         if result.duplicated(["instrument", "datetime"]).any():
             raise ContractError("duplicate qlib result keys")
+        # The isolated worker writes in instrument/date order. Verify the full
+        # calendar grid using vectorized arrays instead of millions of Python
+        # tuples in sets for a full-universe result.
+        actual_instruments = result["instrument"].astype(str).to_numpy(dtype=object)
+        actual_dates = pd.to_datetime(result["datetime"]).dt.strftime("%Y-%m-%d").to_numpy(dtype=object)
+        keys_sorted = (
+            (actual_instruments[1:] > actual_instruments[:-1])
+            | ((actual_instruments[1:] == actual_instruments[:-1])
+               & (actual_dates[1:] >= actual_dates[:-1]))
+        ).all()
+        if not keys_sorted:
+            order = np.lexsort((actual_dates, actual_instruments))
+            actual_instruments, actual_dates = actual_instruments[order], actual_dates[order]
+        expected_instrument_rows = np.repeat(expected_instruments, len(expected_dates))
+        expected_date_rows = np.tile(expected_dates, len(expected_instruments))
+        if (not np.array_equal(actual_instruments, expected_instrument_rows)
+                or not np.array_equal(actual_dates, expected_date_rows)):
+            raise ContractError("qlib result keys do not match governed input panel")
         factor_columns = self.factor_names
         if np.isinf(result[factor_columns].to_numpy(dtype=float)).any():
             raise ContractError("qlib result contains non-finite values")

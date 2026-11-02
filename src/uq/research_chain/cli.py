@@ -195,18 +195,38 @@ class _MappingDecisionProvider:
     def __init__(self, decisions: Mapping[str, Mapping[str, Any]]) -> None:
         self.decisions = decisions
 
-    def resolve(self, *, output_family: str, subject_generation_id: str, **_: Any) -> Mapping[str, Any]:
-        binding_type = _BINDING_TYPE_BY_FAMILY.get(output_family, output_family)
-        decision = self.decisions.get(binding_type) or self.decisions.get(output_family)
+    def resolve(
+        self,
+        *,
+        output_family: str,
+        subject_generation_id: str,
+        binding_type: str | None = None,
+        **_: Any,
+    ) -> Mapping[str, Any]:
+        expected_binding_type = binding_type or _BINDING_TYPE_BY_FAMILY.get(
+            output_family, output_family
+        )
+        decision = self.decisions.get(expected_binding_type)
+        # Legacy static documents may key by output family. Only allow that
+        # fallback when the resolver's requested binding type is the family's
+        # current default; versioned families must name their exact binding.
+        if decision is None and expected_binding_type == _BINDING_TYPE_BY_FAMILY.get(
+            output_family, output_family
+        ):
+            decision = self.decisions.get(output_family)
         if decision is None:
-            raise ContractError(f"missing research chain quality decision: {binding_type}")
+            raise ContractError(
+                f"missing research chain quality decision: {expected_binding_type}"
+            )
         # cr.md H6: provider mode stores per-family callables in this mapping;
         # invoke them with the resolved subject instead of dict()-ing the
         # callable (aligned with Runner._decision).
         if callable(decision):
             decision = decision(subject_generation_id)
         if not isinstance(decision, Mapping):
-            raise ContractError(f"invalid research chain quality decision: {binding_type}")
+            raise ContractError(
+                f"invalid research chain quality decision: {expected_binding_type}"
+            )
         return decision
 
 

@@ -92,7 +92,7 @@ def test_mootdx_normalizes_named_columns_from_reordered_indexed_frame():
 
 def test_mootdx_missing_required_column_is_typed_error():
     class Client:
-        def bars(self, **kwargs):
+        def get_stock_kline(self, **kwargs):
             return pd.DataFrame({"bad": [1]}, index=pd.DatetimeIndex(["2026-08-21"], name="datetime"))
 
         def close(self):

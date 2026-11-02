@@ -32,7 +32,7 @@ from uq.adapters.tushare_2k import Tushare2kAdapter
 from uq.contracts.tushare_dependency import TushareDependencyStore
 from uq.errors import ContractError
 
-_DATE_RANGE_ENDPOINTS = frozenset({"daily_basic", "moneyflow", "hk_hold", "top_list"})
+_DATE_RANGE_ENDPOINTS = frozenset({"daily_basic", "moneyflow", "hk_hold", "top_list", "suspend_d"})
 DEFAULT_STORE_ROOT = Path("data/trading-grade-history/source")
 
 
@@ -152,16 +152,18 @@ def main(argv: list[str] | None = None) -> int:
                 )
             for index, session in enumerate(sessions):
                 query = {"trade_date": session.strftime("%Y%m%d")}
-                reports.append(_one_query(
-                    adapter, store, args.endpoint, query, refresh=args.refresh
-                ))
+                if args.endpoint == "suspend_d":
+                    query["suspend_type"] = "S"
+                result = _one_query(adapter, store, args.endpoint, query, refresh=args.refresh)
+                reports.append(result)
                 if len(reports) % 50 == 0:
                     print(
                         f"{args.endpoint}: completed {len(reports)} of {len(sessions)} sessions",
                         file=sys.stderr,
                         flush=True,
                     )
-                if index + 1 < len(sessions) and args.session_interval_seconds:
+                if (result["status"] == "published" and index + 1 < len(sessions)
+                        and args.session_interval_seconds):
                     time.sleep(args.session_interval_seconds)
         else:
             if args.range_start is not None or args.range_end is not None:

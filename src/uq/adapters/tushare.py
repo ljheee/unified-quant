@@ -17,6 +17,8 @@ _INSTRUMENT_SUFFIXES = {value: key for key, value in _EXCHANGE_SUFFIXES.items()}
 # capability: raw provider records must pass through an owning dataset contract
 # before a factor or execution path can consume them.
 TUSHARE_RESEARCH_ENDPOINTS = frozenset({
+    "stock_basic",
+    "suspend_d",
     "daily_basic",
     "index_classify",
     "index_member_all",
@@ -33,6 +35,8 @@ TUSHARE_RESEARCH_ENDPOINTS = frozenset({
 })
 
 _RESEARCH_QUERY_FILTERS: dict[str, frozenset[str]] = {
+    "stock_basic": frozenset({"exchange", "list_status"}),
+    "suspend_d": frozenset({"trade_date", "ts_code"}),
     "daily_basic": frozenset({"trade_date", "ts_code"}),
     "index_classify": frozenset({"level", "index_code", "parent_code"}),
     "index_member_all": frozenset({"ts_code", "l1_code", "l2_code", "l3_code"}),
@@ -212,6 +216,8 @@ class TushareAdapter:
         allowed = _RESEARCH_QUERY_FILTERS[endpoint] | {
             "end_date", "is_new", "fields", "src"
         }
+        if endpoint == "suspend_d":
+            allowed = allowed | {"suspend_type"}
         unknown = set(params) - allowed
         if unknown:
             raise ContractError(
@@ -227,6 +233,8 @@ class TushareAdapter:
             raise ContractError(f"{endpoint} query requires a non-empty scope filter")
         if endpoint == "top_list" and "trade_date" not in scoped:
             raise ContractError("top_list query requires trade_date")
+        if endpoint == "suspend_d" and "trade_date" not in scoped:
+            raise ContractError("suspend_d query requires trade_date")
         if endpoint == "report_rc" and "start_date" in scoped and not params.get("end_date"):
             raise ContractError("report_rc start_date query also requires end_date")
         if "end_date" in params and "start_date" not in params:
@@ -236,12 +244,10 @@ class TushareAdapter:
     def delisted_instruments(self) -> set[str]:
         """Instruments the provider marks as delisted as of now (``list_status='D'``).
 
-        This is a point-in-time truth, not an event date: at the measured account
-        level ``stock_basic`` never returns ``out_date`` (it is dropped even when
-        requested through ``fields``), ``namechange`` carried no delisting row for
-        the one instrument that motivated this helper, and ``stk_premarket`` is not
-        permitted. Callers may therefore only use it to excuse an absence that
-        already looks total, never to date-bound one.
+        This convenience method intentionally returns only status. Read
+        ``stock_basic`` through ``research_data`` with explicit ``fields`` and
+        publish the response to ``TushareDependencyStore`` when a reproducible
+        ``delist_date`` is needed for historical gap classification.
         """
         frame = self.stock_basic(list_status="D")
         if frame.empty:

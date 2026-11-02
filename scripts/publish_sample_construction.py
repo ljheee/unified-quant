@@ -27,16 +27,24 @@ Usage:
       --semantic-version 1.0.0 \
       --quality-decisions-json evidence/.../decisions.json \
       --out evidence/.../sample-construction.json
+
+To prepare external-review material before a decision exists, replace
+`--quality-decisions-json` with `--candidate-frame-out <candidate.parquet>`.
+That mode writes the deterministic frame and a pending-review report to `--out`
+without publishing to `SampleConstructionStore`.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 from datetime import date
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from uq.contracts.artifacts import UniverseSnapshotStore
@@ -46,7 +54,11 @@ from uq.errors import ContractError
 from uq.execution.market_dataset_publisher import MarketDatasetPublisher
 from uq.execution.market_source import PublishedPaperMarketData
 from uq.factors.store import FactorStore
-from uq.models.sample_construction import SampleConstructionBuilder, select_training_sample
+from uq.models.sample_construction import (
+    SampleConstructionBuilder,
+    select_training_sample,
+    serialize_sample_frame,
+)
 from uq.research_chain.membership_input import filtered_factor_frame, verify_request_input_sets
 from uq.research_chain.owning_contracts import LabelStore, SampleConstructionStore
 
@@ -109,6 +121,76 @@ def _partition_set(path: Path) -> dict[str, Any]:
     return document
 
 
+def _write_review_candidate(
+    *,
+    report_path: Path,
+    frame_path: Path,
+    manifest: dict[str, Any],
+    frame: pd.DataFrame,
+    dropped_rows: dict[str, Any],
+    dropped_labels: dict[str, Any],
+) -> dict[str, Any]:
+    """Write deterministic review material without publishing or approving it."""
+    artifact, checksum = serialize_sample_frame(frame)
+    if checksum != manifest.get("data_checksum_sha256"):
+        raise ContractError("review candidate bytes disagree with sample manifest checksum")
+    frame_path.parent.mkdir(parents=True, exist_ok=True)
+    if frame_path.exists():
+        if frame_path.is_symlink() or hashlib.sha256(frame_path.read_bytes()).hexdigest() != checksum:
+            raise ContractError(f"review candidate frame already exists with different bytes: {frame_path}")
+    else:
+        frame_path.write_bytes(artifact)
+    if hashlib.sha256(frame_path.read_bytes()).hexdigest() != checksum:
+        raise ContractError("review candidate frame failed checksum read-back")
+
+    features = manifest["ordered_features"]
+    values = frame[features].to_numpy(dtype="float64", copy=False)
+    labels = frame["label"].to_numpy(dtype="float64", copy=False)
+    dates = pd.to_datetime(frame["datetime"])
+    report = {
+        "record_version": 1,
+        "kind": "sample_construction_review_candidate",
+        "review_status": "pending_external_quality_decision",
+        "required_decision": {
+            "binding_type": "sample_construction_v1",
+            "bound_generation_id": manifest["generation_id"],
+            "subject_content_sha256": manifest["generation_id"],
+            "status": "passed",
+        },
+        "sample_manifest": manifest,
+        "frame_artifact": {
+            "path": Path(os.path.relpath(frame_path, report_path.parent)).as_posix(),
+            "data_checksum_sha256": checksum,
+            "row_count": len(frame),
+            "columns": list(frame.columns),
+        },
+        "review_summary": {
+            "rows_before_selection": manifest["rows_before_selection"],
+            "rows_after_selection": len(frame),
+            "instruments": int(frame["instrument"].nunique()),
+            "sessions": int(dates.dt.normalize().nunique()),
+            "first_session": dates.min().date().isoformat(),
+            "last_session": dates.max().date().isoformat(),
+            "feature_count": len(features),
+            "non_finite_feature_values": int((~np.isfinite(values)).sum()),
+            "non_finite_label_values": int((~np.isfinite(labels)).sum()),
+            "label_quantiles": {
+                key: float(frame["label"].quantile(q))
+                for key, q in (("p01", 0.01), ("p50", 0.50), ("p99", 0.99))
+            },
+            "dropped_feature_rows": dropped_rows,
+            "dropped_label_rows": dropped_labels,
+        },
+    }
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    if report_path.exists() and report_path.read_text(encoding="utf-8") != payload:
+        raise ContractError(f"review candidate report already exists with different content: {report_path}")
+    if not report_path.exists():
+        report_path.write_text(payload, encoding="utf-8")
+    return report
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--factor-root", type=Path, required=True)
@@ -138,9 +220,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--sample-name", required=True)
     parser.add_argument("--semantic-version", required=True)
-    parser.add_argument("--quality-decisions-json", type=Path, required=True)
+    parser.add_argument("--quality-decisions-json", type=Path)
+    parser.add_argument(
+        "--candidate-frame-out",
+        type=Path,
+        help="write deterministic unapproved Parquet review material and stop before publishing",
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
+
+    if args.candidate_frame_out is not None and args.quality_decisions_json is not None:
+        return _refuse("--candidate-frame-out is mutually exclusive with --quality-decisions-json")
+    if args.candidate_frame_out is None and args.quality_decisions_json is None:
+        return _refuse(
+            "publication requires --quality-decisions-json; candidate mode requires --candidate-frame-out"
+        )
 
     partition_set = _partition_set(args.factor_partition_set)
     window_start = date.fromisoformat(partition_set["window_start"])
@@ -253,6 +347,26 @@ def main(argv: list[str] | None = None) -> int:
         dropped_rows=dropped_rows,
         dropped_labels=dropped_labels,
     )
+    if args.candidate_frame_out is not None:
+        try:
+            report = _write_review_candidate(
+                report_path=args.out,
+                frame_path=args.candidate_frame_out,
+                manifest=manifest,
+                frame=sample_frame,
+                dropped_rows=dropped_rows,
+                dropped_labels=dropped_labels,
+            )
+        except (ContractError, OSError, ValueError) as exc:
+            return _refuse(f"sample construction review candidate failed: {exc}")
+        print(json.dumps({
+            "status": report["review_status"],
+            "generation_id": manifest["generation_id"],
+            "rows": len(sample_frame),
+            "frame_checksum_sha256": manifest["data_checksum_sha256"],
+            "out": str(args.out),
+        }, ensure_ascii=False))
+        return 0
     try:
         decision = _load_decision(
             args.quality_decisions_json,

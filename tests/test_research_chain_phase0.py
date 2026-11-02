@@ -20,7 +20,7 @@ from uq.errors import ContractError
 from uq.research_chain.contracts import validate_provider_config_ref, validate_research_layout
 from uq.research_chain.owning_contracts import FeatureSchemaStore, LabelStore
 from uq.models.features import FeatureSchemaBuilder
-from uq.models.labels import LabelBuilder
+from uq.models.labels import LabelBuilder, adjusted_price_input_checksum
 from uq.portfolio.builder import PortfolioDefinitionBinding
 from uq.contracts.artifacts import UniverseSnapshotStore
 from uq.contracts.factor_governance import FactorRegistry
@@ -526,11 +526,7 @@ def _adjusted_frame() -> pd.DataFrame:
 
 
 def _binding(frame: pd.DataFrame) -> dict:
-    ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort")
-    checksum = sha256_json({"rows": [
-        [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
-        for row in ordered[["instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"]].itertuples(index=False)
-    ]})
+    checksum = adjusted_price_input_checksum(frame)
     return {
         "binding": "adjusted_price", "dataset": "bars_adjusted", "schema_version": "adjusted-v1",
         "partition_date": "2026-01-15", "generation_id": "0" * 64,

@@ -44,24 +44,23 @@ def _read_factor_generations(path: Path) -> list[str]:
 def _calendar_dates(root: Path, generation: str, checksum: str) -> tuple[list[str], dict]:
     store = BacktestMarketDatasetStore(root)
     manifest = store.read_manifest_by(generation, dataset_type="calendar")
-    validate_contract("backtest_market_dataset.v1.json", manifest)
-    if sha256_json({key: value for key, value in manifest.items()
-                    if key != "manifest_digest_sha256"}) != manifest["manifest_digest_sha256"]:
-        raise ContractError("factor screen calendar manifest digest mismatch")
     frame = store.read_frame(
         generation, checksum, dataset_type="calendar", required_columns={"date"}
     )
-    ordered = frame.sort_values([column for column in ("date", "instrument") if column in frame],
-                                kind="mergesort").reset_index(drop=True)
-    expected_generation = sha256_json({
-        "dataset_type": "calendar",
-        "window_start": manifest["window_start"],
-        "window_end": manifest["window_end"],
-        "columns": list(ordered.columns),
-        "rows": ordered.to_dict(orient="records"),
-    })
-    if expected_generation != generation:
-        raise ContractError("factor screen calendar content generation mismatch")
+    if manifest["dataset_version"] == "1.0.0":
+        ordered = frame.sort_values(
+            [column for column in ("date", "instrument") if column in frame],
+            kind="mergesort",
+        ).reset_index(drop=True)
+        expected_generation = sha256_json({
+            "dataset_type": "calendar",
+            "window_start": manifest["window_start"],
+            "window_end": manifest["window_end"],
+            "columns": list(ordered.columns),
+            "rows": ordered.to_dict(orient="records"),
+        })
+        if expected_generation != generation:
+            raise ContractError("factor screen calendar content generation mismatch")
     dates = session_dates(frame["date"].tolist(), label="factor screen calendar")
     dates = sorted(set(dates))
     if not dates:

@@ -19,7 +19,7 @@ from uq.models.accepted_store import AcceptedFactorIndexRuntime
 from uq.models.dataset import DatasetBuilder
 from uq.models.dataset_writer import DatasetWriter
 from uq.models.definition import ModelDefinitionBuilder
-from uq.models.labels import LabelBuilder
+from uq.models.labels import LabelBuilder, adjusted_price_input_checksum
 from uq.models.features import FeatureSchemaBuilder
 from uq.models.predictions import PredictionBuilder
 from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
@@ -209,12 +209,7 @@ class TestEndToEndPipeline:
                 "schema_version": "adjusted-v1",
                 "partition_date": "2026-01-09",
                 "generation_id": DIGEST,
-                "data_checksum_sha256": sha256_json({"rows": [
-                    [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
-                    for row in adjusted_frame[[
-                        "instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"
-                    ]].sort_values(["instrument", "datetime"], kind="mergesort").itertuples(index=False)
-                ]}),
+                "data_checksum_sha256": adjusted_price_input_checksum(adjusted_frame),
                 "visible_cutoff": "2026-01-09T15:00:00+08:00",
             }],
         )
@@ -574,10 +569,7 @@ class TestQlibRuntimeTrainer:
             upstream_bindings=[{
                 "binding": "adjusted_price", "dataset": "tamper_bars", "schema_version": "adjusted-v1",
                 "partition_date": "2026-01-09", "generation_id": DIGEST,
-                "data_checksum_sha256": sha256_json({"rows": [
-                    [str(row[0]), pd.Timestamp(row[1]).isoformat(), float(row[2]), float(row[3]), bool(row[4]), str(pd.Timestamp(row[5]).date())]
-                    for row in adjusted_frame[["instrument", "datetime", "close", "adj_factor", "suspended", "listing_date"]].sort_values(["instrument", "datetime"], kind="mergesort").itertuples(index=False)
-                ]}),
+                "data_checksum_sha256": adjusted_price_input_checksum(adjusted_frame),
                 "visible_cutoff": "2026-01-09T15:00:00+08:00",
             }],
         )

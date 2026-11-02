@@ -6,15 +6,15 @@
 
 | 范围 | 当前证据 | 尚待完成 |
 | --- | --- | --- |
-| 贯穿前置：数据 onboarding、PIT、依赖与生产评审 | gitignore 的 `data/trading-grade-history/` 已含 2024-01-01..2026-10-30：4 类全市场日频 raw Tushare 输入、SW2021 Y/N 行业成员、37 个 `csi-all` 月度成分快照和 683 个 v2 canonical bars 分区；7 类财报/预测端点已做单股真实权限试查；新增 immutable Tushare candidate builder，可复核源快照与治理日历绑定 | readiness 阻断：17 个成员行情缺口不能被 `suspend_d` 解释，2 个标的不足 60 个行情日；14/17 当前出现在退市名单但缺历史退市日期，不能据此豁免。新候选历史快照未保存当时 provider vintage，清单明确 strict PIT=false，尚无经审评的 PIT exposure/factor panels；SW 有效期不等于 transaction-time PIT；`report_rc` 无法支持完整面板；生产 reviewer key provisioning |
+| 贯穿前置：数据 onboarding、PIT、依赖与生产评审 | gitignore 的 `data/trading-grade-history/` 已含 2024-01-01..2026-10-30：4 类全市场日频 raw Tushare 输入、SW2021 Y/N 行业成员、37 个 `csi-all` 月度成分快照和 683 个 v2 canonical bars 分区；7 类财报/预测端点已做单股真实权限试查；新增 immutable Tushare candidate builder；另有 343 行退市日期快照、683 个逐日 `suspend_d(S)` 不可变快照和最新 readiness 离线复核 | 完整 snapshot-backed readiness 已通过：12 个证券的缺失日落在有效退市日及之后；7 条官方公告区间记录（688766 一段、北交所六段）解释停牌缺口；无未解释必需行情缺口。300096/300205 的短历史仅位于 60-session warmup，记录为 informational。新候选历史快照未保存当时 provider vintage，清单明确 strict PIT=false，尚无经审评的 PIT exposure/factor panels；SW 有效期不等于 transaction-time PIT；分析师预期是可选因子扩展而非主模型比较前置；生产 reviewer key provisioning |
 | 阶段 0：冻结原基线 | `evidence/trading-grade/baseline-v1.json` 保存真实 request/run/result、split、特征、模型、成本、制品摘要和数据根；原回测三份制品经 store 读回核验 | 原执行代码/锁摘要为零、原上市日期映射未保存，旧结果仍不能宣称可从零复现；修复后全 A 性能基线尚未测量 |
 | 阶段 0：绑定机制 | `provenance.py` 核验 CLI 实际源码/配置和锁文件；`listing_snapshot.py` 保存可离线重放的上市日期映射；`telemetry.py` 保存独立 attempt 与导出文件写入、清单校验、评审绑定、发布前/owning 读回、receipt 绑定和阶段发布计时；新增不可变实验归档入口，读回核验研究结果、配对评估和环境/计时绑定 | 真实全 A 实验归档、性能基线和源码字节完整重放验证 |
-| 阶段 1：可信评估 | 原基线已冻结；新增配对已扣成本回测的超额/IR、两种胜率、年度/指定市场状态、回撤恢复、换手及重叠修正 IC/RankIC；报告归档输入并读时重算；新增滚动/扩展 fold 规划、时间隔离、一年覆盖门槛、已评审 request 批量执行/读回与完成结果重试；真实 Qlib 短单折集成已测；标签三问书面审计；`audit_label_design.py` v2 绑定独立治理日历、逐日核对原始分区并验证每个非空标签的精确五 session bars grid；新增 v3/v4 实际持仓单票/行业/现金暴露与前日成交额流动性代理；新增等权/市值/行业中性 benchmark owning panel 与同配置 v3/v4 发布入口；连续共享账户 OOS 回放与期末清仓当前限定 v3 | 新 2024-2026 canonical bars 上的 readiness/质量复核通过后，重发 factor/label/export 并完成至少一年、三状态的真实多折实验；退市 PIT 源/退出价格/样本缺口解释；停牌/涨跌停/参与率下未完成清仓时的真实历史处置验收；受治理历史市值暴露与行业/流动性来源核准；完整 OOS/PIT 证据 |
+| 阶段 1：可信评估 | 原基线已冻结；新增配对已扣成本回测的超额/IR、两种胜率、年度/指定市场状态、回撤恢复、换手及重叠修正 IC/RankIC；报告归档输入并读时重算；新增滚动/扩展 fold 规划、时间隔离、一年覆盖门槛、已评审 request 批量执行/读回与完成结果重试；真实 Qlib 短单折集成已测；新窗口标签三问书面审计；`audit_label_design.py` v2 绑定独立治理日历、逐日核对原始分区并验证每个非空标签的精确五 session bars grid；新增 v3/v4 实际持仓单票/行业/现金暴露与前日成交额流动性代理；新增等权/市值/行业中性 benchmark owning panel 与同配置 v3/v4 发布入口；连续共享账户 OOS 回放与期末清仓当前限定 v3 | snapshot-backed readiness 通过；`return_5d/2.0.0` 与 Alpha158/2.0.0 已重发并审计；623 个因子分区绑定 digest `3676c2af3c15900ad6824fb151f4a7244fa8a5fadf0332b1c9c249a64d4c7fee`；新训练样本候选已生成，2,997,703 行/618 sessions/157 特征，独立外部质量决定仍待完成；测试密钥 smoke 样本已发布并回读，receipt 为 `data/trading-grade-history/reports/sample-construction-alpha158-test-key-smoke-publication.json`，但 artifact 仅在隔离测试根，不是正式质量批准。尚无锁定 model dataset、已评审 fold requests、regime 证据或真实 OOS 结果；退市时点可知性、真实历史处置和受治理市值/行业来源仍待确认 |
 | 阶段 2：交易与成本 | v3 原始价格和可见执行事实契约；显式参与率与双边部分成交、历史板块/ST/除权参考限价、冲击/最低佣金、行业/单票/现金/调仓/换手限制；已评审基线重放与三种成本压力、资金网格容量诊断入口；新增 v4 公司行为事件面板：除息日应收入 NAV、支付日现金可用、送股上市日入账且次 session 才可卖，权利发行标的全窗口排除，缺覆盖/关键日期/碎股 fail-closed；旧版本保留 | 历史执行事实、分红与权利发行源的真实全窗口审计；冲击/成交假设校准；真实保守成本下结论稳定性与可承载资金证据；v4 仅 synthetic 验证，未有真实事件源验收；paper 对账与连续跨折回放仍限 v3 |
-| 阶段 3：模型 | `qlib_linear` 保留；LightGBM 已有 model-definition v2、Qlib 训练、受治理 artifact store、日期推理读取；Research Chain v7 request/template 现可选择 LightGBM；另有最多三个候选的验证段 RankIC 选择器；新增 `compare_training_models.py`，验证共享数据 checksum、特征、标签、split、组合模板和同成本 v3 回测，再发布 candidate-minus-baseline 诊断 | 至少一年真实 OOS 的 IR、超额和贡献分散证据；整个研究程序的多重比较预算仍未定义 |
-| 阶段 4：因子 | 保留 157 个 Alpha158 特征；新增已有受治理因子 IC/RankIC + HAC、Spearman 共线性、top-N 换手和 v3 成本代理；新增 Tushare 8 个估值/换手/量比/资金流候选特征及 market-cap/liquidity exposure 物化，绑定逐日 raw generations 与 canonical 日历；新增候选 IC/HAC screen 与基于 JSON policy 的验证集 shortlist；现有 PIT exposure panel owning store、`feature_preprocessing.v2`/`feature_schema.v2` 和 Research Chain 重算链路保留 | Tushare 历史响应没有原始 provider vintage，候选 bundle 严格 PIT=false，不能升级到 owning store或用于 OOS 结论；需要历史公告时间与全市场基本面覆盖、分析师预期来源、行业 transaction-time PIT、外部源质量批准后才可发布；单因子增量、真实成本和跨时期样本外贡献仍待验收 |
+| 阶段 3：模型 | `qlib_linear` 保留；LightGBM 已有 model-definition v2、Qlib 训练、受治理 artifact store、日期推理读取；Research Chain v7 request/template 现可选择 LightGBM；另有最多三个候选的验证段 RankIC 选择器；新增 `compare_training_models.py`，验证共享数据 checksum、特征、标签、split、组合模板和同成本 v3 回测，再发布 candidate-minus-baseline 诊断；主比较使用现有 Alpha158 输入，不要求分析师预期数据 | 训练样本候选已绑定生成号及 Parquet checksum；测试密钥 smoke owning-store 发布已验证，但正式独立签名的 `sample_construction_v1` 决定与正式 store 发布仍待完成；其后还缺逐折已评审 requests、同源 model datasets、真实 regime 标记和一年以上 OOS 的 IR/超额/贡献分散证据；整个研究程序的多重比较预算仍未定义 |
+| 阶段 4：因子 | 保留 157 个 Alpha158 特征；新增已有受治理因子 IC/RankIC + HAC、Spearman 共线性、top-N 换手和 v3 成本代理；新增 Tushare 8 个估值/换手/量比/资金流候选特征及 market-cap/liquidity exposure 物化，绑定逐日 raw generations 与 canonical 日历；新增候选 IC/HAC screen 与基于 JSON policy 的验证集 shortlist；现有 PIT exposure panel owning store、`feature_preprocessing.v2`/`feature_schema.v2` 和 Research Chain 重算链路保留 | Tushare 历史响应没有原始 provider vintage，候选 bundle 严格 PIT=false，不能升级到 owning store或用于 OOS 结论；仍需历史公告时间与全市场基本面覆盖、行业 transaction-time PIT、外部源质量批准后才可发布。分析师预期为可选增强特征，不阻塞阶段 3 主模型比较；单因子增量、真实成本和跨时期样本外贡献仍待验收 |
 | 阶段 5：组合与风险 | v1 等权兼容；v2 softmax 分数加权；v3 风险平价（历史样本协方差、严格前序收益、完整窗口/正定校验）与行业中性（top-N 内行业等额预算、行业内等权）已接入；离线收益源绑定交易日历，行业来源绑定 v3 回测配置的开盘前可见 execution facts；v3 industry cap 按比例缩减并留存现金；Research Chain v8 使用 portfolio-definition template v3；v3 最大回撤停止与目标波动率控制可选启用 | 新 bars 尚未转成并通过质量审评的历史收益/exposure panels；实际 PIT 行业源质量与覆盖审计；风险平价/行业平衡在真实成本和多期样本下验收；风险预算与回撤/波动控制的年度实证效果 |
-| 阶段 6：执行验证 | 现有确定性 paper 回放保留；新增单日及完整窗口 paper/v3 回测成交差异入口，要求同一目标权重、完整决策日覆盖、下一交易日和五项显式预算 | 使用真实历史同源结果进行逐日对账与预算裁决；生产评审 provisioning；小资金真实成交率/滑点/冲击/权重偏差证据（broker/live 路径仍受既有禁止规则约束，不能自行开放） |
+| 阶段 6：执行验证 | 现有确定性 paper 回放保留；新增单日及完整窗口 paper/v3 回测成交差异入口，要求同一目标权重、完整决策日覆盖、下一交易日和五项显式预算 | 使用真实历史同源结果进行逐日对账与预算裁决；生产评审 provisioning；小资金实盘属于架构禁止范围，不纳入本轮执行，须经独立维护者决策后才可重开 |
 | 性能与总体完成定义 | 已有粗粒度阶段计时入口，计时不改变逻辑结果 | 当前 HEAD 全 A 基线与可重复加速；一年多状态稳定超额、容量和风险合格、标签审计、paper 与小资金验证及下一轮调仓结论全部成立 |
 
 ## 已交付入口与复现约定
@@ -754,3 +754,98 @@ Shortlist 不自动改 factor definition，不是跨研究程序的多重比较�
 通过。两套仍有既有 `SettingWithCopyWarning`；Qlib/Pandas 有 NumPy timedelta deprecation warning。本轮未调用
 vendor 网络、未读取 `.env`、未发布 exposure/factor owning artifacts、未运行认证 gate/远程矩阵/实盘。源码和
 文档验证基于未提交工作树 HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`。
+
+## 第三十二轮：退市日期快照与 readiness 生命周期核验
+
+查证 Tushare 官方 `stock_basic` 文档后，修正原台账“当前接口不提供历史退市日期”的陈述：该接口列出 `delist_date`，注明 2000 积分可调用、单次上限 6000 行（[官方文档](https://tushare.pro/document/2?doc_id=25)）。将 `stock_basic` 加入有界研究端点和不可变依赖快照；`_RESPONSE_LIMITS` 同步加上 6000 行拒绝阈值。通过 2000 积分真实接口获取 `list_status=D`、`ts_code/list_status/list_date/delist_date` 快照，343 行均有退市日期；generation 为 `718a95b7a5a0460b5ed7830874fdee916a54f8b475ea2d4f6a12f9c655331504`，data checksum 为 `49ce8e613a2db899fd25b2dba919b15bfc3f1bd289996f1d481ca88ee34ad0d9`。
+
+`validate_training_readiness.py` 新增 `--delisting-snapshot-generation`，读取并记录源 generation 与抓取时间。日期门禁仅将退市日之后缺失的必要交易日记为 informational，退市日及之前缺口继续 blocking；跳过 suspension 查询时，活跃期缺口明确报告为 blocking `unverified_bar_gap`。原 full suspension report 仍是 17 个缺口、`300096.XSHE=47` 与 `300205.XSHE=46` 个 bar sessions。退市日期交叉检查覆盖 14 个 gap names；这些名字各自仍含退市日或之前的缺失交易日，因此日期信息不能解除 17 个名字的阻断。新的 skip-suspensions 集成报告单独标记为不完整核验：823 个未核实 gap candidates、12 个名字合计 162 个退市日后缺失 sessions、2 个不足 60 sessions 的标的。
+
+同轮做了 000861 的新浪日线只读探查：接口成功返回 1000 根 bars，但目标日 `2024-07-18` 不在响应中；另一个在市标的的目标日返回了 bar。该端点缺少 canonical 所需的成交额、复权因子、停牌状态及历史限价事实，因此没有把新浪数据写入 canonical store。TDX bars 既有抽查仍超时；Tushare `daily` 的既有 19 次按代码查询没有返回缺失日。当前缺数据的 source repair 仍未解决。
+
+分析师预期数据已在计划中明确为阶段 4 的可选增强因子，不是阶段 3 Alpha158 线性模型与 LightGBM 主比较的前置条件。
+
+定向回归：`.venv/bin/python -m pytest tests/test_tushare_dependency_store.py tests/test_fetch_tushare_dependency.py tests/test_training_readiness.py` → `74 passed`。真实 683-session readiness CLI 集成检查使用 `--skip-suspensions`，验证快照读回和日期报告路径；由于跳过停牌证据，它不是完整 readiness 通过。普通完整套件 `.venv/bin/python -m pytest` → `1617 passed, 33 skipped`；Qlib 完整套件 `.venv-qlib/bin/python -m pytest` → `1649 passed, 1 skipped`。两套均为本地验证，不代表认证矩阵。快照、报告及行情留在 gitignored data 根；凭证仅通过子进程环境注入，未打印或持久化。
+
+## 第三十三轮：停牌历史快照全量落盘与 readiness 复算
+
+将 `suspend_d` 加入同一原始依赖快照契约，支持按 session 的断点续抓取和 5000 行截断拒绝；`fetch_tushare_dependency.py --endpoint suspend_d --range-start 2024-01-01 --range-end 2026-10-30` 为每个交易日固定 `suspend_type=S`。实际 2000 积分请求获得 683 个日期快照、共 9,237 行，单日最多 61 行；每个 Parquet 和 manifest 均由 owning store checksum 读回，数据留在 gitignored source root。
+
+`validate_training_readiness.py --suspension-snapshot-root` 现在要求该窗口每个交易日均存在确切的 `trade_date` + `suspend_type=S` 查询快照；缺一日或行日期与查询不符即配置失败。报告记录 snapshot count 与 683 个 generation/checksum 的集合 digest。用完整 suspension 和 delisting 快照离线复算得到 `blocked`：18 个未解释 gap names、2 个短历史标的；另有 12 个名字、162 个退市日后缺失 session 作为 informational 记录。与旧实时报告的 17 个名字相比，新快照增加 `688766.XSHG`，其 7 个连续缺失日为 `2025-11-27..2025-12-05`，其中交易日 `2025-11-27..28`、`2025-12-01..05`；该窗口不在 suspension 快照中，校验也显示当时 PIT universe 成员。Tushare `daily` 对该周返回 0 行，新浪 1000 行日线响应也未包含目标日期；没有将任一源的半字段响应写入 canonical。
+
+该轮完整 readiness 报告在 `data/trading-grade-history/reports/readiness-csiall-20240101-20261030-governed-snapshots.json`，停牌获取 receipt 在 `.../suspend-d-fetch-20240101-20261030.json`；readiness provenance digest 为 `2dc84d23a638d2e63f50bc9cc452897aea7cc650e9706e08094cfde76358ecab`。报告保持阻断，旧的 17 项数字已由本轮 18 项完整快照结果取代。Tushare 和新浪针对 688766 的 API 检查只读且未显示凭证；本轮没有写 canonical 行情、labels 或模型结果。
+
+## 第三十四轮：最终回归与剩余计划门槛
+
+更新当前计划对 readiness 状态的引用为完整快照核验的 18 个未解释缺口。两个历史 evidence index 的源码 SHA 已与当前 `validate_training_readiness.py` 和 `readiness.py` 对齐，`tests/test_adv_review_fixes.py::test_evidence_indexes_are_fresh_and_never_index_themselves` 通过。
+
+最终验证在未提交工作树（base HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`）顺序运行：`.venv/bin/python -m pytest` → `1623 passed, 33 skipped`；`.venv-qlib/bin/python -m pytest` → `1655 passed, 1 skipped`。Tushare snapshot、抓取和 readiness 定向套件为 `80 passed`。两套全量测试均有 pandas `SettingWithCopyWarning`；Qlib 环境另有 NumPy timedelta deprecation warnings。未运行 release certification gate、远程矩阵或实盘。
+
+计划目标仍不能标为完成：完整 snapshot-backed readiness 为 `blocked`（18 个未解释行情缺口、2 个不足 60 个行情日的标的）；目前没有基于新窗口重发并经审核的 factor/label/export、至少一年的真实 OOS 多折线性/LightGBM 配对结果，也没有三种市场状态、真实 PIT 暴露与生产 reviewer 凭证证据。分析师预期数据不在这条主比较链的前置条件内。按项目架构与用户已选模拟盘范围，本轮只以确定性 paper 为目标，小资金实盘不执行。没有静默删减 CSI-All 成员或拼接不完整行情来绕过门禁。
+
+本轮最初的 TDX 适配器失败不能作为行情源不可用证据：当时 `_client()` 用 `offset=1` 做探测，后来确认这不是有效的历史 bars 探测参数。既有记录显示 TDX 在 2026-08-21 曾由默认服务器成功返回 `600000`、`000001` 两只标的的真实日线。
+
+## 第三十五轮：修正 TDX bars 探测页长并重做正对照
+
+根据 2026-08-23 的 TDX 历史回归记录（短 offset 无法稳定定位目标日期，实际分页使用完整确定性页），修正 `MootdxSourceAdapter._client()` 和 `health_probe()`：连接探测与健康检查现在都请求配置的完整 `page_size`，并以 `600000` 作正对照。新增离线回归模拟“短页空、整页成功”，锁住两处探测都必须使用整页参数。
+
+按完整请求重新实测 `offset=800`：mootdx HQ 服务发现找到 38 台能响应证券数量查询的服务器；逐台请求 `600000` 均返回 0 行。另对本机缓存的 BESTIP.HQ 节点和一台已知 XDXR 节点请求 bars，仍为空。与此同时，`xdxr` 在 `115.238.90.165` 与 `110.41.147.114` 各返回 88 行，确认两台主机及该命令族可用。当前 bars 读数没有复现 2026-08-21 的成功结果，也不能推翻既往成功；`688766` 未得到可发布补行情，未写入 canonical。这个正对照与旧 `offset=1` 的空探测分开记录。
+
+定向 `.venv/bin/python -m pytest tests/test_mootdx_source.py tests/test_real_chain.py -q` → `17 passed`；普通全量 `.venv/bin/python -m pytest` → `1624 passed, 33 skipped`；Qlib 全量 `.venv-qlib/bin/python -m pytest` → `1656 passed, 1 skipped`。两套有既有 pandas `SettingWithCopyWarning`；Qlib 另有 NumPy timedelta deprecation warnings。未运行 release gate、远程矩阵或实盘。
+
+## 第三十六轮：接入 easy_tdx MAC 日线客户端
+
+审阅 `Downloads/easy_tdx_mac实测说明.md` 后，按说明固定 easy_tdx `1.1.0` 的上游提交 `4820b4a0496899ece0b8ca4d7f4d66a5159da7f8`。只读实测三个 MAC 节点 `121.37.207.165`、`121.36.248.138`、`123.60.47.136`：每个节点均从 `600000` 取回 800 根日线（2023-07-13 至 2026-11-02）。集成适配器通过相同 live 路径返回请求的 2026-11-02 行；MAC `vol` 已是股，canonical `volume` 不再乘以 100。标准协议 `mootdx.xdxr` 保留独立 client，并单独实测 `600000` 返回 88 行。自动选择节点会写入 `~/.easy_tdx/config.json`，适配器改为对显式 MAC 节点逐个请求完整正对照，不写该配置。
+
+将 `bars_daily` 的行情请求切换到 MAC 客户端，XDXR 继续使用 mootdx。`easy-tdx` 作为 `real` extra 锁定到上述 Git commit；新增离线回归覆盖节点 failover、实际页长探测、市场路由及股为单位的成交量映射。针对原 readiness 缺口 `688766.XSHG` 再查 `2025-11-27..2025-12-05`，三个 MAC 节点都没有返回该窗口记录；未向 canonical 或历史根写入任何行情，因此原 18 个未解释缺口及 2 个短历史阻断均未解除。
+
+验证：`uv lock --check` 通过；`.venv/bin/python -m pytest` → `1626 passed, 33 skipped`。317 个 warning 为已有的 pandas `SettingWithCopyWarning` 与 NumPy timedelta deprecation。另以已安装锁定版本对三个 MAC 节点作 800 行只读请求，并通过适配器请求 `600000` 单日行情、以原标准协议取 `xdxr` 88 行。未运行 Qlib 全量、`scripts/run_gate.sh` 或远程认证矩阵；`uv.lock` 已变化，任何 release 声明前仍须完整认证。工作树基于 HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`；未读取 `.env`，未写真实行情 artifact。
+
+## 第三十七轮：连续停牌区间证据修正 readiness 误报
+
+联网核查公司正式披露后确认 `688766.XSHG` 为普冉股份。公司公告说明因筹划收购事项停牌，12 月 9 日复牌；12 月 2 日进展公告和 12 月 9 日复牌公告记载 11 月 25 日起停牌，复牌公告列示 12 月 8 日为停牌终止日。11 月 26 日初始停牌公告把起始日写为 11 月 26 日，存在一日文书不一致；两个可能起始日都早于本次七个缺口 session。三台 TDX MAC 和 Tushare `daily` 均未返回这七天的 bar，属于停牌预期，不是行情源漏数。
+
+根因是 Tushare `suspend_d(S)` 的历史快照未记录该持续停牌的中间七个 session，而 readiness 原先只按逐日快照解释缺行。新增受 schema 验证的 `--suspension-interval-evidence` 输入，要求每个区间提供发行人/交易所公告引用与官方域名 URL；只把日期区间展开到已声明的交易 session，与 daily `suspend_d` 合并，报告绑定输入文件 SHA-256 和逐区间引用。该输入必须与 suspension checking 一起使用，不能替代或绕过快照门禁；未写 canonical bars，也未修改原始 Tushare snapshot。
+
+证据输入 `evidence/trading-grade/suspension-interval-evidence.v1.json` 记录该七日区间及公告 `2025-083`、`2025-088`。用现有 683 个逐日快照、bars、PIT membership 和退市快照离线重算新报告：`data/trading-grade-history/reports/readiness-csiall-20240101-20261030-suspension-intervals.json`；688766 不再出现在 `unexplained_bar_gap`，新增区间解释 7 个 session。完整 readiness 仍为 `blocked`：其余 17 个未解释 gap names 和 2 个短历史标的仍需解决，未以本次更正宣称训练可用。
+
+回归先验证没有区间证据时 688766 会被报为 gap，再验证公告区间合并后 7 天被解释、没有补造 bars；另覆盖非官方 URL 和反向日期 fail-closed。`.venv/bin/python -m pytest tests/test_training_readiness.py -q` 通过；`.venv/bin/python -m pytest` → `1628 passed, 33 skipped`（317 个既有 pandas/NumPy warnings）。首次全量运行仅因两个历史 evidence index 的 readiness 脚本 SHA 过期而失败；更新两个 pin 后，freshness 定向检查与全量套件通过。未运行 Qlib 全量、release gate 或远程矩阵；没有写 canonical bars 或模型产物。验证针对基于 HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b` 的未提交工作树。
+
+## 第三十八轮：修正 warmup 短历史误报并构建新窗训练候选
+
+重新审阅 readiness 的旧报告后，发现 `readiness-csiall-20240101-20261030-corrected-20261102.json`
+仍将 `300096.XSHE` 与 `300205.XSHE` 的 47/46 个行情日按整个 683-session 窗口判为 blocking，未考虑两者的月度成分资格均在 60-session Alpha158 warmup 结束前终止。修正规则只把完全早于首个模型可见 session 的短历史成员记为 informational；任何在模型可见边界仍有 membership 的短历史标的仍会阻断。相同 683 日 bars、683 个不可变 `suspend_d(S)` 快照、退市快照及官方停牌区间输入，使用当前代码重跑生成
+`data/trading-grade-history/reports/readiness-csiall-20240101-20261030-reproduced-20261102.json`，结果 `passed`：5,430/5,430 个成员有 bars，必需行情字段 null rate 均为 0；174 个退市有效日及之后缺失 session 与上述两只 warmup-only 标的均为 informational。688766 的七个缺口日由公告区间解释，没有补造 bars。较早的 `corrected-20261102.json` 及第三十七轮“仍 blocked”的描述均已被该重跑结果取代。
+
+Alpha158/2.0.0 全窗发布完成：683 个治理 sessions 中跳过 60 个 warmup sessions，发布 623 个因子分区，3,428,678 行，5,430 个 instruments；299,032 行因至少一个因子不完整而未进入分区。分区集 digest 为
+`3676c2af3c15900ad6824fb151f4a7244fa8a5fadf0332b1c9c249a64d4c7fee`。用 `drop_unlabeled_rows`
+构造的新训练候选 generation 为 `2f4c3ad5afd26f8f56b51eb488a2e3cc90ef3fd0eaeb6a1867b8271ffcae1132`，包含
+2,997,703 行、157 个特征、618 个成熟标签 sessions（2024-04-03..2026-10-23）；Parquet
+1,646,331,515 bytes，SHA-256 为
+`6d170541ec5060fa2dcb51cc17208b8028e39e34a898ed6476a6561a6c029304`，独立重算一致。特征和标签非有限值均为 0；55,638 行没有标签键、29,103 行标签为 null，均按已声明策略剔除。候选报告在
+`data/trading-grade-history/reports/sample-construction-alpha158-20240403-20261030-review.json`，状态是
+`pending_external_quality_decision`。用仓库测试密钥生成的 smoke 决定已在隔离根
+`data/trading-grade-history/test-key-smoke/governed/` 发布并通过 owning-store manifest
+读取、Parquet 行列元数据与字节 checksum 回读；generation 与帧 checksum 分别为
+`2f4c3ad5afd26f8f56b51eb488a2e3cc90ef3fd0eaeb6a1867b8271ffcae1132` 与
+`6d170541ec5060fa2dcb51cc17208b8028e39e34a898ed6476a6561a6c029304`；完整记录见
+`data/trading-grade-history/reports/sample-construction-alpha158-test-key-smoke-publication.json`。该结果只验证 smoke
+发布链，不是独立质量决定；正式研究 store 仍未发布。
+
+分红端点原始数据修复不受实现进度影响：`div_proc` 现在按 provider 原值保存，`实施` 以外状态仍不会进入动作日程。`fetch_dividend_events.py` 新增逐日原子 checkpoint 与断点恢复。2026-04-19..2026-10-30 尾段已完成 195 个日期查询，53 个无公告日，142 个非空日期分区发布/核对，0 内容漂移。为补齐此前超时且没有逐日 receipt 的早期区间，当前正用 checkpoint 重查 2023-01-01..2026-04-18；截至本轮文档更新已完成 470/1,204 个日期，0 内容漂移，完整重读与 TDX 事件交叉审计尚未完成。`Tushare dividend` [官方接口文档](https://tushare.pro/document/2?doc_id=103)要求至少一个筛选参数，支持 `ann_date`，单次最多 2,000 行且 2,000 积分可调用；当前已落盘日期分区最大 1,857 行，未声称 rights issue 覆盖已解决。
+
+本轮验证：`.venv/bin/python -m pytest tests/test_fetch_dividend_events.py tests/test_dividend_events.py tests/test_adjustment_chain.py tests/test_sample_construction.py -q` 通过；普通全量
+`.venv/bin/python -m pytest` → `1647 passed, 34 skipped, 329 warnings`；Qlib 全量
+`.venv-qlib/bin/python -m pytest` → `1680 passed, 1 skipped, 332 warnings`；`uv lock --check` 与
+`git diff --check` 通过。警告仍为既有 pandas `SettingWithCopyWarning` 和 Qlib/NumPy timedelta deprecation。
+基于 HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b` 的未提交工作树；未运行认证 gate、远程矩阵或实盘。
+
+下一步正式门槛仍是独立外部签名的 `sample_construction_v1` 质量决定；收到后才能向正式研究根发布 owning sample、创建已评审 fold requests 并训练/比较模型。测试密钥 smoke artifact 不解除该门槛。月度 universe 精度按维护者批准口径接受并披露；真实 regime 标记、退市时点可知性结论、外部质量签名以及年度同成本 OOS / paper 仍未完成。分析师预期不在 Alpha158 线性与 LightGBM 主比较的前置范围内。
+
+## 第三十九轮：修正公司行为互校的两类精度误报
+
+对 2024-01-01..2026-10-30 的六标的 Tushare/TDX live pilot 逐项复核后，修正两类比较器误报。第一，TDX XDXR amount 经 mootdx 解码后携带 binary32 精度；例如 50.28 被表示为 50.279998779296875，旧的 float64 绝对比较刚好超出 `1e-6`。现在先按 binary32 投影比较，再使用原绝对容差，并以 50.27995 的真实差异回归确保没有掩盖材料差异。第二，688766 在 2024-06-06 的 Tushare 记录两种现金字段都为空、转增率为每股 0.4；TDX XDXR 对应送转为 4.0/十股。审计映射仅对这种“现金字段全空且送转比例明确”的纯送转事件按零现金进行比较，并在报告 `assumptions` 中保留标的、日期和理由；因子生产端原有的缺现金拒绝语义不变。该行现与 TDX 对齐。
+
+更正后的 live pilot 报告为 `data/trading-grade-history/reports/corporate-action-reconciliation-pilot-20240101-20261030.json`：6/6 instruments `agreed`，无 amount divergence、coverage divergence、no-overlap 或 refusal。该结果仅覆盖 6 只样本，不代表全市场；权利发行仍是 Tushare endpoint 的结构性缺项，full-universe source reconciliation 仍待完成。
+
+定向 `.venv/bin/python -m pytest tests/test_reconcile_corporate_actions.py tests/test_fetch_dividend_events.py tests/test_dividend_events.py tests/test_adjustment_chain.py -q` 通过（包含最后新增的混合纯送转/不可映射记录回退回归）；普通全量 `.venv/bin/python -m pytest` → `1651 passed, 34 skipped, 329 warnings`；Qlib 全量 `.venv-qlib/bin/python -m pytest` → `1684 passed, 1 skipped, 332 warnings`。2023-01-01..2026-04-18 dividend replay 已完成 1,204 天查询：388 天为空、816 天已有分区核对、0 新发布、0 内容漂移。样本候选 `2f4c3ad5afd26f8f56b51eb488a2e3cc90ef3fd0eaeb6a1867b8271ffcae1132` 仍待独立签名质量决定；因此不能发布 owning sample 或开始已治理的年度线性/LightGBM 比较。

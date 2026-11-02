@@ -16,17 +16,21 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pandas as pd
 
 from uq.adapters.tushare_2k import Tushare2kAdapter
 from uq.adapters.tushare_free import _to_instrument
 from uq.contracts.index_membership import IndexMembershipStore
+from uq.contracts.gate_contracts import sha256_json, validate_contract
 from uq.contracts.schema import load_schema
+from uq.contracts.tushare_dependency import TushareDependencyStore
 from uq.errors import ContractError
 from uq.pipeline.readiness import assess_readiness
 from uq.pipeline.readiness import sessions_by_instrument
@@ -155,6 +159,195 @@ def factor_sessions_from_document(document: Any) -> list[dt.date]:
     return sorted(set(sessions))
 
 
+def delistings_from_snapshot(
+    manifest: dict[str, Any], frame: pd.DataFrame
+) -> tuple[set[str], dict[str, dt.date]]:
+    """Normalize an immutable D-status stock_basic response for readiness.
+
+    The current status roster is used only as lifecycle evidence. A historical
+    gap is excused by ``delist_date`` on and after its effective date; gaps
+    strictly before the effective date remain blocking.
+    """
+    query = manifest.get("query")
+    if not isinstance(query, dict) or query.get("list_status") != "D":
+        raise ContractError("delisting snapshot must be scoped to stock_basic list_status=D")
+    requested_fields = {
+        value.strip() for value in str(query.get("fields", "")).split(",") if value.strip()
+    }
+    if not {"ts_code", "list_status", "delist_date"} <= requested_fields:
+        raise ContractError("delisting snapshot must request ts_code,list_status,delist_date")
+    if not {"ts_code", "list_status", "delist_date"} <= set(frame.columns):
+        raise ContractError("delisting snapshot lacks ts_code, list_status, or delist_date")
+
+    delisted: set[str] = set()
+    delist_dates: dict[str, dt.date] = {}
+    for row in frame[["ts_code", "list_status", "delist_date"]].itertuples(index=False):
+        code, status, raw_date = (str(row[0]).strip(), str(row[1]).strip(), row[2])
+        if status != "D":
+            raise ContractError("delisting snapshot contains a row outside list_status=D")
+        try:
+            instrument = _to_instrument(code)
+        except ValueError:
+            # Non-A-share rows cannot map into this readiness universe.
+            continue
+        delisted.add(instrument)
+        if pd.isna(raw_date) or not str(raw_date).strip():
+            continue
+        raw_text = str(raw_date).strip()
+        try:
+            parsed = (
+                dt.datetime.strptime(raw_text, "%Y%m%d").date()
+                if len(raw_text) == 8
+                else dt.date.fromisoformat(raw_text)
+            )
+        except ValueError as exc:
+            raise ContractError(f"invalid delist_date for {instrument}: {raw_text!r}") from exc
+        prior = delist_dates.get(instrument)
+        if prior is not None and prior != parsed:
+            raise ContractError(f"conflicting delist_date rows for {instrument}")
+        delist_dates[instrument] = parsed
+    return delisted, delist_dates
+
+
+def _source_trade_date(value: Any) -> dt.date:
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    text = str(value).strip()
+    try:
+        return dt.datetime.strptime(text, "%Y%m%d").date() if len(text) == 8 else dt.date.fromisoformat(text)
+    except ValueError as exc:
+        raise ContractError(f"invalid suspend_d trade_date: {text!r}") from exc
+
+
+def suspensions_from_snapshots(
+    root: Path, sessions: list[dt.date], notes: dict[str, Any]
+) -> dict[str, list[dt.date]]:
+    """Read exact daily suspend_d(S) responses from immutable source snapshots."""
+    store = TushareDependencyStore(root)
+    manifests = store.list_manifests("suspend_d")
+    by_query: dict[str, dict[str, Any]] = {}
+    for manifest in manifests:
+        key = json.dumps(manifest["query"], sort_keys=True, separators=(",", ":"))
+        prior = by_query.get(key)
+        if prior is None or manifest["source_fetched_at"] > prior["source_fetched_at"]:
+            by_query[key] = manifest
+
+    suspensions: dict[str, list[dt.date]] = {}
+    snapshot_bindings: list[dict[str, str]] = []
+    for session in sessions:
+        query = {"trade_date": session.strftime("%Y%m%d"), "suspend_type": "S"}
+        key = json.dumps(query, sort_keys=True, separators=(",", ":"))
+        manifest = by_query.get(key)
+        if manifest is None:
+            raise ContractError(f"missing suspend_d(S) snapshot for {session.isoformat()}")
+        verified_manifest, frame = store.read_frame(manifest["generation_id"], dataset="suspend_d")
+        if not {"ts_code", "trade_date"} <= set(frame.columns):
+            raise ContractError(f"suspend_d snapshot lacks required columns for {session.isoformat()}")
+        if not frame.empty:
+            observed = {_source_trade_date(value) for value in frame["trade_date"]}
+            if observed != {session}:
+                raise ContractError(f"suspend_d snapshot rows do not match {session.isoformat()}")
+            if "suspend_type" in frame.columns and set(frame["suspend_type"].astype(str)) != {"S"}:
+                raise ContractError(f"suspend_d snapshot contains non-suspension rows for {session.isoformat()}")
+            for code in frame["ts_code"].astype(str):
+                try:
+                    instrument = _to_instrument(code)
+                except ValueError as exc:
+                    notes.setdefault("suspension_unmapped_codes", []).append(f"{session}: {code}")
+                    continue
+                suspensions.setdefault(instrument, []).append(session)
+        snapshot_bindings.append({
+            "trade_date": session.isoformat(),
+            "generation_id": verified_manifest["generation_id"],
+            "data_checksum_sha256": verified_manifest["data_artifact"]["checksum_sha256"],
+        })
+    digest = sha256_json(snapshot_bindings)
+    notes["suspension_provenance"] = f"tushare_dependency:suspend_d(S):{digest}"
+    notes["suspension_snapshot_count"] = len(snapshot_bindings)
+    notes["suspension_snapshot_set_sha256"] = digest
+    return suspensions
+
+
+def suspension_intervals_from_document(
+    path: Path, sessions: list[dt.date], notes: dict[str, Any]
+) -> dict[str, list[dt.date]]:
+    """Expand source-cited issuer/exchange suspension intervals over sessions.
+
+    ``suspend_d`` snapshots can omit dates inside a long halt. This supplemental
+    evidence format records the cited interval without inventing daily provider
+    rows; only declared trading sessions in the inclusive date range are added.
+    """
+    try:
+        raw = path.read_bytes()
+        document = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ContractError(f"unreadable suspension interval evidence {path}") from exc
+    validate_contract("suspension_interval_evidence.v1.json", document)
+
+    official_hosts = ("cninfo.com.cn", "sse.com.cn", "szse.cn", "bse.cn")
+    expanded: dict[str, set[dt.date]] = {}
+    recorded_intervals: list[dict[str, Any]] = []
+    seen: set[tuple[str, dt.date, dt.date]] = set()
+    session_values = sorted(set(sessions))
+    for entry in document["intervals"]:
+        instrument = entry["instrument"]
+        start_text = entry["start_date"]
+        end_text = entry["end_date"]
+        try:
+            start = dt.date.fromisoformat(start_text)
+            end = dt.date.fromisoformat(end_text)
+        except ValueError as exc:
+            raise ContractError("suspension interval dates must be YYYY-MM-DD") from exc
+        if start.isoformat() != start_text or end.isoformat() != end_text or end < start:
+            raise ContractError("suspension interval dates must be ordered YYYY-MM-DD values")
+        identity = (instrument, start, end)
+        if identity in seen:
+            raise ContractError(f"duplicate suspension interval for {instrument}")
+        seen.add(identity)
+
+        for reference in entry["evidence"]:
+            host = (urlsplit(reference["url"]).hostname or "").lower()
+            if not any(host == domain or host.endswith(f".{domain}") for domain in official_hosts):
+                raise ContractError(
+                    f"suspension evidence URL is not on a supported issuer/exchange domain: {host}"
+                )
+
+        covered = [session for session in session_values if start <= session <= end]
+        expanded.setdefault(instrument, set()).update(covered)
+        recorded_intervals.append({
+            "instrument": instrument,
+            "start_date": start_text,
+            "end_date": end_text,
+            "session_dates_applied": [session.isoformat() for session in covered],
+            "evidence": entry["evidence"],
+        })
+
+    digest = hashlib.sha256(raw).hexdigest()
+    notes["suspension_interval_evidence"] = {
+        "path": str(path),
+        "sha256": digest,
+        "interval_count": len(recorded_intervals),
+        "intervals": recorded_intervals,
+    }
+    notes["suspension_interval_evidence_sha256"] = digest
+    return {instrument: sorted(values) for instrument, values in expanded.items()}
+
+
+def merge_suspension_dates(
+    base: dict[str, list[dt.date]], supplemental: dict[str, list[dt.date]]
+) -> tuple[dict[str, list[dt.date]], int]:
+    """Union supplemental interval sessions into the governed daily evidence."""
+    merged = {instrument: set(days) for instrument, days in base.items()}
+    added = 0
+    for instrument, days in supplemental.items():
+        prior = merged.setdefault(instrument, set())
+        added += len(set(days) - prior)
+        prior.update(days)
+    return {instrument: sorted(days) for instrument, days in merged.items()}, added
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="validate-training-readiness")
     parser.add_argument("--bars-root", type=Path, required=True, help="canonical store root")
@@ -163,6 +356,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--end", type=dt.date.fromisoformat, required=True)
     parser.add_argument("--min-sessions", type=int, default=60)
+    parser.add_argument(
+        "--warmup-sessions",
+        type=int,
+        default=60,
+        help="walk-forward warmup before the first model-visible session (default 60)",
+    )
     parser.add_argument("--label-horizon", type=int, default=5)
     parser.add_argument("--max-null-rate", type=float, default=0.0)
     parser.add_argument(
@@ -177,9 +376,34 @@ def main(argv: list[str] | None = None) -> int:
         help="do not query suspend_d; bar gaps are then reported without an explained/unexplained verdict",
     )
     parser.add_argument(
+        "--suspension-snapshot-root",
+        type=Path,
+        default=None,
+        help="read exact per-session suspend_d(S) snapshots instead of querying the live endpoint",
+    )
+    parser.add_argument(
+        "--suspension-interval-evidence",
+        type=Path,
+        default=None,
+        help=(
+            "supplement daily suspend_d with a schema-validated interval file citing issuer or "
+            "exchange notices; intervals are expanded over declared sessions and bound by SHA-256"
+        ),
+    )
+    parser.add_argument(
         "--skip-delistings",
         action="store_true",
         help="do not query stock_basic(list_status=D); delisted members stay unexplained gaps",
+    )
+    parser.add_argument(
+        "--delisting-snapshot-generation",
+        help="read a checksum-verified stock_basic(list_status=D) snapshot with delist_date",
+    )
+    parser.add_argument(
+        "--delisting-snapshot-root",
+        type=Path,
+        default=Path("data/trading-grade-history/source"),
+        help="Tushare dependency store root for --delisting-snapshot-generation",
     )
     parser.add_argument("--schema", type=Path, default=Path("config/schemas/bars_daily.v2.yaml"))
     parser.add_argument(
@@ -212,6 +436,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.suspension_interval_seconds < 0:
         raise SystemExit("--suspension-interval-seconds must not be negative")
+    if args.warmup_sessions < 0:
+        raise SystemExit("--warmup-sessions must not be negative")
+    if args.skip_suspensions and args.suspension_snapshot_root is not None:
+        raise SystemExit("--skip-suspensions cannot be combined with --suspension-snapshot-root")
+    if args.skip_suspensions and args.suspension_interval_evidence is not None:
+        raise SystemExit("--skip-suspensions cannot be combined with --suspension-interval-evidence")
+    if args.skip_delistings and args.delisting_snapshot_generation:
+        raise SystemExit("--skip-delistings cannot be combined with --delisting-snapshot-generation")
 
     schema = load_schema(args.schema)
     adapter = Tushare2kAdapter()
@@ -222,6 +454,7 @@ def main(argv: list[str] | None = None) -> int:
         # with --min-sessions 17 (below the 60-session research default) because
         # its 23-session smoke window cannot satisfy the default.
         "min_sessions_per_instrument": args.min_sessions,
+        "walk_forward_warmup_sessions": args.warmup_sessions,
         "label_horizon_sessions": args.label_horizon,
         "max_null_rate": args.max_null_rate,
         "suspension_interval_seconds": args.suspension_interval_seconds,
@@ -266,7 +499,13 @@ def main(argv: list[str] | None = None) -> int:
     bars = _bars_for_sessions(ManifestFirstReader(args.bars_root), schema, sessions, notes)
     membership = _members_by_session(IndexMembershipStore(args.membership_root), args.universe_id, sessions, notes)
     suspensions: dict[str, list[dt.date]] | None = None
-    if not args.skip_suspensions:
+    if args.suspension_snapshot_root is not None:
+        try:
+            suspensions = suspensions_from_snapshots(args.suspension_snapshot_root, sessions, notes)
+        except (ContractError, OSError, ValueError) as exc:
+            print(json.dumps({"status": "configuration_failure", "error": str(exc)}, ensure_ascii=False))
+            return 2
+    elif not args.skip_suspensions:
         # An upstream failure here must look like what it is - a gate that
         # could not run - not like a blocked verdict with no report behind it.
         try:
@@ -281,9 +520,49 @@ def main(argv: list[str] | None = None) -> int:
         except ContractError as exc:
             print(json.dumps({"status": "configuration_failure", "error": str(exc)}, ensure_ascii=False))
             return 2
+    if args.suspension_interval_evidence is not None:
+        try:
+            interval_suspensions = suspension_intervals_from_document(
+                args.suspension_interval_evidence, sessions, notes
+            )
+        except (ContractError, OSError, ValueError) as exc:
+            print(json.dumps({"status": "configuration_failure", "error": str(exc)}, ensure_ascii=False))
+            return 2
+        if suspensions is None:
+            # --skip-suspensions is rejected above; retain this check if another
+            # entry path ever makes the suspension baseline optional.
+            print(json.dumps({
+                "status": "configuration_failure",
+                "error": "suspension interval evidence requires suspension checking",
+            }, ensure_ascii=False))
+            return 2
+        suspensions, added = merge_suspension_dates(suspensions, interval_suspensions)
+        notes["suspension_interval_sessions_added"] = added
+        notes["suspension_provenance"] = (
+            f"{notes.get('suspension_provenance', 'unspecified')}"
+            f"+official_interval:{notes['suspension_interval_evidence_sha256']}"
+        )
     delisted: set[str] | None = None
+    delist_dates: dict[str, dt.date] | None = None
     delisted_provenance = "unspecified"
-    if not args.skip_delistings:
+    delist_date_provenance = "unspecified"
+    if args.delisting_snapshot_generation:
+        try:
+            manifest, frame = TushareDependencyStore(args.delisting_snapshot_root).read_frame(
+                args.delisting_snapshot_generation, dataset="stock_basic"
+            )
+            delisted, delist_dates = delistings_from_snapshot(manifest, frame)
+        except (ContractError, OSError, ValueError) as exc:
+            print(json.dumps({"status": "configuration_failure", "error": str(exc)}, ensure_ascii=False))
+            return 2
+        delisted_provenance = f"tushare_dependency:stock_basic:{args.delisting_snapshot_generation}"
+        delist_date_provenance = delisted_provenance
+        notes["delisting_snapshot_generation"] = args.delisting_snapshot_generation
+        notes["delisting_snapshot_fetched_at"] = manifest["source_fetched_at"]
+        notes["delisting_snapshot_checksum_sha256"] = manifest["data_artifact"]["checksum_sha256"]
+        notes["delisted_universe_size"] = len(delisted)
+        notes["delisted_date_count"] = len(delist_dates)
+    elif not args.skip_delistings:
         try:
             delisted = adapter.delisted_instruments()
         except ContractError as exc:
@@ -320,12 +599,15 @@ def main(argv: list[str] | None = None) -> int:
         members_by_session=membership,
         bars=bars,
         min_sessions_per_instrument=args.min_sessions,
+        warmup_sessions=args.warmup_sessions,
         label_horizon_sessions=args.label_horizon,
         max_null_rate=args.max_null_rate,
         suspensions=suspensions,
         suspension_provenance=str(notes.get("suspension_provenance", "unspecified")),
         delisted=delisted,
         delisted_provenance=delisted_provenance,
+        delist_dates=delist_dates,
+        delist_date_provenance=delist_date_provenance,
         excluded_instruments=excluded,
         excluded_provenance=str(notes.get("excluded_provenance", "unspecified")),
         factor_sessions=factor_sessions,

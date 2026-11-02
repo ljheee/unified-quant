@@ -4194,3 +4194,117 @@ paper-vs-backtest 对账仍只接受 v3，因为后两者没有跨折公司行�
 `tests/review_key.py` 的共享系统临时 PEM 被并发写入干扰；那次非代码失败后改为顺序执行，最终两套完整
 套件均通过。v4 stress/benchmark 路由回归各新增一例，定向两例通过。`compileall`、相关 CLI `--help` 和
 `git diff --check` 也通过；full release gate/远程矩阵未运行，因此没有作认证或 release 声明。
+
+## 2026-10-31 — Store integrity and identity review follow-up
+
+Addressed the additional review findings on the worktree based on HEAD
+`22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`:
+
+- **D-M1:** Applied the shared symlink guard across the governed stores in
+  `owning_contracts.py`, including `FactorExposureStore`, schema, label,
+  preprocessing, sample, adjusted-price, market-data and backtest-config stores.
+  Paths below the configured root reject symlinks on reads and writes; the store
+  root may itself be reached through a symlink. Regression coverage checks all
+  eight store families and proves a linked feature-schema family is rejected
+  before writing outside the root.
+- **D-M2:** Tushare dependency and factor-candidate publishers read staged
+  manifests and Parquet payloads back, validate checksums and shapes, and only
+  then publish the generation directory. Corrupt staged files are tested to
+  remain unpublished.
+- **D-M3:** Refreshed the data-source subsystem evidence pin and its verification
+  counts to this worktree; the previous pin and counts described an earlier
+  revision.
+- **O1/O2/O3:** Locked same-process query-index refresh after publication with a
+  regression test; corrected the lookup docstring to state that corruption of
+  the newest revision fails closed without fallback; documented that truncation
+  limits cover only 5 of 13 endpoints and do not imply full coverage.
+- **O4:** Mapping decisions now require the exact `binding_type` when one is
+  supplied, preventing a v2 run from inheriting the v1 family default.
+- **O5:** Published backtest market datasets now use identity profile v2, which
+  binds null-normalized rows and dtypes. Version-1 artifacts remain readable;
+  v2 reads recompute identity. The schema version documents the identity change.
+- **O6/O7:** The cost parity grid already had downstream regression coverage;
+  added a fetch-level test for the 500-symbol, single-session full-market query
+  branch.
+
+Sequential full-suite verification on this worktree: `.venv/bin/python -m
+pytest` → `1609 passed, 33 skipped`; `.venv-qlib/bin/python -m pytest` →
+`1641 passed, 1 skipped`. `git diff --check` passes. Existing Qlib/NumPy and
+pandas warnings remain. No release gate, remote certification matrix, or live
+vendor test was run; this is not a release certification.
+
+## 2026-11-02 — Readiness warmup false-positive and training-candidate follow-up
+
+Rechecked the latest readiness reports against the 60-session warmup actually used by
+the expanded walk-forward plan. `readiness-csiall-20240101-20261030-corrected-20261102.json`
+was still blocked because it treated `300096.XSHE` (47 bars) and `300205.XSHE` (46 bars)
+as short across the full window, although both monthly membership intervals ended before
+the first model-visible session. The rule now keeps these names visible as informational
+warmup-only history and continues to block short histories whose membership reaches the
+model-visible interval. Re-running the current readiness CLI with all immutable source
+bindings produced `data/trading-grade-history/reports/readiness-csiall-20240101-20261030-reproduced-20261102.json`:
+683 sessions, 5,430 members, 5,430 instruments with bars, zero required-field null rate,
+zero unexplained active-period bar gaps, and `status=passed`. The seven `688766.XSHG`
+missing sessions remain explained by cited issuer notices; no market bars were synthesized.
+The prior blocked report and the third-seventh-round blocked summary are superseded by
+this current-code reproduction.
+
+Added readiness regressions for both sides of the boundary: an instrument whose PIT
+membership ends during warmup is informational; one still a member after warmup remains
+blocking. Full-window Alpha158 factors and a sample-construction review candidate were
+also prepared. The candidate is generation
+`2f4c3ad5afd26f8f56b51eb488a2e3cc90ef3fd0eaeb6a1867b8271ffcae1132`, 2,997,703 rows × 157
+features, 618 labelable sessions, and Parquet SHA-256
+`6d170541ec5060fa2dcb51cc17208b8028e39e34a898ed6476a6561a6c029304`; the checksum was
+independently recomputed. It remains `pending_external_quality_decision` and has not been
+published or signed.
+
+Also made the dividend raw-event status preserve provider `div_proc` strings verbatim
+while action consumers still select exactly `实施`; added durable per-date checkpoint and
+resume to the Tushare dividend fetcher. Its 2026-04-19..2026-10-30 tail completed with no
+content drift. At review time, an idempotent full replay of 2023-01-01..2026-04-18 was
+still running at checkpoint date 2024-04-14; no full-range receipt or TDX event audit is
+claimed yet.
+
+The TDX/Tushare reconciliation entry point also compared every XDXR event against the
+announcement store's visible history, although this run's store begins at 2023-01-01.
+Added `--window-start`/`--window-end` to restrict both sides to the same effective
+ex-date interval, while preserving `--as-of` as the independent announcement cutoff.
+The regression includes a matching event inside the interval and matching events outside
+it, proving they do not create a false coverage divergence. This makes an honest bounded
+2024-2026 source check possible without implying that the event store contains all history.
+
+Targeted dividend/adjustment/sample suites pass. Sequential full suites on this worktree:
+`.venv/bin/python -m pytest` → `1647 passed, 34 skipped`; then
+`.venv-qlib/bin/python -m pytest` → `1680 passed, 1 skipped`. `uv lock --check` and
+`git diff --check` pass. Warnings are the existing pandas `SettingWithCopyWarning` and
+Qlib/NumPy timedelta deprecations. No certification gate, remote matrix, or broker
+execution was run. The candidate review, one-year model comparison, and deterministic
+paper reconciliation remain blocked on an independent signed sample-quality decision.
+
+## 2026-11-02 — Corporate-action event comparison precision false positives
+
+The bounded live reconciliation pilot found two false positives in the comparison
+layer. `mootdx` exposes XDXR amount fields as float64 values that preserve the TDX
+binary32 representation; 300750's Tushare 50.28 vs TDX 50.279998779296875 therefore
+crossed the old `1e-6` absolute threshold by about 0.00000022. The comparator now
+accepts equal binary32 projections before applying the same absolute tolerance, and
+regressions prove that a 50.27995 value still fails. This changes only source audit
+comparison, not adjustment factor calculation.
+
+The old pure-share fallback also excluded 688766's 2024-06-06 event because both
+cash fields were empty, even though Tushare had an explicit 0.4-per-share transfer
+and TDX had 4.0 per ten shares. The audit now maps such events as zero cash only
+when both cash fields are absent and the stock transfer/bonus rates are explicit;
+it records that assumption and date in the output. The producer's strict missing-
+cash behavior remains unchanged. A live six-instrument pilot over 2024-01-01..
+2026-10-30 now reports 6 agreed, 0 amount divergences, 0 coverage divergences, 0
+no-overlap, and 0 refusals. This remains a bounded sample, not a full-universe audit.
+
+Targeted reconciliation, dividend, and adjustment tests pass, including the final
+mixed pure-share/unmappable fallback regression. The ordinary full suite is
+`1651 passed, 34 skipped, 329 warnings`; the Qlib full suite is `1684 passed, 1
+skipped, 332 warnings`. The checkpointed 2023-01-01..2026-04-18 dividend replay
+completed all 1,204 dates: 388 empty, 816 already present, 0 newly published, and 0
+content drift. The sample candidate remains unsigned and unpublished pending an
+independent `sample_construction_v1` quality decision.

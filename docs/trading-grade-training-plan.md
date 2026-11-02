@@ -3,7 +3,7 @@
 > 目标不是“链路跑通”，而是让训练结果具备交易决策价值：样本外、扣成本、可复现、可解释、可风控，并且结论能指导下一轮调仓。
 已知约束：2000积分的tushare token，获取指数成本只能提供月度PIT，使用月度近似替代日维度即可。
 >
-> 本文基于 2026-10-27 的真实全 A 结果制定。原基线链路已闭合，但新增历史数据的 readiness 尚未通过，年度 OOS 训练链尚未重发，当前结果仍不足以作为交易依据。
+> 2026-11-02 更新：683-session 全窗口 snapshot-backed readiness 已通过；Alpha158 因子和新标签已重发，训练样本候选已生成并等待独立外部质量决定。另有一份使用仓库测试密钥的 smoke 发布，隔离在 Git 忽略的 `data/trading-grade-history/test-key-smoke/`，记录见 `data/trading-grade-history/reports/sample-construction-alpha158-test-key-smoke-publication.json`；它仅验证 owning-store 发布与字节回读，不构成独立质量裁决，不解除候选的正式质量门禁。还没有基于独立评审样本发布正式 dataset、执行年度 OOS 或完成 paper 对账，因此计划目标仍未完成。指数成分月度近似按维护者决定接受，但必须保留精度声明。
 
 ## 1. 当前基线
 
@@ -59,8 +59,8 @@
 
 以下依赖在多个阶段反复出现，单列一次，各阶段引用不再展开：
 
-- **新数据类接入状态**：`TushareAdapter.research_data()` 与不可变 `TushareDependencyStore` 已承接 `daily_basic`、SW 行业、标准财报/指标、业绩预告/快报、`report_rc`、资金流、沪深股通持股和龙虎榜；原始响应不等同 canonical 因子或质量批准。实际 2000 积分端点调用、行数与时间范围见 [`trading-grade-progress.md`](trading-grade-progress.md)；分析师预期的 `report_rc` 仅有每日 10 次试用权限，单股查询成功不构成全市场 PIT 面板，相关特征继续缺失，不得用合成值替代。
-- **离线历史数据根**：仓库忽略目录 `data/trading-grade-history/` 已作为本机历史根并填充 2024-01-01 至 2026-10-30 的 raw Tushare 依赖快照、月度 `csi-all` 成分和 `bars_daily.v2` canonical 行情。readiness 已在 683 个 session 上实查 `suspend_d`，仍报告 17 个未解释的成员行情缺口和 2 个不足 60 个行情日的成员，因此新窗口目前不能用于训练。14 个缺口标的当前出现在 Tushare 退市名单中，但接口无历史退市日期，不能用当前状态解释窗口中途缺口；19 次按代码查询也未从 Tushare `daily` 找回缺失日，TDX 日线抽查未完成。成分为月度近似 PIT；原始市值/行业/财报等仍未转成受评审 exposure/factor panel。旧基线的 factor/label/export 仍绑定其原有 2025 窗口，需要基于新行情和通过质量门禁后重发才能开展年度 OOS。
+- **新数据类接入状态**：`TushareAdapter.research_data()` 与不可变 `TushareDependencyStore` 已承接 `stock_basic`、`daily_basic`、SW 行业、标准财报/指标、业绩预告/快报、`report_rc`、资金流、沪深股通持股和龙虎榜；原始响应不等同 canonical 因子或质量批准。实际 2000 积分端点调用、行数与时间范围见 [`trading-grade-progress.md`](trading-grade-progress.md)。`report_rc` 仅有每日 10 次试用权限，完整分析师预期不是启动 Alpha158 线性模型与 LightGBM 主比较的前置条件；该类特征仅作为可选扩展，未通过历史 PIT 与质量审核前保持缺失，不得用合成值替代。
+- **离线历史数据根**：仓库忽略目录 `data/trading-grade-history/` 已作为本机历史根并填充 2024-01-01 至 2026-10-30 的 raw Tushare 依赖快照、月度 `csi-all` 成分和 `bars_daily.v2` canonical 行情。readiness 已在 683 个 session 上通过完整 snapshot-backed 复核：683 个不可变 `suspend_d` 快照、官方公告区间和 343 行 `stock_basic(list_status=D)` 退市日期快照共同解释所有必需行情缺口，没有补造或改写 canonical bars。当前通过报告 `readiness-csiall-20240101-20261030-suspension-intervals.json` 将 174 个退市有效日及之后缺失 session、以及 2 个只在 60-session warmup 内出现的短历史标的记为 informational。较早的 `corrected-20261102.json` 曾把这两个标的按全窗口短历史规则误判为 blocking；按首个模型可见 session 复算后，该旧结果已被较新的通过报告取代。688766 的 7 个缺失 session 由发行人公告区间解释，不补造 canonical bars；首个模型可见 session 为 2024-04-03。2026-11-02 已把日线切到 easy_tdx MAC 客户端，三个实测节点都对 `600000` 返回 800 根日线。指数成分严格日频 transaction-time PIT 不可得，按维护者已确认的月度近似口径使用并披露；原始市值/行业/财报等仍未转成受评审 exposure/factor panel。
 - **PIT 纪律**：每日指标/资金流/沪深股通/龙虎榜盘后可见，决策使用至少滞后一 session；基本面与预期按公告/披露时点对齐。SW `index_member_all` 的 `in_date/out_date` 是有效期字段，但没有供应商历史发布时间，不能宣称严格 transaction-time PIT。历史 universe 仍需核验退市股、停牌与新股覆盖。
 - **新依赖治理**：本次数据接入复用既有 Tushare 与 Parquet 依赖，未修改 `uv.lock`；若后续依赖锁变更，现有认证矩阵仍须完整重跑 `scripts/run_gate.sh` 与远程矩阵。
 - **生产评审路径**：生产 trust anchor 与外部质量评审流程的 provisioning 是维护者决策项，是阶段 6 的硬前置。
@@ -90,14 +90,14 @@
 
 **动作**
 
-1. **前置：扩展数据窗口。** 原 export 日历止于 `2025-12-24`。目前已接入 2024-01-01 至 2026-10-30 的 canonical bars 和月度近似 PIT 成分，但 readiness 被 17 个未解释缺口与 2 个不足 60 session 的成员阻断；核实覆盖后仍须重新发布 factor/label/export。Alpha158 需要约 60 个交易日暖机 lead-in，历史数据起点必须早于训练起点至少一个暖机窗口。
-2. **前置：标签设计审计。** 当前标签是 `return_5d`（5 日前向收益、收盘决策、governed adjusted close 基准，eligibility 剔除 delisting/limit/suspension/上市未满 60 天）。延长样本外之前必须先书面回答三个问题：
-   - 5 日重叠标签的自相关：728,880 行的有效样本量远小于名义值，IC/RankIC 显著性不按重叠标签调整就会被高估。
-   - 标签腿 close(T)→close(T+5) 与可执行路径 open(T+1)→卖出之间差一段 close→open，标签里包含一段不可交易的收益；量化这段缺口，或改用可执行口径的标签。
-   - `delisting: exclude` 是“决策日时点可知”（PIT 安全）还是事后回溯剔除（训练标签里的幸存者偏差）。
-   - `audit_label_design.py` v2 现在必须绑定独立治理日历，核对窗口原始分区与治理 session 完全一致，并要求每个非空标签标的从 T 到 T+5 的 bars grid 完整；历史基线的 v1 审计值尚未用增强版重跑。
-3. 将 test split 从 11 个交易日扩展到至少 6–12 个月。
-4. 采用 walk-forward 或滚动训练/验证/测试，而不是一次性固定 split。
+1. **前置：扩展数据窗口。** 原 export 日历止于 `2025-12-24`。目前已接入 `2024-01-01..2026-10-30` 的 canonical bars 和月度近似 PIT 成分；snapshot-backed readiness 已通过：活跃期缺口均由逐日停牌快照/官方公告区间解释，或仅出现在有效退市日之后；2 个短历史标的只在首个 60-session warmup 内出现。原始 canonical bars 保持不变。新窗口 `return_5d/2.0.0` 已发布并通过标签腿审计；Alpha158/2.0.0 已发布 623 个因子分区（分区集 digest `3676c2af3c15900ad6824fb151f4a7244fa8a5fadf0332b1c9c249a64d4c7fee`）。`sample_construction.v1` 候选 generation `2f4c3ad5afd26f8f56b51eb488a2e3cc90ef3fd0eaeb6a1867b8271ffcae1132` 已构建：2,997,703 行、157 个因子、618 个成熟标签 session，Parquet checksum `6d170541ec5060fa2dcb51cc17208b8028e39e34a898ed6476a6561a6c029304`；独立外部质量决定仍待完成。相同 generation 另有测试密钥 smoke 发布于 Git 忽略的 `data/trading-grade-history/test-key-smoke/governed/`，不得作为正式 dataset 输入或研究结论。只有独立决定通过并完成正式 dataset 发布后，才可执行年度 OOS。Alpha158 需约 60 个交易日暖机 lead-in，历史数据起点必须早于训练起点至少一个暖机窗口。
+2. **前置：标签设计审计。** 新窗口标签绑定独立治理日历和退市快照，严格按日历 T+5 定位，并在 D..D+5 任一 bars 缺失时输出 null；资格标记按 suspension、限价和有效退市日期从源字段计算并进入输入 checksum。2026-11-02 全窗口审计验证 683/683 行情分区及 3,333,110 个非空标签，详情见 [`trading-grade-label-audit.md`](trading-grade-label-audit.md) 和 gitignored 审计报告。结论：
+   - 五日标签的相邻样本共享四个 session；IC/RankIC 显著性必须用逐日截面序列并至少设 HAC lag=4。现有评估路径已实施该门槛，不从名义股票行数推算有效时间样本量。
+   - close(T)→close(T+5) 相对 open(T+1)→close(T+5) 的平均差为 −7.2052 基点，p95 绝对差 2.3834%，151,875 行方向相反；T+6 开盘退出比较中有 216,376 行方向相反。缺口已量化；目标本身仍是 close-to-close，模型结论必须以成本化 T+1 回测为准。若要声称目标完全可交易，须另发开盘到开盘语义版本并重训。
+   - `stock_basic(D)` 当前退市日期快照没有历史可见时点证据。314 个标的最后出现早于窗口末日，5,584 条空标签在全局末五 session 之前；审计将 `pit_delisting_completeness_certified=false`，历史 universe/PIT 与退出价值仍未通过验收。
+   - 标签审计校验原始分区与日历 session 完全一致，并逐个非空标签核对 D..D+5 行情网格。审计 CLI 现在支持独立 calendar root，允许声明范围从非交易日开始。
+3. 将 test split 从 11 个交易日扩展到至少 6–12 个月。新数据日历上的 expanding 两折计划已发布：generation `12b84e7fb0856333ac6272d4bff2e38f4baaa74c501d0c40086ea916c53f5f8d`，每折 252 session 起始训练、60 session 验证、132 session 测试，含 5-session purge、2-session embargo 与 60-session Alpha158 warmup；合计 264 个 OOS session、397 个日历日。该标记只证明计划结构覆盖一年，尚未执行折内训练，且 `market_regimes_verified=false`、`historical_pit_completeness_verified=false`。
+4. 采用 walk-forward 或滚动训练/验证/测试，而不是一次性固定 split。下一步需在因子分区/模型数据齐备后为每折创建新的、已评审 request，并先通过全协议 preflight，再执行。
    - 已实现逐折结果的统一 v3 回放入口：重新读取每折经评审的 OOS 目标权重，并在共享现金/持仓的一次引擎运行中执行；成本、成交、初始资金与风险设置必须和各折一致。末折最后目标后增加两个 session，依次完成该目标的 T+1 执行和期末强制清仓尝试；清仓仍受停牌、涨跌停、参与率和风控约束，receipt 记录是否清零，交易验收仍需真实数据另做。
 5. 增加基准（数据依赖见“贯穿前置”一节）：
    - 全 A 等权
@@ -119,7 +119,7 @@
 - 至少 1 年样本外，覆盖上涨、下跌、震荡三种状态。
 - 每个指标都能从结果制品直接重算。
 - 基准和策略使用同一成本、同一 universe、同一交易约束。
-- 历史 universe 经核验为 PIT 完整：窗口内退市与新上市标的按当时可知性处理，并有证据记录。
+- 历史 universe 按获批的数据精度核验：CSI-All 月度成分近似由维护者明确接受，制品与报告必须标注 `monthly_approximation`，不得表述成严格日频 transaction-time PIT；新上市/退市边界和标签资格可知时点另需有书面审计结论。
 - 标签审计三问（自相关、可执行口径、delisting 剔除的时点可知性）有书面结论。
 
 ### 阶段 2：交易约束与成本升级
@@ -132,7 +132,7 @@
 - **历史基线限制**：v1/v2 基线 config 未显式保存参与率上限，引擎旧缺省为 0.10；冻结基线不改写。v3 config 将 `volume_participation_cap`、fill-rate multiplier 和调仓间隔设为必填字段，避免新结果继承隐式执行假设。
 - **v3 执行与成本功能已实现**：离线执行事实逐日绑定历史板块/ST/停牌、涨跌停状态与价格、限价参考、整手规则；引擎检查原始开盘及滑点/冲击后价格是否越带。线性/平方根冲击、最低佣金、双边滑点、卖出税、成交率/参与率部分成交、调仓间隔、实际换手上限、单票/行业/现金预算均已由 v3 config 与同版本引擎处理。对应行为和失败边界见 [`portfolio-backtest-risk-execution.md`](subsystems/portfolio-backtest-risk-execution.md) 与 `tests/test_backtest_v3.py`。
 - **成本敏感性与资金网格已实现**：`scripts/run_backtest_stress.py` 在同一目标权重和 owning 数据上分别评估佣金翻倍（含最低费）、滑点翻倍、成交率减半及明确资金网格；各派生 config/result 单独通过外部质量评审并复算 readback。网格的最高合格资金只代表被测点，不等同于经市场校准的容量。
-- **公司行为 v4 已实现，真实源核验仍未完成**：配置绑定 exact-window `corporate_action_events` 面板及 dividend/rights completeness approval。除息日按股权登记日收盘持股形成税后现金和送股应收并计入 NAV、不可用于下单；现金仅在支付日可用；送股在上市日入账并遵守当日不可卖的 T+1；权利发行覆盖清单内标的全窗口排除；碎股和关键日期/覆盖不完整时拒绝。v1/v2/v3 行为保持不变。v4 逻辑有 synthetic engine/store/publisher/exposure、benchmark/stress 回归；无真实分红/权利发行源和历史全窗审计。paper 对账及跨折连续 OOS 回放仍只接受 v3。
+- **公司行为 v4 已实现，真实源核验仍未完成**：配置绑定 exact-window `corporate_action_events` 面板及 dividend/rights completeness approval。除息日按股权登记日收盘持股形成税后现金和送股应收并计入 NAV、不可用于下单；现金仅在支付日可用；送股在上市日入账并遵守当日不可卖的 T+1；权利发行覆盖清单内标的全窗口排除；碎股和关键日期/覆盖不完整时拒绝。v1/v2/v3 行为保持不变。v4 逻辑有 synthetic engine/store/publisher/exposure、benchmark/stress 回归；2026-11-02 对 6 只标的、2024-01-01..2026-10-30 的 live Tushare/TDX 事件 pilot 全部一致，但全市场及全窗来源审计、配股覆盖和 paper 验证仍未完成。paper 对账及跨折连续 OOS 回放仍只接受 v3。
 - **其余数据依赖和实证仍未完成**：执行事实已有读取/发布契约，但历史来源和规则覆盖尚未获得真实全窗口审计；`reference_adjustment_bps` 会留证除权参考相对原始前收的调整幅度，但没有实际校准误差证据。行业约束需要真实、开盘前可见的行业分类。压力场景未在一年 OOS 数据上证明策略结论不反转，容量网格也没有实盘流动性校准。
 
 **验收**
@@ -169,7 +169,7 @@
 
 **动作**
 
-- 前置：基本面/预期/资金类因子全部是新的数据源（见“贯穿前置”）；基本面数据必须按公告日而非报告期对齐，报告期即用即前视。
+- 本阶段的新基本面、预期、资金行为因子是 Alpha158 主比较之外的可选扩展，不是启动线性模型与 LightGBM 基线比较的前置条件。若纳入，基本面数据必须按公告日而非报告期对齐，报告期即用即前视；预期数据须有可用的历史发布时点和全市场覆盖，否则保持缺失。
 - 每个新因子先做单因子增量实验，再进入批量组合。
 - 明确与现有 157 因子的共线性处理，以及样本外稳定性门槛。
 - 补充基本面因子：
@@ -229,7 +229,8 @@
 - 先跑 paper execution。
 - 明确 paper execution 是确定性回放，只能验证流程、状态演进和约束，不能证明真实成交率或真实冲击成本。
 - 对比模拟成交与回测成交差异。
-- 小资金实盘验证：
+- **当前范围仅含模拟盘**：项目架构明确禁止 broker/live 路径，故本计划不连接券商、不下真实订单。小资金实盘指标需另行维护者决策并改变架构边界，不能作为本轮默认执行步骤。
+- 若未来经单独决策解除边界，再做小资金实盘验证：
   - 成交率
   - 滑点
   - 冲击成本
@@ -292,5 +293,5 @@
 - 风险、换手、容量在可接受范围。
 - 结果可复现、可解释、可审计。
 - 标签口径审计有书面结论：自相关已调整、标签与可执行路径的偏差已量化、eligibility 剔除的时点可知性已核验。
-- 通过 paper execution 和小资金验证。
+- 通过 paper execution。小资金实盘验证因 broker/live 禁止边界不属于当前授权范围，须经独立维护者决策后再纳入后续计划。
 - 结论能明确指导下一轮调仓，而不是只给出一个收益率数字。

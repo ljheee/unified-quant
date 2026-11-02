@@ -1,6 +1,6 @@
 # Adjustment Factors and Corporate Actions
 
-> Current behavior reference. Last checked: `2026-10-20` against HEAD `54676a0a3b377d1b88da09309d96d6a7c6535419`. Based on source code, configuration, tests, and documented measurements; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-11-02` against the uncommitted worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`. The 2023-01-01..2026-04-18 announcement-date replay completed with 1,204 queried dates and no drift; the 2026-04-19..2026-10-30 tail also completed. The six-name 2024-2026 live TDX/Tushare pilot agrees after float32 and pure-share comparison fixes; full-universe source reconciliation remains pending. Actionable derivation still selects exactly `实施`. Based on source code, configuration, tests, and documented measurements; unverified items are marked `UNKNOWN`.
 
 ## Responsibilities and Boundaries
 
@@ -36,14 +36,15 @@ The TDX chain is a first-generation lineage, **not** a continuation of a `derive
 Production entry points are scripts, not the CLI:
 
 1. `scripts/build_tdx_adjustments.py` — fetch `xdxr` for a symbol window, normalize, publish the event table.
-2. `scripts/fetch_dividend_events.py` — write the announcement-anchored dividend event store.
+2. `scripts/fetch_dividend_events.py` — write the announcement-anchored dividend event store and report the exact queried date window plus empty announcement dates. `--checkpoint` atomically records each completed query so a network interruption resumes from the last confirmed date.
 3. `scripts/build_dividend_adjustments.py` — map disclosures to exchange events and derive the factor chain.
 4. `scripts/publish_adjusted_window.py` — publish `bars_adjusted/adjusted-v2` partitions, deriving restated prices from vendor `adj_factor`.
-5. `scripts/reconcile_corporate_actions.py` — the routine event cross-check gate.
+5. `scripts/reconcile_corporate_actions.py` — the event cross-check gate. `--window-start`/`--window-end` filter both disclosure and XDXR events by effective ex-date; `--as-of` separately binds the announcement visibility cutoff.
 
 Derivation must satisfy, and refuses to publish otherwise:
 
 - only implemented (`div_proc == 实施`) records are applied; a `stk_div` that disagrees with `stk_bo_rate + stk_co_rate` out of tolerance, or an `imp_ann_date` after its own `ex_date`, or an `ex_date` that is not a bar session, fails closed (`src/uq/market/adjustment_chain.py:11`);
+- the event store preserves non-empty `div_proc` values verbatim, including provider states such as `未通过`, `停止实施`, and `股东大会未通过`; they never enter an action schedule because consumers select exactly `div_proc == 实施` (`src/uq/contracts/dividend_events.py`);
 - `cash_div_tax` (pre-tax) is used; a null pre-tax value fails closed rather than falling back to the after-tax field;
 - Tushare per-share amounts are multiplied by ten for the exchange per-ten-share shape;
 - rights issues (`peigu`/`peigujia`) are absent from the Tushare `dividend` endpoint, so they stay zero and the coverage gap is declared in provenance;
@@ -92,12 +93,14 @@ caller consumes `checked_events` today — the adjusted-window publisher records
 ## Constraints, Failures, and Compatibility
 - **Semantic changes require a new snapshot version.** Documented precedents: v1→v2 for a factor-basis change, v2→v3 for the `.XBSE` pattern widening, v3→v5 for the TDX lineage. Each older version stays readable and keeps rejecting what it rejected, so existing partitions are never silently relabelled.
 - **Tolerance is physical, not arbitrary.** The exchange publishes ex-right reference price at 0.01 CNY resolution and providers publish `adj_factor` at four decimals, so a purely relative jump tolerance consumed up to 89 % of the `1e-3` budget on a measured low-priced name and outright rejected a legal one. The gate now adds a floor of `tick / previous_close` (`src/uq/pipeline/adjusted_price.py`), which absorbs rounding without masking a genuine drift.
-- **Structural gaps are declared, not counted as failures.** Because Tushare carries no rights-issue fields, `peigu`/`peigujia` `amount_diverged` rows only state that the disclosure side lacks the data; `fenhong`/`songzhuangu` divergences are the real two-source disagreements. Pure-bonus disclosures that cannot be mapped to the exchange event shape are counted as `uncovered` rather than failing the gate, so the gate does not turn a structural exclusion into a false red on most real instruments.
+- **Structural gaps are declared, not counted as failures.** Because Tushare carries no rights-issue fields, `peigu`/`peigujia` `amount_diverged` rows only state that the disclosure side lacks the data; `fenhong`/`songzhuangu` divergences are the real two-source disagreements. For the audit only, an implemented pure-bonus/transfer disclosure with both cash fields absent and explicit share rates is mapped as zero cash plus its share amount; this keeps factor-production's stricter cash-field rule unchanged. Ambiguous or dirty disclosures remain `uncovered` or `refused` and are not silently dropped.
+- **XDXR amount comparison follows the provider's numeric precision.** `mootdx` decodes TDX amount fields from IEEE-754 binary32 and exposes them as Python floats; the reconciliation first compares both amounts after binary32 projection, then applies the configured absolute tolerance (default `1e-6` per ten shares). This prevents values such as Tushare `50.28` and TDX `50.279998779296875` from becoming a false divergence while preserving materially different values.
+- **Current bounded live pilot.** On 2024-01-01..2026-10-30, all six instruments agree. 300750's apparent cash-amount differences disappeared after binary32 normalization. 688766's 2024-06-06 transfer reconciles (Tushare 0.4 per share = TDX 4.0 per ten shares) under the explicit pure-share mapping; the zero-cash assumption and date are included in the report. This is a six-name pilot, not a full-universe audit.
 - **Beijing exchange reality.** TDX does not publish BSE events through the path that was originally assumed; that assumption was overturned by measurement (`cr.md` §8.44), and a dividend-store fallback exists for instruments TDX does not cover.
 
 ## Verification Evidence
 
-- `.venv/bin/python -m pytest` → `1188 passed, 25 skipped`; `.venv-qlib/bin/python -m pytest` → `1213 passed, 0 skipped`. Counts updated by the change that adds the event-replay and missing-data-policy sections above.
+- Current reviewed worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`: `.venv/bin/python -m pytest` → `1651 passed, 34 skipped`; `.venv-qlib/bin/python -m pytest` → `1684 passed, 1 skipped`. These local full-suite runs are not release-matrix certification.
 - Adjustment-focused suites: `tests/test_adjustment_chain.py` (incl. the TDX lineage, v5/v3 mutual exclusion, consumption tests), `tests/test_adjustment_snapshot_runtime.py`, `tests/test_adjustment_cash.py`, `tests/test_adjustment_events.py`, `tests/test_build_tdx_adjustments.py`, `tests/test_corporate_action_reconcile.py`, `tests/test_reconcile_corporate_actions.py`, `tests/test_publish_adjusted_window.py`, `tests/test_adjusted_price_pipeline.py`.
 - Snapshot-version coexistence is locked by `tests/test_gate_exit_contracts.py:300` `test_xbse_widening_lands_as_v3_not_an_in_place_edit` and by the v3/v5 mutual-exclusion tests in `tests/test_adjustment_chain.py`.
 - The tick floor is locked by `tests/test_adjusted_price_pipeline.py:463` `test_the_tick_floor_absorbs_exchange_rounding_without_masking_a_drift`; removing the floor fails it.

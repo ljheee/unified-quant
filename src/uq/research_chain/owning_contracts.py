@@ -50,7 +50,11 @@ class FeatureSchemaStore:
         self.root = Path(root)
 
     def read_manifest(self, generation_id: str) -> dict[str, Any]:
-        manifest = _read_json(_match_directory(self.root / "feature_schemas", generation_id) / "manifest.json")
+        manifest_path = _match_directory(
+            self.root / "feature_schemas", generation_id, store_root=self.root
+        ) / "manifest.json"
+        reject_symlinks_within(self.root, manifest_path, label="feature schema store path")
+        manifest = _read_json(manifest_path)
         family = "feature_schema_v2" if manifest.get("contract_version") == 2 else "feature_schema"
         ModelContractLoader.validate(family, manifest)
         return manifest
@@ -84,10 +88,14 @@ class FeatureSchemaStore:
         payload["manifest_digest_sha256"] = digest
         ModelContractLoader.validate(family, payload)
 
-        directory = self.root / "feature_schemas" / f"generation={generation}"
+        family_root = self.root / "feature_schemas"
+        directory = family_root / f"generation={generation}"
+        reject_symlinks_within(self.root, family_root, label="feature schema store path")
+        reject_symlinks_within(self.root, directory, label="feature schema store path")
         if directory.exists():
             raise ContractError(f"immutable feature schema already published: {directory}")
-        staging = self.root / "feature_schemas" / f".staging_{uuid.uuid4().hex}"
+        staging = family_root / f".staging_{uuid.uuid4().hex}"
+        reject_symlinks_within(self.root, staging, label="feature schema staging path")
         staging.mkdir(parents=True)
         try:
             (staging / "manifest.json").write_text(
@@ -109,7 +117,9 @@ class FactorExposureStore:
         self.root = Path(root)
 
     def _directory(self, generation_id: str) -> Path:
-        directory = _match_directory(self.root / "factor_exposure_panels", generation_id)
+        directory = _match_directory(
+            self.root / "factor_exposure_panels", generation_id, store_root=self.root
+        )
         reject_symlinks_within(self.root, directory, label="factor exposure store path")
         return directory
 
@@ -125,6 +135,7 @@ class FactorExposureStore:
             raise ContractError("factor exposure panel identity mismatch")
         checksum = manifest["quality_report_checksum_sha256"]
         report_path = self.root / "external_quality_reviews" / f"{checksum}.json"
+        reject_symlinks_within(self.root, report_path, label="factor exposure quality report path")
         if not report_path.is_file() or report_path.is_symlink():
             raise ContractError("factor exposure quality report is unavailable")
         report = _read_json(report_path)
@@ -226,12 +237,16 @@ class FactorExposureStore:
         family_root = self.root / "factor_exposure_panels"
         directory = family_root / f"generation={generation}"
         lock_path = family_root / "publication.lock"
+        reject_symlinks_within(self.root, family_root, label="factor exposure store path")
+        reject_symlinks_within(self.root, directory, label="factor exposure store path")
+        reject_symlinks_within(self.root, lock_path, label="factor exposure store lock")
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         with lock_path.open("a+") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
             if directory.exists():
                 raise ContractError(f"immutable factor exposure panel already published: {directory}")
             staging = family_root / f".staging_{uuid.uuid4().hex}"
+            reject_symlinks_within(self.root, staging, label="factor exposure store staging")
             staging.mkdir()
             try:
                 (staging / "data.parquet").write_bytes(artifact)
@@ -249,10 +264,12 @@ class FactorExposureStore:
 
     def _publish_quality_report(self, checksum: str, report: dict[str, Any]) -> None:
         root = self.root / "external_quality_reviews"
+        path = root / f"{checksum}.json"
+        reject_symlinks_within(self.root, root, label="factor exposure quality report root")
+        reject_symlinks_within(self.root, path, label="factor exposure quality report path")
         root.mkdir(parents=True, exist_ok=True)
         if root.is_symlink() or not root.is_dir():
             raise ContractError("external quality review root is unsafe")
-        path = root / f"{checksum}.json"
         if path.is_symlink():
             raise ContractError("external quality review path cannot be a symbolic link")
         if path.exists():
@@ -299,13 +316,16 @@ class AdjustedPriceDatasetStore:
         bindings, so the digest convention is shared rather than re-invented.
         """
         base = self.root / "canonical" / "bars_adjusted" / "adjusted-v2"
+        reject_symlinks_within(self.root, base, label="adjusted price dataset path")
         if not base.is_dir():
             return []
         triples: list[dict[str, Any]] = []
         for child in sorted(base.iterdir()):
+            reject_symlinks_within(self.root, child, label="adjusted price dataset path")
             if not child.is_dir() or not child.name.startswith("date="):
                 continue
             manifest_path = child / "manifest.json"
+            reject_symlinks_within(self.root, manifest_path, label="adjusted price manifest path")
             if not manifest_path.is_file():
                 continue
             try:
@@ -385,7 +405,7 @@ class AdjustedPriceDatasetStore:
 
     def _read_verified_directory(self, generation_id: str) -> tuple[dict[str, Any], Path]:
         _validate_generation_id(generation_id, "adjusted price")
-        candidates = _manifests_under(self.root / "canonical")
+        candidates = _manifests_under(self.root / "canonical", store_root=self.root)
         matches: list[Path] = []
         for path in candidates:
             try:
@@ -416,8 +436,12 @@ class AdjustedPriceDatasetStore:
     def _read_verified_manifest(self, directory: Path) -> dict[str, Any]:
         # Schema plus all three identities come from the one contract-layer rule,
         # so this boundary cannot drift from the publisher or the governed reader.
-        manifest = validate_canonical_v2_manifest(_read_json(directory / "manifest.json"))
+        reject_symlinks_within(self.root, directory, label="adjusted price dataset path")
+        manifest_path = directory / "manifest.json"
+        reject_symlinks_within(self.root, manifest_path, label="adjusted price manifest path")
+        manifest = validate_canonical_v2_manifest(_read_json(manifest_path))
         data_path = directory / "data.parquet"
+        reject_symlinks_within(self.root, data_path, label="adjusted price data path")
         if not data_path.is_file():
             raise ContractError("incomplete adjusted price dataset")
         if manifest["data_checksum_sha256"] != file_sha256_bytes(data_path.read_bytes()):
@@ -439,6 +463,7 @@ class AdjustedPriceDatasetStore:
         reject_symlinks_within(self.root, canonical_root, label="adjusted price dataset root")
         report_root = canonical_root.parent
         report_path = report_root / "reports" / "canonical_v2" / manifest["generation_id"] / "report.json"
+        reject_symlinks_within(self.root, report_path, label="adjusted price quality report path")
         if not report_path.is_file():
             raise ContractError("adjusted price quality report is missing")
         QualityReportStore().read(
@@ -453,6 +478,55 @@ class AdjustedPriceDatasetStore:
 
 class BacktestMarketDatasetStore:
     """Read immutable market-data artifacts referenced by backtest config bindings."""
+
+    _NULL_IDENTITY_PROFILE = "rows-null-normalized-dtypes-v2"
+
+    @staticmethod
+    def _manifest_schema(manifest: Mapping[str, Any]) -> str:
+        version = manifest.get("dataset_version")
+        if version == "1.0.0":
+            schema_name = "backtest_market_dataset.v1.json"
+        elif version == "2.0.0":
+            schema_name = "backtest_market_dataset.v2.json"
+        else:
+            raise ContractError("unsupported backtest market dataset version")
+        validate_contract(schema_name, dict(manifest))
+        expected_digest = sha256_json({
+            key: value for key, value in manifest.items()
+            if key != "manifest_digest_sha256"
+        })
+        if manifest.get("manifest_digest_sha256") != expected_digest:
+            raise ContractError("backtest market dataset manifest digest mismatch")
+        return schema_name
+
+    @staticmethod
+    def _generation_identity(
+        frame: pd.DataFrame,
+        *,
+        dataset_type: str,
+        window_start: str,
+        window_end: str,
+        dataset_version: str,
+    ) -> str:
+        sort_columns = (
+            ["event_type", "event_id", "instrument"]
+            if dataset_type == "corporate_action_events"
+            else ["date", "instrument"]
+        )
+        ordered = frame.sort_values(sort_columns, kind="mergesort").reset_index(drop=True)
+        rows = ordered.astype(object).where(pd.notna(ordered), None).to_dict(orient="records")
+        identity = {
+            "dataset_type": dataset_type,
+            "window_start": window_start,
+            "window_end": window_end,
+            "columns": list(ordered.columns),
+            "rows": rows,
+        }
+        if dataset_version == "2.0.0":
+            identity["dataset_version"] = "2.0.0"
+            identity["identity_profile"] = BacktestMarketDatasetStore._NULL_IDENTITY_PROFILE
+            identity["dtypes"] = {key: str(value) for key, value in ordered.dtypes.items()}
+        return sha256_json(identity)
 
     def __init__(self, root: Path | str) -> None:
         self.root = Path(root)
@@ -469,14 +543,19 @@ class BacktestMarketDatasetStore:
         if not re.fullmatch(r"[0-9a-f]{64}", expected_checksum_sha256):
             raise ContractError(f"invalid {dataset_type} dataset checksum")
         directory = self.root / "backtest_market_data" / f"dataset={generation_id}"
+        reject_symlinks_within(self.root, directory, label="backtest market data path")
         if not directory.is_dir():
             raise ContractError(f"unpublished {dataset_type} dataset: {generation_id}")
-        manifest = _read_json(directory / "manifest.json")
+        manifest_path = directory / "manifest.json"
+        data_path = directory / "data.parquet"
+        reject_symlinks_within(self.root, manifest_path, label="backtest market data manifest")
+        reject_symlinks_within(self.root, data_path, label="backtest market data artifact")
+        manifest = _read_json(manifest_path)
+        self._manifest_schema(manifest)
         if manifest.get("generation_id") != generation_id:
             raise ContractError(f"{dataset_type} dataset manifest identity mismatch")
         if manifest.get("dataset_type") != dataset_type:
             raise ContractError(f"{dataset_type} dataset manifest type mismatch")
-        data_path = directory / "data.parquet"
         if not data_path.is_file():
             raise ContractError(f"incomplete {dataset_type} dataset: {generation_id}")
         actual_checksum = file_sha256_bytes(data_path.read_bytes())
@@ -494,6 +573,16 @@ class BacktestMarketDatasetStore:
                 raise ContractError("corporate_action_events dataset has an invalid event schema")
         if len(frame) != manifest.get("row_count"):
             raise ContractError(f"{dataset_type} dataset row count mismatch")
+        if manifest["dataset_version"] == "2.0.0":
+            expected_generation = self._generation_identity(
+                frame,
+                dataset_type=dataset_type,
+                window_start=manifest["window_start"],
+                window_end=manifest["window_end"],
+                dataset_version=manifest["dataset_version"],
+            )
+            if expected_generation != generation_id:
+                raise ContractError(f"{dataset_type} dataset generation identity mismatch")
         if required_columns is not None and not required_columns.issubset(frame.columns):
             raise ContractError(f"{dataset_type} dataset is missing required columns")
         return frame
@@ -516,7 +605,9 @@ class BacktestMarketDatasetStore:
         (a single `generation_id` + `checksum_sha256`, never a partition set).
         This is that publisher, and it keeps the same contract `read_frame`
         verifies: one immutable `backtest_market_data/dataset=<generation>`
-        directory whose generation id is a content hash of the frame's own bytes.
+        directory whose v2 generation binds the normalized rows, column dtypes,
+        window and identity profile. Dataset v1 remains readable with its
+        original generation rule.
 
         `sources` records provenance rather than being consumed, so the split the
         paper plan mandates stays visible on the artifact: for suspensions the bars
@@ -541,28 +632,33 @@ class BacktestMarketDatasetStore:
                     raise ContractError(f"{dataset_type} dataset requires a {column} column")
             sort_columns = ["date", "instrument"]
         ordered = frame.sort_values(sort_columns, kind="mergesort").reset_index(drop=True)
-        rows = ordered.astype(object).where(pd.notna(ordered), None).to_dict(orient="records")
-        generation = sha256_json({
-            "dataset_type": dataset_type,
-            "window_start": window_start.isoformat(),
-            "window_end": window_end.isoformat(),
-            "columns": list(ordered.columns),
-            "rows": rows,
-        })
+        dataset_version = "2.0.0"
+        generation = self._generation_identity(
+            ordered,
+            dataset_type=dataset_type,
+            window_start=window_start.isoformat(),
+            window_end=window_end.isoformat(),
+            dataset_version=dataset_version,
+        )
         directory = self.root / "backtest_market_data" / f"dataset={generation}"
+        family_root = self.root / "backtest_market_data"
+        reject_symlinks_within(self.root, family_root, label="backtest market data path")
+        reject_symlinks_within(self.root, directory, label="backtest market data path")
         if directory.is_dir():
             # cr.md 8.62: the same window re-run is the resume path, so an identical
-            # re-publish is a skip, not a failure. A *different* frame that hashes to
-            # the same generation is impossible by construction of the content hash.
+            # re-publish is a skip, not a failure. The v2 identity includes the
+            # normalized rows and dtypes, so a different logical frame gets a new id.
             return self.read_manifest_by(generation, dataset_type=dataset_type)
-        staging = self.root / "backtest_market_data" / f".staging_{uuid.uuid4().hex}"
+        staging = family_root / f".staging_{uuid.uuid4().hex}"
+        reject_symlinks_within(self.root, staging, label="backtest market data staging")
         try:
             staging.mkdir(parents=True)
             data_path = staging / "data.parquet"
             ordered.to_parquet(data_path, index=False)
             data_checksum = file_sha256_bytes(data_path.read_bytes())
             manifest = {
-                "dataset_version": "1.0.0",
+                "dataset_version": dataset_version,
+                "identity_profile": self._NULL_IDENTITY_PROFILE,
                 "dataset_type": dataset_type,
                 "generation_id": generation,
                 "window_start": window_start.isoformat(),
@@ -575,11 +671,26 @@ class BacktestMarketDatasetStore:
                 "serialization_profile": "parquet-v1",
             }
             manifest["manifest_digest_sha256"] = sha256_json(manifest)
-            validate_contract("backtest_market_dataset.v1.json", manifest)
+            validate_contract("backtest_market_dataset.v2.json", manifest)
             (staging / "manifest.json").write_text(
                 json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
             )
-            reject_symlinks_within(self.root, directory.parent, label="backtest market data path")
+            try:
+                staged_manifest = _read_json(staging / "manifest.json")
+                self._manifest_schema(staged_manifest)
+                staged_frame = pd.read_parquet(data_path)
+            except (OSError, ValueError) as exc:
+                raise ContractError("staged backtest market dataset cannot be read back") from exc
+            if staged_manifest != manifest or list(staged_frame.columns) != manifest["columns"]:
+                raise ContractError("staged backtest market dataset manifest/columns changed")
+            if len(staged_frame) != manifest["row_count"] or self._generation_identity(
+                staged_frame,
+                dataset_type=dataset_type,
+                window_start=manifest["window_start"],
+                window_end=manifest["window_end"],
+                dataset_version=dataset_version,
+            ) != generation:
+                raise ContractError("staged backtest market dataset generation does not read back")
             fsync_tree(staging)
             os.replace(staging, directory)
             fsync_dir(directory.parent)
@@ -592,9 +703,11 @@ class BacktestMarketDatasetStore:
         """Read a published backtest market dataset's manifest without a checksum."""
         _validate_generation_id(generation_id, f"{dataset_type} dataset")
         path = self.root / "backtest_market_data" / f"dataset={generation_id}" / "manifest.json"
+        reject_symlinks_within(self.root, path, label="backtest market data manifest")
         if not path.is_file():
             raise ContractError(f"unpublished {dataset_type} dataset: {generation_id}")
         manifest = _read_json(path)
+        self._manifest_schema(manifest)
         if manifest.get("generation_id") != generation_id or manifest.get("dataset_type") != dataset_type:
             raise ContractError(f"{dataset_type} dataset manifest identity mismatch")
         return manifest
@@ -607,12 +720,17 @@ class LabelStore:
         self.root = Path(root)
 
     def read_manifest(self, generation_id: str) -> dict[str, Any]:
-        return _read_manifest(self.root / "label_sets", generation_id, "label_set")
+        return _read_manifest(
+            self.root / "label_sets", generation_id, "label_set", store_root=self.root
+        )
 
     def read_frame(self, generation_id: str) -> tuple[dict[str, Any], pd.DataFrame]:
         manifest = self.read_manifest(generation_id)
-        directory = _match_directory(self.root / "label_sets", generation_id)
+        directory = _match_directory(
+            self.root / "label_sets", generation_id, store_root=self.root
+        )
         data_path = directory / "data.parquet"
+        reject_symlinks_within(self.root, data_path, label="label data path")
         if not data_path.is_file():
             raise ContractError(f"unpublished label data: {generation_id}")
         # cr.md: the manifest declares data_checksum_sha256 over the label rows, so
@@ -658,9 +776,11 @@ class FeaturePreprocessingStore:
         self.root = Path(root)
 
     def read_manifest(self, generation_id: str) -> dict[str, Any]:
-        manifest = _read_json(_match_directory(
-            self.root / "feature_preprocessing", generation_id
-        ) / "manifest.json")
+        manifest_path = _match_directory(
+            self.root / "feature_preprocessing", generation_id, store_root=self.root
+        ) / "manifest.json"
+        reject_symlinks_within(self.root, manifest_path, label="feature preprocessing path")
+        manifest = _read_json(manifest_path)
         family = "feature_preprocessing_v2" if manifest.get("contract_version") == 2 else "feature_preprocessing"
         ModelContractLoader.validate(family, manifest)
         if manifest.get("quality_report_checksum_sha256") in (None, "0" * 64):
@@ -678,6 +798,7 @@ class FeaturePreprocessingStore:
                 raise ContractError("feature preprocessing v2 identity mismatch")
             checksum = manifest["quality_report_checksum_sha256"]
             report_path = self.root / "external_quality_reviews" / f"{checksum}.json"
+            reject_symlinks_within(self.root, report_path, label="feature preprocessing quality report path")
             if not report_path.is_file() or report_path.is_symlink():
                 raise ContractError("feature preprocessing v2 quality report is unavailable")
             report = _read_json(report_path)
@@ -757,17 +878,24 @@ class FeaturePreprocessingStore:
         published["manifest_digest_sha256"] = digest
         ModelContractLoader.validate(schema_name, published)
 
-        directory = self.root / "feature_preprocessing" / f"generation={generation}"
+        family_root = self.root / "feature_preprocessing"
+        directory = family_root / f"generation={generation}"
+        reject_symlinks_within(self.root, family_root, label="feature preprocessing store path")
+        reject_symlinks_within(self.root, directory, label="feature preprocessing store path")
         if directory.exists():
             raise ContractError(f"immutable feature preprocessing already published: {directory}")
-        staging = self.root / "feature_preprocessing" / f".staging_{uuid.uuid4().hex}"
+        staging = family_root / f".staging_{uuid.uuid4().hex}"
+        reject_symlinks_within(self.root, staging, label="feature preprocessing staging path")
         staging.mkdir(parents=True)
         try:
             (staging / "manifest.json").write_text(
                 json.dumps(published, sort_keys=True) + "\n", encoding="utf-8"
             )
-            (self.root / "external_quality_reviews").mkdir(parents=True, exist_ok=True)
-            report_path = self.root / "external_quality_reviews" / f"{report_checksum}.json"
+            report_root = self.root / "external_quality_reviews"
+            report_path = report_root / f"{report_checksum}.json"
+            reject_symlinks_within(self.root, report_root, label="quality report root")
+            reject_symlinks_within(self.root, report_path, label="quality report path")
+            report_root.mkdir(parents=True, exist_ok=True)
             if report_path.exists():
                 if _read_json(report_path) != bound_report:
                     raise ContractError("immutable quality report checksum collision")
@@ -798,12 +926,14 @@ class SampleConstructionStore:
 
     def read_manifest(self, generation_id: str) -> dict[str, Any]:
         manifest = _read_manifest(
-            self.root / "sample_construction", generation_id, "sample_construction"
+            self.root / "sample_construction", generation_id, "sample_construction",
+            store_root=self.root,
         )
         if manifest.get("quality_report_checksum_sha256") in (None, "0" * 64):
             raise ContractError("sample construction is missing a quality report binding")
         checksum = manifest["quality_report_checksum_sha256"]
         report_path = self.root / "external_quality_reviews" / f"{checksum}.json"
+        reject_symlinks_within(self.root, report_path, label="sample construction quality report path")
         if not report_path.is_file():
             raise ContractError("sample construction quality report is unavailable")
         report = _read_json(report_path)
@@ -825,9 +955,10 @@ class SampleConstructionStore:
     def read_frame(self, generation_id: str) -> tuple[dict[str, Any], pd.DataFrame]:
         manifest = self.read_manifest(generation_id)
         directory = _match_directory(
-            self.root / "sample_construction", generation_id
+            self.root / "sample_construction", generation_id, store_root=self.root
         )
         data_path = directory / "data.parquet"
+        reject_symlinks_within(self.root, data_path, label="sample construction data path")
         if not data_path.is_file():
             raise ContractError(f"unpublished sample construction data: {generation_id}")
         frame = pd.read_parquet(data_path)
@@ -880,10 +1011,14 @@ class SampleConstructionStore:
             raise ContractError("sample construction generation moved when review was bound")
         published["manifest_digest_sha256"] = digest
         ModelContractLoader.validate("sample_construction", published)
-        directory = self.root / "sample_construction" / f"generation={generation}"
+        family_root = self.root / "sample_construction"
+        directory = family_root / f"generation={generation}"
+        reject_symlinks_within(self.root, family_root, label="sample construction store path")
+        reject_symlinks_within(self.root, directory, label="sample construction store path")
         if directory.exists():
             raise ContractError(f"immutable sample construction already published: {directory}")
-        staging = self.root / "sample_construction" / f".staging_{uuid.uuid4().hex}"
+        staging = family_root / f".staging_{uuid.uuid4().hex}"
+        reject_symlinks_within(self.root, staging, label="sample construction staging path")
         staging.mkdir(parents=True)
         try:
             data_path = staging / "data.parquet"
@@ -891,8 +1026,12 @@ class SampleConstructionStore:
             (staging / "manifest.json").write_text(
                 json.dumps(published, sort_keys=True) + "\n", encoding="utf-8"
             )
-            (self.root / "external_quality_reviews").mkdir(parents=True, exist_ok=True)
-            (self.root / "external_quality_reviews" / f"{report_checksum}.json").write_text(
+            report_root = self.root / "external_quality_reviews"
+            report_path = report_root / f"{report_checksum}.json"
+            reject_symlinks_within(self.root, report_root, label="quality report root")
+            reject_symlinks_within(self.root, report_path, label="quality report path")
+            report_root.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(
                 json.dumps(bound_report, sort_keys=True) + "\n", encoding="utf-8"
             )
             fsync_tree(staging)
@@ -994,17 +1133,25 @@ class BacktestConfigStore:
         payload["manifest_digest_sha256"] = digest
         ModelContractLoader.validate(schema_name, payload)
 
-        directory = self.root / "backtest_configs" / f"generation={final}"
+        family_root = self.root / "backtest_configs"
+        directory = family_root / f"generation={final}"
+        reject_symlinks_within(self.root, family_root, label="backtest config store path")
+        reject_symlinks_within(self.root, directory, label="backtest config store path")
         if directory.exists():
             raise ContractError(f"immutable backtest config already published: {directory}")
-        staging = self.root / "backtest_configs" / f".staging_{uuid.uuid4().hex}"
+        staging = family_root / f".staging_{uuid.uuid4().hex}"
+        reject_symlinks_within(self.root, staging, label="backtest config staging path")
         staging.mkdir(parents=True)
         try:
             (staging / "manifest.json").write_text(
                 json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
             )
-            (self.root / "external_quality_reviews").mkdir(parents=True, exist_ok=True)
-            (self.root / "external_quality_reviews" / f"{report_checksum}.json").write_text(
+            report_root = self.root / "external_quality_reviews"
+            report_path = report_root / f"{report_checksum}.json"
+            reject_symlinks_within(self.root, report_root, label="quality report root")
+            reject_symlinks_within(self.root, report_path, label="quality report path")
+            report_root.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(
                 json.dumps(bound_report, sort_keys=True) + "\n", encoding="utf-8"
             )
             staging.replace(directory)
@@ -1017,7 +1164,9 @@ class BacktestConfigStore:
 
     def read_manifest(self, generation_id: str) -> dict[str, Any]:
         _validate_generation_id(generation_id, "backtest config")
-        candidates = _manifests_under(self.root / "backtest_configs")
+        candidates = _manifests_under(
+            self.root / "backtest_configs", store_root=self.root
+        )
         matches: list[Path] = []
         for path in candidates:
             try:
@@ -1039,7 +1188,9 @@ class BacktestConfigStore:
             raise ContractError(f"unpublished backtest config: {generation_id}")
         if len(matches) > 1:
             raise ContractError(f"ambiguous backtest config generation: {generation_id}")
-        return json.loads((matches[0] / "manifest.json").read_text(encoding="utf-8"))
+        manifest_path = matches[0] / "manifest.json"
+        reject_symlinks_within(self.root, manifest_path, label="backtest config manifest path")
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
 def _validate_generation_id(generation_id: str, family: str) -> None:
@@ -1047,20 +1198,30 @@ def _validate_generation_id(generation_id: str, family: str) -> None:
         raise ContractError(f"invalid {family} generation id")
 
 
-def _manifests_under(root: Path) -> list[Path]:
+def _manifests_under(root: Path, *, store_root: Path | None = None) -> list[Path]:
+    governed_root = root if store_root is None else store_root
+    reject_symlinks_within(governed_root, root, label="owning store path")
     if not root.exists():
         return []
-    return [
-        path for path in root.rglob("manifest.json")
-        if not any(part.startswith(".") for part in path.parent.relative_to(root).parts)
-    ]
+    paths = []
+    for path in root.rglob("manifest.json"):
+        reject_symlinks_within(governed_root, path, label="owning store manifest path")
+        if not any(part.startswith(".") for part in path.parent.relative_to(root).parts):
+            paths.append(path)
+    return paths
 
 
-def _match_directory(root: Path, generation_id: str) -> Path:
+def _match_directory(
+    root: Path, generation_id: str, *, store_root: Path | None = None
+) -> Path:
     if len(generation_id) != 64:
         raise ContractError("invalid owning artifact generation id")
+    governed_root = root if store_root is None else store_root
+    reject_symlinks_within(governed_root, root, label="owning artifact store path")
     if not root.exists():
         raise ContractError(f"unpublished owning artifact root: {root}")
+    for child in root.iterdir():
+        reject_symlinks_within(governed_root, child, label="owning artifact store path")
     candidates = [
         path.parent
         for path in root.rglob("manifest.json")
@@ -1068,6 +1229,8 @@ def _match_directory(root: Path, generation_id: str) -> Path:
     ]
     matches = []
     for candidate in candidates:
+        reject_symlinks_within(governed_root, candidate, label="owning artifact generation path")
+        reject_symlinks_within(governed_root, candidate / "manifest.json", label="owning artifact manifest path")
         try:
             document = json.loads((candidate / "manifest.json").read_text())
         except (OSError, json.JSONDecodeError):
@@ -1081,8 +1244,13 @@ def _match_directory(root: Path, generation_id: str) -> Path:
     return matches[0]
 
 
-def _read_manifest(root: Path, generation_id: str, schema_name: str) -> dict[str, Any]:
-    manifest = _read_json(_match_directory(root, generation_id) / "manifest.json")
+def _read_manifest(
+    root: Path, generation_id: str, schema_name: str, *, store_root: Path | None = None
+) -> dict[str, Any]:
+    directory = _match_directory(root, generation_id, store_root=store_root)
+    manifest_path = directory / "manifest.json"
+    reject_symlinks_within(store_root or root, manifest_path, label="owning artifact manifest path")
+    manifest = _read_json(manifest_path)
     ModelContractLoader.validate(schema_name, manifest)
     return manifest
 

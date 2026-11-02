@@ -22,6 +22,7 @@ canonical datasets and declared field capabilities.
 uq-ingest daily --date YYYY-MM-DD --data-root /path/to/data
 ```
 
-The current credential-free path uses Mootdx/TDX as the primary source and the
-frozen `bars_daily.research-v1` schema. Outputs remain research prototype data;
-they require real-sample validation before wider use.
+The current credential-free path uses easy_tdx's MAC client for TDX daily bars
+and Mootdx for standard-protocol corporate-action events, under the frozen
+`bars_daily.research-v1` schema. Outputs remain research prototype data; they
+require real-sample validation before wider use.

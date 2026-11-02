@@ -10,6 +10,7 @@ import pytest
 
 from uq.contracts.index_membership import IndexMembershipStore
 from uq.contracts.schema import load_schema
+from uq.contracts.tushare_dependency import TushareDependencyStore
 from uq.errors import ContractError
 from uq.pipeline.readiness import assess_factor_label_linkage, assess_readiness
 from uq.store.pit_store import CanonicalStore
@@ -101,6 +102,59 @@ def test_short_history_blocks_with_the_offending_instruments():
     assert "000001.XSHE" in next(item.instruments for item in report.findings if item.code == "insufficient_history")
 
 
+def test_short_history_ending_inside_walk_forward_warmup_is_informational():
+    members = {
+        session: ["600000.XSHG"] + (["000001.XSHE"] if index < 10 else [])
+        for index, session in enumerate(SESSIONS)
+    }
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"]),
+            _bars(instruments=["000001.XSHE"], sessions=SESSIONS[:15]),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        members,
+        suspensions={},
+        min_sessions_per_instrument=20,
+        warmup_sessions=20,
+    )
+
+    assert report.status == "passed", report.findings
+    finding = next(item for item in report.findings if item.code == "short_history_only_in_warmup")
+    assert finding.severity == "informational"
+    assert finding.instruments == ("000001.XSHE",)
+    assert "2026-01-21" in finding.detail
+    assert report.metrics["instruments_short_history_only_in_warmup"] == 1.0
+
+
+def test_short_history_after_walk_forward_warmup_still_blocks():
+    members = {
+        session: ["600000.XSHG"] + (["000001.XSHE"] if 20 <= index < 30 else [])
+        for index, session in enumerate(SESSIONS)
+    }
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"]),
+            _bars(instruments=["000001.XSHE"], sessions=SESSIONS[20:35]),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        members,
+        suspensions={},
+        min_sessions_per_instrument=20,
+        warmup_sessions=20,
+    )
+
+    assert report.status == "blocked"
+    limited = next(item for item in report.findings if item.code == "limited_tradable_history")
+    assert limited.instruments == ("000001.XSHE",)
+
+
 def test_session_without_visible_membership_blocks():
     members = _members()
     members.pop(SESSIONS[7])
@@ -186,6 +240,229 @@ def test_a_delisted_member_with_a_partial_gap_is_still_a_blocking_gap():
     assert gap.severity == "blocking"
     assert gap.instruments == ("000001.XSHE",)
     assert report.status == "blocked"
+
+
+def test_a_dated_delisting_excuses_missing_sessions_on_and_after_the_delist_date():
+    # ``stock_basic.delist_date`` is the effective removal date. The name does
+    # not have a daily bar on that date; only sessions strictly before it are
+    # required to be observable.
+    first_nine = SESSIONS[:9]
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"]),
+            _bars(instruments=["000001.XSHE"], sessions=first_nine),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        _members(),
+        suspensions={},
+        min_sessions_per_instrument=5,
+        delist_dates={"000001.XSHE": SESSIONS[9]},
+        delist_date_provenance="test:stock_basic-snapshot",
+    )
+
+    assert report.status == "passed", report.findings
+    assert "unexplained_bar_gap" not in {item.code for item in report.findings}
+    after = next(item for item in report.findings if item.code == "post_delisting_missing_sessions")
+    assert after.severity == "informational"
+    assert after.instruments == ("000001.XSHE",)
+    assert "on or after" in after.detail
+    assert report.metrics["post_delisting_missing_sessions_excused"] == len(SESSIONS) - 9
+
+
+def test_a_dated_delisting_does_not_excuse_a_gap_before_the_delist_date():
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"]),
+            _bars(instruments=["000001.XSHE"], sessions=SESSIONS[5:10]),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        _members(),
+        suspensions={},
+        min_sessions_per_instrument=5,
+        delist_dates={"000001.XSHE": SESSIONS[9]},
+        delist_date_provenance="test:stock_basic-snapshot",
+    )
+
+    gap = next(item for item in report.findings if item.code == "unexplained_bar_gap")
+    assert gap.severity == "blocking"
+    assert gap.instruments == ("000001.XSHE",)
+    assert report.status == "blocked"
+
+
+def test_without_suspension_data_active_period_gaps_stay_blocking_but_post_delist_gaps_are_labeled():
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"]),
+            _bars(instruments=["000001.XSHE"], sessions=SESSIONS[:5]),
+        ],
+        ignore_index=True,
+    )
+    report = _assess(
+        bars,
+        _members(),
+        suspensions=None,
+        min_sessions_per_instrument=5,
+        delist_dates={"000001.XSHE": SESSIONS[9]},
+        delist_date_provenance="test:stock_basic-snapshot",
+    )
+
+    gap = next(item for item in report.findings if item.code == "unverified_bar_gap")
+    assert gap.severity == "blocking"
+    assert gap.instruments == ("000001.XSHE",)
+    after = next(item for item in report.findings if item.code == "post_delisting_missing_sessions")
+    assert after.instruments == ("000001.XSHE",)
+
+
+def test_delisting_snapshot_is_scoped_and_normalized_for_readiness():
+    manifest = {
+        "query": {
+            "list_status": "D",
+            "fields": "ts_code,list_status,list_date,delist_date",
+        }
+    }
+    frame = pd.DataFrame({
+        "ts_code": ["000861.SZ", "300096.SZ"],
+        "list_status": ["D", "D"],
+        "list_date": ["19981028", "20080625"],
+        "delist_date": ["20240918", None],
+    })
+
+    delisted, dates = script.delistings_from_snapshot(manifest, frame)
+
+    assert delisted == {"000861.XSHE", "300096.XSHE"}
+    assert dates == {"000861.XSHE": date(2024, 9, 18)}
+
+
+def test_delisting_snapshot_refuses_current_listing_rows():
+    manifest = {"query": {"list_status": "D", "fields": "ts_code,list_status,delist_date"}}
+    frame = pd.DataFrame({
+        "ts_code": ["000861.SZ"],
+        "list_status": ["L"],
+        "delist_date": [None],
+    })
+    with pytest.raises(ContractError, match="outside list_status=D"):
+        script.delistings_from_snapshot(manifest, frame)
+
+
+def test_readiness_loads_exact_session_suspension_snapshots(tmp_path):
+    store = TushareDependencyStore(tmp_path)
+    for session in _SCRIPT_SESSIONS:
+        store.publish(
+            "suspend_d",
+            query={"trade_date": session.strftime("%Y%m%d"), "suspend_type": "S"},
+            source_fetched_at=datetime(2026, 10, 31, tzinfo=timezone.utc),
+            frame=pd.DataFrame({
+                "ts_code": ["000861.SZ"],
+                "trade_date": [session.strftime("%Y%m%d")],
+                "suspend_type": ["S"],
+            }),
+        )
+    notes = {}
+
+    suspensions = script.suspensions_from_snapshots(tmp_path, _SCRIPT_SESSIONS, notes)
+
+    assert suspensions == {"000861.XSHE": _SCRIPT_SESSIONS}
+    assert notes["suspension_snapshot_count"] == len(_SCRIPT_SESSIONS)
+    assert len(notes["suspension_snapshot_set_sha256"]) == 64
+
+
+def test_readiness_refuses_incomplete_suspension_snapshot_sets(tmp_path):
+    with pytest.raises(ContractError, match=r"missing suspend_d\(S\) snapshot"):
+        script.suspensions_from_snapshots(tmp_path, _SCRIPT_SESSIONS, {})
+
+
+def test_official_suspension_interval_evidence_resolves_688766_gap_without_fabricating_bars():
+    sessions = [
+        date(2025, 11, 24),
+        date(2025, 11, 25),
+        date(2025, 11, 26),
+        date(2025, 11, 27),
+        date(2025, 11, 28),
+        date(2025, 12, 1),
+        date(2025, 12, 2),
+        date(2025, 12, 3),
+        date(2025, 12, 4),
+        date(2025, 12, 5),
+        date(2025, 12, 8),
+        date(2025, 12, 9),
+    ]
+    members = {session: ["600000.XSHG", "688766.XSHG"] for session in sessions}
+    bars = pd.concat(
+        [
+            _bars(instruments=["600000.XSHG"], sessions=sessions),
+            _bars(instruments=["688766.XSHG"], sessions=[sessions[0], sessions[-1]]),
+        ],
+        ignore_index=True,
+    )
+    snapshot_suspensions = {
+        "688766.XSHG": [sessions[1], sessions[2], sessions[10]],
+    }
+    baseline = assess_readiness(
+        window_start=sessions[0],
+        window_end=sessions[-1],
+        sessions=sessions,
+        members_by_session=members,
+        bars=bars,
+        min_sessions_per_instrument=2,
+        label_horizon_sessions=0,
+        suspensions=snapshot_suspensions,
+        suspension_provenance="test:suspend_d-snapshots",
+    )
+    baseline_gap = next(item for item in baseline.findings if item.code == "unexplained_bar_gap")
+    assert baseline_gap.instruments == ("688766.XSHG",)
+
+    notes = {}
+    interval_suspensions = script.suspension_intervals_from_document(
+        _ROOT / "evidence/trading-grade/suspension-interval-evidence.v1.json",
+        sessions,
+        notes,
+    )
+    merged_suspensions, added = script.merge_suspension_dates(
+        snapshot_suspensions, interval_suspensions
+    )
+    corrected = assess_readiness(
+        window_start=sessions[0],
+        window_end=sessions[-1],
+        sessions=sessions,
+        members_by_session=members,
+        bars=bars,
+        min_sessions_per_instrument=2,
+        label_horizon_sessions=0,
+        suspensions=merged_suspensions,
+        suspension_provenance="test:suspend_d-snapshots+issuer-intervals",
+    )
+
+    assert corrected.status == "passed", corrected.findings
+    assert "unexplained_bar_gap" not in {item.code for item in corrected.findings}
+    assert len(merged_suspensions["688766.XSHG"]) == 10
+    assert added == 7
+    assert len(notes["suspension_interval_evidence_sha256"]) == 64
+
+
+def test_suspension_interval_evidence_rejects_untrusted_source_and_reversed_range(tmp_path):
+    path = _ROOT / "evidence/trading-grade/suspension-interval-evidence.v1.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["intervals"][0]["evidence"][0]["url"] = "https://example.com/notice.pdf"
+    untrusted = tmp_path / "untrusted.json"
+    untrusted.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(ContractError, match="not on a supported issuer/exchange domain"):
+        script.suspension_intervals_from_document(untrusted, SESSIONS, {})
+
+    document["intervals"][0]["evidence"][0]["url"] = (
+        "https://static.cninfo.com.cn/finalpage/2025-12-02/1224839861.PDF"
+    )
+    document["intervals"][0]["start_date"] = "2025-12-05"
+    document["intervals"][0]["end_date"] = "2025-11-27"
+    reversed_range = tmp_path / "reversed.json"
+    reversed_range.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(ContractError, match="dates must be ordered"):
+        script.suspension_intervals_from_document(reversed_range, SESSIONS, {})
 
 
 def test_a_gap_the_suspension_source_cannot_explain_blocks():

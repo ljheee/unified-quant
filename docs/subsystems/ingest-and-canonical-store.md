@@ -1,6 +1,6 @@
 # Ingest Routing and Canonical Store
 
-> Current behavior reference. Last checked: `2026-10-20` against HEAD `54676a0a3b377d1b88da09309d96d6a7c6535419`. Based on source code, configuration, tests, and CI; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-11-01` against the uncommitted worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`. Based on source code, configuration, tests, and CI; unverified items are marked `UNKNOWN`.
 
 ## Responsibilities and Boundaries
 
@@ -42,7 +42,7 @@ Exit codes per status are declared in `EXIT_STATUS_CODES` (`src/uq/cli.py:19`) a
 
 Three source-eligibility implementations are live and must not be conflated:
 
-- **TDX-only research path** (`build_tdx_pipeline`, default `uq-ingest daily`): primary `tdx` via `src/uq/adapters/mootdx_source.py`. Its contract declares `cross_validation_mode: optional`, so cross-validation is skipped unless `--cross-validate` is passed. This is intentional: `mootdx` answers `xdxr` reliably but `bars`/`quotes` are frequently blocked on measured hosts, so probing with a quote-shaped command would wrongly mark the host unusable (`src/uq/adapters/mootdx_source.py:13`).
+- **TDX-only research path** (`build_tdx_pipeline`, default `uq-ingest daily`): primary `tdx` via `src/uq/adapters/mootdx_source.py`. Daily bars use easy_tdx `MacClient` 1.1.0 pinned to commit `4820b4a0496899ece0b8ca4d7f4d66a5159da7f8`; the adapter tries the configured MAC hosts and requires a full-page positive-control response before ingest. On 2026-11-02, all three configured hosts returned 800 `600000` rows. MAC volume is already in shares. Corporate-action `xdxr` continues through mootdx's standard protocol because that command family still returned data when standard-protocol bars were empty. Its contract declares `cross_validation_mode: optional`, so cross-validation is skipped unless `--cross-validate` is passed. These are date- and command-specific measurements, not a permanent source-availability claim.
 - **Cross-check research path** (`build_tushare_crosscheck_pipeline`): adds Tushare as comparator and an independent calendar; coverage resolves to `complete` rather than `unverified`.
 - **`bars_daily.v2` production-draft path** (`build_tushare_v2_pipeline`): ownership inverts — Tushare is the only source serving `status`/`limit_up`/`limit_down`/`adj_factor`, so TDX can only be an OHLCV comparator. The Mootdx XDXR dividend cross-check for `adj_factor` is still not wired (`pendding.md`).
 

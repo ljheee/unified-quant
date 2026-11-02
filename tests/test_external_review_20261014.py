@@ -123,6 +123,83 @@ def test_adjusted_price_dataset_reads_through_a_symlinked_store_root(tmp_path: P
     assert manifest["generation_id"] == generation
 
 
+@pytest.mark.parametrize(
+    "family,reader",
+    [
+        ("feature_schemas", "feature_schema"),
+        ("factor_exposure_panels", "factor_exposure"),
+        ("label_sets", "label"),
+        ("feature_preprocessing", "feature_preprocessing"),
+        ("sample_construction", "sample_construction"),
+        ("backtest_configs", "backtest_config"),
+        ("backtest_market_data", "backtest_market_data"),
+        ("canonical", "adjusted_price"),
+    ],
+)
+def test_owning_store_read_boundaries_reject_symlinked_family_roots(
+    tmp_path: Path, family: str, reader: str,
+) -> None:
+    from uq.research_chain.owning_contracts import (
+        BacktestConfigStore,
+        BacktestMarketDatasetStore,
+        FactorExposureStore,
+        FeaturePreprocessingStore,
+        FeatureSchemaStore,
+        LabelStore,
+        SampleConstructionStore,
+    )
+
+    root = tmp_path / "store"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (root / family).symlink_to(outside, target_is_directory=True)
+    generation = "1" * 64
+    stores = {
+        "feature_schema": lambda: FeatureSchemaStore(root).read_manifest(generation),
+        "factor_exposure": lambda: FactorExposureStore(root).read_manifest(generation),
+        "label": lambda: LabelStore(root).read_manifest(generation),
+        "feature_preprocessing": lambda: FeaturePreprocessingStore(root).read_manifest(generation),
+        "sample_construction": lambda: SampleConstructionStore(root).read_manifest(generation),
+        "backtest_config": lambda: BacktestConfigStore(root).read_manifest(generation),
+        "backtest_market_data": lambda: BacktestMarketDatasetStore(root).read_manifest_by(
+            generation, dataset_type="calendar"
+        ),
+        "adjusted_price": lambda: AdjustedPriceDatasetStore(root).list_partitions(),
+    }
+    with pytest.raises(ContractError, match="symbolic links are forbidden"):
+        stores[reader]()
+
+
+def test_feature_schema_store_publishes_through_root_alias_and_rejects_family_link(
+    tmp_path: Path,
+) -> None:
+    from uq.models.features import FeatureSchemaBuilder
+    from uq.research_chain.owning_contracts import FeatureSchemaStore
+
+    frame = pd.DataFrame({
+        "instrument": ["600000.XSHG"],
+        "datetime": pd.to_datetime(["2026-08-21"]),
+        "factor": [1.0],
+    })
+    schema = FeatureSchemaBuilder().build(
+        frame, source_factor_set="basic", source_factor_version="1.0.0"
+    )
+    root = _symlinked_store_root(tmp_path)
+    store = FeatureSchemaStore(root)
+    published = store.publish(schema)
+    assert store.read_manifest(published["generation_id"]) == published
+
+    outside = tmp_path / "outside-feature-schemas"
+    outside.mkdir()
+    real_root = tmp_path / "real-store-with-linked-family"
+    real_root.mkdir()
+    (real_root / "feature_schemas").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ContractError, match="symbolic links are forbidden"):
+        FeatureSchemaStore(real_root).publish(schema)
+    assert list(outside.iterdir()) == []
+
+
 def test_reject_symlinks_within_accepts_a_consistently_spelled_pair(tmp_path: Path) -> None:
     """B9-C/B9-D: a pair spelled the same way is accepted; a mixed one is not."""
     root = _symlinked_store_root(tmp_path)

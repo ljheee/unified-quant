@@ -332,7 +332,6 @@ def test_pit_exposure_panel_publication_and_preprocessing_v2_readback(tmp_path):
     )
     pd.testing.assert_frame_equal(replay_input, factors)
     pd.testing.assert_frame_equal(replay_output, output)
-
     dataset_manifest = {
         "feature_preprocessing_generation_id": preprocessing["generation_id"],
         "factor_set": "basic",
@@ -365,6 +364,46 @@ def test_pit_exposure_panel_publication_and_preprocessing_v2_readback(tmp_path):
             aligned.assign(market_cap=aligned["market_cap"].iloc[::-1].to_numpy()),
             read_exposure_manifest,
         )
+
+
+def test_exposure_store_symlink_policy_allows_linked_root_and_rejects_links_inside(tmp_path):
+    from uq.research_chain.owning_contracts import FactorExposureStore
+
+    model_layer, _ = _test_quality_policy()
+    _, exposures = _pit_exposure_rows()
+    arguments = {
+        "frame": exposures,
+        "controls": ["industry", "market_cap"],
+        "source_id": "offline-reviewed-source",
+        "source_approval_ref": "review-record-2025-01",
+        "quality_decision": _signed_decision(
+            model_layer,
+            "factor_exposure_panel_v1",
+            "reject_all",
+            ["key_uniqueness", "control_values_valid", "pit_visibility_valid",
+             "source_approval_present", "readback_checksum"],
+        ),
+    }
+
+    actual_root = tmp_path / "actual-store"
+    actual_root.mkdir()
+    linked_root = tmp_path / "linked-store"
+    linked_root.symlink_to(actual_root, target_is_directory=True)
+    published = FactorExposureStore(linked_root).publish(**arguments)
+    assert (actual_root / "factor_exposure_panels" / f"generation={published['generation_id']}").is_dir()
+
+    blocked_actual_root = tmp_path / "blocked-actual-store"
+    blocked_actual_root.mkdir()
+    blocked_linked_root = tmp_path / "blocked-linked-store"
+    blocked_linked_root.symlink_to(blocked_actual_root, target_is_directory=True)
+    outside = tmp_path / "outside-store"
+    outside.mkdir()
+    (blocked_linked_root / "factor_exposure_panels").symlink_to(
+        outside, target_is_directory=True
+    )
+    with pytest.raises(ContractError, match="symbolic links are forbidden"):
+        FactorExposureStore(blocked_linked_root).publish(**arguments)
+    assert list(outside.iterdir()) == []
 
 
 @pytest.mark.parametrize("available_at", [

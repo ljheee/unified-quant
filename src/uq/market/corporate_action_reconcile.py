@@ -24,6 +24,8 @@ settled by the vendor's factor jump, which is a separate check.
 from __future__ import annotations
 
 import datetime as dt
+import math
+import struct
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -35,6 +37,30 @@ _EXCHANGE_COLUMNS = ("year", "month", "day", "category", "fenhong", "songzhuangu
 # TDX publishes amounts per 10 shares; the disclosure mapping multiplies per-share
 # values by 10, so both sides are already per 10 shares here.
 _DEFAULT_TOLERANCE_PER_TEN = 1e-6
+_FLOAT32 = struct.Struct("!f")
+
+
+def _amounts_agree(disclosure: float, tdx: float, *, tolerance: float) -> bool:
+    """Compare amounts at TDX XDXR's binary32 wire precision, then by tolerance.
+
+    The mootdx XDXR client decodes amount fields as IEEE-754 binary32 and exposes
+    them as Python floats. A direct float64 comparison can therefore flag the
+    same decimal amount as different (for example, 50.28 becomes
+    50.279998779296875). Treat values with the same binary32 projection as equal;
+    retain the explicit absolute tolerance for small residuals and other clients.
+    """
+    if abs(disclosure - tdx) <= tolerance:
+        return True
+    try:
+        disclosure_binary32 = _FLOAT32.unpack(_FLOAT32.pack(disclosure))[0]
+        tdx_binary32 = _FLOAT32.unpack(_FLOAT32.pack(tdx))[0]
+    except (OverflowError, struct.error):
+        return False
+    return (
+        math.isfinite(disclosure_binary32)
+        and math.isfinite(tdx_binary32)
+        and disclosure_binary32 == tdx_binary32
+    )
 
 
 @dataclass(frozen=True)
@@ -146,7 +172,7 @@ def reconcile_instrument(
                 if disclosure_value is not tdx_value:
                     row_divergences.append(EventDivergence(session, field, disclosure_value, tdx_value))
                 continue
-            if abs(disclosure_value - tdx_value) > tolerance:
+            if not _amounts_agree(disclosure_value, tdx_value, tolerance=tolerance):
                 row_divergences.append(EventDivergence(session, field, disclosure_value, tdx_value))
         if row_divergences:
             divergences.extend(row_divergences)

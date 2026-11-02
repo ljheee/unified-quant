@@ -1,0 +1,95 @@
+{
+  "record_version": 1,
+  "kind": "suspension_interval_evidence",
+  "intervals": [
+    {
+      "instrument": "688766.XSHG",
+      "start_date": "2025-11-27",
+      "end_date": "2025-12-05",
+      "evidence": [
+        {
+          "kind": "issuer_announcement",
+          "reference": "2025-083",
+          "url": "https://static.cninfo.com.cn/finalpage/2025-12-02/1224839861.PDF"
+        },
+        {
+          "kind": "issuer_announcement",
+          "reference": "2025-088",
+          "url": "https://static.cninfo.com.cn/finalpage/2025-12-09/1224858827.PDF"
+        }
+      ]
+    },
+    {
+      "instrument": "920174.XBSE",
+      "start_date": "2024-11-26",
+      "end_date": "2024-12-09",
+      "evidence": [
+        {
+          "kind": "issuer_announcement",
+          "reference": "2024-092 and 2024-111",
+          "url": "https://static.cninfo.com.cn/finalpage/2025-07-16/1224190217.PDF"
+        }
+      ]
+    },
+    {
+      "instrument": "920305.XBSE",
+      "start_date": "2025-04-30",
+      "end_date": "2025-04-30",
+      "evidence": [
+        {
+          "kind": "issuer_announcement",
+          "reference": "2025-036",
+          "url": "https://static.cninfo.com.cn/finalpage/2025-04-29/1223423954.PDF"
+        }
+      ]
+    },
+    {
+      "instrument": "920680.XBSE",
+      "start_date": "2025-04-30",
+      "end_date": "2025-04-30",
+      "evidence": [
+        {
+          "kind": "issuer_announcement",
+          "reference": "2025-037",
+          "url": "https://static.cninfo.com.cn/finalpage/2025-04-29/1223429057.PDF"
+        }
+      ]
+    },
+    {
+      "instrument": "920680.XBSE",
+      "start_date": "2025-06-16",
+      "end_date": "2025-06-16",
+      "evidence": [
+        {
+          "kind": "exchange_notice",
+          "reference": "2025-051",
+          "url": "https://www.bse.cn/disclosure/2025/2025-06-13/4cb8c684c10241cca8e3c5fa618989ec.pdf"
+        }
+      ]
+    },
+    {
+      "instrument": "920961.XBSE",
+      "start_date": "2025-09-16",
+      "end_date": "2025-09-22",
+      "evidence": [
+        {
+          "kind": "issuer_announcement",
+          "reference": "2025-099 and 2025-118",
+          "url": "https://dataclouds.cninfo.com.cn/sjother2/bse_onmarket/2025/20250922/891a443697a811f0a303fa163ee65716.pdf"
+        }
+      ]
+    },
+    {
+      "instrument": "920964.XBSE",
+      "start_date": "2024-10-22",
+      "end_date": "2024-10-25",
+      "evidence": [
+        {
+          "kind": "issuer_announcement",
+          "reference": "2024-060",
+          "url": "https://static.cninfo.com.cn/finalpage/2024-10-25/1221524846.PDF"
+        }
+      ]
+    }
+  ]
+}

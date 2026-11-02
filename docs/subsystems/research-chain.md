@@ -1,6 +1,6 @@
 # Research Chain Orchestrator
 
-> Current behavior reference. Last checked: `2026-10-20` against HEAD `54676a0a3b377d1b88da09309d96d6a7c6535419`. Based on source code, configuration, tests, and release evidence; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-11-02` against the uncommitted worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`. Based on source code, configuration, tests, and release evidence; unverified items are marked `UNKNOWN`.
 
 ## Responsibilities and Boundaries
 
@@ -53,7 +53,7 @@ Cancellation/failure writes a failed state on the way out, which is what makes r
   remaining continuous-portfolio limitations.
 
 - **Contract versions 1–8** select different schemas and governed inputs. `contract_version` 3 and 4 are intentionally not executable (`research request v3/v4 paper-execution runtime is not enabled`) — a fail-closed behaviour lock registered by a test, not an unfinished wire-up. v5–v8 are executable; v6 adds sample construction, v7 selects the Qlib LightGBM model-definition template, and v8 adds portfolio-definition template v3 with risk-parity, industry-neutral and cap routes. v7/v8 reuse the v6 stage-plan digest and signed activation because no stage was added or reordered. Risk-parity requests resolve the immutable return generation, recheck its calendar and identity, and require sufficient pre-window history. Industry-aware requests resolve the execution-facts generation through the reviewed backtest config and enforce session-open visibility. A v2 preprocessing manifest is resolved through `FactorExposureStore` before stage execution, then re-read and transformed again during dataset preparation. It requires visible-by-close controls; publication is currently blocked until the two new review families are approved in the trust-anchor-pinned registry.
-- **Decision providers.** The runner resolves quality decisions through a pluggable `QualityDecisionProvider` (`src/uq/research_chain/cli.py:183` mapping provider, `:201` command provider, or a JSON document). Implementations never sign; they return an immutable owning-layer decision for verification.
+- **Decision providers.** The runner resolves quality decisions through a pluggable `QualityDecisionProvider` (`src/uq/research_chain/cli.py` mapping or command provider, or a JSON document). The mapping provider uses the resolver's exact `binding_type` when one is supplied; output-family fallback is allowed only for that family's default binding. Thus a `feature_preprocessing.v2` decision must be keyed as `feature_preprocessing_v2`, and cannot accidentally fall back to a v1 decision. Implementations never sign; they return an immutable owning-layer decision for verification.
 - **Membership filtering.** v5–v8 dataset preparation filters factors by *that day's* visible index members; a missing membership store is a hard error rather than a silent fall back to the unfiltered partition (`src/uq/research_chain/membership_input.py`).
 - **Window-level universe anchor.** A v6 request binds one `universe_snapshot`, while PIT membership is published in monthly tiles. For a window spanning several tiles, `scripts/publish_universe_union.py` publishes the union of every visible snapshot and declares `semantics=window_level_union_not_daily_pit`. In v6 the snapshot is an **identity anchor**; the authoritative per-day member rule remains `index_membership_binding`, applied by `filtered_factor_frame`.
 - **Paper market inputs.** `MarketDatasetPublisher` supplies the governed trading calendar for the research window; a window not covered by a calendar snapshot fails closed rather than being widened.
@@ -123,6 +123,10 @@ frame-local. `drop_unlabelled_factor_rows` now compares key sets with `pandas`
   newly bound request. Direct runner APIs retain explicitly injected identities
   for isolated test/embedding callers; only the CLI performs this local checkout
   measurement (`provenance.py`, `tests/test_training_provenance.py`).
+- **Owning-store paths.** Stores in `research_chain/owning_contracts.py` reject
+  symlinks in every path component beneath the configured store root on reads
+  and writes. The store root itself may be spelled through a symlink; family,
+  generation, artifact, lock, staging and quality-report paths remain guarded.
 - **Independent timing receipt.** On return or a Python exception, a CLI runner
   invocation publishes a unique
   `research_runs/telemetry/request=<id>/run=<id>/attempt=<uuid>.json`, including
@@ -157,6 +161,7 @@ frame-local. `drop_unlabelled_factor_rows` now compares key sets with `pandas`
 ## Verification Evidence
 
 - `.venv/bin/python -m pytest` → `1265 passed, 28 skipped`; `.venv-qlib/bin/python -m pytest` → `1293 passed, 0 skipped` (the 28 `.venv` skips are Qlib-gated tests). Counts updated by the v6 sample-construction change.
+- Current reviewed worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`: `.venv/bin/python -m pytest` → `1651 passed, 34 skipped`; `.venv-qlib/bin/python -m pytest` → `1684 passed, 1 skipped`. These are local full-suite results, not release-matrix certification.
 - Research-chain suites: `tests/test_research_chain_phase0.py`–`phase5.py`, `tests/test_research_chain_release_evidence.py`, `tests/test_research_v4_contract.py`, `tests/test_research_membership_input.py`.
 - Paper-stage integration: `tests/test_paper_execution_research_stage_runner.py` and `tests/test_paper_execution_research_integration_phase*.py`.
 - CLI dry-run smoke with the shipped fixture: `evidence/research-chain/phase-0/fixtures/research_run_request-valid.json` (documented in `docs/user-guide.md` §6).
@@ -202,11 +207,12 @@ Two consequences, locked rather than assumed:
 
 | | layout | calendar column | consumer |
 |---|---|---|---|
-| `BacktestMarketDatasetStore` (`src/uq/research_chain/owning_contracts.py:175`) | `backtest_market_data/dataset=<generation>` | `date` | the backtest stage's calendar/suspension/corporate inputs |
+| `BacktestMarketDatasetStore` (`src/uq/research_chain/owning_contracts.py`) | `backtest_market_data/dataset=<generation>` | `date` | the backtest stage's calendar/suspension/corporate inputs |
 | `MarketDatasetPublisher` (`src/uq/execution/market_dataset_publisher.py:29`) | `<family>/<partition_date>` under `market-datasets/` | `session_date` | paper-execution bindings and the governed-calendar path |
 
-`scripts/publish_market_datasets.py` produces the second; the first has **no production
-publisher** — only test helpers write it.
+`scripts/publish_market_datasets.py` produces the second. The first is produced by
+`scripts/publish_backtest_market_data.py`; the store API also supports isolated
+publication by tests and other owning-layer callers.
 
 These are two contracts' entry points, not two copies of the same data, so they must not
 be merged by "pointing the backtest at `market-datasets/`". The reason is the binding
@@ -219,9 +225,12 @@ per family, which is what makes the run reproducible — a fact `partition_set` 
 therefore change the published contract (`backtest_config.v1`), not just a path, and
 belongs to its own round with a maintainer decision.
 
-The window-level publisher for the three backtest families is
+The window-level publisher for the backtest families is
 `scripts/publish_backtest_market_data.py` (store: `BacktestMarketDatasetStore.publish`,
-contract: `config/schemas/contracts/backtest_market_dataset.v1.json`). Its input sources
+contracts: `config/schemas/contracts/backtest_market_dataset.v1.json` for legacy reads and
+`backtest_market_dataset.v2.json` for current publications). v2 generations bind the
+dataset version, normalized nulls, column dtypes, window and identity profile; v1 remains
+readable with its original identity. Its input sources
 are fixed by `specs/layers/paper-execution-research-integration-plan.md` phase 0.5, not
 chosen ad hoc:
 

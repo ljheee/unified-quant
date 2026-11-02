@@ -971,6 +971,16 @@ wheels = [
 ]
 
 [[package]]
+name = "easy-tdx"
+version = "1.1.0"
+source = { git = "https://github.com/clong365/easy_tdx.git?rev=4820b4a0496899ece0b8ca4d7f4d66a5159da7f8#4820b4a0496899ece0b8ca4d7f4d66a5159da7f8" }
+dependencies = [
+    { name = "click" },
+    { name = "pandas" },
+    { name = "tzdata" },
+]
+
+[[package]]
 name = "executing"
 version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4876,6 +4886,7 @@ qlib = [
     { name = "pyqlib" },
 ]
 real = [
+    { name = "easy-tdx" },
     { name = "mootdx" },
     { name = "tushare" },
 ]
@@ -4883,6 +4894,7 @@ real = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=44" },
+    { name = "easy-tdx", marker = "extra == 'real'", git = "https://github.com/clong365/easy_tdx.git?rev=4820b4a0496899ece0b8ca4d7f4d66a5159da7f8" },
     { name = "joblib", marker = "extra == 'dev'", specifier = ">=1.3" },
     { name = "jsonschema", specifier = ">=4,<5" },
     { name = "lightgbm", marker = "extra == 'dev'", specifier = ">=4.7,<5" },

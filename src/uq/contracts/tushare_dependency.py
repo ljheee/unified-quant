@@ -27,6 +27,8 @@ from .paths import reject_symlinks_within
 
 
 TUSHARE_DEPENDENCY_ENDPOINTS = frozenset({
+    "stock_basic",
+    "suspend_d",
     "daily_basic",
     "index_classify",
     "index_member_all",
@@ -43,6 +45,8 @@ TUSHARE_DEPENDENCY_ENDPOINTS = frozenset({
 })
 
 _REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
+    "stock_basic": frozenset({"ts_code", "delist_date"}),
+    "suspend_d": frozenset({"ts_code", "trade_date"}),
     "daily_basic": frozenset({"ts_code", "trade_date"}),
     "index_classify": frozenset({"index_code", "industry_name", "level"}),
     "index_member_all": frozenset({"ts_code", "l3_code", "in_date", "out_date"}),
@@ -61,6 +65,8 @@ _REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
 # Tushare's documented per-request row limits. A response at the cap might be
 # truncated, so it cannot be published as complete; callers must narrow it.
 _RESPONSE_LIMITS = {
+    "stock_basic": 6000,
+    "suspend_d": 5000,
     "daily_basic": 6000,
     "index_member_all": 2000,
     "report_rc": 3000,
@@ -110,6 +116,33 @@ class TushareDependencyStore:
         family = self.root / "tushare_dependencies" / dataset
         reject_symlinks_within(self.root, family, label="Tushare dependency store path")
         return family
+
+    @staticmethod
+    def _verify_staged_snapshot(
+        staging: Path, *, dataset: str, generation: str, expected_manifest: dict[str, Any]
+    ) -> None:
+        """Read the serialized snapshot back before making its directory visible."""
+        try:
+            manifest = json.loads((staging / "manifest.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContractError("staged Tushare dependency manifest is unreadable") from exc
+        validate_contract("tushare_dependency_snapshot.v1.json", manifest)
+        if (manifest != expected_manifest or manifest.get("dataset") != dataset
+                or manifest.get("generation_id") != generation):
+            raise ContractError("staged Tushare dependency manifest changed before publication")
+        artifact_path = staging / manifest["data_artifact"]["path"]
+        if not artifact_path.is_file() or artifact_path.is_symlink():
+            raise ContractError("staged Tushare dependency artifact is unavailable")
+        artifact = artifact_path.read_bytes()
+        checksum = manifest["data_artifact"]["checksum_sha256"]
+        if hashlib.sha256(artifact).hexdigest() != checksum:
+            raise ContractError("staged Tushare dependency artifact checksum mismatch")
+        try:
+            frame = pd.read_parquet(io.BytesIO(artifact))
+        except (ImportError, OSError, ValueError) as exc:
+            raise ContractError("staged Tushare dependency Parquet artifact is unreadable") from exc
+        if len(frame) != manifest["row_count"] or frame.columns.tolist() != manifest["columns"]:
+            raise ContractError("staged Tushare dependency artifact shape mismatch")
 
     def publish(
         self,
@@ -189,6 +222,9 @@ class TushareDependencyStore:
                     encoding="utf-8",
                 )
                 fsync_tree(staging)
+                self._verify_staged_snapshot(
+                    staging, dataset=dataset, generation=generation, expected_manifest=manifest
+                )
                 staging.replace(directory)
                 fsync_dir(family)
             except Exception:
@@ -246,11 +282,13 @@ class TushareDependencyStore:
     def existing_generation_for_query(
         self, dataset: str, query: dict[str, Any]
     ) -> dict[str, Any] | None:
-        """Return the newest intact immutable response for an exact query, if any.
+        """Return the newest published response for an exact query, if intact.
 
         Backfill commands use this to resume without spending another upstream
-        call. ``refresh`` remains an explicit caller choice when a provider may
-        have revised its historical response.
+        call. The newest generation is verified and a corrupt one fails closed;
+        older responses are not substituted because that would hide provider
+        revision history. ``refresh`` remains an explicit caller choice when a
+        provider may have revised its historical response.
         """
         query = _validated_query(query)
         if dataset not in self._query_index:

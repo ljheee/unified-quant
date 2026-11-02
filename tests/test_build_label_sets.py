@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -19,10 +19,11 @@ import pytest
 
 from uq.contracts.artifacts import QualityReportStore
 from uq.contracts.canonical_v2 import CanonicalV2Store, file_sha256_bytes
-from uq.contracts.model_layer import sha256_json
 from uq.contracts.schema import load_schema
+from uq.contracts.tushare_dependency import TushareDependencyStore
 from uq.errors import ContractError
 from uq.research_chain.owning_contracts import LabelStore
+from uq.research_chain.owning_contracts import BacktestMarketDatasetStore
 
 _ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location(
@@ -81,8 +82,46 @@ def _patch_listing_dates(monkeypatch, listing_dates=None):
     monkeypatch.setattr(module, "_listing_dates", lambda instruments: defaults)
 
 
+def _delisting_cli_args(tmp_path, delisting_dates=None):
+    rows = []
+    for instrument, day in (delisting_dates or {}).items():
+        number, exchange = instrument.split(".")
+        suffix = {"XSHG": "SH", "XSHE": "SZ", "XBSE": "BJ"}[exchange]
+        rows.append({"ts_code": f"{number}.{suffix}", "list_status": "D",
+                     "delist_date": day.strftime("%Y%m%d")})
+    if not rows:
+        rows.append({"ts_code": "999999.SZ", "list_status": "D", "delist_date": "20991231"})
+    store = TushareDependencyStore(tmp_path / "source")
+    manifest = store.publish(
+        "stock_basic",
+        query={"list_status": "D", "fields": "ts_code,list_status,delist_date"},
+        source_fetched_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        frame=pd.DataFrame(rows, columns=["ts_code", "list_status", "delist_date"]),
+    )
+    return ["--delisting-snapshot-root", str(tmp_path / "source"),
+            "--delisting-snapshot-generation", manifest["generation_id"]]
+
+
+def _calendar_cli_args(tmp_path):
+    sessions = [day.date().isoformat() for day in DATES]
+    frame = pd.DataFrame({"date": sessions, "instrument": ["CALENDAR"] * len(sessions)})
+    manifest = BacktestMarketDatasetStore(tmp_path / "market").publish(
+        frame,
+        dataset_type="calendar",
+        window_start=DATES[0].date(),
+        window_end=DATES[-1].date(),
+        sources={"fixture": "independent-test-calendar"},
+        producer="test-build-label-sets",
+    )
+    return [
+        "--calendar-root", str(tmp_path / "market"),
+        "--calendar-generation", manifest["generation_id"],
+        "--calendar-checksum", manifest["data_checksum_sha256"],
+    ]
+
+
 def _run(tmp_path, monkeypatch, *, start="2026-01-05", end="2026-01-20", instrument=None,
-         listing_dates=None, combined=False):
+         listing_dates=None, combined=False, delisting_dates=None):
     bars_root = tmp_path / "bars"
     _publish_bars(bars_root)
     _patch_listing_dates(monkeypatch, listing_dates)
@@ -91,6 +130,8 @@ def _run(tmp_path, monkeypatch, *, start="2026-01-05", end="2026-01-20", instrum
         "--bars-root", str(bars_root), "--label-root", str(tmp_path / "labels"),
         "--start", start, "--end", end, "--out", str(out),
     ]
+    argv += _delisting_cli_args(tmp_path, delisting_dates)
+    argv += _calendar_cli_args(tmp_path)
     if instrument is not None:
         argv += ["--instrument", instrument]
     if combined:
@@ -118,7 +159,7 @@ def test_already_adjusted_input_is_rejected_before_label_or_source_publication(t
             "--start", "2026-01-05", "--end", "2026-01-20",
             "--schema", str(_ROOT / "config/schemas/bars_adjusted.adjusted-v2.yaml"),
             "--out", str(tmp_path / "report.json"),
-        ])
+    ] + _delisting_cli_args(tmp_path) + _calendar_cli_args(tmp_path))
     assert not (tmp_path / "labels").exists()
 
 
@@ -127,8 +168,17 @@ def test_publishes_one_combined_label_set_for_the_whole_universe(tmp_path, monke
     # (`research_run_request_*.json` has a single `label_binding`, closed to
     # {family, generation_id, manifest_digest_sha256}). Per-instrument sets could
     # never be bound, so the entry point must be able to publish one combined set.
+    build_sizes = []
+    original_build = module.LabelBuilder.build_with_frame
+
+    def count_builds(self, frame, *, upstream_bindings):
+        build_sizes.append(len(frame))
+        return original_build(self, frame, upstream_bindings=upstream_bindings)
+
+    monkeypatch.setattr(module.LabelBuilder, "build_with_frame", count_builds)
     code, report = _run(tmp_path, monkeypatch, combined=True)
     assert code == 0
+    assert build_sizes == [len(DATES) * len(INSTRUMENTS)]
     assert report["mode"] == "combined"
     assert report["published"] == 1
     assert report["refused"] == 0
@@ -334,7 +384,7 @@ def test_combined_mode_names_an_instrument_whose_eligibility_removes_every_row(t
     code = module.main([
         "--bars-root", str(bars_root), "--label-root", str(tmp_path / "labels"),
         "--start", "2026-01-05", "--end", "2026-01-20", "--combined", "--out", str(out),
-    ])
+    ] + _delisting_cli_args(tmp_path) + _calendar_cli_args(tmp_path))
     report = json.loads(out.read_text())
     assert code == 1
     assert report["published"] == 1
@@ -368,10 +418,58 @@ def test_replays_exact_listing_mapping_without_vendor_access(tmp_path, monkeypat
         '--bars-root', str(tmp_path / 'bars'), '--label-root', str(second_root),
         '--start', '2026-01-05', '--end', '2026-01-20', '--combined',
         '--listing-snapshot-generation', snapshot_id, '--out', str(out),
+    ] + [
+        '--delisting-snapshot-root', str(tmp_path / 'source'),
+        '--delisting-snapshot-generation', first['eligibility']['delisting_snapshot']['generation_id'],
+    ] + [
+        '--calendar-root', str(tmp_path / 'market'),
+        '--calendar-generation', first['eligibility']['calendar_binding']['generation_id'],
+        '--calendar-checksum', first['eligibility']['calendar_binding']['data_checksum_sha256'],
     ]) == 0
     second = json.loads(out.read_text())
     assert first['records'] == second['records']
     assert second['eligibility']['listing_date_snapshot']['generation_id'] == snapshot_id
+
+
+def test_label_publication_excludes_effective_delisting_date_and_pins_snapshot(tmp_path, monkeypatch):
+    effective_date = DATES[6].date()
+    code, report = _run(
+        tmp_path, monkeypatch, combined=True,
+        delisting_dates={"600000.XSHG": effective_date},
+    )
+    assert code == 0
+    store = LabelStore(tmp_path / "labels")
+    manifest, labels = store.read_frame(report["records"][0]["label_generation_id"])
+    delisted_rows = labels[labels["instrument"] == "600000.XSHG"]
+    assert delisted_rows["decision_date"].dt.date.max() == DATES[5].date()
+    assert len(delisted_rows) == 6
+    rules = manifest["eligibility"]["rules"]
+    assert rules["delisting"] == "exclude_on_or_after_effective_delist_date"
+    assert rules["listing_date_snapshot_generation_id"] == report["eligibility"]["listing_date_snapshot"]["generation_id"]
+    assert rules["delisting_snapshot_generation_id"] == report["eligibility"]["delisting_snapshot"]["generation_id"]
+
+
+def test_limit_price_equality_is_derived_as_an_ineligible_event():
+    frame = pd.DataFrame({
+        "instrument": ["600000.XSHG"] * 3,
+        "session_date": DATES[:3],
+        "open": [10.0, 10.0, 10.0], "high": [10.0, 10.0, 10.0],
+        "low": [10.0, 10.0, 10.0], "close": [10.0, 10.0, 10.0],
+        "volume": [1.0] * 3, "amount": [10.0] * 3, "status": ["trading"] * 3,
+        "limit_up": [10.0, 11.0, 11.0], "limit_down": [9.0, 9.0, 10.0],
+        "adj_factor": [1.0] * 3,
+    })
+    derived = module._eligibility_columns(
+        frame, {"600000.XSHG": date(2010, 1, 4)}, {}
+    )
+    assert derived["limit_up"].tolist() == [True, False, False]
+    assert derived["limit_down"].tolist() == [False, False, True]
+
+
+def test_delisting_snapshot_skips_only_tushare_b_share_code_namespace():
+    assert module._instrument_from_ts_code("T600018.SH") is None
+    with pytest.raises(ContractError, match="invalid Tushare security code"):
+        module._instrument_from_ts_code("not-a-code")
 
 
 def test_partial_listing_snapshot_fails_before_label_publication(tmp_path, monkeypatch):

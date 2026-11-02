@@ -114,6 +114,10 @@ def test_unimplemented_stages_are_ignored():
         _record(div_proc="预案", ex_date=None),
         _record(div_proc="股东大会通过", ex_date=None, record_id="b" * 64),
         _record(div_proc="预披露", ex_date=None, record_id="c" * 64),
+        _record(div_proc="未通过", ex_date="2026-08-20", record_id="d" * 64),
+        _record(div_proc="停止实施", ex_date="2026-08-20", record_id="e" * 64),
+        _record(div_proc="股东大会未通过", ex_date="2026-08-20", record_id="f" * 64),
+        _record(div_proc="future vendor stage", ex_date="2026-08-20", record_id="0" * 64),
     )
     events, dropped = implemented_events(
         records, instrument=INSTRUMENT, window_start=DATES[0], window_end=DATES[-1]

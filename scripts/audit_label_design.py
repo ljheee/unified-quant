@@ -14,8 +14,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--bars-root', type=Path, required=True)
     parser.add_argument('--label-root', type=Path, required=True)
     parser.add_argument('--label-generation', required=True)
+    parser.add_argument('--calendar-root', type=Path,
+                        help='owning calendar store; defaults to --bars-root for co-located stores')
     parser.add_argument('--calendar-generation-id', required=True,
-                        help='published independent calendar dataset generation in --bars-root')
+                        help='published independent calendar dataset generation in --calendar-root')
     parser.add_argument('--calendar-checksum', required=True,
                         help='calendar dataset data_checksum_sha256')
     parser.add_argument('--start', required=True)
@@ -28,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
         args.label_generation,
         args.start,
         args.end,
+        calendar_root=args.calendar_root,
         calendar_generation_id=args.calendar_generation_id,
         calendar_checksum_sha256=args.calendar_checksum,
     )

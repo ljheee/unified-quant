@@ -1,6 +1,6 @@
 # Portfolio, Backtest, Risk Control Plane, and Paper Execution
 
-> Current behavior reference. Last checked: `2026-10-31` against the uncommitted worktree based on HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`. v4 company-action behavior is synthetic-test verified only; no real event-source review has been performed. Based on source code, configuration, and tests; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-11-02` against the uncommitted worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`. v4 company-action behavior is synthetic-test verified only. The live 2023-01-01..2026-10-30 dividend backfill is complete, and a six-name 2024-2026 event-source pilot agrees; a full-universe event-source reconciliation has not been completed. Backtest market dataset v2 binds null-normalized rows, dtypes and its identity profile; v1 artifacts remain readable. Based on source code, configuration, and tests; unverified items are marked `UNKNOWN`.
 
 ## Responsibilities and Boundaries
 
@@ -185,6 +185,16 @@ state or backtest artifacts, and it does not infer real fills; see
 
 ## State and Data Contracts
 
+The research backtest's whole-window calendar, suspension and corporate-action
+inputs are published by `BacktestMarketDatasetStore` under
+`backtest_market_data/dataset=<generation>` (the owning-store details are in
+[`research-chain.md`](research-chain.md#two-market-data-stores-two-layouts-not-one)).
+Current publications use `backtest_market_dataset.v2.json`: generation identity
+includes the window, dataset type, ordered rows with missing values normalized to
+JSON null, column dtypes and the `rows-null-normalized-dtypes-v2` profile. The
+reader still accepts v1 manifests with their original identity rule, and it
+recomputes v2 generation identity from the checksum-verified Parquet frame.
+
 Risk families (`risk_policy`, `risk_event`/`risk_run`, `risk_state`, `risk_decision`, `risk_exception`) are immutable manifests under `$ROOT/<family>/generation=<id>/manifest.json`, plus one canonical serialization shared by every file artifact (`src/uq/risk/contracts.py:52`). Paper families (`execution_config`, `order_plan`, `execution_result`, `paper_portfolio_state`) follow the same pattern at `src/uq/execution/stores.py`.
 
 A `ConfigPublicationBinding` is single-use: once it has authorized a config publication, a second call raises, so one risk decision cannot license two publications.
@@ -208,6 +218,7 @@ A `ConfigPublicationBinding` is single-use: once it has authorized a config publ
 - Paper execution: `tests/test_paper_execution_contracts.py`, `tests/test_paper_execution_phase1.py`–`phase5.py`, `tests/test_paper_execution_market_source.py`, `tests/test_publish_market_datasets.py`.
 - Portfolio v2 score weighting: `tests/test_portfolio_layer.py`; portfolio v3 risk-parity solver and data-store routing: `tests/test_portfolio_risk_model.py` and `tests/test_research_v8_risk_parity.py`.
 - Historical verification at HEAD `2d713260eef73d595bf75bb1bd06899a8929dad1`: 1500 passed / 33 skipped and 1532 passed / 1 skipped. After v4 company-action work and review fixes, sequential full suites at HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21` passed with `.venv/bin/python -m pytest` → 1563 passed / 33 skipped and `.venv-qlib/bin/python -m pytest` → 1595 passed / 1 skipped. Qlib and pandas emit existing dependency/deprecation warnings; no real corporate-action event, risk-return or industry-history panel was available, so those paths were verified with governed synthetic fixtures only.
+- Current reviewed worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`: `.venv/bin/python -m pytest` → `1651 passed, 34 skipped`; `.venv-qlib/bin/python -m pytest` → `1684 passed, 1 skipped`. These are local full-suite results, not release-matrix certification.
 - Research-chain paper integration: `tests/test_paper_execution_research_integration_phase0.py`–`phase3.py`, `tests/test_paper_execution_research_stage_runner.py`, `tests/test_paper_execution_research_integration_evidence.py`, `tests/test_paper_execution_research_integration_release.py`.
 - Golden identity vectors: `evidence/paper-execution/phase-0/identity-golden-vectors.json`, consumed by `tests/test_paper_execution_contracts.py`.
 

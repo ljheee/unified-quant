@@ -414,6 +414,24 @@ class TushareFactorCandidateStore:
     def __init__(self, root: Path | str) -> None:
         self.root = Path(root)
 
+    @staticmethod
+    def _verify_artifacts(directory: Path, manifest: dict[str, Any]) -> None:
+        """Read each serialized panel back before its generation is published."""
+        for field in ("factor_artifact", "exposure_artifact"):
+            artifact = manifest[field]
+            path = directory / artifact["filename"]
+            if not path.is_file() or path.is_symlink():
+                raise ContractError("candidate panel artifact is unavailable")
+            payload = path.read_bytes()
+            if file_sha256_bytes(payload) != artifact["checksum_sha256"]:
+                raise ContractError("candidate panel artifact checksum mismatch")
+            try:
+                frame = pd.read_parquet(path)
+            except (ImportError, OSError, ValueError) as exc:
+                raise ContractError("candidate panel artifact is unreadable") from exc
+            if len(frame) != artifact["row_count"] or frame.columns.tolist() != artifact["columns"]:
+                raise ContractError("candidate panel artifact shape mismatch")
+
     def publish(self, bundle: TushareFactorCandidateBundle) -> dict[str, Any]:
         manifest = dict(bundle.manifest)
         validate_contract("tushare_factor_candidate.v1.json", manifest)
@@ -449,6 +467,16 @@ class TushareFactorCandidateStore:
                     encoding="utf-8",
                 )
                 fsync_tree(staging)
+                try:
+                    staged_manifest = json.loads(
+                        (staging / "manifest.json").read_text(encoding="utf-8")
+                    )
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise ContractError("candidate staged manifest is unreadable") from exc
+                validate_contract("tushare_factor_candidate.v1.json", staged_manifest)
+                if staged_manifest != manifest:
+                    raise ContractError("candidate staged manifest changed before publication")
+                self._verify_artifacts(staging, staged_manifest)
                 os.replace(staging, directory)
                 fsync_dir(family)
             except Exception:
@@ -479,17 +507,7 @@ class TushareFactorCandidateStore:
             or sha256_json({key: value for key, value in manifest.items() if key != "generation_id"}) != generation_id
         ):
             raise ContractError("candidate manifest identity mismatch")
-        for field in ("factor_artifact", "exposure_artifact"):
-            artifact = manifest[field]
-            path = directory / artifact["filename"]
-            if not path.is_file() or path.is_symlink():
-                raise ContractError("candidate panel artifact is unavailable")
-            payload = path.read_bytes()
-            if file_sha256_bytes(payload) != artifact["checksum_sha256"]:
-                raise ContractError("candidate panel artifact checksum mismatch")
-            frame = pd.read_parquet(path)
-            if len(frame) != artifact["row_count"] or frame.columns.tolist() != artifact["columns"]:
-                raise ContractError("candidate panel artifact shape mismatch")
+        self._verify_artifacts(directory, manifest)
         if (source_root is None) != (bars_root is None):
             raise ContractError("candidate lineage verification requires both source_root and bars_root")
         if source_root is not None and bars_root is not None:

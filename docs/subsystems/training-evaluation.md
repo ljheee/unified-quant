@@ -1,5 +1,7 @@
 # Training Evaluation Diagnostics
 
+> Current behavior reference. Last checked: `2026-11-02` against the uncommitted worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`. Verification counts are refreshed after the current change set; historical test totals remain tied to their recorded revisions.
+
 This subsystem adds recomputable research diagnostics and a fixed walk-forward
 protocol for the trading-grade training plan. Its metric readers consume
 published backtest results, predictions, labels and dataset manifests. The
@@ -11,6 +13,14 @@ order gate. This is additional evidence, not a production approval.
 ## Entry Points and Contracts
 
 - `scripts/evaluate_training.py`: CLI over the owning read-side stores.
+- `scripts/publish_backtest_calendar.py`: publish the whole-window session
+  calendar only after exact agreement between Tushare `trade_cal` and the
+  independent Sina index calendar.
+- `scripts/build_label_sets.py`: publish one or per-instrument label sets from
+  canonical bars, a pinned delisting snapshot, and an owning-store calendar.
+- `scripts/publish_qlib_factor_partitions.py`: compute reviewed Alpha158 on the
+  sparse observed bar panel without choosing stocks by full-window survival;
+  incomplete factor vectors are excluded and reported per session.
 - `src/uq/evaluation/report.py`: `paired_backtest_inputs`,
   `published_ic_inputs`, `EvaluationReportStore`.
 - `scripts/compare_training_models.py`, `evaluation/model_comparison.py`:
@@ -73,23 +83,41 @@ order gate. This is additional evidence, not a production approval.
 
 ## Label Design Audit
 
+`build_label_sets.py` requires both a checksum-verified `stock_basic(D)` snapshot
+and a `BacktestMarketDatasetStore` calendar binding. Its calendar-based 2.0.0
+label uses the exact fifth governed session after the decision date; it publishes
+a null label if any instrument bar is missing from the six-session path. This
+prevents a suspension gap from stretching a nominal five-session horizon. The
+eligibility flags exclude suspended sessions, listing ages under 60 calendar
+days, closes equal to the canonical raw limit prices, and sessions on or after
+the effective delisting date. The adjusted-price input checksum includes all
+derived eligibility flags, and the label manifest binds the listing-date map
+generation, delisting snapshot and calendar identities. A current delisting
+snapshot still does not
+certify the historical PIT membership universe.
+
 `audit_label_design.py` requires the independent `BacktestMarketDatasetStore`
 calendar generation and byte checksum in addition to raw bars and the published
-label. Readback verifies the calendar manifest digest, data checksum and content
-generation; raw partition dates in the requested window must exactly equal the
-governed sessions. For every non-null label, all instrument bars from decision
-session through the fifth governed future session must exist. Label and execution
+label. `--calendar-root` may point to a separate owning store; it defaults to
+`--bars-root` for co-located stores. Readback verifies the calendar manifest
+digest, data checksum and content generation; raw partition dates in the requested
+window must exactly equal the governed sessions. For every non-null label, all
+instrument bars from decision session through the fifth governed future session
+must exist. Label and execution
 legs are then aligned by calendar offsets (`T+1`, `T+5`, `T+6`), not by shifting
 whatever rows happened to survive for each instrument. This rejects both a
 missing whole-market partition and a security-specific hole that would stretch
 the nominal five-session horizon.
 
-Get `calendar_generation_id` and `data_checksum_sha256` from the
-`publish_backtest_market_data.py` report's `bindings.calendar_binding`, then run:
+Get `generation_id` and `data_checksum_sha256` from the
+`publish_backtest_calendar.py` report, and pass the same calendar store used at
+publication as `--calendar-root`. The audit window endpoints must be actual
+governed sessions, then run:
 
 ```sh
 .venv/bin/python scripts/audit_label_design.py \
   --bars-root <market-data-root> --label-root <label-store> \
+  --calendar-root <independent-calendar-store> \
   --label-generation <label-generation> --start <YYYY-MM-DD> --end <YYYY-MM-DD> \
   --calendar-generation-id <calendar-generation> \
   --calendar-checksum <calendar-data-checksum>
@@ -514,13 +542,10 @@ not replace the held-out OOS comparison with existing factors.
 
 `tests/test_tushare_factor_candidates.py` covers field/unit formulas, strict
 previous-session joins, exposure availability normalization, missing-source
-refusal, raw/calendar lineage re-verification, candidate screen bindings,
-direction-adjusted selection, collinearity de-duplication and insufficient
-correlation-history refusal. On the current uncommitted worktree based on HEAD
-`cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`, the ordinary full suite passed
-(`1593 passed, 33 skipped`) and the Qlib full suite passed
-(`1625 passed, 1 skipped`). These test fixtures verify the mechanisms, not
-provider historical vintages or strategy value.
+refusal, raw/calendar lineage re-verification, staged readback, candidate screen
+bindings, direction-adjusted selection, collinearity de-duplication and
+insufficient correlation-history refusal. These test fixtures verify the
+mechanisms, not provider historical vintages or strategy value.
 
 `tests/test_factor_screening.py` covers direct/inverse IC, collinearity,
 membership turnover, reviewed-config cost calculation, missing-calendar
@@ -558,6 +583,10 @@ and the benchmark-stage full suites passed with `.venv/bin/python -m pytest`
 (`1573 passed, 1 skipped`) at HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21`. Following
 trust-anchor activation and review fixes, final sequential suites on the same HEAD
 passed with `1563 passed, 33 skipped` and `1595 passed, 1 skipped`, respectively.
+The current reviewed worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`
+passes `.venv/bin/python -m pytest` (`1651 passed, 34 skipped`) and
+`.venv-qlib/bin/python -m pytest` (`1684 passed, 1 skipped`). These are local
+full-suite results, not release-matrix certification.
 
 The benchmark path now has immutable panel publication and a reviewed same-config
 v3/v4 backtest CLI. Synthetic tests verify the panel and runner handoff; no real

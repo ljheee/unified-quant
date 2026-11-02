@@ -2,8 +2,8 @@
 
 The direct event-to-event comparison is only useful if it runs from the same
 announcement-anchored store the derivation consumes, keeps amount and coverage
-divergences apart, and reports a share-only disclosure as uncovered instead of
-refusing the whole instrument over a record the *comparison* can still express.
+divergences apart, and records the explicit zero-cash assumption that lets a
+share-only disclosure be compared without changing factor-production behavior.
 """
 
 from __future__ import annotations
@@ -73,15 +73,30 @@ def _fake_adapter(frames):
     return _Adapter()
 
 
-def _run(tmp_path, monkeypatch, *, instruments, tdx_frames, disclosures, as_of="2026-01-01"):
+def _run(
+    tmp_path,
+    monkeypatch,
+    *,
+    instruments,
+    tdx_frames,
+    disclosures,
+    as_of="2026-01-01",
+    window_start=None,
+    window_end=None,
+):
     root = tmp_path / "dividend"
     _publish_disclosures(root, *disclosures)
     monkeypatch.setattr(module, "MootdxSourceAdapter", lambda: _fake_adapter(tdx_frames))
     out = tmp_path / "report.json"
-    code = module.main([
+    command = [
         "--dividend-root", str(root), "--instruments", *instruments,
         "--as-of", as_of, "--out", str(out),
-    ])
+    ]
+    if window_start is not None:
+        command.extend(["--window-start", window_start])
+    if window_end is not None:
+        command.extend(["--window-end", window_end])
+    code = module.main(command)
     return code, json.loads(out.read_text())
 
 
@@ -96,6 +111,80 @@ def test_agreement_passes_the_gate(tmp_path, monkeypatch):
     assert report["agreed"] == 1
     assert report["amount_diverged"] == 0
     assert report["records"][0]["status"] == "agreed"
+
+
+def test_binary32_rounding_of_tdx_amount_does_not_create_false_divergence(tmp_path, monkeypatch):
+    tdx_rounded_50_28 = float(pd.Series([50.28], dtype="float32").iloc[0])
+    code, report = _run(
+        tmp_path,
+        monkeypatch,
+        instruments=["300750.XSHE"],
+        disclosures=[_disclosure_row(
+            ts_code="300750.SZ",
+            end_date="20231231",
+            ann_date="20240420",
+            ex_date="20240430",
+            imp_ann_date="20240425",
+            cash_div_tax=5.028,
+        )],
+        tdx_frames={"300750": _tdx((2024, 4, 30, 1, tdx_rounded_50_28, 0.0, 0.0, 0.0))},
+    )
+
+    assert code == 0
+    assert report["tdx_amount_precision"] == "ieee754_binary32_projection"
+    assert report["agreed"] == 1
+    assert report["amount_diverged"] == 0
+
+
+def test_binary32_precision_rule_does_not_hide_a_material_amount_difference(tmp_path, monkeypatch):
+    code, report = _run(
+        tmp_path,
+        monkeypatch,
+        instruments=["300750.XSHE"],
+        disclosures=[_disclosure_row(
+            ts_code="300750.SZ",
+            end_date="20231231",
+            ann_date="20240420",
+            ex_date="20240430",
+            imp_ann_date="20240425",
+            cash_div_tax=5.028,
+        )],
+        tdx_frames={"300750": _tdx((2024, 4, 30, 1, 50.27995, 0.0, 0.0, 0.0))},
+    )
+
+    assert code == 1
+    assert report["amount_diverged"] == 1
+    assert report["records"][0]["status"] == "amount_diverged"
+
+
+def test_effective_date_window_filters_both_event_sources(tmp_path, monkeypatch):
+    code, report = _run(
+        tmp_path,
+        monkeypatch,
+        instruments=["600000.XSHG"],
+        disclosures=[
+            _disclosure_row(),
+            _disclosure_row(
+                ann_date="20251120",
+                ex_date="20251201",
+                imp_ann_date="20251125",
+            ),
+        ],
+        tdx_frames={"600000": _tdx(
+            (2025, 9, 16, 1, 4.1, 0.0, 0.0, 0.0),
+            (2025, 12, 1, 1, 4.1, 0.0, 0.0, 0.0),
+        )},
+        window_start="2025-09-16",
+        window_end="2025-09-16",
+    )
+
+    assert code == 0
+    assert report["effective_date_window"] == {
+        "start": "2025-09-16",
+        "end": "2025-09-16",
+    }
+    assert report["agreed"] == 1
+    assert report["coverage_diverged"] == 0
 
 
 def test_an_amount_divergence_fails_the_gate_with_both_values(tmp_path, monkeypatch):
@@ -130,10 +219,9 @@ def test_a_coverage_divergence_is_not_folded_into_an_amount_divergence(tmp_path,
     assert report["records"][0]["tdx_only_dates"] == ["2025-12-01"]
 
 
-def test_a_share_only_disclosure_is_uncovered_not_a_refusal_of_the_name(tmp_path, monkeypatch):
-    # The derivation fails closed on a share-only distribution (it has no cash to
-    # derive a factor from), but the *comparison* can still express the event, so it
-    # is compared rather than dropping the instrument from the gate.
+def test_a_share_only_disclosure_is_compared_with_zero_cash_assumption(tmp_path, monkeypatch):
+    # The factor derivation keeps its missing-cash refusal. For source comparison,
+    # both absent cash fields plus an explicit share rate describe a share-only event.
     code, report = _run(
         tmp_path, monkeypatch,
         instruments=["600000.XSHG"],
@@ -143,18 +231,21 @@ def test_a_share_only_disclosure_is_uncovered_not_a_refusal_of_the_name(tmp_path
                             stk_bo_rate=1.0, stk_co_rate=0.0, ex_date="20251201",
                             imp_ann_date="20250901"),
         ],
-        tdx_frames={"600000": _tdx((2025, 9, 16, 1, 4.1, 0.0, 0.0, 0.0))},
+        tdx_frames={"600000": _tdx(
+            (2025, 9, 16, 1, 4.1, 0.0, 0.0, 0.0),
+            (2025, 12, 1, 1, 0.0, 10.0, 0.0, 0.0),
+        )},
     )
     assert code == 0
     assert report["instruments_compared"] == 1
     assert report["records"][0]["status"] == "agreed"
     assert report["refusals"] == []
-    (note,) = report["uncovered"]
-    assert note["side"] == "disclosure"
-    assert note["excluded_ex_dates"] == ["2025-12-01"]
+    assert report["uncovered"] == []
+    (assumption,) = report["assumptions"]
+    assert assumption["assumed_zero_cash_ex_dates"] == ["2025-12-01"]
 
 
-def test_a_name_with_only_a_share_only_disclosure_is_reported_as_uncovered(tmp_path, monkeypatch):
+def test_a_name_with_only_a_share_only_disclosure_can_be_reconciled(tmp_path, monkeypatch):
     code, report = _run(
         tmp_path, monkeypatch,
         instruments=["600000.XSHG"],
@@ -162,9 +253,40 @@ def test_a_name_with_only_a_share_only_disclosure_is_reported_as_uncovered(tmp_p
                                      stk_co_rate=0.0, ex_date="20251201", imp_ann_date="20250901")],
         tdx_frames={"600000": _tdx((2025, 12, 1, 1, 0.0, 10.0, 0.0, 0.0))},
     )
-    assert code == 1
-    assert report["instruments_compared"] == 0
-    assert "no pre-tax cash field" in report["refusals"][0]["reason"]
+    assert code == 0
+    assert report["instruments_compared"] == 1
+    assert report["records"][0]["status"] == "agreed"
+    assert report["assumptions"][0]["assumed_zero_cash_ex_dates"] == ["2025-12-01"]
+
+
+def test_reduced_mapping_keeps_pure_share_events_when_other_disclosure_is_unmappable(
+    tmp_path, monkeypatch
+):
+    code, report = _run(
+        tmp_path,
+        monkeypatch,
+        instruments=["600000.XSHG"],
+        disclosures=[
+            _disclosure_row(),
+            _disclosure_row(
+                end_date="20241231", cash_div=None, cash_div_tax=None, stk_div=1.0,
+                stk_bo_rate=1.0, stk_co_rate=0.0, ex_date="20251201", imp_ann_date="20250901",
+            ),
+            _disclosure_row(
+                end_date="20231231", cash_div=None, cash_div_tax=None, stk_div=None,
+                stk_bo_rate=None, stk_co_rate=None, ex_date="20251215", imp_ann_date="20250901",
+            ),
+        ],
+        tdx_frames={"600000": _tdx(
+            (2025, 9, 16, 1, 4.1, 0.0, 0.0, 0.0),
+            (2025, 12, 1, 1, 0.0, 10.0, 0.0, 0.0),
+        )},
+    )
+
+    assert code == 0
+    assert report["records"][0]["status"] == "agreed"
+    assert report["assumptions"][0]["assumed_zero_cash_ex_dates"] == ["2025-12-01"]
+    assert report["uncovered"][0]["excluded_ex_dates"] == ["2025-12-15"]
 
 
 def test_a_genuinely_unmappable_disclosure_is_a_refusal_not_a_traceback(tmp_path, monkeypatch):

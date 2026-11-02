@@ -270,16 +270,36 @@ def test_engine_version_mismatch_rejected(monkeypatch):
         _adapter()._validate_engine_version()
 
 
-def test_incomplete_qlib_panel_rejected():
+def test_sparse_qlib_input_panel_is_accepted_without_future_survivor_filtering():
     panel, dates, instruments = _synthetic_panel(days=70)
     incomplete = panel.drop(index=0)
-    with pytest.raises(ContractError, match="not a complete instrument/date panel"):
-        _adapter()._validate_request(
-            incomplete,
-            list(instruments),
-            str(dates[-1].date()),
-            str(dates[-1].date()),
-        )
+    _adapter()._validate_request(
+        incomplete,
+        list(instruments),
+        str(dates[-1].date()),
+        str(dates[-1].date()),
+    )
+
+
+def test_sparse_input_keeps_the_governed_calendar_and_marks_missing_factor_rows():
+    pytest.importorskip("qlib")
+    panel, dates, instruments = _synthetic_panel(days=120)
+    missing_day = dates[80]
+    sparse = panel.loc[~(
+        (panel["instrument"] == instruments[0]) & (panel["datetime"] == missing_day)
+    )].reset_index(drop=True)
+    result = _adapter().compute(
+        sparse,
+        instruments=list(instruments),
+        start_date=str(dates[0].date()),
+        end_date=str(dates[-1].date()),
+    )
+    assert len(result) == len(dates) * len(instruments)
+    missing_row = result[
+        (result["instrument"] == instruments[0]) & (result["datetime"] == missing_day)
+    ]
+    assert len(missing_row) == 1
+    assert missing_row[_adapter().factor_names].isna().any(axis=1).item()
 
 
 def test_minimum_qlib_history_rejected():

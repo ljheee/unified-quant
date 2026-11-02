@@ -96,21 +96,30 @@ def assess_readiness(
     members_by_session: Mapping[date, Sequence[str]],
     bars: pd.DataFrame,
     min_sessions_per_instrument: int = 60,
+    warmup_sessions: int = 0,
     label_horizon_sessions: int = 5,
     max_null_rate: float = 0.0,
     suspensions: Mapping[str, Sequence[date]] | None = None,
     suspension_provenance: str = "unspecified",
     delisted: Collection[str] | None = None,
     delisted_provenance: str = "unspecified",
+    delist_dates: Mapping[str, date] | None = None,
+    delist_date_provenance: str = "unspecified",
     excluded_instruments: Mapping[str, str] | None = None,
     excluded_provenance: str = "unspecified",
     factor_sessions: Sequence[date] | None = None,
 ) -> ReadinessReport:
     """Evaluate the cross-input conditions a training run depends on.
 
+    Without suspension data, required active-period gaps remain blocking but
+    their suspension cause is reported as unverified. ``delist_dates`` marks
+    the first date on which the security is no longer listed. A missing
+    required session on or after that date is informational; it does not turn
+    a gap during the listing period into an explained absence.
+
     ``excluded_instruments`` maps an instrument to the recorded reason it is
     dropped from the universe for this window.  It exists for the case the
-    ``delisted`` rule cannot express: an instrument the provider simply stops
+    status-only ``delisted`` rule cannot express: an instrument the provider simply stops
     publishing mid-window (a long halt ``suspend_d`` never flags, or a vendor
     hole), where no window length produces enough tradable sessions.  Such a
     name is not trainable and not repairable, so the caller must either drop it
@@ -127,6 +136,7 @@ def assess_readiness(
     suspended_by_instrument = {
         instrument: set(values) for instrument, values in (suspensions or {}).items()
     }
+    dated_delistings = dict(delist_dates or {})
     excluded = {str(name): str(reason) for name, reason in (excluded_instruments or {}).items()}
 
     if not session_values:
@@ -203,7 +213,15 @@ def assess_readiness(
 
     rows_by_instrument = {} if frame.empty else frame.groupby("instrument").size().to_dict()
     with_bars = sorted(rows_by_instrument)
-    members_without_bars = sorted(name for name in set(members) - set(with_bars) if name not in excluded)
+    members_without_bars = sorted(
+        name
+        for name in set(members) - set(with_bars)
+        if name not in excluded
+        and not (
+            name in dated_delistings
+            and dated_delistings[name] <= window_start
+        )
+    )
     # When the window has no bars at all, ``no_bars`` is the root cause; listing
     # every member as a second finding would only bury it.
     # With a suspension source available the per-session rules below give the
@@ -254,11 +272,22 @@ def assess_readiness(
         for instrument in set(members) | set(with_bars)
     }
     observable_counts: dict[str, int] = {
-        instrument: len(required - suspended_by_instrument.get(instrument, set()))
+        instrument: len(
+            {
+                session for session in required
+                if instrument not in dated_delistings or session < dated_delistings[instrument]
+            }
+            - suspended_by_instrument.get(instrument, set())
+        )
         for instrument, required in required_by_instrument.items()
     }
     fully_suspended = sorted(
-        instrument for instrument in members if observable_counts.get(instrument) == 0
+        instrument for instrument in members
+        if observable_counts.get(instrument) == 0
+        and not (
+            instrument in dated_delistings
+            and dated_delistings[instrument] <= window_start
+        )
     )
     if fully_suspended:
         metrics["instruments_fully_suspended"] = float(len(fully_suspended))
@@ -269,6 +298,7 @@ def assess_readiness(
         gaps: list[str] = []
         conflicts: list[str] = []
         excused_delisted: list[str] = []
+        excused_post_delist: dict[str, set[date]] = {}
         excused_excluded: list[str] = []
         non_suspended_sessions = (
             sessions_by_instrument(frame.loc[frame["status"].astype(str) != "suspended"])
@@ -284,7 +314,17 @@ def assess_readiness(
             if suspended & non_suspended_sessions.get(instrument, set()):
                 conflicts.append(instrument)
             required = required_by_instrument[instrument]
-            missing = {value for value in required if value not in suspended} - present
+            delist_date = dated_delistings.get(instrument)
+            in_listing_window = {
+                value for value in required if delist_date is None or value < delist_date
+            }
+            after_delisting = {
+                value for value in required if delist_date is not None and value >= delist_date
+            }
+            missing = {value for value in in_listing_window if value not in suspended} - present
+            excused_missing = after_delisting - suspended - present
+            if excused_missing:
+                excused_post_delist[instrument] = excused_missing
             if not missing:
                 continue
             # A provider-confirmed delisting excuses an absence that is total for
@@ -310,6 +350,18 @@ def assess_readiness(
                     f"{len(excused_delisted)} members have no bars in the window and "
                     f"{delisted_provenance} marks them delisted",
                     tuple(excused_delisted[:50]),
+                    "informational",
+                )
+            )
+        if excused_post_delist:
+            missing_count = sum(len(values) for values in excused_post_delist.values())
+            metrics["post_delisting_missing_sessions_excused"] = float(missing_count)
+            findings.append(
+                ReadinessFinding(
+                    "post_delisting_missing_sessions",
+                    f"{missing_count} required-session absences fall on or after dates in "
+                    f"{delist_date_provenance}; missing sessions before the delist date remain blocking",
+                    tuple(sorted(excused_post_delist)[:50]),
                     "informational",
                 )
             )
@@ -347,6 +399,64 @@ def assess_readiness(
                     tuple(conflicts[:50]),
                 )
             )
+    elif session_values:
+        # Skipping the suspension source does not make missing rows disappear.
+        # Keep gaps that fall during the verified listing period blocking, but
+        # state that their suspension cause was not checked.
+        unverified_gaps: list[str] = []
+        excused_without_suspension: list[str] = []
+        excused_post_delist: dict[str, set[date]] = {}
+        for instrument in sorted(set(members) | set(with_bars)):
+            required = required_by_instrument[instrument]
+            delist_date = dated_delistings.get(instrument)
+            active_required = {
+                value for value in required if delist_date is None or value < delist_date
+            }
+            missing = active_required - present_sessions.get(instrument, set())
+            if missing:
+                if instrument in excluded:
+                    excused_without_suspension.append(instrument)
+                else:
+                    unverified_gaps.append(instrument)
+            if delist_date is not None:
+                post_delist_missing = {
+                    value for value in required
+                    if value >= delist_date and value not in present_sessions.get(instrument, set())
+                }
+                if post_delist_missing:
+                    excused_post_delist[instrument] = post_delist_missing
+        if unverified_gaps:
+            findings.append(
+                ReadinessFinding(
+                    "unverified_bar_gap",
+                    f"{len(unverified_gaps)} instruments lack required sessions; "
+                    "suspension evidence was skipped, so missing-row causes are unverified",
+                    tuple(unverified_gaps[:50]),
+                )
+            )
+        if excused_without_suspension:
+            metrics["instruments_exclusion_excused"] = float(len(excused_without_suspension))
+            findings.append(
+                ReadinessFinding(
+                    "excluded_instruments_excused",
+                    f"{len(excused_without_suspension)} instruments with required gaps are covered by "
+                    f"{excluded_provenance}; suspension causes were not checked",
+                    tuple(excused_without_suspension[:50]),
+                    "informational",
+                )
+            )
+        if excused_post_delist:
+            missing_count = sum(len(values) for values in excused_post_delist.values())
+            metrics["post_delisting_missing_sessions_excused"] = float(missing_count)
+            findings.append(
+                ReadinessFinding(
+                    "post_delisting_missing_sessions",
+                    f"{missing_count} required-session absences fall on or after dates in "
+                    f"{delist_date_provenance}; missing sessions before the delist date remain blocking",
+                    tuple(sorted(excused_post_delist)[:50]),
+                    "informational",
+                )
+            )
 
     # An exclusion is always reported, whichever rule would otherwise have
     # caught the name (suspension-aware gap, or the blunt member_without_bars
@@ -381,6 +491,37 @@ def assess_readiness(
         for instrument, count in rows_by_instrument.items()
         if count < min_sessions_per_instrument
     )
+    # A stock whose entire PIT membership ends before the first model-visible
+    # session contributes only to the declared walk-forward warmup. Its short
+    # history is not a missing training sample. Keep it visible as an
+    # informational finding, while continuing to enforce the floor for every
+    # instrument that is a member on or after that boundary.
+    first_training_session = (
+        session_values[warmup_sessions]
+        if 0 < warmup_sessions < len(session_values)
+        else None
+    )
+    warmup_only_short = sorted(
+        instrument
+        for instrument in short
+        if first_training_session is not None
+        and member_days_by_instrument.get(instrument)
+        and max(member_days_by_instrument[instrument]) < first_training_session
+    )
+    if warmup_only_short:
+        short = [instrument for instrument in short if instrument not in warmup_only_short]
+        short_all = [instrument for instrument in short_all if instrument not in warmup_only_short]
+        metrics["instruments_short_history_only_in_warmup"] = float(len(warmup_only_short))
+        findings.append(
+            ReadinessFinding(
+                "short_history_only_in_warmup",
+                f"{len(warmup_only_short)} instruments have fewer than {min_sessions_per_instrument} "
+                f"bar sessions but their PIT membership ends before first model-visible session "
+                f"{first_training_session.isoformat()} after {warmup_sessions} warmup sessions",
+                tuple(warmup_only_short[:50]),
+                "informational",
+            )
+        )
     # An exclusion that does not actually explain a defect is a silent universe
     # shrinkage: the name is dropped while the traceable evidence says it had
     # enough to train on.  A name is excludable only when it is genuinely

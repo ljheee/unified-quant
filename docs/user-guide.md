@@ -107,7 +107,7 @@ mkdir -p "$DATA_ROOT"
 | 来源 | 取什么 | 访问方式 | 当前状态与限制 |
 |---|---|---|---|
 | Tushare（2000 积分账号） | `daily` 原始 OHLCV、`adj_factor`、`stk_limit`、`suspend_d`、`stock_basic`、`trade_cal`、`index_weight`（部分） | HTTP API，需 `TUSHARE_2K_TOKEN` | **本项目主力源**。CLI 不自动加载 `.env`，需把 token 注入进程环境。2000 积分档官方频次为约 200 次/分钟；端点另有单次行数和日请求上限。`income_vip` 类接口不可用。 |
-| TDX / 通达信（via `mootdx`） | **除权除息事件**（`xdxr`）、行情 `bars`、指数日线 | 原生 TCP 协议，端口 7709 | `xdxr` **实测可用**（默认主机 `115.238.90.165:7709`，实测返回真实事件）。`bars`/`quotes` 在部分网络下被拦截返回空，但 `xdxr` 仍可用——**探测时必须用真正要发的命令**，否则会把"命令族被拦"误判成"服务器不可用"。 |
+| TDX / 通达信（`easy_tdx` MAC + `mootdx` 标准协议） | 日线 `bars`（MAC）、**除权除息事件**（标准协议 `xdxr`） | 原生 TCP，端口 7709 | `easy_tdx` 1.1.0 固定到 commit `4820b4a`。2026-11-02 用 MAC 客户端对 `121.37.207.165`、`121.36.248.138`、`123.60.47.136` 各取 `600000` 日线 800 根，均成功；默认探测须拿到真实 K 线才接受节点。MAC `vol` 单位是股，直接映射 `volume`。`xdxr` 仍走 mootdx 标准协议；2026-11-01 两台主机各返回 88 行。标准协议 mootdx 在 2026-11-01 对 38 台可返回证券数量的主机取 `bars` 均为空；该观察有日期和协议范围，不代表 TDX 全部不可用。 |
 | EastMoney | 独立交易日历（指数日线推会话表） | HTTP | 实测可用，但**抖动明显**（约 1/6 概率掉连接），入库与就绪门都带重试。 |
 
 除已有日线、日历和参考端点外，`Tushare2kAdapter.research_data()` 现在可按受限端点清单采集每日指标、申万行业分类/历史成分、三张财报、财务指标、业绩预告/快报、卖方盈利预测、资金流、沪深股通持股和龙虎榜。原始响应进入只追加、带校验和的 `TushareDependencyStore`，默认根为 `data/trading-grade-history/source/`；该落地区不是 canonical 数据，不能直接作为 PIT 因子或回测输入。
@@ -178,9 +178,9 @@ set +a
 - **新浪有真实缺陷**（中国平安 2018 事件）。
 - **Tushare 自己的 `dividend` 字段也有错**（中国平安该事件给 0.2）。这正是"复权链要用两个独立来源交叉校验"的意义：单一来源（含 Tushare 公告）都可能错。
 
-**事件互校（已落地为常规门）**：`src/uq/market/corporate_action_reconcile.py` 把两份事件源**逐除权日、逐字段**直接对撞（不再各自只对自己的因子），区分三种结论：`agreed` / `amount_diverged`（同一事件金额不一致）/ `coverage_diverged`（一方缺该事件）。生产入口 `scripts/reconcile_corporate_actions.py` 从**已发布的公告 store** 取披露侧（与派生链同一份记录，不再打 API），TDX 侧取 `xdxr`，任一分歧即 **exit 1**（门而非日志）。真跑实测（6 只标的）复现了上述人工裁定——**601318 2018-06-07 自动报出 `amount_diverged`**（公告 2.0/10股 vs TDX 12.0/10股），无需人工仲裁即可发现；同时 **000858 1999-06-08** 也报 `amount_diverged`（公告 12.5 vs TDX 10.0），方向与上一条相反——**再次印证"没有来源处处正确"**。
+**事件互校（已落地为常规门）**：`src/uq/market/corporate_action_reconcile.py` 把两份事件源**逐除权日、逐字段**直接对撞（不再各自只对自己的因子），区分三种结论：`agreed` / `amount_diverged`（同一事件金额不一致）/ `coverage_diverged`（一方缺该事件）。生产入口 `scripts/reconcile_corporate_actions.py` 从**已发布的公告 store** 取披露侧（与派生链同一份记录，不再打 API），TDX 侧取 `xdxr`，任一分歧即 **exit 1**（门而非日志）。`--window-start`/`--window-end` 可将两源同时限制在同一除权日窗口，`--as-of` 独立限制披露公告可见日期。真跑实测（6 只标的）复现了上述人工裁定——**601318 2018-06-07 自动报出 `amount_diverged`**（公告 2.0/10股 vs TDX 12.0/10股），无需人工仲裁即可发现；同时 **000858 1999-06-08** 也报 `amount_diverged`（公告 12.5 vs TDX 10.0），方向与上一条相反——**再次印证"没有来源处处正确"**。
 
-**一个结构性缺口（已明确登记，不是缺陷）**：Tushare 的 `dividend` 端点**完全不含配股数据**（`peigu`/`peigujia`）。所以任何配股事件在披露侧只能表现为"缺该字段"，而不是"金额不一致"。报告里 `peigu`/`peigujia` 的 `amount_diverged` **只说明披露侧没有配股数据**，不是两源对同一金额的争议；`fenhong`/`songzhuangu` 的 `amount_diverged` 才是两源都携带同一金额却对不上的真分歧。另有少数**纯送股**披露（无任何现金字段）无法映射成交易所事件形状——脚本把它们计入报告的 `uncovered`（可复核）而**不是** gate 失败，因为把这类结构性排除算成失败会让门在多数真实标的上误红。
+**结构性缺口与精度规则**：Tushare 的 `dividend` 端点不含配股字段（`peigu`/`peigujia`）；这类差异会在报告中按披露侧缺项说明。对于两种现金字段都为空、但送股/转增比例明确且一致的纯送转披露，审计器只在互校映射中将现金视为 0 并比较送转金额，不改变因子生产链的缺现金拒绝规则。TDX XDXR 金额按其 binary32 数值精度比较，再应用 `1e-6`/十股的绝对容差，避免把 IEEE-754 解码差异当作金额分歧。当前六只标的、2024-01-01..2026-10-30 的 live pilot 有五只全项一致；300750 的精度差异消失，688766 的 2024-06-06 纯转增以 Tushare 0.4/股和 TDX 4.0/十股对齐。该 pilot 不代表全市场审计已完成。
 
 **如果要接入新浪作为第三源**：
 
@@ -192,7 +192,7 @@ set +a
 1. **先确认是"命令族被拦"还是"主机不可达"**：TDX 上换 `xdxr` 再试一次。
 2. Tushare 报限流：增加 `scripts/ingest_window.py --session-interval-seconds`。默认 25 秒对低积分档保守；2000 积分档的 500+ 标的单日路径通常是 5 个 Tushare 请求（全市场 `daily` 加三类参考数据和交易日历），可从 3 秒间隔开始。
 3. EastMoney 掉连接：加重试（`--calendar-attempts`）。
-4. 某只股票日线中途消失且不停牌：见 `--excluded-instruments`（供应商停发，属已知缺陷，需要在证据文件里显式剔除）。
+4. 某只股票日线中途消失时，先核对公司/交易所公告和停复牌记录。长停牌期间 `suspend_d` 可能缺少中间日期；有正式公告区间时，用 `validate_training_readiness.py --suspension-interval-evidence <json>` 追加带公告引用的停牌区间证据。确认股票实际应交易而供应商仍不返回 bars 后，才用 `--excluded-instruments` 显式登记供应商停发缺陷。
 
 ## 6. 运行一次安全的 Research Chain dry-run
 
@@ -311,10 +311,10 @@ execute 的命令形状如下，仅作结构说明：
 | `universe_snapshot_binding` | `uq.contracts.artifacts.UniverseSnapshotStore` | 是:`scripts/publish_universe_snapshots.py`(把 `scripts/fetch_index_membership.py` 的 PIT 成分快照铺成 `[visible_from, 下一 visible_from)` 区间) |
 | 跨月窗口的 `universe_snapshot_binding` | 同上 | 是:`scripts/publish_universe_union.py`(窗口内可见月度快照的并集;只作身份锚点,逐日成员规则仍由 `index_membership_binding` 承担) |
 | `adjusted_price_binding` | `src/uq/research_chain/owning_contracts.py:89` `AdjustedPriceDatasetStore` | 否:只读 |
-| `sample_construction_binding` (v6) | 同文件 `SampleConstructionStore` | 是:`scripts/publish_sample_construction.py`(factor + label + universe + membership → 按 reviewed 行策略筛选 → 绑定**外部签发**的评审 → 发布最终训练样本) |
+| `sample_construction_binding` (v6) | 同文件 `SampleConstructionStore` | 是:`scripts/publish_sample_construction.py`(factor + label + universe + membership → 按 reviewed 行策略筛选；`--candidate-frame-out` 可先生成待审报告和确定性 Parquet，不发布；签核后再用外部质量决策发布) |
 | `feature_preprocessing_binding` | 同文件 `FeatureSchemaStore` + `FeaturePreprocessingStore` | 是:`scripts/publish_feature_preprocessing.py`(读 factor 分区或已评审 sample_construction → 截面变换 → 绑定**外部签发**的评审 → 发布) |
 | v2 中性化的暴露输入（写在预处理 manifest 内，不是额外 request 字段） | 同文件 `FactorExposureStore` | 是:`scripts/publish_factor_exposure_panel.py`(离线 Parquet → 15:00 上海时间 PIT 检查 → 绑定外部评审 → 发布)；passed-only 策略已加入活动 trust-anchor registry；真实 PIT 源和生产 reviewer key 仍须由维护者提供 |
-| `label_binding` | 同文件 `LabelStore` | 是:`scripts/build_label_sets.py`(默认逐标的发布;`--combined` 发布**一份覆盖全部标的**的集合——研究请求只绑一份,所以跑 execute 要用这个开关) |
+| `label_binding` | 同文件 `LabelStore` | 是:`scripts/build_label_sets.py`(默认逐标的发布;`--combined` 发布**一份覆盖全部标的**的集合——研究请求只绑一份,所以跑 execute 要用这个开关;发布需传入受治理交易日历与 `stock_basic(D)` 退市快照,标签按精确日历 T+5 计算,缺 bars 的窗口输出 null) |
 | `backtest_config_binding` | 同文件 `BacktestConfigStore` | 否:只读 |
 
 v5–v8 请求额外要求的两类绑定**有**随仓库提供的生产者:
@@ -323,6 +323,7 @@ v5–v8 请求额外要求的两类绑定**有**随仓库提供的生产者:
 - `paper_execution_template` 的市场数据四族:`scripts/publish_market_datasets.py`。
 - `backtest_config` 绑定的 calendar / suspension / corporate_action 三族(整窗口单一制品,**不是**上面那四族的布局):`scripts/publish_backtest_market_data.py`。v2/v3 发布粗粒度公司行为排除集；v4 发布完整 `corporate_action_events` 面板，并须提供 dividend-source 完整性与权利发行全窗口排除声明。v4 对权益按登记日持仓计量，在除息日把应收计入 NAV，并分别按现金支付日/送股上市日结算。来源见 `docs/subsystems/portfolio-backtest-risk-execution.md`。
 - `backtest_config_binding` 本身:`scripts/publish_backtest_config.py`。四个绑定全部从已发布制品显式读取,市场三族还会**逐个回读校验**,不会把报告里不一致的 checksum 烙进 config。
+- 标签和评估所用的回测日历:`scripts/publish_backtest_calendar.py`。它只有在 Tushare `trade_cal` 与独立 Sina 指数日历逐 session 完全一致后才发布；标签输入绑定该日历的 generation、manifest digest 和 data checksum。
 - v3 `backtest_config` 可通过 `scripts/publish_backtest_config.py` 显式配置 `--max-drawdown-stop 0.20`，或用 `--volatility-target-annualized 0.20 --volatility-lookback-sessions 20 --volatility-min-history-sessions 20` 开启目标波动率；这些参数进入受外部评审绑定的回测配置。回撤停止会在后续 session 持续尝试退出；波动率目标只降仓不加杠杆，历史不足时不缩放。它们是确定性回放控制，不代表真实成交或风险预算必然满足。
 - `adjusted_price` 的按日分区写侧:`scripts/publish_adjusted_window.py`。它逐会话发布 `adjusted-v2`,并把样本选择排除项作为带原因的受治理 JSON 输入(`--excluded-instruments`),排除会同时作用于发布帧与交叉校验。
 

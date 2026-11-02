@@ -318,3 +318,33 @@ def test_full_market_day_fetch_refuses_possible_vendor_truncation():
     client = _MarketDayClient(rows=6000)
     with pytest.raises(RuntimeError, match="possibly truncated"):
         TushareAdapter._daily_session(client, "2026-10-30", ["600000.XSHG"])
+
+
+def test_fetch_routes_a_500_name_single_session_through_full_market_query():
+    class _FullSessionFetchClient:
+        def __init__(self):
+            self.calls = []
+
+        def daily(self, *, trade_date):
+            self.calls.append({"trade_date": trade_date})
+            codes = [f"600{i:03d}.SH" for i in range(500)]
+            return pd.DataFrame({
+                "ts_code": codes,
+                "trade_date": [trade_date] * len(codes),
+                "open": [10.0] * len(codes),
+                "high": [11.0] * len(codes),
+                "low": [9.0] * len(codes),
+                "close": [10.5] * len(codes),
+                "vol": [100.0] * len(codes),
+                "amount": [1050.0] * len(codes),
+            })
+
+    client = _FullSessionFetchClient()
+    instruments = [f"600{i:03d}.XSHG" for i in range(500)]
+    result = _adapter(client).fetch(
+        "bars_daily", instruments, "2026-10-30", "2026-10-30", V1_FIELDS
+    )
+
+    assert result.status is FetchStatus.SUCCESS
+    assert len(result.rows) == 500
+    assert client.calls == [{"trade_date": "20261030"}]

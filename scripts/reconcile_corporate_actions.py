@@ -45,41 +45,84 @@ import pandas as pd
 
 from uq.adapters.mootdx_source import MootdxSourceAdapter
 from uq.contracts.dividend_events import DividendEventStore
+from uq.errors import ContractError
 from uq.market.adjustment_chain import EVENT_COLUMNS, implemented_events
 from uq.market.corporate_action_reconcile import reconcile_instrument, summarize
 
 
 def _disclosure_events(
-    records: pd.DataFrame, instrument: str, as_of: dt.date
+    records: pd.DataFrame,
+    instrument: str,
+    *,
+    window_start: dt.date,
+    window_end: dt.date,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """Map one instrument's announcements into the exchange event shape.
 
-    Returns ``(events, notes)``. The derivation's own mapping fails closed on a
-    share-only distribution, because deriving a factor from it needs a pre-tax cash
-    amount. That refusal is correct for derivation but wrong for *comparison*: a
-    share-only event is exactly as comparable as any other, and measured on the
-    vendor's own disclosures it is 157 of 4724 implemented records. Refusing the
-    whole instrument over them would leave the gate unable to cover most names.
+    Returns ``(events, notes)``. The factor deriver requires an explicit pre-tax
+    cash amount. This comparison can also map a pure bonus/transfer when both cash
+    fields are absent and stock-distribution rates are present: that event has no
+    cash component and is comparable to TDX. This normalization is local to the
+    audit and does not change factor-production semantics. Other unmappable records
+    are reported as ``uncovered`` or ``refused`` rather than silently dropped.
 
-    So a first pass is attempted over everything; if it fails, the instrument is
-    re-run over the records the mapping can express and the excluded dates are
-    reported as ``uncovered`` rather than silently dropped.
-
-    Each note carries a ``kind``: ``uncovered`` records a disclosure the comparison
-    could not express but that did not stop the instrument from being compared, and
+    Each note carries a ``kind``: ``assumption`` records an explicit zero-cash
+    normalization, ``uncovered`` records a disclosure the comparison could not
+    express but that did not stop the instrument from being compared, and
     ``refused`` records an instrument with nothing comparable at all. Only the
-    latter is a gate failure -- an uncovered record is a known structural exclusion,
-    not a defect, and folding it into the failure count would fail the gate on most
-    real names.
+    latter is a gate failure.
     """
-    window = {"window_start": dt.date(1990, 1, 1), "window_end": as_of}
+    window = {"window_start": window_start, "window_end": window_end}
+    comparison_records = records.copy()
+    normalized_share_only_dates: list[str] = []
+    required_for_zero_cash = {"cash_div", "cash_div_tax", "stk_bo_rate", "stk_co_rate"}
+    if required_for_zero_cash.issubset(comparison_records.columns):
+        own_implemented = (
+            comparison_records["instrument"].eq(instrument)
+            & comparison_records["div_proc"].eq("实施")
+        )
+
+        def missing_field(name: str) -> pd.Series:
+            values = comparison_records[name]
+            return values.isna() | values.astype(str).str.strip().str.lower().isin(
+                {"", "none", "nan", "null", "nat"}
+            )
+
+        cash_is_absent = missing_field("cash_div") & missing_field("cash_div_tax")
+        bonus = pd.to_numeric(comparison_records["stk_bo_rate"], errors="coerce").fillna(0.0)
+        capitalization = pd.to_numeric(comparison_records["stk_co_rate"], errors="coerce").fillna(0.0)
+        pure_share_only = own_implemented & cash_is_absent & ((bonus + capitalization) > 0.0)
+        normalized_share_only_dates = sorted(
+            pd.to_datetime(comparison_records.loc[pure_share_only, "ex_date"], errors="coerce")
+            .dropna()
+            .dt.date.astype(str)
+            .unique()
+        )
+        comparison_records.loc[pure_share_only, "cash_div_tax"] = 0.0
+
+    dates_in_window = [
+        value for value in normalized_share_only_dates
+        if window_start <= dt.date.fromisoformat(value) <= window_end
+    ]
+    assumption_notes = []
+    if dates_in_window:
+        assumption_notes.append({
+            "instrument": instrument,
+            "side": "disclosure",
+            "kind": "assumption",
+            "reason": "zero cash for implemented share-only events with both cash fields absent",
+            "assumed_zero_cash_ex_dates": dates_in_window,
+        })
+
     try:
-        events, _dropped = implemented_events(records, instrument=instrument, **window)
-        return events[list(EVENT_COLUMNS)], []
+        events, _dropped = implemented_events(comparison_records, instrument=instrument, **window)
+        return events[list(EVENT_COLUMNS)], assumption_notes
     except Exception as exc:
         first_failure = f"{type(exc).__name__}: {exc}"
 
-    own = records[records["instrument"] == instrument]
+    own = comparison_records[comparison_records["instrument"] == instrument].copy()
+    ex_dates = pd.to_datetime(own["ex_date"], errors="coerce").dt.date
+    own = own.loc[ex_dates.between(window_start, window_end)]
     shares = own[
         own["div_proc"].eq("实施")
         & own["ex_date"].notna()
@@ -92,7 +135,7 @@ def _disclosure_events(
         if str(value) not in set(shares["ex_date"].astype(str))
     )
     if shares.empty:
-        return pd.DataFrame(columns=list(EVENT_COLUMNS)), [
+        return pd.DataFrame(columns=list(EVENT_COLUMNS)), [*assumption_notes,
             {"instrument": instrument, "side": "disclosure", "kind": "refused", "reason": first_failure}
         ]
     try:
@@ -102,19 +145,37 @@ def _disclosure_events(
         # share-only: it is genuinely unmappable (a dirty record, or two revisions
         # that disagree on the same ex-date). Report it as a refusal rather than
         # letting the traceback abort the whole run.
-        return pd.DataFrame(columns=list(EVENT_COLUMNS)), [
+        return pd.DataFrame(columns=list(EVENT_COLUMNS)), [*assumption_notes,
             {"instrument": instrument, "side": "disclosure", "kind": "refused",
              "reason": f"{type(exc).__name__}: {exc}"}
         ]
-    return events[list(EVENT_COLUMNS)], [
+    return events[list(EVENT_COLUMNS)], [*assumption_notes,
         {
             "instrument": instrument,
             "side": "disclosure",
             "kind": "uncovered",
-            "reason": "share-only or otherwise unmappable disclosures excluded from the comparison",
+            "reason": "otherwise unmappable disclosures excluded from the comparison",
             "excluded_ex_dates": excluded[:50],
         }
     ]
+
+
+def _tdx_events_in_window(
+    frame: pd.DataFrame, *, window_start: dt.date, window_end: dt.date
+) -> pd.DataFrame:
+    """Filter category-classifiable XDXR events to the audited ex-date window."""
+    required = {"year", "month", "day"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ContractError(f"tdx xdxr frame missing date columns for window filter: {missing}")
+    dates: list[dt.date] = []
+    try:
+        for row in frame[["year", "month", "day"]].itertuples(index=False, name=None):
+            dates.append(dt.date(int(row[0]), int(row[1]), int(row[2])))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ContractError("tdx xdxr frame contains an invalid event date") from exc
+    mask = [window_start <= value <= window_end for value in dates]
+    return frame.loc[mask].reset_index(drop=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -123,12 +184,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--instruments", nargs="+", required=True)
     parser.add_argument("--as-of", type=dt.date.fromisoformat, default=None,
                         help="announcement cutoff for the disclosure side (default: today)")
+    parser.add_argument(
+        "--window-start", type=dt.date.fromisoformat, default=dt.date(1990, 1, 1),
+        help="inclusive ex-date window start (default: 1990-01-01)",
+    )
+    parser.add_argument(
+        "--window-end", type=dt.date.fromisoformat, default=None,
+        help="inclusive ex-date window end (default: --as-of or today)",
+    )
     parser.add_argument("--tolerance", type=float, default=1e-6,
                         help="per-10-share amount tolerance; TDX publishes amounts per 10 shares")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
     as_of = args.as_of or dt.date.today()
+    window_end = args.window_end or as_of
+    if args.window_start > window_end:
+        raise SystemExit("window start date exceeds window end date")
     records = DividendEventStore(args.dividend_root).as_of(as_of)
     if records.empty:
         raise SystemExit(f"no dividend disclosures on or before {as_of}")
@@ -143,12 +215,17 @@ def main(argv: list[str] | None = None) -> int:
     results = []
     refusals: list[dict[str, Any]] = []
     uncovered: list[dict[str, Any]] = []
+    comparison_assumptions: list[dict[str, Any]] = []
     for instrument in args.instruments:
         disclosure, notes = _disclosure_events(
-            records=records, instrument=instrument, as_of=as_of
+            records=records,
+            instrument=instrument,
+            window_start=args.window_start,
+            window_end=window_end,
         )
         refusals.extend(note for note in notes if note["kind"] == "refused")
         uncovered.extend(note for note in notes if note["kind"] == "uncovered")
+        comparison_assumptions.extend(note for note in notes if note["kind"] == "assumption")
         # A refusal already names this instrument and fails the gate, so it is not
         # also fed to the comparison: that would report the same name twice, once as
         # "unmappable" and once as "no overlap". An *empty* disclosure without a
@@ -171,7 +248,20 @@ def main(argv: list[str] | None = None) -> int:
                           "cannot be classified as ex-right",
             })
             continue
-        tdx = raw[raw["category"] == 1]
+        try:
+            tdx = _tdx_events_in_window(
+                raw[raw["category"] == 1],
+                window_start=args.window_start,
+                window_end=window_end,
+            )
+        except ContractError as exc:
+            refusals.append({
+                "instrument": instrument,
+                "side": "tdx",
+                "kind": "refused",
+                "reason": str(exc),
+            })
+            continue
         results.append(reconcile_instrument(
             instrument, disclosure, tdx[list(EVENT_COLUMNS)], tolerance=args.tolerance
         ))
@@ -181,6 +271,10 @@ def main(argv: list[str] | None = None) -> int:
         "record_version": 1,
         "kind": "corporate_action_reconciliation",
         "as_of": as_of.isoformat(),
+        "effective_date_window": {
+            "start": args.window_start.isoformat(),
+            "end": window_end.isoformat(),
+        },
         "stores": {
             "dividend_root": str(args.dividend_root),
             "tracked": False,
@@ -192,6 +286,7 @@ def main(argv: list[str] | None = None) -> int:
             "server": adapter.connected_server,
         },
         "tolerance_per_ten_shares": args.tolerance,
+        "tdx_amount_precision": "ieee754_binary32_projection",
         "instruments_requested": len(args.instruments),
         "instruments_compared": summary["instruments_compared"],
         "agreed": summary["agreed"],
@@ -203,6 +298,7 @@ def main(argv: list[str] | None = None) -> int:
         "no_overlap_instruments": summary["no_overlap_instruments"],
         "records": summary["records"],
         "uncovered": uncovered,
+        "assumptions": comparison_assumptions,
         "refusals": refusals,
         "verdict_note": (
             "this report does not decide which source is right; that is settled by "

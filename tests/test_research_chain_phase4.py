@@ -20,9 +20,7 @@ from uq.contracts.model_layer import (
     create_reviewed_quality_decision,
     model_manifest_identities,
     research_contract_identities,
-    sha256_json,
 )
-from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.errors import ContractError
 from uq.models.definition import ModelDefinitionBuilder
 from uq.models.predictions import PredictionBuilder
@@ -236,7 +234,7 @@ def _publish_prediction(
 
 def _market_frame(dataset_type: str, rows: list[dict]) -> pd.DataFrame:
     columns = {
-        "calendar": ["date"],
+        "calendar": ["date", "instrument"],
         "suspension": ["date", "instrument", "suspended"],
         "corporate_action": ["date", "instrument"],
     }[dataset_type]
@@ -244,20 +242,15 @@ def _market_frame(dataset_type: str, rows: list[dict]) -> pd.DataFrame:
 
 
 def _publish_market_data(root: Path, dataset_type: str, frame: pd.DataFrame) -> dict:
-    generation = sha256_json({"dataset_type": dataset_type, "rows": frame.to_dict(orient="records")})
-    directory = root / "backtest_market_data" / f"dataset={generation}"
-    directory.mkdir(parents=True, exist_ok=True)
-    data_path = directory / "data.parquet"
-    frame.to_parquet(data_path, index=False)
-    manifest = {
-        "generation_id": generation,
-        "dataset_type": dataset_type,
-        "columns": frame.columns.tolist(),
-        "row_count": len(frame),
-        "data_checksum_sha256": file_sha256_bytes(data_path.read_bytes()),
-    }
-    (directory / "manifest.json").write_text(json.dumps(manifest, sort_keys=True))
-    return manifest
+    dates = pd.to_datetime(frame["date"]).dt.date
+    return BacktestMarketDatasetStore(root).publish(
+        frame,
+        dataset_type=dataset_type,
+        window_start=min(dates),
+        window_end=max(dates),
+        sources={"fixture": "test-research-chain-phase4"},
+        producer="test",
+    )
 
 
 def _publish_market_inputs(
@@ -273,13 +266,24 @@ def _publish_market_inputs(
     price_frame = AdjustedPriceDatasetStore(root).read_frame(price_generation_id)
     trading_dates = sorted(pd.to_datetime(price_frame["datetime"]).dt.strftime("%Y-%m-%d").unique().tolist())
     calendar_manifest = _publish_market_data(
-        root, "calendar", _market_frame("calendar", [{"date": date} for date in trading_dates])
+        root, "calendar", _market_frame("calendar", [
+            {"date": date, "instrument": "CALENDAR"} for date in trading_dates
+        ])
     )
+    suspension_rows = suspension
+    if suspension_rows is None:
+        suspension_rows = [
+            {"date": day, "instrument": instrument, "suspended": False}
+            for day in trading_dates for instrument in INSTRUMENTS
+        ]
     suspension_manifest = _publish_market_data(
-        root, "suspension", _market_frame("suspension", suspension if suspension is not None else [])
+        root, "suspension", _market_frame("suspension", suspension_rows)
     )
+    corporate_rows = corporate
+    if corporate_rows is None:
+        corporate_rows = [{"date": trading_dates[0], "instrument": "NO-ACTION"}]
     corporate_manifest = _publish_market_data(
-        root, "corporate_action", _market_frame("corporate_action", corporate if corporate is not None else [])
+        root, "corporate_action", _market_frame("corporate_action", corporate_rows)
     )
     config = _backtest_config(
         universe_generation_id, price_generation_id, price_checksum,
@@ -1205,7 +1209,9 @@ def _shorten_calendar(tmp_path: Path, config: dict, plan) -> object:
     assert sessions, "the fixture must publish at least one priced session"
     shortened = _publish_market_data(
         tmp_path, "calendar",
-        _market_frame("calendar", [{"date": session} for session in sessions[:-1]]),
+        _market_frame("calendar", [
+            {"date": session, "instrument": "CALENDAR"} for session in sessions[:-1]
+        ]),
     )
     config["calendar_binding"] = {
         "generation_id": shortened["generation_id"],

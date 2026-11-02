@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unified-quant.local/schemas/contracts/suspension_interval_evidence.v1.json",
+  "title": "Issuer or exchange suspension interval evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["record_version", "kind", "intervals"],
+  "properties": {
+    "record_version": {"const": 1},
+    "kind": {"const": "suspension_interval_evidence"},
+    "intervals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/interval"}
+    }
+  },
+  "$defs": {
+    "interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instrument", "start_date", "end_date", "evidence"],
+      "properties": {
+        "instrument": {
+          "type": "string",
+          "pattern": "^[0-9]{6}\\.(XSHG|XSHE|XBSE)$"
+        },
+        "start_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/reference"}
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "url"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["issuer_announcement", "exchange_notice"]
+        },
+        "reference": {"type": "string", "minLength": 1},
+        "url": {
+          "type": "string",
+          "pattern": "^https://",
+          "minLength": 12
+        }
+      }
+    }
+  }
+}

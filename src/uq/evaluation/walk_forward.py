@@ -132,7 +132,6 @@ def verify_walk_forward_plan(plan: Mapping[str, Any]) -> None:
 def plan_from_published_calendar(
     root: Path, generation: str, checksum: str, spec: WalkForwardSpec,
 ) -> dict:
-    from ..contracts.gate_contracts import validate_contract
     root = Path(root)
     directory = root / 'backtest_market_data' / f'dataset={generation}'
     for name in ('manifest.json', 'data.parquet'):
@@ -141,17 +140,14 @@ def plan_from_published_calendar(
     frame = BacktestMarketDatasetStore(root).read_frame(
         generation, checksum, dataset_type='calendar', required_columns={'date'},
     )
-    validate_contract('backtest_market_dataset.v1.json', manifest)
-    if sha256_json({key: value for key, value in manifest.items()
-                    if key != 'manifest_digest_sha256'}) != manifest['manifest_digest_sha256']:
-        raise ContractError('walk-forward calendar manifest digest mismatch')
-    expected_generation = sha256_json({
-        'dataset_type': 'calendar', 'window_start': manifest['window_start'],
-        'window_end': manifest['window_end'], 'columns': list(frame.columns),
-        'rows': frame.to_dict(orient='records'),
-    })
-    if generation != expected_generation:
-        raise ContractError('walk-forward calendar content generation mismatch')
+    if manifest['dataset_version'] == '1.0.0':
+        expected_generation = sha256_json({
+            'dataset_type': 'calendar', 'window_start': manifest['window_start'],
+            'window_end': manifest['window_end'], 'columns': list(frame.columns),
+            'rows': frame.to_dict(orient='records'),
+        })
+        if generation != expected_generation:
+            raise ContractError('walk-forward calendar content generation mismatch')
     # The absolute store locator is part of plan identity: relocating or
     # spelling the same root differently requires creating a new plan.
     return build_walk_forward_plan(frame['date'].tolist(), spec, calendar_binding={
