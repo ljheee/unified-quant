@@ -182,7 +182,6 @@ class FeaturePreprocessorBuilder:
     def _apply(self, frame: pd.DataFrame, ordered_features: list[str] | None = None) -> pd.DataFrame:
         features = ordered_features if ordered_features is not None else list(frame.columns[2:])
         output = frame.copy()
-        group = output.groupby("datetime", sort=False, dropna=False)
         for name in features:
             if name not in output.columns:
                 raise ContractError(f"feature column {name} is absent")
@@ -191,6 +190,20 @@ class FeaturePreprocessorBuilder:
             series = output[name]
             if not (pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series)):
                 raise ContractError(f"cross-sectional preprocessing requires float64/int64 feature: {name}")
+
+        if self.transform_type == "rank_cross_section" and features:
+            grouped_features = output.groupby("datetime", sort=False, dropna=False)[features]
+            counts = grouped_features.transform("count")
+            if (counts < self.min_group_observations).any().any():
+                raise ContractError("cross-sectional group has fewer than minimum observations")
+            ranks = grouped_features.rank(method="average", na_option="keep", ascending=True)
+            ranked_values = (ranks - 1.0).div(counts - 1.0).astype("float64")
+            for name in features:
+                output[name] = ranked_values[name]
+            return output
+
+        group = output.groupby("datetime", sort=False, dropna=False)
+        for name in features:
             if self.transform_type == "standardize_cross_section":
                 values = group[name].transform(lambda values: self._standardize(values))
             else:

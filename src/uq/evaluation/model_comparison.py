@@ -26,7 +26,6 @@ _REQUEST_FIELDS = (
     'window_start_date', 'window_end_date', 'decision_timezone',
     'factor_binding', 'universe_snapshot_binding', 'adjusted_price_binding',
     'label_binding', 'feature_preprocessing_binding', 'dataset_policy_template',
-    'portfolio_definition_template',
 )
 
 
@@ -90,6 +89,31 @@ def _assert_same_protocol(left: dict, right: dict) -> None:
     for field in _REQUEST_FIELDS:
         if left.get(field) != right.get(field):
             raise ContractError(f'model comparison request mismatch: {field}')
+    _assert_same_portfolio_semantics(
+        left['portfolio_definition_template'], right['portfolio_definition_template']
+    )
+
+
+def _assert_same_portfolio_semantics(left: dict, right: dict) -> None:
+    """Allow portfolio template v1/v2 to differ only in wire-version identity.
+
+    Research request v7 requires portfolio template v2 while v6 uses v1. Both
+    can express the same top-N equal-weight execution policy, so comparing the
+    serialized templates would prevent the supported linear/LightGBM comparison
+    even when the actual portfolio behavior is identical.
+    """
+    left_version = left.get('contract_version', 1)
+    right_version = right.get('contract_version', 1)
+    if left_version != right_version and {left_version, right_version} != {1, 2}:
+        raise ContractError('model comparison portfolio template versions are not semantically comparable')
+    identity_fields = {
+        'contract_version', 'template_version', 'template_generation_id',
+        'template_manifest_digest_sha256',
+    }
+    left_semantics = {key: value for key, value in left.items() if key not in identity_fields}
+    right_semantics = {key: value for key, value in right.items() if key not in identity_fields}
+    if left_semantics != right_semantics:
+        raise ContractError('model comparison portfolio semantics mismatch')
 
 
 def _verify_dataset_lineage(request: dict, dataset: dict) -> None:

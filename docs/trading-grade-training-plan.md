@@ -3,7 +3,7 @@
 > 目标不是“链路跑通”，而是让训练结果具备交易决策价值：样本外、扣成本、可复现、可解释、可风控，并且结论能指导下一轮调仓。
 已知约束：2000积分的tushare token，获取指数成本只能提供月度PIT，使用月度近似替代日维度即可。
 >
-> 2026-11-02 更新：683-session 全窗口 snapshot-backed readiness 已通过；Alpha158 因子和新标签已重发，训练样本候选已生成并等待独立外部质量决定。另有一份使用仓库测试密钥的 smoke 发布，隔离在 Git 忽略的 `data/trading-grade-history/test-key-smoke/`，记录见 `data/trading-grade-history/reports/sample-construction-alpha158-test-key-smoke-publication.json`；它仅验证 owning-store 发布与字节回读，不构成独立质量裁决，不解除候选的正式质量门禁。还没有基于独立评审样本发布正式 dataset、执行年度 OOS 或完成 paper 对账，因此计划目标仍未完成。指数成分月度近似按维护者决定接受，但必须保留精度声明。
+> 2026-11-02 更新：683-session 全窗口 snapshot-backed readiness 已通过；Alpha158 因子和新标签已重发，训练样本候选已生成并等待独立外部质量决定。测试密钥隔离链路已完成样本发布、32 标的子集 Qlib Linear/LightGBM 训练与回读；另在 `data/trading-grade-history/test-key-smoke/canonical-v2-pilot/` 将 683 个旧格式行情分区重发为真正的 canonical-v2 manifest，并生成 683 份 owning quality report。测试根记录 `canonical-v2-test-migration-receipt.json`。canonical `quality_report.v1` 不含签名字段，测试密钥不能签进该报告；隔离根与报告只证明测试级迁移/读回，不是独立来源质量批准。完整年度 OOS 和 paper 对账仍未执行，因此计划目标未完成。指数成分月度近似按维护者决定接受，但必须保留精度声明。
 
 ## 1. 当前基线
 
@@ -40,6 +40,19 @@
 - 模型是 `qlib_linear` 基线，未做模型选择。
 - 回测在一个**隐含的 10% 成交量参与度上限**下产出：`volume_participation_cap` 未写入 config，引擎缺省静默套用 0.10（`src/uq/backtest/engine.py`）。
 - 结果只能说明链路、成本、T+1、涨跌停、停牌等机制已闭合，**不能说明策略具备正期望**。
+
+### 1.4 年度 OOS 执行前核验（2026-11-02）
+
+现有 walk-forward 计划在结构上达到一年覆盖：两个测试折各 132 个 session，合计 264 个 OOS session、397 个日历日；fold 0 测试期为 `2025-08-07..2026-02-26`，fold 1 为 `2026-02-27..2026-09-07`。这只是计划覆盖，不是已执行结果。计划仍标记 `market_regimes_verified=false`、`historical_pit_completeness_verified=false`。
+
+本次对 `data/trading-grade-history/` 的拥有层预检发现：
+
+- 源目录 `bars-csiall/canonical/bars_daily/v2/` 的 683 个分区实际是 `manifest_version=1`，且缺少 683 份对应质量报告；这不是只补报告就能修复的 canonical-v2 store。已按维护者本轮指示，在隔离的 `test-key-smoke/canonical-v2-pilot/` 用 `CanonicalV2Store` 重发为 manifest v2，并生成/读回 683 份 `quality_report.v1`，覆盖 3,428,679 行。源每日 CSV 与重发 bars 的 OHLCV/amount 六字段逐行一致，683 个新 Parquet 的 data checksum 均与源分区一致；target generation 变化，因为 manifest 版本和 provenance 不同。实际 `RawExecutionPriceStore` 单日读取也通过。测试根中的质量报告是机械校验，不是测试密钥签名或独立来源裁决；报告明确标注 status、限价和 adj_factor 未在本次独立重取核验。此前 `ManifestFirstReader` 的旧 manifest checksum 读取不等同于 owning canonical-v2 质量读回。
+- 该历史根下没有 `backtest_execution_facts/`、`backtest_configs/`、`research_runs/requests/` 或 `research_runs/results/`，也没有逐折 v3 回测配置和 paper 风控文档。`run_walk_forward.py --mode execute` 的全协议预检因此尚无可执行 jobs。
+- 全量 `sample_construction.v1` 候选仍等待独立质量决定。现有测试密钥签名只用于隔离 smoke，不是正式决定，也不能授权年度研究结论。
+- `oos-market-regimes-20261102.json` 覆盖全部 264 个测试 session，并按诊断代理分为 up 122、down 46、sideways 96；它使用月度近似成分和等权市场代理，审计状态为 `diagnostic_proxy_predeclared_before_model_run`，不能将计划的市场状态资格改成已核验。
+
+`compare_training_models.py` 要求两边均为已通过的研究结果，且回测配置为 v3/v4；因此当前没有合法的输入可生成年度扣成本模型比较。canonical-v2 迁移已在测试根完成，但尚未与正式研究输入组装成完整 data root，也不替代独立来源质量审查。本次未执行 walk-forward、模型对比或 paper 对账，也没有将测试密钥结果标成正式 OOS。继续执行前仍须取得全量样本的独立质量决定，准备完整窗口的来源声明执行事实及已评审 v3 配置，并为每折生成已评审 request 与 paper 风控材料；之后才运行全协议 preflight 和两折执行。
 
 ## 2. 什么叫“对交易有指导意义”
 
@@ -90,13 +103,13 @@
 
 **动作**
 
-1. **前置：扩展数据窗口。** 原 export 日历止于 `2025-12-24`。目前已接入 `2024-01-01..2026-10-30` 的 canonical bars 和月度近似 PIT 成分；snapshot-backed readiness 已通过：活跃期缺口均由逐日停牌快照/官方公告区间解释，或仅出现在有效退市日之后；2 个短历史标的只在首个 60-session warmup 内出现。原始 canonical bars 保持不变。新窗口 `return_5d/2.0.0` 已发布并通过标签腿审计；Alpha158/2.0.0 已发布 623 个因子分区（分区集 digest `3676c2af3c15900ad6824fb151f4a7244fa8a5fadf0332b1c9c249a64d4c7fee`）。`sample_construction.v1` 候选 generation `2f4c3ad5afd26f8f56b51eb488a2e3cc90ef3fd0eaeb6a1867b8271ffcae1132` 已构建：2,997,703 行、157 个因子、618 个成熟标签 session，Parquet checksum `6d170541ec5060fa2dcb51cc17208b8028e39e34a898ed6476a6561a6c029304`；独立外部质量决定仍待完成。相同 generation 另有测试密钥 smoke 发布于 Git 忽略的 `data/trading-grade-history/test-key-smoke/governed/`，不得作为正式 dataset 输入或研究结论。只有独立决定通过并完成正式 dataset 发布后，才可执行年度 OOS。Alpha158 需约 60 个交易日暖机 lead-in，历史数据起点必须早于训练起点至少一个暖机窗口。
+1. **前置：扩展数据窗口。** 原 export 日历止于 `2025-12-24`。目前已接入 `2024-01-01..2026-10-30` 的 canonical bars 和月度近似 PIT 成分；snapshot-backed readiness 已通过：活跃期缺口均由逐日停牌快照/官方公告区间解释，或仅出现在有效退市日之后；2 个短历史标的只在首个 60-session warmup 内出现。原始 canonical bars 保持不变。新窗口 `return_5d/2.0.0` 已发布并通过标签腿审计；Alpha158/2.0.0 已发布 623 个因子分区（分区集 digest `3676c2af3c15900ad6824fb151f4a7244fa8a5fadf0332b1c9c249a64d4c7fee`）。`sample_construction.v1` 候选 generation `2f4c3ad5afd26f8f56b51eb488a2e3cc90ef3fd0eaeb6a1867b8271ffcae1132` 已构建：2,997,703 行、157 个因子、618 个成熟标签 session，Parquet checksum `6d170541ec5060fa2dcb51cc17208b8028e39e34a898ed6476a6561a6c029304`；独立外部质量决定仍待完成。相同 generation 另有测试密钥 smoke 发布于 Git 忽略的 `data/trading-grade-history/test-key-smoke/governed/`；另从中抽取 32 个标的发布了 19,018 行 smoke dataset，并完成 Qlib Linear/LightGBM 训练。以上产物仅用于链路验证，不得作为正式 dataset 输入或研究结论。只有独立决定通过并完成正式 dataset 发布后，才可执行年度 OOS。Alpha158 需约 60 个交易日暖机 lead-in，历史数据起点必须早于训练起点至少一个暖机窗口。
 2. **前置：标签设计审计。** 新窗口标签绑定独立治理日历和退市快照，严格按日历 T+5 定位，并在 D..D+5 任一 bars 缺失时输出 null；资格标记按 suspension、限价和有效退市日期从源字段计算并进入输入 checksum。2026-11-02 全窗口审计验证 683/683 行情分区及 3,333,110 个非空标签，详情见 [`trading-grade-label-audit.md`](trading-grade-label-audit.md) 和 gitignored 审计报告。结论：
    - 五日标签的相邻样本共享四个 session；IC/RankIC 显著性必须用逐日截面序列并至少设 HAC lag=4。现有评估路径已实施该门槛，不从名义股票行数推算有效时间样本量。
    - close(T)→close(T+5) 相对 open(T+1)→close(T+5) 的平均差为 −7.2052 基点，p95 绝对差 2.3834%，151,875 行方向相反；T+6 开盘退出比较中有 216,376 行方向相反。缺口已量化；目标本身仍是 close-to-close，模型结论必须以成本化 T+1 回测为准。若要声称目标完全可交易，须另发开盘到开盘语义版本并重训。
    - `stock_basic(D)` 当前退市日期快照没有历史可见时点证据。314 个标的最后出现早于窗口末日，5,584 条空标签在全局末五 session 之前；审计将 `pit_delisting_completeness_certified=false`，历史 universe/PIT 与退出价值仍未通过验收。
    - 标签审计校验原始分区与日历 session 完全一致，并逐个非空标签核对 D..D+5 行情网格。审计 CLI 现在支持独立 calendar root，允许声明范围从非交易日开始。
-3. 将 test split 从 11 个交易日扩展到至少 6–12 个月。新数据日历上的 expanding 两折计划已发布：generation `12b84e7fb0856333ac6272d4bff2e38f4baaa74c501d0c40086ea916c53f5f8d`，每折 252 session 起始训练、60 session 验证、132 session 测试，含 5-session purge、2-session embargo 与 60-session Alpha158 warmup；合计 264 个 OOS session、397 个日历日。该标记只证明计划结构覆盖一年，尚未执行折内训练，且 `market_regimes_verified=false`、`historical_pit_completeness_verified=false`。
+3. 将 test split 从 11 个交易日扩展到至少 6–12 个月。新数据日历上的 expanding 两折计划已发布：generation `12b84e7fb0856333ac6272d4bff2e38f4baaa74c501d0c40086ea916c53f5f8d`，每折 252 session 起始训练、60 session 验证、132 session 测试，含 5-session purge、2-session embargo 与 60-session Alpha158 warmup；合计 264 个 OOS session、397 个日历日。隔离 smoke 使用了单折形状切分并只训练训练段；正式两折训练和 OOS 评估尚未执行，且 `market_regimes_verified=false`、`historical_pit_completeness_verified=false`。
 4. 采用 walk-forward 或滚动训练/验证/测试，而不是一次性固定 split。下一步需在因子分区/模型数据齐备后为每折创建新的、已评审 request，并先通过全协议 preflight，再执行。
    - 已实现逐折结果的统一 v3 回放入口：重新读取每折经评审的 OOS 目标权重，并在共享现金/持仓的一次引擎运行中执行；成本、成交、初始资金与风险设置必须和各折一致。末折最后目标后增加两个 session，依次完成该目标的 T+1 执行和期末强制清仓尝试；清仓仍受停牌、涨跌停、参与率和风控约束，receipt 记录是否清零，交易验收仍需真实数据另做。
 5. 增加基准（数据依赖见“贯穿前置”一节）：

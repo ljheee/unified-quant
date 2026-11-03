@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 import uuid
 
+import numpy as np
 import pandas as pd
 from tests.review_key import REVIEWER_PRIVATE_KEY
 import pytest
@@ -157,6 +158,39 @@ def test_cross_sectional_standardization_and_rank_are_date_bounded() -> None:
     assert ranked.groupby("datetime")["volume_ratio_20d"].min().eq(0.0).all()
     assert ranked.groupby("datetime")["volume_ratio_20d"].max().eq(1.0).all()
     assert frame["volume_ratio_20d"].tolist() == [1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 6.0, 8.0, 4.0, 1.0, 3.0, 2.0, 5.0, 6.0, 7.0, 8.0]
+
+
+def test_vectorized_rank_matches_average_rank_with_ties_nulls_and_constant_groups() -> None:
+    frame = pd.DataFrame({
+        "instrument": ["000001.XSHE", "000002.XSHE", "000003.XSHE", "000004.XSHE"] * 2,
+        "datetime": [pd.Timestamp("2026-01-05")] * 4 + [pd.Timestamp("2026-01-06")] * 4,
+        "feature_a": [2.0, 2.0, 5.0, np.nan, 4.0, 4.0, 4.0, 4.0],
+        "feature_b": [1.0, np.nan, 3.0, 4.0, 7.0, 2.0, 2.0, 9.0],
+    })
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="rank-vectorized-regression",
+        semantic_version="1.0.0",
+        transform="rank_cross_section",
+    )
+
+    expected = frame.copy()
+    for name in ("feature_a", "feature_b"):
+        expected[name] = expected.groupby("datetime", sort=False)[name].transform(
+            lambda values: builder._rank(values)
+        )
+    expected = expected.sort_values(["instrument", "datetime"], kind="mergesort").reset_index(drop=True)
+
+    actual = builder.transform(frame)
+    pd.testing.assert_frame_equal(actual, expected)
+    assert actual.loc[actual["datetime"] == pd.Timestamp("2026-01-06"), "feature_a"].eq(0.5).all()
+    assert actual.loc[
+        (actual["datetime"] == pd.Timestamp("2026-01-05"))
+        & (actual["instrument"] == "000001.XSHE"), "feature_a"
+    ].iloc[0] == pytest.approx(0.25)
+    assert pd.isna(actual.loc[
+        (actual["datetime"] == pd.Timestamp("2026-01-05"))
+        & (actual["instrument"] == "000004.XSHE"), "feature_a"
+    ].iloc[0])
 
 
 def test_manifest_rejects_transform_output_mismatch_and_sparse_group() -> None:

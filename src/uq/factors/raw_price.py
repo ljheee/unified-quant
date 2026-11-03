@@ -45,6 +45,68 @@ def calculate_raw_price_factors(frame: pd.DataFrame) -> pd.DataFrame:
     return output
 
 
+def _finite_float_frame_fingerprint(
+    frame: pd.DataFrame,
+    *,
+    columns: list[str],
+    tolerance: float,
+    chunk_rows: int = 8192,
+) -> str | None:
+    """Stream the v3 JSON identity for common finite feature panels.
+
+    The canonical v3 payload is intentionally unchanged. This fast path only
+    applies when every payload feature is a finite float and keys are strings
+    plus midnight ``datetime64[ns]`` values. Serializing row chunks avoids
+    constructing hundreds of millions of Python scalar wrappers for large
+    governed samples. Unsupported shapes fall through to the original path.
+    """
+    if not columns or not all(pd.api.types.is_float_dtype(frame[name].dtype) for name in columns):
+        return None
+    dates = frame["datetime"]
+    if not pd.api.types.is_datetime64_ns_dtype(dates.dtype):
+        return None
+    if not dates.eq(dates.dt.normalize()).all():
+        return None
+
+    values = frame[columns].round(12).to_numpy(copy=False)
+    if not np.isfinite(values).all():
+        return None
+
+    hasher = hashlib.sha256()
+    hasher.update(b'{"columns":')
+    hasher.update(json.dumps(columns, separators=(",", ":")).encode("utf-8"))
+    hasher.update(b',"null_mask":[')
+    null_row = json.dumps([False] * len(columns), separators=(",", ":")).encode("ascii")
+    for start in range(0, len(frame), chunk_rows):
+        count = min(chunk_rows, len(frame) - start)
+        if start:
+            hasher.update(b",")
+        hasher.update(b",".join([null_row] * count))
+
+    hasher.update(b'],"rows":[')
+    instruments = frame["instrument"]
+    timestamps = dates.dt.strftime("%Y-%m-%dT%H:%M:%S")
+    first_chunk = True
+    for start in range(0, len(frame), chunk_rows):
+        end = min(start + chunk_rows, len(frame))
+        row_values = values[start:end].tolist()
+        row_instruments = instruments.iloc[start:end].astype(str).tolist()
+        row_timestamps = timestamps.iloc[start:end].tolist()
+        rows = [
+            [instrument, timestamp, *row]
+            for instrument, timestamp, row in zip(row_instruments, row_timestamps, row_values)
+        ]
+        encoded = json.dumps(rows, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        if not first_chunk:
+            hasher.update(b",")
+        hasher.update(encoded[1:-1])
+        first_chunk = False
+    hasher.update(b'],"tolerance":')
+    hasher.update(json.dumps(tolerance, separators=(",", ":"), allow_nan=False).encode("ascii"))
+    hasher.update(b"}")
+    return hasher.hexdigest()
+
+
 # cr.md U2: the fingerprint algorithm has changed twice (H11 null-mask, U18
 # infinity signs), which orphaned every artifact pinned by an older algorithm.
 # Rather than cut existing partitions off, reads accept any known version
@@ -55,6 +117,12 @@ LATEST_FINGERPRINT_VERSION = 3
 
 def logical_fingerprint(frame: pd.DataFrame, *, tolerance: float = 1e-12, version: int = LATEST_FINGERPRINT_VERSION) -> str:
     columns = [column for column in frame.columns if column not in {"instrument", "datetime"}]
+    if version == 3:
+        fast = _finite_float_frame_fingerprint(
+            frame, columns=columns, tolerance=tolerance
+        )
+        if fast is not None:
+            return fast
     if version == 1:
         # Legacy (pre-H11): masking NaN to -0.0 made missing values collide
         # with genuine -0.0; kept for reading存量 artifacts.

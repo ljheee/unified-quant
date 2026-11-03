@@ -151,6 +151,31 @@ def test_model_comparison_requires_same_dataset_and_costed_portfolio(monkeypatch
     assert not bindings['model_comparison']['one_year_oos_met']
 
 
+def test_model_comparison_accepts_equivalent_portfolio_template_v1_and_v2():
+    baseline = {
+        'contract_version': 1, 'template_version': '1.0.0', 'status': 'reviewed',
+        'portfolio_name': 'top20', 'weight_scheme': 'top_n_equal_weight',
+        'scheme_parameters': {'n': 20},
+        'score_policy': {'direction': 'descending', 'nan_policy': 'exclude',
+                         'tie_policy': 'first_by_instrument_id'},
+        'constraints': {'max_single_weight': 0.1, 'max_industry_weight': None,
+                        'max_turnover': None, 'cash_reserve': 0.05},
+        'rebalance_schedule': 'daily', 'universe_snapshot_generation_id': 'a' * 64,
+        'industry_source_binding': None,
+        'template_generation_id': 'b' * 64, 'template_manifest_digest_sha256': 'c' * 64,
+    }
+    candidate = copy.deepcopy(baseline)
+    candidate.update({
+        'contract_version': 2, 'template_version': '2.0.0',
+        'template_generation_id': 'd' * 64, 'template_manifest_digest_sha256': 'e' * 64,
+    })
+    model_comparison._assert_same_portfolio_semantics(baseline, candidate)
+
+    candidate['constraints']['cash_reserve'] = 0.1
+    with pytest.raises(ContractError, match='portfolio semantics mismatch'):
+        model_comparison._assert_same_portfolio_semantics(baseline, candidate)
+
+
 @pytest.mark.parametrize('field', ['label_generation_id', 'ordered_features', 'data_checksum_sha256'])
 def test_model_comparison_refuses_dataset_drift(monkeypatch, tmp_path, field):
     fixtures = _fixtures()

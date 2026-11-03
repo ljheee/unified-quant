@@ -149,6 +149,20 @@ def test_fingerprint_distinguishes_signed_infinities():
     assert logical_fingerprint(_factor_frame(np.inf)) == logical_fingerprint(_factor_frame(np.inf))
 
 
+def test_finite_float_fingerprint_streaming_preserves_v3_digest():
+    # This golden digest was computed by the original row-wise v3 serializer.
+    # The streaming path must remain byte-for-byte compatible for large samples.
+    frame = pd.DataFrame({
+        "instrument": ["000001.XSHE", "600000.XSHG", "300001.XSHE"],
+        "datetime": pd.to_datetime(["2024-04-03", "2024-04-04", "2024-04-05"]),
+        "feature_a": np.array([1.23456789, -0.0000000004, 3.1415926535], dtype="float32"),
+        "feature_b": np.array([0.0, 2.5, -8.75], dtype="float64"),
+    })
+    assert logical_fingerprint(frame) == (
+        "a4dda9fe7bbdb128380b28ff6e4a382bb61c04e6700c55e82178083ef7477e26"
+    )
+
+
 def test_fingerprint_read_path_accepts_all_known_versions():
     # U2 migration: partitions/manifests pinned by the legacy (v1, fillna) or
     # H11 (v2, null-mask) algorithms must stay readable; writes use the
