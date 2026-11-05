@@ -27,7 +27,11 @@ from ..models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
 from ..models.predictions import PredictionBuilder
 from ..models.trainer import ModelRunBuilder
 from ..models.dataset_writer import DatasetWriter
-from ..models.feature_preprocessing import FeaturePreprocessorBuilder, complete_rows
+from ..models.feature_preprocessing import (
+    FeaturePreprocessorBuilder,
+    _canonical_key_order,
+    complete_rows,
+)
 from ..models.factor_neutralization import FactorNeutralizationPreprocessorBuilder
 from ..models.factor_exposures import align_exposure_panel
 from ..models.features import FeatureSchemaBuilder, FeatureSchemaValidator
@@ -233,21 +237,25 @@ def _merge_labels(
     label_keys = label_frame[["instrument", "decision_date"]].astype({"instrument": "string"})
     if label_keys.duplicated().any():
         raise ContractError("duplicate label keys prevent dataset preparation")
-    factor_keys = factor_frame[["instrument", "datetime"]].copy()
-    factor_keys["decision_date"] = pd.to_datetime(factor_keys["datetime"]).dt.tz_localize(None)
-    factor_frame = factor_frame.copy()
-    factor_frame["decision_date"] = factor_keys["decision_date"]
-    merged = factor_frame.merge(
-        label_frame,
-        on=["instrument", "decision_date"],
-        how="left",
-        validate="one_to_one",
-        suffixes=("", "__label"),
+    factor_dates = pd.to_datetime(factor_frame["datetime"]).dt.tz_localize(None)
+    factor_index = pd.MultiIndex.from_arrays(
+        [factor_frame["instrument"].astype("string"), factor_dates],
+        names=["instrument", "decision_date"],
     )
-    if merged["label"].isna().all():
+    if factor_index.has_duplicates:
+        raise ContractError("duplicate factor keys prevent dataset preparation")
+    label_index = pd.MultiIndex.from_frame(label_keys)
+    aligned_labels = pd.Series(
+        label_frame["label"].to_numpy(dtype="float64", copy=False), index=label_index
+    ).reindex(factor_index)
+    if aligned_labels.isna().all():
         raise ContractError(f"label artifact has no values for dataset generation {label_generation_id}")
-    feature_columns = [column for column in merged.columns if column not in {"instrument", "datetime", "decision_date", "label"}]
-    return merged[["instrument", "datetime", *feature_columns, "label"]]
+    # The dataset adds only one label column. Reuse the immutable feature/key
+    # blocks instead of duplicating the full-width panel at this boundary.
+    dataset_frame = factor_frame.copy(deep=False)
+    dataset_frame.index = pd.RangeIndex(len(dataset_frame))
+    dataset_frame["label"] = aligned_labels.to_numpy(dtype="float64", na_value=float("nan"))
+    return dataset_frame
 
 
 def _prepare_preprocessed_frame(
@@ -282,9 +290,7 @@ def _prepare_preprocessed_frame(
             min_group_observations=preprocessing["policy"]["min_group_observations"],
             code_fingerprint=preprocessing["code_fingerprint"],
         )
-    input_frame = factor_frame.sort_values(
-        ["instrument", "datetime"], kind="mergesort"
-    ).reset_index(drop=True)
+    input_frame = _canonical_key_order(factor_frame)
     if FeaturePreprocessorBuilder.frame_fingerprint(input_frame) != preprocessing["input_frame_sha256"]:
         raise ContractError("preprocessing input frame fingerprint mismatch")
     FeatureSchemaValidator.validate_against_frame(dict(input_schema), input_frame)
@@ -512,7 +518,10 @@ class DatasetStageAdapter:
             raise ContractError("factor binding manifest digest mismatch")
         if factor_manifest["data_checksum_sha256"] != factor_binding.data_checksum_sha256:
             raise ContractError("factor binding data checksum mismatch")
-        factor_frame = self._read_factor_frame(plan, factor_binding)
+        uses_sample_construction = plan.request.get("contract_version") in {6, 7, 8}
+        factor_frame: pd.DataFrame | None = None
+        if not uses_sample_construction:
+            factor_frame = self._read_factor_frame(plan, factor_binding)
 
         universe_manifest = self.universe_store.read_manifest(universe_binding.generation_id)
         if universe_manifest["generation_id"] != universe_binding.generation_id:
@@ -520,16 +529,21 @@ class DatasetStageAdapter:
         universe_manifest_digest = adjustment_snapshot_generation(universe_manifest)
         if universe_manifest_digest != universe_binding.manifest_digest_sha256:
             raise ContractError("universe binding manifest digest mismatch")
-        members = self.universe_store.read_members(
-            universe_manifest["generation_id"],
-            universe_id=universe_manifest["universe_id"],
-            requested_valid_from=date.fromisoformat(plan.request["window_start_date"]),
-            requested_valid_to=date.fromisoformat(plan.request["window_end_date"]),
-        )
-        member_ids = set(members["instrument"].astype(str))
-        factor_frame = factor_frame[factor_frame["instrument"].astype(str).isin(member_ids)].copy()
-        if factor_frame.empty:
-            raise ContractError("factor artifact has no universe members")
+        if not uses_sample_construction:
+            members = self.universe_store.read_members(
+                universe_manifest["generation_id"],
+                universe_id=universe_manifest["universe_id"],
+                requested_valid_from=date.fromisoformat(plan.request["window_start_date"]),
+                requested_valid_to=date.fromisoformat(plan.request["window_end_date"]),
+            )
+            member_ids = set(members["instrument"].astype(str))
+            if factor_frame is None:
+                raise ContractError("factor frame was not loaded for this dataset contract")
+            factor_frame = factor_frame[
+                factor_frame["instrument"].astype(str).isin(member_ids)
+            ].copy()
+            if factor_frame.empty:
+                raise ContractError("factor artifact has no universe members")
 
         adjusted_manifest = self.adjusted_price_store.read_manifest(adjusted_binding.generation_id)
         if adjusted_manifest["manifest_digest_sha256"] != adjusted_binding.manifest_digest_sha256:
@@ -613,7 +627,8 @@ class DatasetStageAdapter:
             ):
                 raise ContractError("neutralization exposure binding mismatch")
 
-        if plan.request.get("contract_version") in {6, 7, 8}:
+        sample_keys: pd.DataFrame | None = None
+        if uses_sample_construction:
             if self.sample_construction_store is None:
                 raise ContractError(
                     "v6 dataset stage requires a governed sample-construction store"
@@ -668,15 +683,19 @@ class DatasetStageAdapter:
                 raise ContractError("sample construction feature order does not match preprocessing")
             if sample_frame[["instrument", "datetime"]].duplicated().any():
                 raise ContractError("sample construction contains duplicate keys")
-            factor_frame = sample_frame[
-                ["instrument", "datetime", *sample_manifest["ordered_features"]]
-            ].copy()
-            label_frame = sample_frame[
-                ["instrument", "datetime", "label"]
-            ].rename(columns={"datetime": "decision_date"})
+            sample_keys = sample_frame[["instrument", "datetime"]].copy()
+            sample_labels = sample_frame.pop("label")
+            factor_frame = sample_frame
+            label_frame = sample_keys.rename(
+                columns={"datetime": "decision_date"}
+            ).copy()
+            label_frame["label"] = sample_labels.to_numpy(dtype="float64", copy=False)
+            sample_frame = None
+            del sample_labels
         else:
             sample_manifest = None
             sample_frame = None
+            sample_keys = None
 
         # `drop_incomplete_rows` has to act *here*, before preprocessing, not after
         # the label merge. `DatasetWriter` requires the published frame and the
@@ -746,7 +765,7 @@ class DatasetStageAdapter:
             preprocessing_exposure_frame = _align_exposures_to_factor_frame(
                 factor_frame, exposure_panel, preprocessing["policy"]["control_order"]
             )
-        _, preprocessed_frame = _prepare_preprocessed_frame(
+        preprocessed_input_frame, preprocessed_frame = _prepare_preprocessed_frame(
             factor_frame,
             preprocessing,
             input_schema,
@@ -765,9 +784,9 @@ class DatasetStageAdapter:
                 raise ContractError(
                     "sample construction row count does not match the preprocessed dataset"
                 )
-            if not dataset_frame[["instrument", "datetime"]].reset_index(drop=True).equals(
-                sample_frame[["instrument", "datetime"]].reset_index(drop=True)
-            ):
+            if sample_keys is None:
+                raise ContractError("sample construction keys were not retained for reconciliation")
+            if not dataset_frame[["instrument", "datetime"]].reset_index(drop=True).equals(sample_keys):
                 raise ContractError(
                     "sample construction keys do not match the preprocessed dataset"
                 )
@@ -824,7 +843,7 @@ class DatasetStageAdapter:
                 # decisions keep the historical defensive copy.
                 quality_report=quality_decision if callable(quality_decision) else dict(quality_decision),
                 preprocessing_manifest=dict(preprocessing),
-                preprocessing_input_frame=factor_frame,
+                preprocessing_input_frame=preprocessed_input_frame,
                 preprocessing_frame=preprocessed_frame,
                 preprocessing_input_feature_schema=input_schema,
                 preprocessing_exposure_frame=preprocessing_exposure_frame,
@@ -843,6 +862,7 @@ class DatasetStageAdapter:
             published_manifest = self._read_back_published_dataset(exc, manifest)
         else:
             published_manifest = self.dataset_writer.last_published_manifest
+        del factor_frame, preprocessed_input_frame, preprocessed_frame, dataset_frame
         _, readback_frame = self.dataset_writer.read(
             published_manifest["dataset_name"],
             published_manifest["semantic_version"],
@@ -989,14 +1009,16 @@ class ModelStageResult:
 
     ``definition``, ``artifact_bytes`` and ``published_state`` describe work done in
     this process. A resumed run rebuilds the hand-off from the published artifacts,
-    where those three do not exist, so they are optional: everything downstream
-    actually reads is the two manifests.
+    where those three do not exist, so they are optional. The dataset frame is an
+    ephemeral, owning-store-verified hand-off for same-process Qlib inference; it is
+    never persisted in the result or used as an identity.
     """
     run_manifest: dict[str, Any]
     artifact_manifest: dict[str, Any]
     definition: dict[str, Any] | None = None
     artifact_bytes: bytes = b""
     published_state: PublishedState | None = None
+    verified_dataset: tuple[dict[str, Any], pd.DataFrame] | None = None
 
 
 @dataclass(frozen=True)
@@ -1761,38 +1783,48 @@ class QlibExportStageAdapter:
         feature_mapping = {column: column.upper() for column in feature_columns}
         calendar_dates = sorted(dataset_frame["datetime"].dt.strftime("%Y-%m-%d").unique().tolist())
         instruments = sorted(dataset_frame["instrument"].astype(str).unique().tolist())
-        export_frame = dataset_frame[["instrument", "datetime", *feature_columns, label_column]].copy()
+        export_columns = ["instrument", "datetime", *feature_columns, label_column]
+        export_frame = (dataset_frame if list(dataset_frame.columns) == export_columns
+                        else dataset_frame[export_columns].copy())
         numeric_columns = [*feature_columns, label_column]
-        if export_frame[numeric_columns].isna().any().any():
+        if any(export_frame[column].isna().any() for column in numeric_columns):
             raise ContractError("Qlib export cannot contain missing governed dataset values")
-        try:
-            export_manifest = self.exporter.export(
-                dataset_name=dataset_manifest["dataset_name"],
-                generation_id=dataset_generation_id,
-                frame=export_frame,
-                feature_mapping=feature_mapping,
-                label_column=label_column,
-                label_mapping=label_column.upper(),
-                calendar_dates=calendar_dates,
-                instruments=instruments,
-                provider_uri=provider_uri,
-                quality_decision=_decision_payload(export_quality_decision),
-                timing_callback=telemetry.substage if telemetry is not None else None,
-            )
-        except ContractError as exc:
-            if "already exists" not in str(exc):
-                raise
-            with (telemetry.stage("qlib_export/retry_readback")
+        export_args = dict(
+            dataset_name=dataset_manifest["dataset_name"], frame=export_frame,
+            feature_mapping=feature_mapping, label_column=label_column,
+            label_mapping=label_column.upper(), calendar_dates=calendar_dates,
+            instruments=instruments, provider_uri=provider_uri,
+            quality_decision=_decision_payload(export_quality_decision),
+        )
+        verified_export = None
+        if isinstance(self.exporter, QlibDatasetExporter):
+            with (telemetry.stage("qlib_export/reuse_lookup")
                   if telemetry is not None else nullcontext()):
-                export_manifest = self._read_back_published_export(
-                    exc, dataset_manifest["dataset_name"], provider_uri=provider_uri,
+                verified_export = self.exporter.find_reusable_export(**export_args)
+        if verified_export is not None:
+            export_manifest = verified_export[0]
+        else:
+            try:
+                export_manifest = self.exporter.export(
+                    **export_args, generation_id=dataset_generation_id,
+                    timing_callback=telemetry.substage if telemetry is not None else None,
                 )
-        with (telemetry.stage("qlib_export/owner_readback")
-              if telemetry is not None else nullcontext()):
-            verified_export = self.exporter.read(
-                dataset_manifest["dataset_name"], export_manifest["generation_id"])
-            if verified_export[0]["generation_id"] != export_manifest["generation_id"]:
-                raise ContractError("Qlib export readback identity mismatch")
+            except ContractError as exc:
+                if "already exists" not in str(exc):
+                    raise
+                with (telemetry.stage("qlib_export/retry_readback")
+                      if telemetry is not None else nullcontext()):
+                    export_manifest = self._read_back_published_export(
+                        exc, dataset_manifest["dataset_name"], provider_uri=provider_uri,
+                    )
+            with (telemetry.stage("qlib_export/owner_readback")
+                  if telemetry is not None else nullcontext()):
+                verified_export = self.exporter.read(
+                    dataset_manifest["dataset_name"], export_manifest["generation_id"],
+                    verify_content=False,
+                )
+                if verified_export[0]["generation_id"] != export_manifest["generation_id"]:
+                    raise ContractError("Qlib export readback identity mismatch")
         with (telemetry.stage("qlib_export/receipt_binding")
               if telemetry is not None else nullcontext()):
             cache_before = cache_files_before
@@ -1959,6 +1991,8 @@ class ModelStageAdapter:
         feature_columns: Sequence[str],
         label_column: str,
         runner_identity: Mapping[str, str],
+        verified_export: tuple[dict[str, Any], Path] | None = None,
+        telemetry: Any | None = None,
         created_at: str | None = None,
     ) -> ModelStageResult:
         factor_binding = _stage_binding(plan, stage="factor_computation", output_family="factor_partition")
@@ -1973,7 +2007,7 @@ class ModelStageAdapter:
             raise ContractError("model stage universe binding mismatch")
         if factor_generation_id != factor_binding.generation_id:
             raise ContractError("model stage factor binding mismatch")
-        dataset_manifest, _ = self.dataset_writer.read(
+        dataset_manifest, dataset_frame = self.dataset_writer.read(
             plan.request["dataset_policy_template"]["dataset_name"],
             plan.request["dataset_policy_template"]["semantic_version"],
             dataset_generation_id,
@@ -2010,20 +2044,36 @@ class ModelStageAdapter:
         )
         if bound_definition["model_run_content_generation_id"] != run_manifest["run_content_generation_id"]:
             raise ContractError("model run content binding mismatch")
-        verified_export = self.exporter.read(
-            dataset_manifest["dataset_name"], export_manifest["generation_id"],
-        )
+        if verified_export is None:
+            # This read checks the signed report and exact file layout. The
+            # trainer immediately below performs the required full SHA-256
+            # verification before it opens the data through Qlib.
+            verified_export = self.exporter.read(
+                dataset_manifest["dataset_name"], export_manifest["generation_id"],
+                verify_content=False,
+            )
         if verified_export[0] != export_manifest or verified_export[0]["manifest_digest_sha256"] != export_manifest["manifest_digest_sha256"]:
             raise ContractError("verified Qlib export binding mismatch")
-        artifact_manifest, artifact_bytes = self.trainer.train(
+        expected_snapshot = (
+            self.exporter.export_root
+            / f"dataset={dataset_manifest['dataset_name']}"
+            / f"generation={export_manifest['generation_id']}"
+        )
+        if verified_export[1] != expected_snapshot:
+            raise ContractError("verified Qlib export path mismatch")
+        trainer_kwargs = dict(
             definition=bound_definition,
             dataset_manifest=dataset_manifest,
             export_manifest=export_manifest,
             receipt_manifest=receipt_manifest,
             verified_export=verified_export,
+            verified_dataset=(dataset_manifest, dataset_frame),
             feature_columns=list(feature_columns),
             label_column=label_column,
         )
+        if telemetry is not None:
+            trainer_kwargs["timing_callback"] = telemetry.substage
+        artifact_manifest, artifact_bytes = self.trainer.train(**trainer_kwargs)
         artifact_manifest = dict(artifact_manifest)
         artifact_manifest["generation_id"] = "0" * 64
         artifact_manifest["manifest_digest_sha256"] = "0" * 64
@@ -2090,6 +2140,7 @@ class ModelStageAdapter:
             artifact_manifest=artifact_readback,
             artifact_bytes=artifact_bytes,
             published_state=self.run_store.publish_state(state, stage="model_training"),
+            verified_dataset=(dataset_manifest, dataset_frame),
         )
 
 

@@ -174,7 +174,7 @@ def prediction_decision():
 
 
 class TestEndToEndPipeline:
-    def test_full_chain_from_factor_to_prediction(self, tmp_path: Path) -> None:
+    def test_full_chain_from_factor_to_prediction(self, tmp_path: Path, monkeypatch) -> None:
         # === Phase 1: Accepted factor index ===
         _publish_factor(tmp_path)
         runtime = AcceptedFactorIndexRuntime(tmp_path)
@@ -292,6 +292,16 @@ class TestEndToEndPipeline:
         # === Phase 4A: Real Qlib runtime training ===
         if qlib is not None:
             from uq.models.qlib_runtime import QlibRuntimeTrainer
+            from uq.models import qlib_runtime
+
+            handler_arguments = {}
+            original_handler = qlib_runtime.DataHandlerLP
+
+            def capture_handler_arguments(**kwargs):
+                handler_arguments.update(kwargs)
+                return original_handler(**kwargs)
+
+            monkeypatch.setattr(qlib_runtime, "DataHandlerLP", capture_handler_arguments)
 
             qlib_definition_input = ModelDefinitionBuilder(
                 run_content_generation_id="1" * 64, reviewed=True
@@ -316,7 +326,24 @@ class TestEndToEndPipeline:
                 factor_manifests={factor_gen: factor_document},
                 quality_decision=run_decision(), store_root=tmp_path,
             )
-            qlib_manifest, qlib_bytes = QlibRuntimeTrainer().train(
+            qlib_manifest, qlib_bytes = QlibRuntimeTrainer(kernels=2).train(
+                definition=qlib_definition,
+                dataset_manifest=loaded_ds_manifest,
+                export_manifest=export_manifest,
+                receipt_manifest=receipt,
+                verified_export=exporter.read("e2e_slice", export_manifest["generation_id"]),
+                verified_dataset=(loaded_ds_manifest, loaded_ds),
+                feature_columns=["volume_ratio_20d"], label_column="label",
+            )
+            assert handler_arguments["start_time"] == "2026-01-05"
+            assert handler_arguments["end_time"] == "2026-01-12"
+            assert handler_arguments["instruments"] is None
+            assert type(handler_arguments["data_loader"]).__name__ == "StaticDataLoader"
+            from qlib.config import C
+            assert C.get_kernels("day") == 2
+            assert qlib_manifest["runtime_name"] == "qlib_linear"
+            assert qlib_manifest["runtime_version"] == qlib.__version__
+            qlib_bin_manifest, qlib_bin_bytes = QlibRuntimeTrainer(kernels=2).train(
                 definition=qlib_definition,
                 dataset_manifest=loaded_ds_manifest,
                 export_manifest=export_manifest,
@@ -324,8 +351,8 @@ class TestEndToEndPipeline:
                 verified_export=exporter.read("e2e_slice", export_manifest["generation_id"]),
                 feature_columns=["volume_ratio_20d"], label_column="label",
             )
-            assert qlib_manifest["runtime_name"] == "qlib_linear"
-            assert qlib_manifest["runtime_version"] == qlib.__version__
+            assert qlib_bin_bytes == qlib_bytes
+            assert qlib_bin_manifest["artifact_checksum_sha256"] == qlib_manifest["artifact_checksum_sha256"]
             assert "features/inst0/volume_ratio.day.bin" in {entry["path"] for entry in export_manifest["files"]}
             assert "features/inst0/label_5d.day.bin" in {entry["path"] for entry in export_manifest["files"]}
 
@@ -422,6 +449,7 @@ class TestEndToEndPipeline:
             )
             from uq.models.inference import score_decision_dates
 
+            inference_timings = []
             lightgbm_inference = score_decision_dates(
                 export_root=tmp_path / "qlib_exports",
                 dataset_name="e2e_slice",
@@ -430,8 +458,57 @@ class TestEndToEndPipeline:
                 artifact_generation_id=lightgbm_generation,
                 decision_dates=[calendar_dates[-1]],
                 expected_qlib_version=qlib.__version__,
+                timing_callback=lambda name, elapsed, status: inference_timings.append(
+                    (name, elapsed, status)
+                ),
             )
             assert len(lightgbm_inference.scores[calendar_dates[-1]]) > 0
+            assert {
+                "prediction_inference/export_file_verification",
+                "prediction_inference/qlib_initialization",
+                "prediction_inference/qlib_data_loading",
+                "prediction_inference/model_scoring",
+            } == {step[0] for step in inference_timings}
+            assert all(elapsed >= 0 and status == "passed" for _, elapsed, status in inference_timings)
+            static_inference_timings = []
+            lightgbm_static_inference = score_decision_dates(
+                export_root=tmp_path / "qlib_exports",
+                dataset_name="e2e_slice",
+                export_generation_id=export_manifest["generation_id"],
+                run_generation_id=lightgbm_manifest["model_run_content_generation_id"],
+                artifact_generation_id=lightgbm_generation,
+                decision_dates=[calendar_dates[-1]],
+                expected_qlib_version=qlib.__version__,
+                verified_dataset=(loaded_ds_manifest, loaded_ds),
+                expected_dataset_generation_id=loaded_ds_manifest["generation_id"],
+                export_content_verified=True,
+                timing_callback=lambda name, elapsed, status: static_inference_timings.append(
+                    (name, elapsed, status)
+                ),
+            )
+            assert {
+                "prediction_inference/qlib_initialization",
+                "prediction_inference/qlib_data_loading",
+                "prediction_inference/model_scoring",
+            } == {step[0] for step in static_inference_timings}
+            assert all(elapsed >= 0 and status == "passed" for _, elapsed, status in static_inference_timings)
+            pd.testing.assert_frame_equal(
+                lightgbm_static_inference.scores[calendar_dates[-1]],
+                lightgbm_inference.scores[calendar_dates[-1]],
+            )
+            assert lightgbm_static_inference.unscorable_rows == lightgbm_inference.unscorable_rows
+            with pytest.raises(ContractError, match="does not match the model run"):
+                score_decision_dates(
+                    export_root=tmp_path / "qlib_exports",
+                    dataset_name="e2e_slice",
+                    export_generation_id=export_manifest["generation_id"],
+                    run_generation_id=lightgbm_manifest["model_run_content_generation_id"],
+                    artifact_generation_id=lightgbm_generation,
+                    decision_dates=[calendar_dates[-1]],
+                    expected_qlib_version=qlib.__version__,
+                    verified_dataset=(loaded_ds_manifest, loaded_ds),
+                    expected_dataset_generation_id="0" * 64,
+                )
 
         # === Phase 4: Train + publish artifact ===
         trainer = ModelTrainer(tmp_path)
@@ -545,6 +622,14 @@ class TestEndToEndPipeline:
 
 class TestQlibRuntimeTrainer:
     @pytest.mark.skipif(qlib is None, reason="Qlib extra is not installed")
+    @pytest.mark.parametrize("kernels", [True, 0, -1, 1.5])
+    def test_rejects_invalid_loader_kernel_count(self, kernels) -> None:
+        from uq.models.qlib_runtime import QlibRuntimeTrainer
+
+        with pytest.raises(ContractError, match="positive integer"):
+            QlibRuntimeTrainer(kernels=kernels)
+
+    @pytest.mark.skipif(qlib is None, reason="Qlib extra is not installed")
     def test_tampered_provider_bin_rejects_training(self, tmp_path: Path) -> None:
         from uq.models.qlib_runtime import QlibRuntimeTrainer
 
@@ -621,13 +706,23 @@ class TestQlibRuntimeTrainer:
             universe_snapshot=universe_manifest, factor_manifests={factor_gen: factor_document},
             quality_decision=run_decision(), store_root=tmp_path,
         )
-        verified_manifest, snapshot = exporter.read("tamper_slice", export_manifest["generation_id"])
+        verified_manifest, snapshot = exporter.read(
+            "tamper_slice", export_manifest["generation_id"], verify_content=False,
+        )
         target = snapshot / "features" / "inst0" / "volume_ratio.day.bin"
-        target.write_bytes(target.read_bytes()[:-1])
+        mutated = bytearray(target.read_bytes())
+        mutated[0] ^= 1  # Keep the declared size so only the content hash can catch this.
+        target.write_bytes(mutated)
+        timed_steps = []
         with pytest.raises(ContractError, match="tampered Qlib export file"):
             QlibRuntimeTrainer().train(
                 definition=definition, dataset_manifest=dataset_manifest,
                 export_manifest=export_manifest, receipt_manifest=receipt,
                 verified_export=(verified_manifest, snapshot),
                 feature_columns=["volume_ratio_20d"], label_column="label",
+                timing_callback=lambda name, elapsed, status: timed_steps.append((name, elapsed, status)),
             )
+        assert len(timed_steps) == 1
+        assert timed_steps[0][0] == "model_training/export_file_verification"
+        assert timed_steps[0][1] >= 0
+        assert timed_steps[0][2] == "failed"

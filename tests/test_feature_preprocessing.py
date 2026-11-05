@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import shutil
+import warnings
 from pathlib import Path
 import uuid
 
@@ -22,7 +23,11 @@ from uq.contracts.model_layer import (
 from uq.errors import ContractError
 from uq.models.dataset import DatasetBuilder
 from uq.models.dataset_writer import DatasetWriter
-from uq.models.feature_preprocessing import FeaturePreprocessorBuilder, complete_rows
+from uq.models.feature_preprocessing import (
+    FeaturePreprocessorBuilder,
+    _canonical_key_order,
+    complete_rows,
+)
 from uq.models.features import FeatureSchemaBuilder
 from uq.contracts.canonical_v2 import file_sha256_bytes
 from uq.factors.raw_price import logical_fingerprint as frame_logical_fingerprint
@@ -172,6 +177,7 @@ def test_vectorized_rank_matches_average_rank_with_ties_nulls_and_constant_group
         semantic_version="1.0.0",
         transform="rank_cross_section",
     )
+    original = frame.copy(deep=True)
 
     expected = frame.copy()
     for name in ("feature_a", "feature_b"):
@@ -182,6 +188,7 @@ def test_vectorized_rank_matches_average_rank_with_ties_nulls_and_constant_group
 
     actual = builder.transform(frame)
     pd.testing.assert_frame_equal(actual, expected)
+    pd.testing.assert_frame_equal(frame, original)
     assert actual.loc[actual["datetime"] == pd.Timestamp("2026-01-06"), "feature_a"].eq(0.5).all()
     assert actual.loc[
         (actual["datetime"] == pd.Timestamp("2026-01-05"))
@@ -191,6 +198,105 @@ def test_vectorized_rank_matches_average_rank_with_ties_nulls_and_constant_group
         (actual["datetime"] == pd.Timestamp("2026-01-05"))
         & (actual["instrument"] == "000004.XSHE"), "feature_a"
     ].iloc[0])
+
+
+def test_full_rank_transform_avoids_fragmented_output_columns() -> None:
+    instruments = ["000001.XSHE", "000002.XSHE", "000003.XSHE"] * 2
+    datetimes = [pd.Timestamp("2026-01-05")] * 3 + [pd.Timestamp("2026-01-06")] * 3
+    base_values = [1.0, 2.0, 3.0, 3.0, 2.0, 1.0]
+    features = [f"feature_{index:03d}" for index in range(128)]
+    frame = pd.DataFrame(
+        {
+            "instrument": instruments,
+            "datetime": datetimes,
+            **{name: base_values for name in features},
+        },
+        index=[2, 2, 7, 4, 4, 9],
+    )
+    original = frame.copy(deep=True)
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="wide-rank-regression",
+        semantic_version="1.0.0",
+        transform="rank_cross_section",
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", pd.errors.PerformanceWarning)
+        output = builder.transform(frame, features)
+
+    assert not [warning for warning in caught if issubclass(
+        warning.category, pd.errors.PerformanceWarning
+    )]
+    assert list(output.columns) == ["instrument", "datetime", *features]
+    assert output.loc[output["datetime"] == pd.Timestamp("2026-01-05"), features[0]].tolist() == [
+        0.0, 0.5, 1.0
+    ]
+    assert output.loc[output["datetime"] == pd.Timestamp("2026-01-06"), features[0]].tolist() == [
+        1.0, 0.5, 0.0
+    ]
+    pd.testing.assert_frame_equal(frame, original)
+
+
+def test_transform_skips_full_frame_sort_when_keys_are_already_ordered(monkeypatch) -> None:
+    frame = _frame().sort_values(
+        ["instrument", "datetime"], kind="mergesort"
+    ).reset_index(drop=True)
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="ordered-rank-regression",
+        semantic_version="1.0.0",
+        transform="rank_cross_section",
+    )
+
+    def unexpected_sort(*args, **kwargs):
+        raise AssertionError("already ordered frame must not be copied through sort_values")
+
+    monkeypatch.setattr(pd.DataFrame, "sort_values", unexpected_sort)
+    output = builder.transform(frame)
+
+    assert output["instrument"].tolist() == frame["instrument"].tolist()
+    assert output["datetime"].tolist() == frame["datetime"].tolist()
+
+
+def test_canonical_key_order_reuses_sorted_frame() -> None:
+    frame = _frame().sort_values(
+        ["instrument", "datetime"], kind="mergesort"
+    ).reset_index(drop=True)
+
+    assert _canonical_key_order(frame) is frame
+
+
+def test_transform_output_verification_compares_one_feature_at_a_time(monkeypatch) -> None:
+    frame = _frame().sort_values(
+        ["instrument", "datetime"], kind="mergesort"
+    ).reset_index(drop=True)
+    builder = FeaturePreprocessorBuilder(
+        preprocess_name="columnwise-validation",
+        semantic_version="1.0.0",
+        transform="rank_cross_section",
+    )
+    output = builder.transform(frame)
+
+    def unexpected_full_transform(*args, **kwargs):
+        raise AssertionError("verification must not allocate a second full transformed frame")
+
+    monkeypatch.setattr(builder, "_apply", unexpected_full_transform)
+    builder.validate_transform_output(frame, output)
+
+    changed = output.copy()
+    feature = frame.columns[2]
+    changed.loc[0, feature] += 0.1
+    with pytest.raises(ContractError, match="preprocessing output does not match"):
+        builder.validate_transform_output(frame, changed)
+
+
+def test_preprocessing_frame_fingerprint_preserves_stable_key_sort_identity() -> None:
+    frame = _frame().sample(frac=1.0, random_state=13)
+    expected = frame.sort_values(
+        ["instrument", "datetime"], kind="mergesort"
+    ).reset_index(drop=True)
+
+    assert FeaturePreprocessorBuilder.frame_fingerprint(frame) == frame_logical_fingerprint(expected)
+    assert FeaturePreprocessorBuilder.frame_fingerprint(expected) == frame_logical_fingerprint(expected)
 
 
 def test_manifest_rejects_transform_output_mismatch_and_sparse_group() -> None:

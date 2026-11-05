@@ -12,11 +12,37 @@ from ..errors import ContractError
 from .features import FeatureSchemaValidator
 
 
+def _stable_key_order(frame: pd.DataFrame) -> np.ndarray | None:
+    positions = np.arange(len(frame), dtype=np.intp)
+    try:
+        return np.lexsort((
+            positions,
+            frame["datetime"].to_numpy(),
+            frame["instrument"].to_numpy(),
+        ))
+    except (TypeError, ValueError):
+        return None
+
+
+def _canonical_key_order(frame: pd.DataFrame) -> pd.DataFrame:
+    """Return rows in stable instrument/date order without copying sorted data."""
+    positions = np.arange(len(frame), dtype=np.intp)
+    order = _stable_key_order(frame)
+    if order is None:
+        return frame.sort_values(
+            ["instrument", "datetime"], kind="mergesort"
+        ).reset_index(drop=True)
+    if np.array_equal(order, positions):
+        if frame.index.equals(pd.RangeIndex(len(frame))):
+            return frame
+        return frame.reset_index(drop=True)
+    return frame.iloc[order].reset_index(drop=True)
+
+
 def _frame_fingerprint(frame: pd.DataFrame) -> str:
     from ..factors.raw_price import logical_fingerprint
 
-    canonical = frame.sort_values(["instrument", "datetime"], kind="mergesort").reset_index(drop=True)
-    return logical_fingerprint(canonical)
+    return logical_fingerprint(_canonical_key_order(frame))
 
 
 class FeaturePreprocessorBuilder:
@@ -83,13 +109,7 @@ class FeaturePreprocessorBuilder:
         )
         self.validate_feature_values(input_frame, ordered_features)
         self.validate_feature_values(output_frame, ordered_features)
-        try:
-            expected_output = self._apply(input_frame.copy(), ordered_features)
-            pd.testing.assert_frame_equal(
-                output_frame, expected_output, check_exact=False, rtol=1e-12, atol=1e-12
-            )
-        except AssertionError as exc:
-            raise ContractError("preprocessing output does not match declared transform") from exc
+        self.validate_transform_output(input_frame, output_frame, ordered_features)
 
         manifest: dict[str, Any] = {
             "contract_version": 1,
@@ -147,6 +167,56 @@ class FeaturePreprocessorBuilder:
             if column["transform_status"] != expected_status:
                 raise ContractError(f"{label} feature schema transform status mismatch for {column['name']}")
 
+    def validate_transform_output(
+        self,
+        input_frame: pd.DataFrame,
+        output_frame: pd.DataFrame,
+        ordered_features: list[str] | None = None,
+    ) -> None:
+        """Verify a transform one column at a time without allocating a second wide frame."""
+        features = ordered_features if ordered_features is not None else list(input_frame.columns[2:])
+        expected_columns = ["instrument", "datetime", *features]
+        if list(input_frame.columns) != expected_columns or list(output_frame.columns) != expected_columns:
+            raise ContractError("preprocessing output does not match declared transform")
+        if len(input_frame) != len(output_frame):
+            raise ContractError("preprocessing output does not match declared transform")
+
+        canonical_input = _canonical_key_order(input_frame)
+        canonical_output = _canonical_key_order(output_frame)
+        self.validate_frame_keys(canonical_input)
+        self.validate_frame_keys(canonical_output)
+        for name in ("instrument", "datetime"):
+            if (canonical_input[name].dtype != canonical_output[name].dtype
+                    or not canonical_input[name].equals(canonical_output[name])):
+                raise ContractError("preprocessing output does not match declared transform")
+        self.validate_feature_values(canonical_input, features)
+        self.validate_feature_values(canonical_output, features)
+
+        grouped = canonical_input.groupby("datetime", sort=False, dropna=False)
+        for name in features:
+            if self.transform_type == "rank_cross_section":
+                feature_group = grouped[name]
+                counts = feature_group.transform("count")
+                if (counts < self.min_group_observations).any():
+                    raise ContractError("cross-sectional group has fewer than minimum observations")
+                ranks = feature_group.rank(
+                    method="average", na_option="keep", ascending=True
+                )
+                expected = (ranks - 1.0).div(counts - 1.0).astype("float64")
+            else:
+                expected = grouped[name].transform(
+                    lambda values: self._standardize(values)
+                ).astype("float64")
+            actual = canonical_output[name]
+            if expected.dtype != actual.dtype or not np.allclose(
+                expected.to_numpy(dtype=np.float64, na_value=np.nan),
+                actual.to_numpy(dtype=np.float64, na_value=np.nan),
+                rtol=1e-12,
+                atol=1e-12,
+                equal_nan=True,
+            ):
+                raise ContractError("preprocessing output does not match declared transform")
+
     def validate_frame_keys(self, frame: pd.DataFrame) -> None:
         if list(frame.columns[:2]) != ["instrument", "datetime"]:
             raise ContractError("preprocessing frame keys must be instrument then datetime")
@@ -173,35 +243,56 @@ class FeaturePreprocessorBuilder:
     def transform(self, frame: pd.DataFrame, ordered_features: list[str] | None = None) -> pd.DataFrame:
         self.validate_frame_keys(frame)
         self.validate_feature_values(frame, ordered_features)
-        output = self._apply(frame, ordered_features).sort_values(
-            ["instrument", "datetime"], kind="mergesort"
-        ).reset_index(drop=True)
+        canonical_input = _canonical_key_order(frame)
+        output = _canonical_key_order(self._apply(canonical_input, ordered_features))
         self.validate_feature_values(output, ordered_features)
         return output
 
     def _apply(self, frame: pd.DataFrame, ordered_features: list[str] | None = None) -> pd.DataFrame:
         features = ordered_features if ordered_features is not None else list(frame.columns[2:])
-        output = frame.copy()
         for name in features:
-            if name not in output.columns:
+            if name not in frame.columns:
                 raise ContractError(f"feature column {name} is absent")
             if name in {"instrument", "datetime"}:
                 raise ContractError(f"feature column {name} conflicts with key column")
-            series = output[name]
+            series = frame[name]
             if not (pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series)):
                 raise ContractError(f"cross-sectional preprocessing requires float64/int64 feature: {name}")
 
         if self.transform_type == "rank_cross_section" and features:
-            grouped_features = output.groupby("datetime", sort=False, dropna=False)[features]
-            counts = grouped_features.transform("count")
-            if (counts < self.min_group_observations).any().any():
-                raise ContractError("cross-sectional group has fewer than minimum observations")
-            ranks = grouped_features.rank(method="average", na_option="keep", ascending=True)
-            ranked_values = (ranks - 1.0).div(counts - 1.0).astype("float64")
-            for name in features:
-                output[name] = ranked_values[name]
+            full_rank = features == list(frame.columns[2:])
+            if full_rank:
+                ranked_matrix = np.empty((len(frame), len(features)), dtype=np.float64)
+            else:
+                output = frame.copy()
+            grouped = frame.groupby("datetime", sort=False, dropna=False)
+            for feature_index, name in enumerate(features):
+                feature_group = grouped[name]
+                counts = feature_group.transform("count")
+                if (counts < self.min_group_observations).any():
+                    raise ContractError("cross-sectional group has fewer than minimum observations")
+                ranks = feature_group.rank(
+                    method="average", na_option="keep", ascending=True
+                )
+                normalized = (ranks - 1.0).div(counts - 1.0).astype("float64")
+                if full_rank:
+                    ranked_matrix[:, feature_index] = normalized.to_numpy(
+                        dtype=np.float64, copy=False
+                    )
+                else:
+                    output[name] = normalized
+            if full_rank:
+                ranked_frame = pd.DataFrame(
+                    ranked_matrix, columns=features, index=frame.index, copy=False
+                )
+                return pd.concat(
+                    [frame[["instrument", "datetime"]].copy(), ranked_frame],
+                    axis=1,
+                    copy=False,
+                )
             return output
 
+        output = frame.copy()
         group = output.groupby("datetime", sort=False, dropna=False)
         for name in features:
             if self.transform_type == "standardize_cross_section":

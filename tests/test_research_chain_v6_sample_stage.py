@@ -13,11 +13,14 @@ import dataclasses
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import pytest
 
 from uq.contracts.model_layer import create_reviewed_quality_decision
 from uq.models.sample_construction import SampleConstructionBuilder
-from uq.research_chain.adapters import _stage_binding
+from uq.errors import ContractError
+from uq.research_chain.adapters import _merge_labels, _stage_binding
 from uq.research_chain.owning_contracts import SampleConstructionStore
 from uq.research_chain.resolver import ResolvedStageBinding
 from tests.review_key import REVIEWER_PRIVATE_KEY
@@ -43,6 +46,52 @@ def _sample_decision(generation: str) -> dict:
         private_key_pem=REVIEWER_PRIVATE_KEY,
         subject_generation_id=generation,
     )
+
+
+def test_merge_labels_preserves_factor_order_without_wide_merge(monkeypatch) -> None:
+    factor_frame = pd.DataFrame({
+        "instrument": ["000002.XSHE", "000001.XSHE", "000003.XSHE"],
+        "datetime": pd.to_datetime(["2026-01-06", "2026-01-05", "2026-01-07"]),
+        "feature": [2.0, 1.0, 3.0],
+    })
+    label_frame = pd.DataFrame({
+        "instrument": ["000001.XSHE", "000002.XSHE", "000004.XSHE"],
+        "decision_date": pd.to_datetime(["2026-01-05", "2026-01-06", "2026-01-08"]),
+        "label": [0.1, 0.2, 0.4],
+    })
+    original = factor_frame.copy(deep=True)
+
+    def unexpected_wide_merge(*args, **kwargs):
+        raise AssertionError("label alignment must not create an intermediate wide merge frame")
+
+    monkeypatch.setattr(pd.DataFrame, "merge", unexpected_wide_merge)
+    actual = _merge_labels(
+        factor_frame, label_frame, label_generation_id="a" * 64
+    )
+
+    expected = original.copy()
+    expected["label"] = [0.2, 0.1, float("nan")]
+    pd.testing.assert_frame_equal(actual, expected)
+    pd.testing.assert_frame_equal(factor_frame, original)
+    assert np.shares_memory(
+        actual["feature"].to_numpy(), factor_frame["feature"].to_numpy()
+    )
+
+
+def test_merge_labels_rejects_duplicate_factor_keys() -> None:
+    factors = pd.DataFrame({
+        "instrument": ["000001.XSHE", "000001.XSHE"],
+        "datetime": pd.to_datetime(["2026-01-05", "2026-01-05"]),
+        "feature": [1.0, 2.0],
+    })
+    labels = pd.DataFrame({
+        "instrument": ["000001.XSHE"],
+        "decision_date": pd.to_datetime(["2026-01-05"]),
+        "label": [0.1],
+    })
+
+    with pytest.raises(ContractError, match="duplicate factor keys"):
+        _merge_labels(factors, labels, label_generation_id="a" * 64)
 
 
 def test_v6_dataset_stage_consumes_the_sample_artifact(tmp_path: Path, monkeypatch) -> None:
@@ -137,7 +186,10 @@ def test_v6_dataset_stage_consumes_the_sample_artifact(tmp_path: Path, monkeypat
         ),
     )
 
-    monkeypatch.setattr(adapter, "_read_factor_frame", lambda *args, **kwargs: factor_frame)
+    def unexpected_raw_factor_read(*args, **kwargs):
+        raise AssertionError("v6 dataset preparation must consume the reviewed sample artifact")
+
+    monkeypatch.setattr(adapter, "_read_factor_frame", unexpected_raw_factor_read)
     monkeypatch.setattr(
         adapter,
         "_factor_partition_set",

@@ -6,6 +6,8 @@ import io
 from datetime import date, datetime
 import shutil
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -54,6 +56,29 @@ class _ImmutablePaperManifestStore:
         self.root = Path(root)
         self.family = family
         self.directory = self.root / directory
+        self._read_index: ContextVar[dict[str, list[Path]] | None] = ContextVar(
+            f"paper_read_index_{id(self)}", default=None
+        )
+
+    @contextmanager
+    def indexed_reads(self):
+        """Index candidate paths for one bounded read operation, never across calls."""
+        def scan() -> dict[str, list[Path]]:
+            index: dict[str, list[Path]] = {}
+            for path in self.directory.rglob("generation=*"):
+                index.setdefault(path.name.removeprefix("generation="), []).append(path)
+            for paths in index.values():
+                paths.sort()
+            return index
+
+        index = scan()
+        token = self._read_index.set(index)
+        try:
+            yield
+            if scan() != index:
+                raise ContractError(f"paper {self.family} partition inventory changed during readback")
+        finally:
+            self._read_index.reset(token)
 
     def _safe_resolve(self, path: Path) -> Path:
         try:
@@ -81,7 +106,9 @@ class _ImmutablePaperManifestStore:
             raise ContractError(f"paper {self.family} manifest identity mismatch")
 
     def _read_manifest(self, generation_id: str) -> tuple[Path, dict[str, Any]]:
-        candidates = list(self.directory.rglob(f"generation={generation_id}"))
+        index = self._read_index.get()
+        candidates = (list(self.directory.rglob(f"generation={generation_id}"))
+                      if index is None else index.get(generation_id, []))
         if len(candidates) != 1:
             raise ContractError(f"paper {self.family} partition is missing or ambiguous")
         manifest_path = candidates[0] / "manifest.json"

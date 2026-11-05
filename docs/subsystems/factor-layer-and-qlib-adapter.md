@@ -1,6 +1,6 @@
 # Factor Layer and Qlib Adapter
 
-> Current behavior reference. Last checked: `2026-10-20` against HEAD `54676a0a3b377d1b88da09309d96d6a7c6535419`. Based on source code, configuration, tests, and previous review records; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-11-05` against the uncommitted worktree based on HEAD `334a12c84bc22698d065e215f846365a1f93c5b4`. Based on source code, configuration, tests, and previous review records; unverified items are marked `UNKNOWN`.
 
 ## Responsibilities and Boundaries
 
@@ -36,6 +36,11 @@ Production producer is `scripts/publish_factor_partitions.py` (canonical bars �
 6. a publication lock is taken, the partition must not already exist, the staging directory is written and the Parquet re-read, then `_reconcile_output` compares the restored frame against the in-memory frame by logical fingerprint.
 
 Reads (`read_factor_partition`) re-validate the manifest against its declared `factor_manifest.v{n}.json` schema, recompute identities, and verify the logical fingerprint of the restored frame. Fingerprint versions 1–3 are all accepted on read; versions 2 and 3 fixed real collisions (`NaN` vs `-0.0`, and `+inf` vs `-inf` sharing a null mask), and reads were kept compatible with older partitions rather than being cut off.
+
+For finite floating-point panels with midnight nanosecond timestamps, the v3
+serializer rounds and hashes bounded row chunks. Each column is rounded before
+mixed float dtypes are promoted, preserving the canonical digest. Non-finite
+values and unsupported shapes fall back to the original v3 serializer.
 
 Qlib computation runs in a **subprocess** (`_qlib_worker`): the parent validates the payload — instrument grammar, allowed expression field whitelist — and the child writes the result, preserving canonical `datetime64` dtype and uppercasing instruments. A pyqlib interpreter that is absent is a typed `QlibNotInstalledError`, and the tests that require it are skipped rather than failing silently.
 

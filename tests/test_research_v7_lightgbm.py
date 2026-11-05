@@ -152,7 +152,8 @@ def test_v7_model_stage_builds_a_v2_lightgbm_definition() -> None:
 
     class _Exporter:
         @staticmethod
-        def read(_dataset_name: str, _generation: str):
+        def read(_dataset_name: str, _generation: str, *, verify_content: bool = True):
+            assert verify_content is False
             return ({"generation_id": "b" * 64}, None)
 
     class _ModelAdapter:

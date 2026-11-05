@@ -7,6 +7,7 @@ import pytest
 
 from uq.errors import ContractError
 from uq.factors.raw_price import calculate_raw_price_factors, logical_fingerprint
+from uq.factors import raw_price
 
 
 def bars(rows):
@@ -67,6 +68,23 @@ def test_logical_fingerprint_is_deterministic():
     left=calculate_raw_price_factors(frame)
     right=calculate_raw_price_factors(frame.copy())
     assert logical_fingerprint(left)==logical_fingerprint(right)
+
+
+def test_chunked_fingerprint_preserves_v3_identity_and_nonfinite_fallback(monkeypatch):
+    frame = pd.DataFrame({
+        "instrument": ["A", "B", "C", "D", "E"],
+        "datetime": pd.date_range("2024-01-01", periods=5),
+        "f32": np.array([1.23456789, -0.0, 1e-9, -3.5, 9.3], dtype="float32"),
+        "f64": [1e-8, -0.0, 7.1234567890123, -2.5, 3.0],
+    })
+    stream = raw_price._finite_float_frame_fingerprint
+    monkeypatch.setattr(raw_price, "_finite_float_frame_fingerprint", lambda *args, **kwargs: None)
+    expected = logical_fingerprint(frame)
+    assert stream(frame, columns=["f32", "f64"], tolerance=1e-12, chunk_rows=2) == expected
+    for value in (np.nan, np.inf, -np.inf):
+        changed = frame.copy()
+        changed.loc[4, "f64"] = value
+        assert stream(changed, columns=["f32", "f64"], tolerance=1e-12, chunk_rows=2) is None
 
 
 def test_raw_price_factors_do_not_consume_adjustment_data():

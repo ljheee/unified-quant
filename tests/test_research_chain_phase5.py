@@ -383,6 +383,7 @@ def test_cli_dry_run_publishes_only_request_and_state(tmp_path: Path, capsys: py
         "--data-root", str(data_root),
         "--mode", "dry-run",
         "--request-json", str(request_path),
+        "--qlib-kernels", "2",
     ])
     assert exit_code == 0
     output = json.loads(capsys.readouterr().out)
@@ -392,6 +393,47 @@ def test_cli_dry_run_publishes_only_request_and_state(tmp_path: Path, capsys: py
     assert not data_root.joinpath("factors").exists()
     assert not data_root.joinpath("models").exists()
     assert not data_root.joinpath("research_runs", "results").exists()
+
+
+def test_cli_rejects_nonpositive_qlib_kernels(tmp_path: Path) -> None:
+    from uq.research_chain.cli import uq_research_run
+
+    with pytest.raises(SystemExit):
+        uq_research_run([
+            "--project-root", str(ROOT),
+            "--data-root", str(tmp_path / "data"),
+            "--mode", "dry-run",
+            "--request-json", str(tmp_path / "missing.json"),
+            "--qlib-kernels", "0",
+        ])
+
+
+def test_cli_forwards_qlib_kernel_count(tmp_path: Path, monkeypatch, capsys) -> None:
+    from uq.research_chain import cli
+
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps({"contract_version": 1}))
+    decisions_path = tmp_path / "decisions.json"
+    decisions_path.write_text("{}")
+    captured = {}
+
+    def fake_execute(request, **kwargs):
+        captured.update(kwargs)
+        return {"status": "published"}
+
+    monkeypatch.setattr(cli, "_execute", fake_execute)
+    exit_code = cli.uq_research_run([
+        "--project-root", str(ROOT),
+        "--data-root", str(tmp_path / "data"),
+        "--mode", "execute",
+        "--request-json", str(request_path),
+        "--quality-decisions-json", str(decisions_path),
+        "--qlib-kernels", "3",
+    ])
+
+    assert exit_code == 0
+    assert captured["qlib_kernels"] == 3
+    assert json.loads(capsys.readouterr().out)["status"] == "published"
 
 
 def test_cli_execute_requires_external_decisions(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -908,10 +950,14 @@ def test_inference_uses_the_artifact_runtime_version_not_the_export_manifest(
     reaches `score_decision_dates`.
     """
     from types import SimpleNamespace
+    import pandas as pd
+
+    from uq.research_chain.adapters import ModelStageResult
     from uq.research_chain.resolver import ResolvedStageBinding
 
     runner = ResearchChainRunner.__new__(ResearchChainRunner)
     generation = "9" * 64
+    dataset_generation = "6" * 64
     runner.export_adapter = SimpleNamespace(
         exporter=SimpleNamespace(
             export_root=tmp_path / "qlib_exports",
@@ -919,8 +965,13 @@ def test_inference_uses_the_artifact_runtime_version_not_the_export_manifest(
         )
     )
     runner.model_adapter = SimpleNamespace(
-        last_result=SimpleNamespace(
+        last_result=ModelStageResult(
+            run_manifest={"model_dataset_generation_id": dataset_generation},
             artifact_manifest={"runtime_version": "0.9.7"},
+            verified_dataset=(
+                {"dataset_name": "research_slice", "generation_id": dataset_generation},
+                pd.DataFrame(),
+            ),
         )
     )
     plan = SimpleNamespace(
@@ -949,6 +1000,13 @@ def test_inference_uses_the_artifact_runtime_version_not_the_export_manifest(
                 manifest_digest_sha256="7" * 64,
                 data_checksum_sha256="7" * 64,
             ),
+            ResolvedStageBinding(
+                stage="dataset_preparation",
+                output_family="model_dataset",
+                generation_id=dataset_generation,
+                manifest_digest_sha256=dataset_generation,
+                data_checksum_sha256=dataset_generation,
+            ),
         ),
     )
     captured: dict[str, object] = {}
@@ -965,6 +1023,10 @@ def test_inference_uses_the_artifact_runtime_version_not_the_export_manifest(
         runner_identity={"code_fingerprint": "0" * 64},
     )
     assert captured["expected_qlib_version"] == "0.9.7"
+    assert captured["expected_dataset_generation_id"] == dataset_generation
+    assert captured["export_content_verified"] is True
+    assert captured["verified_dataset"][0]["generation_id"] == dataset_generation
+    assert runner.model_adapter.last_result.verified_dataset is None
     assert result is scores
 
 
@@ -1006,11 +1068,18 @@ def test_a_v2_price_panel_is_keyed_on_its_own_session_column(tmp_path: Path):
 
 @requires_qlib
 def test_attempt_telemetry_covers_real_stages_without_changing_results(tmp_path, monkeypatch):
+    from uq.models.qlib_export import QlibDatasetExporter
     from uq.research_chain.telemetry import RunTelemetry
 
     plain, _, _ = _run_full_chain(tmp_path / 'plain')
     real_execute = ResearchChainRunner.execute
+    real_export_read = QlibDatasetExporter.read
     attempts = []
+    export_read_modes = []
+
+    def track_export_read(self, dataset_name, generation_id, **kwargs):
+        export_read_modes.append(kwargs.get('verify_content', True))
+        return real_export_read(self, dataset_name, generation_id, **kwargs)
 
     def measured(self, plan, **kwargs):
         with RunTelemetry(self.run_store.root, plan.request, {'test': 'isolated'}) as attempt:
@@ -1018,6 +1087,7 @@ def test_attempt_telemetry_covers_real_stages_without_changing_results(tmp_path,
             return real_execute(self, plan, telemetry=attempt, **kwargs)
 
     monkeypatch.setattr(ResearchChainRunner, 'execute', measured)
+    monkeypatch.setattr(QlibDatasetExporter, 'read', track_export_read)
     timed, _, _ = _run_full_chain(tmp_path / 'timed')
     assert plain.result_manifest == timed.result_manifest
     record = json.loads(attempts[0].path.read_text())
@@ -1028,6 +1098,17 @@ def test_attempt_telemetry_covers_real_stages_without_changing_results(tmp_path,
             'qlib_export/review_binding', 'qlib_export/prepublish_readback',
             'qlib_export/durable_publish', 'qlib_export/owner_readback',
             'qlib_export/receipt_binding', 'qlib_export/stage_publication'} <= covered_stages
+    assert {
+        'model_training/export_file_verification',
+        'model_training/qlib_initialization',
+        'model_training/static_frame_conversion',
+        'model_training/qlib_data_loading',
+        'model_training/train_split_prepare',
+        'model_training/model_fit',
+        'model_training/artifact_serialization',
+    } <= covered_stages
+    assert export_read_modes.count(False) == 1
+    assert export_read_modes.count(True) == 1
     for item in record['stages']:
         if item['status'] == 'reused':
             assert 'elapsed_seconds' not in item

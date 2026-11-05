@@ -89,8 +89,9 @@ class RunTelemetry:
         self.document["stages"].append({"stage": stage, "status": "reused"})
 
     def substage(self, stage: str, elapsed_seconds: float, status: str) -> None:
-        """Record exporter work without placing timings in logical artifacts."""
-        if (not stage.startswith("qlib_export/") or status not in {"passed", "failed"}
+        """Record export, Qlib, and inference timings outside logical artifacts."""
+        if (not stage.startswith(("qlib_export/", "model_training/", "prediction_inference/"))
+                or status not in {"passed", "failed"}
                 or not isinstance(elapsed_seconds, (int, float))
                 or not math.isfinite(elapsed_seconds) or elapsed_seconds < 0):
             raise ContractError("invalid research telemetry substage")

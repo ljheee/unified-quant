@@ -20,7 +20,7 @@ from ..contracts.model_layer import ModelContractLoader, ModelQualityReviewRegis
 from ..contracts.paths import reject_symlinks_within
 from ..errors import ContractError
 from .dataset import SplitValidator
-from .feature_preprocessing import FeaturePreprocessorBuilder
+from .feature_preprocessing import FeaturePreprocessorBuilder, _canonical_key_order
 from .factor_neutralization import FactorNeutralizationPreprocessorBuilder
 from .features import FeatureSchemaValidator
 from ..factors.raw_price import logical_fingerprint as frame_logical_fingerprint, verify_logical_fingerprint as verify_frame_logical_fingerprint
@@ -359,7 +359,7 @@ class DatasetWriter:
 
     @staticmethod
     def _serialize(frame: pd.DataFrame) -> tuple[bytes, str]:
-        ordered = frame.sort_values(["instrument", "datetime"], kind="mergesort").reset_index(drop=True)
+        ordered = _canonical_key_order(frame)
         table = arrow.Table.from_pandas(ordered, preserve_index=False)
         sink = arrow.BufferOutputStream()
         parquet.write_table(table, sink, compression="snappy")
@@ -433,20 +433,21 @@ class DatasetWriter:
             raise ContractError("preprocessing output row count mismatch")
         if len(preprocessing_frame) != len(frame):
             raise ContractError("dataset and preprocessing frame row counts disagree")
-        canonical_output = preprocessing_frame.sort_values(
-            ["instrument", "datetime"], kind="mergesort"
-        ).reset_index(drop=True)
-        expected = (
-            builder.transform(preprocessing_input_frame.copy(), preprocessing_exposure_frame)
-            if contract_version == 2
-            else builder.transform(preprocessing_input_frame.copy(), ordered_features)
-        )
-        try:
-            pd.testing.assert_frame_equal(
-                canonical_output, expected, check_exact=False, rtol=1e-12, atol=1e-12
+        canonical_output = _canonical_key_order(preprocessing_frame)
+        if contract_version == 2:
+            expected = builder.transform(
+                preprocessing_input_frame.copy(), preprocessing_exposure_frame
             )
-        except AssertionError as exc:
-            raise ContractError("preprocessing output does not match declared transform") from exc
+            try:
+                pd.testing.assert_frame_equal(
+                    canonical_output, expected, check_exact=False, rtol=1e-12, atol=1e-12
+                )
+            except AssertionError as exc:
+                raise ContractError("preprocessing output does not match declared transform") from exc
+        else:
+            builder.validate_transform_output(
+                preprocessing_input_frame, canonical_output, ordered_features
+            )
         if not verify_frame_logical_fingerprint(canonical_output, preprocessing_manifest["output_frame_sha256"]):
             raise ContractError("preprocessing output fingerprint mismatch")
 

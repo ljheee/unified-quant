@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
@@ -13,7 +14,10 @@ from uq.errors import ContractError
 from uq.models.dataset_writer import DatasetWriter
 from uq.models.features import FeatureSchemaBuilder
 from uq.contracts.model_layer import create_reviewed_quality_decision, review_signature, sha256_json
-from uq.models.qlib_export import QlibDatasetExporter, QlibInitReceiptBuilder
+from uq.models.qlib_export import (
+    QlibDatasetExporter, QlibInitReceiptBuilder, _verify_export_files,
+    _write_qlib_feature_files,
+)
 
 _SIGNED_FIELDS = (
     "report_version", "binding_type", "policy", "status", "checks",
@@ -101,7 +105,150 @@ CALENDAR = ["2026-01-05", "2026-01-06", "2026-01-07"]
 INSTRUMENTS = ["INST0", "INST1"]
 
 
+def test_streamed_inventory_checks_unordered_entries_and_tampering(tmp_path: Path) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "feature.bin").write_bytes(b"abc")
+    (tmp_path / "a.bin").write_bytes(b"xyz")
+    entries = [
+        {"path": "a.bin", "byte_size": 3, "checksum_sha256": hashlib.sha256(b"xyz").hexdigest()},
+        {"path": "a/feature.bin", "byte_size": 3, "checksum_sha256": hashlib.sha256(b"abc").hexdigest()},
+    ]
+    _verify_export_files(tmp_path, entries, verify_content=True)
+    (tmp_path / "a.bin").write_bytes(b"zzz")
+    _verify_export_files(tmp_path, entries, verify_content=False)
+    with pytest.raises(ContractError, match="tampered Qlib export file"):
+        _verify_export_files(tmp_path, entries, verify_content=True)
+    (tmp_path / "extra.bin").write_bytes(b"extra")
+    with pytest.raises(ContractError, match="file list mismatch"):
+        _verify_export_files(tmp_path, entries, verify_content=True)
+
+
+def test_feature_export_preserves_input_and_ignores_unneeded_columns(tmp_path: Path) -> None:
+    frame = _dataset_frame()
+    extended = frame.assign(unused="ignored")
+    originals = [frame.copy(deep=True), extended.copy(deep=True)]
+    inventories = []
+    for index, source in enumerate((frame, extended)):
+        entries = []
+        _write_qlib_feature_files(
+            source, mapping={**FEATURE_MAPPING, LABEL_COLUMN: LABEL_MAPPING},
+            calendar_dates=CALENDAR, feature_dir=tmp_path / str(index) / "features",
+            file_entries=entries,
+        )
+        pd.testing.assert_frame_equal(source, originals[index])
+        inventories.append(entries)
+    assert inventories[0] == inventories[1]
+
+
+def test_streamed_inventory_rejects_wrong_size_before_read(tmp_path: Path, monkeypatch) -> None:
+    path = tmp_path / "feature.bin"
+    path.write_bytes(b"oversized")
+    entries = [{"path": "feature.bin", "byte_size": 1, "checksum_sha256": "0" * 64}]
+
+    def unexpected_read(_path):
+        raise AssertionError("wrong-sized file must not be read")
+
+    monkeypatch.setattr(Path, "read_bytes", unexpected_read)
+    with pytest.raises(ContractError, match="tampered Qlib export file"):
+        _verify_export_files(tmp_path, entries, verify_content=True)
+
+
 class TestQlibDatasetExporter:
+    def test_reuse_rederives_identity_without_writing_and_checks_content(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        args = dict(
+            dataset_name="reuse", frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING, calendar_dates=CALENDAR,
+            instruments=INSTRUMENTS, provider_uri="file:///tmp/exports",
+            quality_decision=export_decision(),
+        )
+        published = exporter.export(**args, generation_id="a" * 64)
+        # Identity-only lookup must not create a staging tree or bin files.
+        def forbidden_mkdir(*args, **kwargs):
+            raise AssertionError("reuse must not create directories")
+
+        monkeypatch.setattr(Path, "mkdir", forbidden_mkdir)
+        reused = exporter.find_reusable_export(**args)
+        assert reused is not None and reused[0] == published
+        assert not list((tmp_path / "exports").glob(".staging.*"))
+        with pytest.raises(ContractError, match="different provider URI"):
+            exporter.find_reusable_export(**dict(args, provider_uri="file:///different"))
+        with pytest.raises(ContractError):
+            exporter.find_reusable_export(**dict(args, quality_decision={}))
+        changed = dict(args, frame=args["frame"].copy())
+        changed["frame"].loc[0, "label"] += 0.1
+        assert exporter.find_reusable_export(**changed) is None
+        target = reused[1] / "features" / "inst0" / "label_5d.day.bin"
+        original = target.read_bytes()
+        target.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+        with pytest.raises(ContractError, match="tampered Qlib export file"):
+            exporter.find_reusable_export(**args)
+
+    def test_bin_checksums_are_registered_at_write_and_read_back_once(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        original_read_bytes = Path.read_bytes
+        bin_reads: list[str] = []
+
+        def track_bin_reads(path: Path) -> bytes:
+            content = original_read_bytes(path)
+            if path.name.endswith(".day.bin"):
+                bin_reads.append(Path(*path.parts[-3:]).as_posix())
+            return content
+
+        monkeypatch.setattr(Path, "read_bytes", track_bin_reads)
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        manifest = exporter.export(
+            dataset_name="write-time-checksums", generation_id="a" * 64,
+            frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+            calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+            provider_uri="file:///tmp/exports", quality_decision=export_decision(),
+        )
+
+        bin_entries = [entry for entry in manifest["files"] if entry["path"].endswith(".day.bin")]
+        expected_paths = sorted(entry["path"] for entry in bin_entries)
+        assert len(bin_entries) == 4
+        assert sorted(bin_reads) == expected_paths
+        assert [entry["path"] for entry in manifest["files"]] == sorted(
+            (entry["path"] for entry in manifest["files"]), key=Path,
+        )
+
+        monkeypatch.setattr(Path, "read_bytes", original_read_bytes)
+        snapshot = tmp_path / "exports" / "dataset=write-time-checksums" / f"generation={manifest['generation_id']}"
+        for entry in bin_entries:
+            payload = (snapshot / entry["path"]).read_bytes()
+            assert hashlib.sha256(payload).hexdigest() == entry["checksum_sha256"]
+            assert len(payload) == entry["byte_size"]
+
+    def test_prepublication_readback_rejects_write_buffer_mismatch(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        from uq.models import qlib_export
+
+        original_write = qlib_export._write_qlib_feature_files
+
+        def tamper_after_write(*args, **kwargs):
+            entries = original_write(*args, **kwargs)
+            path = kwargs["feature_dir"] / "inst0" / "volume_ratio_20d.day.bin"
+            payload = bytearray(path.read_bytes())
+            payload[-1] ^= 1
+            path.write_bytes(payload)
+            return entries
+
+        monkeypatch.setattr(qlib_export, "_write_qlib_feature_files", tamper_after_write)
+        with pytest.raises(ContractError, match="export file verification failed"):
+            QlibDatasetExporter(tmp_path / "exports").export(
+                dataset_name="tampered-during-export", generation_id="b" * 64,
+                frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+                label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+                calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+                provider_uri="file:///tmp/exports", quality_decision=export_decision(),
+            )
+        assert not list((tmp_path / "exports").glob(".staging.*"))
+
     def test_export_step_timings_are_observations_only(self, tmp_path: Path) -> None:
         measured = []
         common = dict(
@@ -175,8 +322,9 @@ class TestQlibDatasetExporter:
 
         original = qlib_export._write_qlib_feature_files
         def add_empty_file(*args, **kwargs):
-            original(*args, **kwargs)
+            entries = original(*args, **kwargs)
             (kwargs["feature_dir"] / "empty.day.bin").write_bytes(b"")
+            return entries
         monkeypatch.setattr(qlib_export, "_write_qlib_feature_files", add_empty_file)
         observed = []
         with pytest.raises(ContractError, match="zero-byte export file"):
@@ -417,6 +565,30 @@ class TestQlibDatasetExporter:
         mutated_path.write_bytes(bytes(mutated_bytes))
         with pytest.raises(ContractError, match="tampered Qlib export file:"):
             exporter.read("feature-order", manifest["generation_id"])
+
+    def test_deferred_content_read_keeps_layout_gates_and_strict_read_default(
+        self, tmp_path: Path,
+    ) -> None:
+        exporter = QlibDatasetExporter(tmp_path / "exports")
+        manifest = exporter.export(
+            dataset_name="deferred-content", generation_id="1" * 64,
+            frame=_dataset_frame(), feature_mapping=FEATURE_MAPPING,
+            label_column=LABEL_COLUMN, label_mapping=LABEL_MAPPING,
+            calendar_dates=CALENDAR, instruments=INSTRUMENTS,
+            provider_uri="file:///data", quality_decision=export_decision(),
+        )
+        _, snapshot = exporter.read("deferred-content", manifest["generation_id"])
+        target = snapshot / "features" / "inst0" / "volume_ratio_20d.day.bin"
+        original = target.read_bytes()
+        target.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+
+        deferred_manifest, deferred_snapshot = exporter.read(
+            "deferred-content", manifest["generation_id"], verify_content=False,
+        )
+        assert deferred_manifest == manifest
+        assert deferred_snapshot == snapshot
+        with pytest.raises(ContractError, match="tampered Qlib export file"):
+            exporter.read("deferred-content", manifest["generation_id"])
 
     def test_warning_status_report_rejected_on_read(self, tmp_path: Path) -> None:
         # cr.md 8.4 round-4 follow-up (m9): the registry-level lock cannot

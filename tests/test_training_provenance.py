@@ -105,6 +105,19 @@ def test_telemetry_preserves_failed_attempt_and_does_not_invent_reuse_timings(tm
     assert json.loads(retry.path.read_text())['status'] == 'passed'
 
 
+def test_telemetry_accepts_prediction_inference_substages(tmp_path):
+    request = {'request_content_generation_id': 'a' * 64,
+               'run_id': '00000000-0000-4000-8000-000000000012'}
+    with RunTelemetry(tmp_path, request, {}) as attempt:
+        attempt.substage('prediction_inference/qlib_data_loading', 0.25, 'passed')
+    record = json.loads(attempt.path.read_text())
+    assert record['stages'] == [{
+        'stage': 'prediction_inference/qlib_data_loading',
+        'status': 'passed',
+        'elapsed_seconds': 0.25,
+    }]
+
+
 def test_telemetry_store_allows_root_alias_and_rejects_links_inside(tmp_path):
     request = {'request_content_generation_id': 'a' * 64,
                'run_id': '00000000-0000-4000-8000-000000000011'}

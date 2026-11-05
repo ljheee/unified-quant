@@ -3,7 +3,7 @@
 > 目标不是“链路跑通”，而是让训练结果具备交易决策价值：样本外、扣成本、可复现、可解释、可风控，并且结论能指导下一轮调仓。
 已知约束：2000积分的tushare token，获取指数成本只能提供月度PIT，使用月度近似替代日维度即可。
 >
-> 2026-11-02 更新：683-session 全窗口 snapshot-backed readiness 已通过；Alpha158 因子和新标签已重发，训练样本候选已生成并等待独立外部质量决定。测试密钥隔离链路已完成样本发布、32 标的子集 Qlib Linear/LightGBM 训练与回读；另在 `data/trading-grade-history/test-key-smoke/canonical-v2-pilot/` 将 683 个旧格式行情分区重发为真正的 canonical-v2 manifest，并生成 683 份 owning quality report。测试根记录 `canonical-v2-test-migration-receipt.json`。canonical `quality_report.v1` 不含签名字段，测试密钥不能签进该报告；隔离根与报告只证明测试级迁移/读回，不是独立来源质量批准。完整年度 OOS 和 paper 对账仍未执行，因此计划目标未完成。指数成分月度近似按维护者决定接受，但必须保留精度声明。
+> 2026-11-02 更新：683-session 全窗口 snapshot-backed readiness 已通过；Alpha158 因子和新标签已重发，训练样本候选已生成并等待独立外部质量决定。测试密钥隔离链路已完成样本发布、32 标的子集 Qlib Linear/LightGBM 训练与回读；另在 `data/trading-grade-history/test-key-smoke/canonical-v2-pilot/` 将 683 个旧格式行情分区重发为真正的 canonical-v2 manifest，并生成 683 份 owning quality report。测试根记录 `canonical-v2-test-migration-receipt.json`。canonical `quality_report.v1` 不含签名字段，测试密钥不能签进该报告；隔离根与报告只证明测试级迁移/读回，不是独立来源质量批准。2026-11-04 已在隔离测试根以测试密钥跑通 LightGBM 两折 walk-forward（264 个 OOS sessions，attempt `folds_passed`）；该诊断不构成正式质量结论。年度线性基线配对比较、正式 OOS 资格和 paper 对账仍未完成，计划目标未完成。指数成分月度近似按维护者决定接受，但必须保留精度声明。
 
 ## 1. 当前基线
 
@@ -88,7 +88,7 @@
 - 补上两个已查实的复现缺口，否则“任何人能复现”不成立：
   - 基线 run 的 `runner_identity.code_fingerprint` 与 `environment.lock_digest` 全为零——代码与环境绑定当前并未发生，可能需要先实现绑定机制，再谈记录。
   - 标签资格使用的 `listing_date` 来自 tushare `stock_basic` 实时拉取，不被受治理 store 的 checksum 覆盖（标签发布证据的 `reproducibility_note` 已自承认）；必须钉住这份映射，否则标签层面无法复现。
-- 把分阶段耗时一并写入证据：`2d71326` 批量化修复之后的全链路与 export 耗时目前没有任何台账记录，首次测量即基线。
+- 把分阶段耗时一并写入证据：已记录一次 `2d71326` 之后的部分全链路耗时，但该运行在 exporter 清点阶段被中断，不能当作完整全 A 基线；完成优化后仍需完整重跑并分阶段记录。
 - 明确记录测试密钥、非生产评审、短样本外等限制。
 - 建立统一的实验命名和结果归档规则。
 
@@ -109,7 +109,7 @@
    - close(T)→close(T+5) 相对 open(T+1)→close(T+5) 的平均差为 −7.2052 基点，p95 绝对差 2.3834%，151,875 行方向相反；T+6 开盘退出比较中有 216,376 行方向相反。缺口已量化；目标本身仍是 close-to-close，模型结论必须以成本化 T+1 回测为准。若要声称目标完全可交易，须另发开盘到开盘语义版本并重训。
    - `stock_basic(D)` 当前退市日期快照没有历史可见时点证据。314 个标的最后出现早于窗口末日，5,584 条空标签在全局末五 session 之前；审计将 `pit_delisting_completeness_certified=false`，历史 universe/PIT 与退出价值仍未通过验收。
    - 标签审计校验原始分区与日历 session 完全一致，并逐个非空标签核对 D..D+5 行情网格。审计 CLI 现在支持独立 calendar root，允许声明范围从非交易日开始。
-3. 将 test split 从 11 个交易日扩展到至少 6–12 个月。新数据日历上的 expanding 两折计划已发布：generation `12b84e7fb0856333ac6272d4bff2e38f4baaa74c501d0c40086ea916c53f5f8d`，每折 252 session 起始训练、60 session 验证、132 session 测试，含 5-session purge、2-session embargo 与 60-session Alpha158 warmup；合计 264 个 OOS session、397 个日历日。隔离 smoke 使用了单折形状切分并只训练训练段；正式两折训练和 OOS 评估尚未执行，且 `market_regimes_verified=false`、`historical_pit_completeness_verified=false`。
+3. 将 test split 从 11 个交易日扩展到至少 6–12 个月。新数据日历上的 expanding 两折计划已发布：generation `12b84e7fb0856333ac6272d4bff2e38f4baaa74c501d0c40086ea916c53f5f8d`，每折 252 session 起始训练、60 session 验证、132 session 测试，含 5-session purge、2-session embargo 与 60-session Alpha158 warmup；合计 264 个 OOS session、397 个日历日。此前隔离 smoke 使用单折形状切分并只训练训练段。2026-11-04 已在测试根跑通全量 LightGBM 两折执行：attempt `folds_passed`、退出码 0、264 个 OOS sessions/397 个日历日；但 `market_regimes_verified=false`、`historical_pit_completeness_verified=false`，只证明测试链路和执行协议可跑，不产生正式质量结论。相同数据、split、成本下的线性基线已在测试根完成两折，逐折配对报告已生成并通过回读；两折独立回测的年度汇总仍待执行。
 4. 采用 walk-forward 或滚动训练/验证/测试，而不是一次性固定 split。下一步需在因子分区/模型数据齐备后为每折创建新的、已评审 request，并先通过全协议 preflight，再执行。
    - 已实现逐折结果的统一 v3 回放入口：重新读取每折经评审的 OOS 目标权重，并在共享现金/持仓的一次引擎运行中执行；成本、成交、初始资金与风险设置必须和各折一致。末折最后目标后增加两个 session，依次完成该目标的 T+1 执行和期末强制清仓尝试；清仓仍受停牌、涨跌停、参与率和风控约束，receipt 记录是否清零，交易验收仍需真实数据另做。
 5. 增加基准（数据依赖见“贯穿前置”一节）：
@@ -274,14 +274,23 @@
 
 ### 下一步 B：解决 exporter 性能
 
-已锚定的耗时事实：基线 run（`…0011`）首遍全链路约 3 小时 20 分（state ledger `created_at` 锚点 09:32:45→12:53:21 UTC），且跑在 `2d71326` 批量化修复**之前**；修复后的分阶段耗时目前没有任何台账记录，先前流传的“1 小时 56 分 / export 28–30 分钟”无出处，不得作为基线引用。
+已锚定的耗时事实：基线 run（`…0011`）首遍全链路约 3 小时 20 分（state ledger `created_at` 锚点 09:32:45→12:53:21 UTC），且跑在 `2d71326` 批量化修复**之前**。2026-11-02 的 attempt telemetry 记录了一个后续运行：总耗时 1,789.61 秒，`dataset_preparation` 1,185.37 秒，`feature_files` 100.28 秒，`file_inventory` 207.78 秒后以 `KeyboardInterrupt` 失败；它是中断时的部分耗时，不是完整导出基线。先前流传的“1 小时 56 分 / export 28–30 分钟”仍无出处，不得作为基线引用。
 
 建议：
 
-- 先在当前 HEAD 上对一次全 A 运行做分阶段计时（写入、manifest、哈希、发布校验、读取校验），把结果写入 `evidence/` 作为性能基线——这是阶段 0 基线记录的一部分。
-- 77 万小文件（157 因子 × 4,891 标的）的 I/O 仍是主要成本；评估是否可以在不改变 Qlib 最终布局的前提下，减少重复全量扫描。
+- 已在导出器中实现写入期摘要：从序列化缓冲区计算 checksum 并登记文件清单；有序目录清点核验路径/大小且不保留全树 `Path` 列表，不再为首轮 manifest 哈希重读所有 `.bin`。发布前全文件读回校验、durable fsync、最终 Qlib 布局和 manifest schema 均保留；完整 `manifest.files` 仍因身份绑定而驻留内存。
+- `QlibRuntimeTrainer` 现在在构造 `DataHandlerLP` 前解析训练 split，只加载训练区间；`uq-research-run --qlib-kernels N` 控制旧 `.bin` 路径的逐标的读取 worker 数，默认 4。2026-11-03 的 256 标的微基准（157 特征和标签）在 1/2/4/8 workers 下分别耗时 37.70/26.38/24.89/33.03 秒，frame hash 一致；4 workers 进程树 RSS 求和峰值约 1.38 GiB（包含共享页）。随后对全部 5,276 标的、真实训练区间、1,230,325 行做了完整 QlibDataLoader 输入读取：4 workers 耗时 365.766 秒，进程树 RSS 求和峰值约 3.24 GiB。它尚不含 manifest 校验、`DataHandlerLP` 后处理与拟合，不能替代完整 model-stage 计时。
+- 11 月 3 日使用现有已发布 export 直接运行 `QlibRuntimeTrainer(kernels=4)`，LightGBM 4.7.0 在内存中成功拟合并序列化；从逐文件摘要核验到模型字节完成共 833.82 秒，产物 26,214 bytes，未发布模型 artifact、未更改 run state，也未计算预测或质量指标。旧签名请求绑定优化前源码指纹，因此该次是隔离的 trainer 诊断调用，不是完整 CLI/Research Chain run，也不能替代正式 OOS 结果。完整记录见 `trading-grade-progress.md` 第四十五轮。
+- 已在新鲜 Research Chain 路径把连续的 exporter 全内容 read-back 合并：export stage 交给 model stage 已验证的 snapshot，续跑只做结构/大小检查，trainer 在 Qlib load 前保留完整 SHA-256，最终 reconciliation 保留严格回读。回归锁定新鲜链路 read 模式和同尺寸内容篡改拒绝。按执行路径计数，完整 `.bin` 内容扫描由六轮减为三轮，另有一轮结构/大小清点；具体端到端节省仍待完整链路实测。
+- 2026-11-03 对既有全量 export 单独重跑 trainer 并加入阶段计时：833,611 文件、5,276 标的、157 特征，4 workers。训练前 SHA-256 为 374.48 秒，Qlib 训练窗口读取为 364.27 秒，LightGBM fit 为 18.00 秒；总计 784.45 秒，模型字节 checksum 与此前诊断一致。它是 trainer 直调而不是完整 Research Chain，不能当作重复扫描优化后的端到端对照；详情见 `trading-grade-progress.md` 第四十六轮。
+- Research Chain 已把 `DatasetWriter.read()` 返回的受治理 frame 交给 Qlib `StaticDataLoader`；直接 trainer 调用未提供该 frame 时保留 `.bin` 读取。全量 train frame（1,196,803 × 158）与 Qlib 0.9.7 `.bin` 路径的索引、列、dtype 和全部值完全一致，摘要均为 `f3936a69534849e3227d6115c5c7908b9808ef5e3931bacdbfe69b923f326788`。全窗 `.bin` loader 加 handler prepare 耗时 322.02 秒；静态路由的独立诊断耗时 8.07 秒（含另行读取 Parquet，handler 本身 1.04 秒）。使用 owning frame 的 trainer 诊断中，dataset read 169.78 秒、完整 export hash 397.66 秒、静态转换 4.10 秒、handler 0.01 秒、split prepare 0.49 秒、fit 16.56 秒、总计 446.07 秒；模型字节 checksum 与 `.bin` 路径相同。该诊断不是完整 Research Chain 受控对照，不能据此宣称端到端加速比例。完整记录见 `trading-grade-progress.md` 第四十七轮。
+- Research Chain 的同一 owner-verified frame 现用于请求日期的推理，Qlib `StaticDataLoader` 只构造所需日期的数据；静态路径由 export instrument/date inventory 计算缺失组合数，保留 `unscorable_rows` 语义而不创建稠密证券×日期矩阵。新鲜运行复用训练器刚完成的全量 export 内容校验，避免推理再哈希 83 万个 `.bin`；续跑与无 owner frame 的直接调用仍严格哈希并保留 `.bin` 加载回退。两折旧请求诊断已结束但批次未通过：fold0 和 fold1 的 Research Chain result/telemetry 均为 passed（6,090.16/7,705.57 秒），但 walk-forward attempt 在 fold1 因 `research environment code_fingerprint does not match observed bytes` fail-closed。请求仍绑定 668aac712909288977f8155778fb48cf5eb3d506df14e77a826ab368b9e38e51，当前工作树指纹为 0c853698deb1d73bd5a6e8535d5a17910072e6425ee4d061a5a2223920fa4ea5；attempt 记录 fold0 passed、fold1 failed，因此不能作为年度批次比较或新推理路径的端到端速度证据。下一次完整计时需用固定工作树源码指纹重新创建并评审两折请求。
+- 2026-11-04 两次重跑均停在 fold1 dataset preparation：PID 62294 明确以 exit 137/SIGKILL 结束；PID 8253 后续从进程表消失但未取得退出码。fold0 stage 00–08 及最终 read-back passed；fold1 stage 00–01 passed，stage 02 没有持久化，也没有新的 walk-forward attempt。之前 rank 路径的 Pandas fragmentation warning 已通过连续输出矩阵修复。详见 `trading-grade-progress.md` 第四十九轮。
+- 随后进一步降低 dataset-preparation 峰值：v6–v8 经 lineage digest 验证后直接用 sample artifact，不再重读完整 factor panel 或重复物化 universe members；标签对齐用浅拷贝复用宽特征块；按列验证 transform，已排序 frame 跳过重排；publish 后在 owning read-back 前释放临时宽 frame。单份 2,229,842×157 float64 panel 约 2.80 GB，此为可避免分配量级估算。普通全量测试 `1667 passed, 38 skipped`，Qlib 全量 `1704 passed, 1 skipped`。用新 request 和测试审阅密钥重跑后，两折 LightGBM walk-forward 已通过；完整计时为 12,616.52 秒，maximum RSS 11,598,905,344 bytes，peak memory footprint 33,738,961,864 bytes，swap 0。此前中断运行无同口径最终计时，因此不能声称峰值降低 28%。执行记录、正式质量限制及剩余线性配对比较见 `trading-grade-progress.md` 第五十一轮。
+- 已为现有 Qlib export 添加严格复用途径：从当前帧内存内重算每个文件摘要和 generation，再验证质量决定、provider URI 与既有文件的完整内容；匹配时不再重写 staging。纸面结果 reconciliation 在单次回读中为四类 store 分别建立路径索引，并在结束时复查目录变动；每份制品仍完整核验。小规模合成基准、两套全量测试及尚未实测的全年耗时见 `trading-grade-progress.md` 第五十三轮。
+- exporter read-back 合并后，新鲜链路对 `.bin` 的完整内容扫描按路径计数从六轮减为三轮，另有一轮结构/大小清点；trainer 训练前完整 SHA-256 与最终 reconciliation 严格回读仍保留。定向回归锁定同尺寸内容篡改拒绝。完整 Research Chain 受控计时仍待执行，需记录 dataset owning read、导出、发布校验、训练前校验、训练、持久化和最终 reconciliation；如果校验仍为瓶颈，再评估并行校验并保留 fail-closed 语义。
 - 为大窗口实验提供更快的迭代能力。
-- 验收目标：以新测得的证据基线为起点，export 耗时显著下降且可重复，并保持最终 Qlib 布局、manifest 和完整性校验不变。
+- 验收目标：保持最终 Qlib 布局、manifest、train-only 边界和完整性门禁不变；报告静态/`.bin` 训练帧全量一致性、export 与模型训练加载耗时，并完成可复现的完整链路计时及内存峰值记录。
 
 ### 下一步 C：建立模型比较实验
 

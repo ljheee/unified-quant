@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -116,6 +117,40 @@ def _publish_config(tmp_path: Path) -> tuple[dict, Path]:
     readback = store.read(config["generation_id"])
     assert readback["execution_id"] == config["execution_id"]
     return readback, store.directory / config["execution_id"] / f"generation={generation}"
+
+
+def test_indexed_paper_reads_recheck_content_and_reject_ambiguous_paths(tmp_path: Path, monkeypatch) -> None:
+    config, partition = _publish_config(tmp_path)
+    store = ExecutionConfigStore(tmp_path)
+    original_rglob = Path.rglob
+    searches = []
+
+    def tracked_rglob(path, pattern):
+        if path == store.directory:
+            searches.append(pattern)
+        return original_rglob(path, pattern)
+
+    monkeypatch.setattr(Path, "rglob", tracked_rglob)
+    with store.indexed_reads():
+        assert store.read(config["generation_id"]) == config
+        assert store.read(config["generation_id"]) == config
+        report = tmp_path / "external_quality_reviews" / f"{config['quality_report_checksum_sha256']}.json"
+        original = report.read_bytes()
+        report.write_bytes(b"{}")
+        with pytest.raises(ContractError):
+            store.read(config["generation_id"])
+        report.write_bytes(original)
+    assert searches == ["generation=*", "generation=*"]
+    store.read(config["generation_id"])
+    assert len(searches) == 3
+    with pytest.raises(ContractError, match="inventory changed"):
+        with store.indexed_reads():
+            store.read(config["generation_id"])
+            shutil.copytree(partition, store.directory / "late" / partition.name)
+    shutil.rmtree(store.directory / "late")
+    shutil.copytree(partition, store.directory / "duplicate" / partition.name)
+    with store.indexed_reads(), pytest.raises(ContractError, match="missing or ambiguous"):
+        store.read(config["generation_id"])
 
 
 def test_order_plan_is_deterministic_sell_before_buy(tmp_path: Path) -> None:

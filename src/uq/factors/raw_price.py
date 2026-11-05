@@ -68,10 +68,6 @@ def _finite_float_frame_fingerprint(
     if not dates.eq(dates.dt.normalize()).all():
         return None
 
-    values = frame[columns].round(12).to_numpy(copy=False)
-    if not np.isfinite(values).all():
-        return None
-
     hasher = hashlib.sha256()
     hasher.update(b'{"columns":')
     hasher.update(json.dumps(columns, separators=(",", ":")).encode("utf-8"))
@@ -85,13 +81,21 @@ def _finite_float_frame_fingerprint(
 
     hasher.update(b'],"rows":[')
     instruments = frame["instrument"]
-    timestamps = dates.dt.strftime("%Y-%m-%dT%H:%M:%S")
+    timestamps = np.datetime_as_string(
+        dates.to_numpy(dtype="datetime64[s]"), unit="s"
+    )
     first_chunk = True
     for start in range(0, len(frame), chunk_rows):
         end = min(start + chunk_rows, len(frame))
-        row_values = values[start:end].tolist()
+        # Round per column before conversion, as the canonical implementation
+        # does. In particular, mixed float32/float64 frames must not be promoted
+        # to float64 before rounding. Limit the temporary wide array to a chunk.
+        values = frame.iloc[start:end][columns].round(12).to_numpy(copy=False)
+        if not np.isfinite(values).all():
+            return None
+        row_values = values.tolist()
         row_instruments = instruments.iloc[start:end].astype(str).tolist()
-        row_timestamps = timestamps.iloc[start:end].tolist()
+        row_timestamps = timestamps[start:end].tolist()
         rows = [
             [instrument, timestamp, *row]
             for instrument, timestamp, row in zip(row_instruments, row_timestamps, row_values)

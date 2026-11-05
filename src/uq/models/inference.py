@@ -28,16 +28,18 @@ Deliberate boundaries:
 from __future__ import annotations
 
 import json
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Iterator, Mapping
 
 import joblib
 import numpy as np
 import pandas as pd
 
 from ..contracts.canonical_v2 import file_sha256_bytes
-from ..contracts.model_layer import ModelContractLoader
+from ..contracts.model_layer import ModelContractLoader, model_manifest_identities
 from ..errors import ContractError
 from .trainer import ArtifactStore
 
@@ -55,6 +57,23 @@ class InferenceResult:
 
     scores: dict[str, pd.DataFrame]
     unscorable_rows: int
+
+
+@contextmanager
+def _timed_inference_step(
+    name: str,
+    callback: Callable[[str, float, str], None] | None,
+) -> Iterator[None]:
+    started = time.perf_counter()
+    status = "passed"
+    try:
+        yield
+    except BaseException:
+        status = "failed"
+        raise
+    finally:
+        if callback is not None:
+            callback(name, time.perf_counter() - started, status)
 
 
 def assert_runtime_version(
@@ -79,11 +98,18 @@ def score_decision_dates(
     decision_dates: Iterable[str],
     provider_uri: str | None = None,
     expected_qlib_version: str | None = None,
+    verified_dataset: tuple[dict[str, Any], pd.DataFrame] | None = None,
+    expected_dataset_generation_id: str | None = None,
+    export_content_verified: bool = False,
+    timing_callback: Callable[[str, float, str], None] | None = None,
 ) -> InferenceResult:
     """Return one `{instrument, score}` frame per requested decision date.
 
     The caller owns everything about *which* dates matter; this function owns
-    loading the governed model and refusing anything that does not line up.
+    loading the governed model and refusing anything that does not line up. Set
+    `export_content_verified` only when the same run already hashed this export
+    in full; the static dataset path does not consume its `.bin` files. Without
+    that attestation, this function always verifies every export file itself.
     """
     root = Path(export_root)
     snapshot = root / f"dataset={dataset_name}" / f"generation={export_generation_id}"
@@ -101,14 +127,22 @@ def score_decision_dates(
             provider_uri.encode("utf-8")
         ).hexdigest():
             raise ContractError("Qlib export was not produced for this provider URI")
-    for entry in export_manifest["files"]:
-        path = snapshot / entry["path"]
-        if (
-            not path.is_file()
-            or file_sha256_bytes(path.read_bytes()) != entry["checksum_sha256"]
-            or path.stat().st_size != entry["byte_size"]
+    if export_content_verified and verified_dataset is None:
+        raise ContractError(
+            "verified export content reuse requires an owner-verified dataset frame"
+        )
+    if not export_content_verified:
+        with _timed_inference_step(
+            "prediction_inference/export_file_verification", timing_callback,
         ):
-            raise ContractError(f"tampered Qlib export file: {entry['path']}")
+            for entry in export_manifest["files"]:
+                path = snapshot / entry["path"]
+                if (
+                    not path.is_file()
+                    or file_sha256_bytes(path.read_bytes()) != entry["checksum_sha256"]
+                    or path.stat().st_size != entry["byte_size"]
+                ):
+                    raise ContractError(f"tampered Qlib export file: {entry['path']}")
 
     mapping_path = snapshot / "feature_mapping.json"
     feature_mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
@@ -117,6 +151,44 @@ def score_decision_dates(
     features = [name for name in feature_mapping if name != "label"]
     if not features:
         raise ContractError("Qlib export feature mapping carries no features")
+
+    verified_dataset_manifest: dict[str, Any] | None = None
+    verified_dataset_frame: pd.DataFrame | None = None
+    if verified_dataset is not None:
+        if (
+            not isinstance(verified_dataset, tuple)
+            or len(verified_dataset) != 2
+            or not isinstance(verified_dataset[0], dict)
+            or not isinstance(verified_dataset[1], pd.DataFrame)
+        ):
+            raise ContractError("verified inference dataset must be a manifest/frame pair")
+        verified_dataset_manifest, verified_dataset_frame = verified_dataset
+        ModelContractLoader.validate("model_dataset", verified_dataset_manifest)
+        expected_generation, expected_digest = model_manifest_identities(
+            verified_dataset_manifest,
+            schema_name="model_dataset",
+            exclude_fields={
+                "input_feature_schema_manifest_digest_sha256",
+                "logical_fingerprint",
+                "quality_report_checksum_sha256",
+            },
+        )
+        if (
+            expected_dataset_generation_id is None
+            or verified_dataset_manifest.get("generation_id") != expected_dataset_generation_id
+            or expected_generation != expected_dataset_generation_id
+            or verified_dataset_manifest.get("manifest_digest_sha256") != expected_digest
+            or verified_dataset_manifest.get("dataset_name") != dataset_name
+        ):
+            raise ContractError("verified inference dataset does not match the model run")
+        if verified_dataset_manifest.get("ordered_features") != features:
+            raise ContractError("verified inference dataset features do not match the Qlib export")
+        if "label" not in verified_dataset_frame.columns:
+            raise ContractError("verified inference dataset carries no label column")
+    elif expected_dataset_generation_id is not None:
+        raise ContractError(
+            "expected inference dataset generation requires a verified dataset frame"
+        )
 
     artifact_store = ArtifactStore(root.parent)
     artifact_manifest, artifact_bytes = artifact_store.read(
@@ -137,7 +209,7 @@ def score_decision_dates(
         import qlib
         from qlib.data.dataset import DatasetH
         from qlib.data.dataset.handler import DataHandlerLP
-        from qlib.data.dataset.loader import QlibDataLoader
+        from qlib.data.dataset.loader import QlibDataLoader, StaticDataLoader
     except ImportError as exc:
         raise ContractError(
             "Qlib is required to score decision dates; install the qlib extra"
@@ -166,57 +238,97 @@ def score_decision_dates(
     if not wanted:
         raise ContractError("inference requires at least one decision date")
 
-    instruments = sorted(
-        line.split("\t", 1)[0]
+    instrument_records = [
+        line.split("\t")
         for line in (snapshot / "instruments" / "all.txt").read_text(
             encoding="utf-8"
         ).splitlines()
         if line
-    )
+    ]
+    if any(len(record) != 3 for record in instrument_records):
+        raise ContractError("Qlib export instrument inventory is malformed")
+    instruments = sorted(record[0] for record in instrument_records)
     if not instruments:
         raise ContractError("Qlib export instruments are empty")
+    expected_prediction_rows = sum(
+        sum(
+            (start_date == "0" or start_date <= day) and day <= end_date
+            for _, start_date, end_date in instrument_records
+        )
+        for day in wanted
+    )
 
-    qlib.init(
-        provider_uri=str(snapshot),
-        region="cn",
-        expression_cache=None,
-        dataset_cache=None,
-        kernels=1,
-        logging_level="WARNING",
-    )
-    loader = QlibDataLoader(
-        config={
-            "feature": [f"${feature_mapping[name]}" for name in features],
-            "label": [f"${feature_mapping['label']}"],
-        },
-        freq="day",
-    )
-    handler = DataHandlerLP(
-        instruments=instruments,
-        start_time=calendar[0],
-        end_time=calendar[-1],
-        data_loader=loader,
-        infer_processors=[],
-        learn_processors=[],
-        process_type="append",
-    )
-    dataset = DatasetH(
-        handler, segments={"infer": (wanted[0], wanted[-1])}
-    )
+    with _timed_inference_step(
+        "prediction_inference/qlib_initialization", timing_callback,
+    ):
+        qlib.init(
+            provider_uri=str(snapshot),
+            region="cn",
+            expression_cache=None,
+            dataset_cache=None,
+            kernels=1,
+            logging_level="WARNING",
+        )
+    with _timed_inference_step(
+        "prediction_inference/qlib_data_loading", timing_callback,
+    ):
+        if verified_dataset_manifest is not None and verified_dataset_frame is not None:
+            from .qlib_runtime import build_static_qlib_frame
+
+            qlib_frame = build_static_qlib_frame(
+                verified_dataset_frame,
+                dataset_manifest=verified_dataset_manifest,
+                feature_columns=features,
+                label_column="label",
+                feature_mapping=feature_mapping,
+                start_time=wanted[0],
+                end_time=wanted[-1],
+                selected_dates=wanted,
+            )
+            loader = StaticDataLoader(qlib_frame)
+            handler_instruments = None
+            handler_start = wanted[0]
+            handler_end = wanted[-1]
+        else:
+            loader = QlibDataLoader(
+                config={
+                    "feature": [f"${feature_mapping[name]}" for name in features],
+                    "label": [f"${feature_mapping['label']}"],
+                },
+                freq="day",
+            )
+            handler_instruments = instruments
+            handler_start = calendar[0]
+            handler_end = calendar[-1]
+        handler = DataHandlerLP(
+            instruments=handler_instruments,
+            start_time=handler_start,
+            end_time=handler_end,
+            data_loader=loader,
+            infer_processors=[],
+            learn_processors=[],
+            process_type="append",
+        )
+        dataset = DatasetH(
+            handler, segments={"infer": (wanted[0], wanted[-1])}
+        )
 
     model = _load_model(artifact_bytes, artifact_manifest)
-    if is_qlib_linear:
-        predictions = model.predict(dataset, segment="infer")
-    else:
-        feature_frame = dataset.prepare(
-            "infer", col_set="feature", data_key=DataHandlerLP.DK_I
-        )
-        values = feature_frame.to_numpy(dtype="float64", na_value=np.nan)
-        scorable = np.isfinite(values).all(axis=1)
-        scores = np.full(len(feature_frame), np.nan, dtype="float64")
-        if scorable.any():
-            scores[scorable] = model.predict(feature_frame.loc[scorable])
-        predictions = pd.Series(scores, index=feature_frame.index)
+    with _timed_inference_step(
+        "prediction_inference/model_scoring", timing_callback,
+    ):
+        if is_qlib_linear:
+            predictions = model.predict(dataset, segment="infer")
+        else:
+            feature_frame = dataset.prepare(
+                "infer", col_set="feature", data_key=DataHandlerLP.DK_I
+            )
+            values = feature_frame.to_numpy(dtype="float64", na_value=np.nan)
+            scorable = np.isfinite(values).all(axis=1)
+            scores = np.full(len(feature_frame), np.nan, dtype="float64")
+            if scorable.any():
+                scores[scorable] = model.predict(feature_frame.loc[scorable])
+            predictions = pd.Series(scores, index=feature_frame.index)
     if predictions.empty:
         raise ContractError("inference produced no scores")
 
@@ -231,6 +343,15 @@ def score_decision_dates(
     # so scoring them would be inventing coverage. Drop them and report the count
     # rather than silently publishing a partial set.
     unscorable = int(frame["score"].isna().sum())
+    if verified_dataset_frame is not None:
+        finite_scores = int(frame["score"].notna().sum())
+        if finite_scores > expected_prediction_rows:
+            raise ContractError("inference produced more rows than the Qlib instrument calendar")
+        # The static loader contains only dataset rows. Qlib's provider loader
+        # also materializes active instrument/date pairs with no dataset row as
+        # NaN predictions, so account for those here to keep the public count
+        # identical without allocating a dense instrument-by-date frame.
+        unscorable = expected_prediction_rows - finite_scores
     frame = frame[frame["score"].notna()]
     if frame.empty:
         raise ContractError("inference produced no finite scores")

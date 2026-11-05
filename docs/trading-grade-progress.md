@@ -9,9 +9,9 @@
 | 贯穿前置：数据 onboarding、PIT、依赖与生产评审 | gitignore 的 `data/trading-grade-history/` 已含 2024-01-01..2026-10-30：4 类全市场日频 raw Tushare 输入、SW2021 Y/N 行业成员、37 个 `csi-all` 月度成分快照和 683 个 v2 canonical bars 分区；7 类财报/预测端点已做单股真实权限试查；新增 immutable Tushare candidate builder；另有 343 行退市日期快照、683 个逐日 `suspend_d(S)` 不可变快照和最新 readiness 离线复核 | 完整 snapshot-backed readiness 已通过：12 个证券的缺失日落在有效退市日及之后；7 条官方公告区间记录（688766 一段、北交所六段）解释停牌缺口；无未解释必需行情缺口。300096/300205 的短历史仅位于 60-session warmup，记录为 informational。新候选历史快照未保存当时 provider vintage，清单明确 strict PIT=false，尚无经审评的 PIT exposure/factor panels；SW 有效期不等于 transaction-time PIT；分析师预期是可选因子扩展而非主模型比较前置；生产 reviewer key provisioning |
 | 阶段 0：冻结原基线 | `evidence/trading-grade/baseline-v1.json` 保存真实 request/run/result、split、特征、模型、成本、制品摘要和数据根；原回测三份制品经 store 读回核验 | 原执行代码/锁摘要为零、原上市日期映射未保存，旧结果仍不能宣称可从零复现；修复后全 A 性能基线尚未测量 |
 | 阶段 0：绑定机制 | `provenance.py` 核验 CLI 实际源码/配置和锁文件；`listing_snapshot.py` 保存可离线重放的上市日期映射；`telemetry.py` 保存独立 attempt 与导出文件写入、清单校验、评审绑定、发布前/owning 读回、receipt 绑定和阶段发布计时；新增不可变实验归档入口，读回核验研究结果、配对评估和环境/计时绑定 | 真实全 A 实验归档、性能基线和源码字节完整重放验证 |
-| 阶段 1：可信评估 | 原基线已冻结；新增配对已扣成本回测的超额/IR、两种胜率、年度/指定市场状态、回撤恢复、换手及重叠修正 IC/RankIC；报告归档输入并读时重算；新增滚动/扩展 fold 规划、时间隔离、一年覆盖门槛、已评审 request 批量执行/读回与完成结果重试；真实 Qlib 短单折集成已测；新窗口标签三问书面审计；`audit_label_design.py` v2 绑定独立治理日历、逐日核对原始分区并验证每个非空标签的精确五 session bars grid；新增 v3/v4 实际持仓单票/行业/现金暴露与前日成交额流动性代理；新增等权/市值/行业中性 benchmark owning panel 与同配置 v3/v4 发布入口；连续共享账户 OOS 回放与期末清仓当前限定 v3 | snapshot-backed readiness 通过；`return_5d/2.0.0` 与 Alpha158/2.0.0 已重发并审计；623 个因子分区绑定 digest `3676c2af3c15900ad6824fb151f4a7244fa8a5fadf0332b1c9c249a64d4c7fee`；全量样本候选为 2,997,703 行/618 sessions/157 特征，独立质量决定待完成。源 bars 目录实际是 manifest v1，且缺对应报告；已在 `test-key-smoke/canonical-v2-pilot/` 重发 683 个真正的 canonical-v2 分区和质量报告（测试限定），但完整研究根尚未组装。历史执行事实、逐折 v3 配置、fold requests 与 paper 风控包仍未发布；两折 OOS 尚未执行，诊断状态代理不能替代市场状态核验。详见[年度 OOS 执行前核验](trading-grade-training-plan.md#14-年度-oos-执行前核验2026-11-02) |
+| 阶段 1：可信评估 | 原基线已冻结；新增配对已扣成本回测的超额/IR、两种胜率、年度/指定市场状态、回撤恢复、换手及重叠修正 IC/RankIC；报告归档输入并读时重算；新增滚动/扩展 fold 规划、时间隔离、一年覆盖门槛、已评审 request 批量执行/读回与完成结果重试；真实 Qlib 短单折集成已测；新窗口标签三问书面审计；`audit_label_design.py` v2 绑定独立治理日历、逐日核对原始分区并验证每个非空标签的精确五 session bars grid；新增 v3/v4 实际持仓单票/行业/现金暴露与前日成交额流动性代理；新增等权/市值/行业中性 benchmark owning panel 与同配置 v3/v4 发布入口；连续共享账户 OOS 回放与期末清仓当前限定 v3 | snapshot-backed readiness 通过；`return_5d/2.0.0` 与 Alpha158/2.0.0 已重发并审计；623 个因子分区绑定 digest `3676c2af3c15900ad6824fb151f4a7244fa8a5fadf0332b1c9c249a64d4c7fee`；全量样本候选为 2,997,703 行/618 sessions/157 特征，独立质量决定待完成。源 bars 目录实际是 manifest v1，且缺对应报告；已在 `test-key-smoke/canonical-v2-pilot/` 重发 683 个真正的 canonical-v2 分区和质量报告（测试限定），但完整研究根尚未组装。历史执行事实、逐折 v3 配置、fold requests 与 paper 风控包仍未进入正式研究根；隔离测试根的 LightGBM 两折 walk-forward 已完成，264 个 OOS sessions、397 个日历日，attempt 为 `folds_passed`，但不替代正式输入批准，也未验证历史 PIT 完整性或市场状态。独立质量决定和正式数据根仍待完成；隔离测试根已生成两份逐折模型比较报告，年度汇总仍待完成。详见[年度 OOS 执行前核验](trading-grade-training-plan.md#14-年度-oos-执行前核验2026-11-02) |
 | 阶段 2：交易与成本 | v3 原始价格和可见执行事实契约；显式参与率与双边部分成交、历史板块/ST/除权参考限价、冲击/最低佣金、行业/单票/现金/调仓/换手限制；已评审基线重放与三种成本压力、资金网格容量诊断入口；新增 v4 公司行为事件面板：除息日应收入 NAV、支付日现金可用、送股上市日入账且次 session 才可卖，权利发行标的全窗口排除，缺覆盖/关键日期/碎股 fail-closed；旧版本保留 | `data/trading-grade-history/` 未发布完整窗口 `backtest_execution_facts.v1` 和逐折已评审 v3 配置。683 个旧 bars 已在隔离测试根迁成 canonical-v2 并通过读回，但还未与研究输入组装；完整执行事实仍没有来源声明。还缺分红与权利发行源的真实全窗口审计、冲击/成交假设校准、真实保守成本下稳定性与容量证据；v4 仅 synthetic 验证，paper 对账与连续跨折回放仍限 v3 |
-| 阶段 3：模型 | `qlib_linear` 保留；LightGBM 已有 model-definition v2、Qlib 训练、受治理 artifact store、日期推理读取；Research Chain v7 request/template 现可选择 LightGBM；另有最多三个候选的验证段 RankIC 选择器；新增 `compare_training_models.py`，验证共享数据 checksum、特征、标签、split、组合模板和同成本 v3 回测，再发布 candidate-minus-baseline 诊断；主比较使用现有 Alpha158 输入，不要求分析师预期数据 | 测试密钥隔离 smoke 已完成：32 标的/19,018 行/157 特征 dataset、618-session Qlib export、Qlib Linear 与 LightGBM 各训练并通过 artifact store 回读，记录见 `data/trading-grade-history/test-key-smoke/model-store/smoke-training-receipt.json`；全量 `sample_construction.v1` 独立决定仍待完成，测试签名不替代它；正式 fold requests / model datasets 尚无，且所需的 v3/v4 costed results 不可生成（见阶段 1 预检）。还缺一年以上 OOS 的 IR/超额/贡献分散证据；整个研究程序的多重比较预算仍未定义 |
+| 阶段 3：模型 | `qlib_linear` 保留；LightGBM 已有 model-definition v2、Qlib 训练、受治理 artifact store、日期推理读取；Research Chain v7 request/template 现可选择 LightGBM；另有最多三个候选的验证段 RankIC 选择器；新增 `compare_training_models.py`，验证共享数据 checksum、特征、标签、split、组合模板和同成本 v3 回测，再发布 candidate-minus-baseline 诊断；主比较使用现有 Alpha158 输入，不要求分析师预期数据 | 测试密钥隔离 smoke 已完成：32 标的/19,018 行/157 特征 dataset、618-session Qlib export、Qlib Linear 与 LightGBM 各训练并通过 artifact store 回读，记录见 `data/trading-grade-history/test-key-smoke/model-store/smoke-training-receipt.json`；全量 `sample_construction.v1` 独立决定仍待完成，测试签名不替代它；另有隔离测试根的全量 LightGBM 两折诊断通过（第五十一轮），已与相同窗口/数据/成本的线性基线生成两份逐折配对报告，年度汇总仍待完成；历史 PIT 和 regime qualification 未核验，诊断结果不得作为正式质量结论。还缺配对年度 OOS 指标；整个研究程序的多重比较预算仍未定义 |
 | 阶段 4：因子 | 保留 157 个 Alpha158 特征；新增已有受治理因子 IC/RankIC + HAC、Spearman 共线性、top-N 换手和 v3 成本代理；新增 Tushare 8 个估值/换手/量比/资金流候选特征及 market-cap/liquidity exposure 物化，绑定逐日 raw generations 与 canonical 日历；新增候选 IC/HAC screen 与基于 JSON policy 的验证集 shortlist；现有 PIT exposure panel owning store、`feature_preprocessing.v2`/`feature_schema.v2` 和 Research Chain 重算链路保留 | Tushare 历史响应没有原始 provider vintage，候选 bundle 严格 PIT=false，不能升级到 owning store或用于 OOS 结论；仍需历史公告时间与全市场基本面覆盖、行业 transaction-time PIT、外部源质量批准后才可发布。分析师预期为可选增强特征，不阻塞阶段 3 主模型比较；单因子增量、真实成本和跨时期样本外贡献仍待验收 |
 | 阶段 5：组合与风险 | v1 等权兼容；v2 softmax 分数加权；v3 风险平价（历史样本协方差、严格前序收益、完整窗口/正定校验）与行业中性（top-N 内行业等额预算、行业内等权）已接入；离线收益源绑定交易日历，行业来源绑定 v3 回测配置的开盘前可见 execution facts；v3 industry cap 按比例缩减并留存现金；Research Chain v8 使用 portfolio-definition template v3；v3 最大回撤停止与目标波动率控制可选启用 | 新 bars 尚未转成并通过质量审评的历史收益/exposure panels；实际 PIT 行业源质量与覆盖审计；风险平价/行业平衡在真实成本和多期样本下验收；风险预算与回撤/波动控制的年度实证效果 |
 | 阶段 6：执行验证 | 现有确定性 paper 回放保留；新增单日及完整窗口 paper/v3 回测成交差异入口，要求同一目标权重、完整决策日覆盖、下一交易日和五项显式预算 | 使用真实历史同源结果进行逐日对账与预算裁决；生产评审 provisioning；小资金实盘属于架构禁止范围，不纳入本轮执行，须经独立维护者决策后才可重开 |
@@ -841,6 +841,127 @@ Alpha158/2.0.0 全窗发布完成：683 个治理 sessions 中跳过 60 个 warm
 基于 HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b` 的未提交工作树；未运行认证 gate、远程矩阵或实盘。
 
 下一步正式门槛仍是独立外部签名的 `sample_construction_v1` 质量决定；收到后才能向正式研究根发布 owning sample、创建已评审 fold requests 并训练/比较模型。测试密钥 smoke artifact 不解除该门槛。月度 universe 精度按维护者批准口径接受并披露；真实 regime 标记、退市时点可知性结论、外部质量签名以及年度同成本 OOS / paper 仍未完成。分析师预期不在 Alpha158 线性与 LightGBM 主比较的前置范围内。
+
+## 第五十轮：降低 dataset preparation 的宽表峰值
+
+继续针对 fold1 在 dataset preparation 阶段退出的问题收窄全窗宽表的同时存活数量。v6–v8 现在先验证 sample artifact 对 factor generations/partition set、label、universe snapshot 和 membership set 的绑定，再直接消费该 frame；不再重复读取同一因子全窗或再次物化 universe members。Sample frame 保留 keys 作行级回读对账，特征 frame 不再复制出第二份 feature panel。标签对齐仍按唯一 keys 做精确索引重排，输出用浅拷贝共享 key/feature blocks，只新增 label 列。Dataset publish 完成后，stage 在 owning read-back 前释放临时宽 frame。
+
+完整 rank 路径已按列计算临时排名并写入单个连续 float64 输出矩阵；transform 验证也逐列重算，不再产生第二个全宽 expected frame；已排序的 frame 跳过排序副本。单份 2,229,842 × 157 的 float64 feature panel 约 2.80 GB（十进制），因此移除的重复 panel 对应数 GB 级潜在分配，但这只是数组尺寸估算，不是实测 RSS 降幅，也不能保证避免系统级 SIGKILL。
+
+回归覆盖排序 frame 复用、逐列等价校验、rank 输出不碎片化、v6 sample stage 不重新加载因子、标签对齐不做宽表 merge且共享特征底层存储。验证：`.venv/bin/python -m pytest` → `1667 passed, 38 skipped, 329 warnings`；`.venv-qlib/bin/python -m pytest` → `1704 passed, 1 skipped, 332 warnings`。warning 为既有 pandas SettingWithCopy 与 Qlib/NumPy timedelta deprecation。full walk-forward 尚未使用这版代码重跑，RSS 实测及是否成功完成 fold1 仍待验证。
+
+旧 request 绑定修改前的源码指纹，不能续跑；下一次诊断要在源码保持固定后重建并用测试审阅密钥签发两折请求。全程仍是本地数据、测试密钥，不请求网络行情；结果仅用于执行诊断，不构成正式质量结论。
+
+## 第五十一轮：降低峰值后的全量 LightGBM 两折诊断
+
+在隔离测试根 `data/trading-grade-history/test-key-smoke/annual-oos-diagnostic/` 使用测试 reviewer key 执行计划 `12b84e7fb0856333ac6272d4bff2e38f4baaa74c501d0c40086ea916c53f5f8d` 的两个 LightGBM folds。walk-forward attempt `0a80f9cb-e0ec-4bbc-84ac-3d41e8e680c1` 状态为 `folds_passed`，终端退出码 0；fold 0000/0001 均有已发布 dataset、backtest 和 Research Chain result。覆盖 264 个 OOS sessions、397 个日历日，达到计划的一年覆盖门槛。attempt 的 `publication_scope=research_evidence_no_quality_authorization`；`historical_pit_completeness_verified=false`、`market_regimes_verified=false`，资本语义为各折独立回测而非拼接 PnL。因此这是链路/模型诊断，不是正式质量结论或可交易性认可。
+
+完整命令运行 12,616.52 秒（约 3 小时 30 分钟）。macOS `/usr/bin/time -l` 记录 maximum RSS 为 11,598,905,344 bytes（约 10.8 GiB），peak memory footprint 为 33,738,961,864 bytes（约 31.4 GiB），swap 为 0。运行中 `sample` 曾显示 24.9GB 的 process peak；完成后的 `/usr/bin/time` 总计更高，应以后者作为本轮峰值记录。此前被中断的运行没有同口径最终 time 记录，因此不能据 24.9GB 宣称相对旧运行降低 28%，也不能作可靠的内存前后变化结论。
+
+证据 attempt：`data/trading-grade-history/derived/walk-forward-plan-20240102-20261030/walk_forward/attempts/plan=12b84e7fb0856333ac6272d4bff2e38f4baaa74c501d0c40086ea916c53f5f8d/attempt=0a80f9cb-e0ec-4bbc-84ac-3d41e8e680c1.json`；计时和日志位于测试数据根的 `requests/logs/lightgbm-20261104-retry.{time,log}`。同一窗口、成本与组合约束的线性基线随后以退出码 0 完成两折，attempt `e42373ba-3352-4c85-93e7-871e5a00fb84` 为 `folds_passed`；两份逐折配对报告后来已生成，年度汇总仍待完成。正式样本质量决定及真实 PIT/regime 核验也仍未完成。全程未请求网络行情、未使用生产密钥。
+
+
+## 第五十二轮：缩减宽表复制和 Qlib 文件核验开销
+
+第 51 轮 LightGBM attempt telemetry 显示，两折 dataset preparation 分别耗时 1,235/1,709 秒；Qlib export 的已存在制品 retry readback 分别耗时 471/501 秒，model training 的 export 文件核验约 426/410 秒，最终 reconciliation 约 835/1,336 秒。上述阶段计时有包含关系，不能相加为额外耗时。实现工作在基于 HEAD `334a12c84bc22698d065e215f846365a1f93c5b4` 的独立未提交 worktree 中进行，避免更改正在执行的线性基线的源码指纹。
+
+v3 有限浮点指纹按行块逐列舍入并序列化，避免同时构造全窗舍入宽表；混合 float32/float64、符号零以及非有限值回退保留原有身份。Qlib exporter 在列顺序符合要求时以浅拷贝共享只读特征块，规范化键时不改输入；适配器避免再复制已符合顺序的宽表，并逐列检查空值。Qlib export 读取将精确文件清单、大小和内容校验合并成一次目录遍历，不保留整个发现路径集合；大小异常在读取文件前拒绝，严格模式仍对每个文件核验摘要。
+
+15,000 个模拟 600 字节文件的单次本机校验，旧路径 2.066 秒、新路径 1.835 秒；这只是小规模观察且未控制页面缓存，不能外推年度任务加速。20,000 行 × 157 特征的合成指纹对照摘要一致，旧/新分别 0.721/0.730 秒；该规模的内存峰值未显示下降，不能据此推算全量降幅。普通测试 `1671 passed, 38 skipped`，Qlib 测试 `1708 passed, 1 skipped`；使用 `PYTHONPATH=src` 和单线程 BLAS，在隔离 worktree 运行。真实全量端到端加速、内存峰值以及已存在 Qlib export 的重写问题仍待测量与进一步优化。
+
+## 第五十四轮：线性与 LightGBM 逐折配对诊断
+
+在隔离测试根对两模型同一 fold 的已通过研究结果，使用 `scripts/compare_training_models.py` 生成逐折已扣成本报告；拥有层回读重算两份报告均通过，每份覆盖 132 个交易日。fold 0000（2025-08-07..2026-02-26）LightGBM 累计收益 -2.12%，线性累计收益 +13.91%，差 -16.03 个百分点，报告 generation `b171bcb89a6f03ab9ca1811171f8e4cad89eb8227b1955a49116bb6cc966c99a`；fold 0001（2026-02-27..2026-09-07）LightGBM 累计收益 -11.31%，线性累计收益 -29.51%，差 +18.20 个百分点，generation `b3ed12e32ae3c92ccfce914b762921fbe222d599b999d5116383f55d837e165a`。两份报告都绑定同折相同 dataset checksum、特征、标签、切分、组合语义与成本，均为 `diagnostic_only_no_quality_authorization`。每折独立回测、每份报告 `one_year_oos_met=false`，没有将两折资金曲线拼接，也尚未发布年度汇总；两折方向相反不能作为稳定优势或正式质量结论。历史 PIT 和市场状态资格仍未核验。
+
+比较流程分别耗时 625.79/816.15 秒；`/usr/bin/time -l` 的 peak memory footprint 分别为 10,691,338,952/13,374,287,008 bytes，maximum RSS 分别为 7,277,608,960/8,272,674,816 bytes。它读取已有研究、dataset 和 backtest 结果，没有经过 Qlib export 复用或 Research Chain paper reconciliation，因此不是第 53 轮两项优化的实测对照；也没有同口径旧版比较耗时。日志和计时在测试根 `requests/logs/model-comparison-fold000{0,1}-20261105.{log,time}`，报告分别在 `model-comparison-fold0000/` 和 `model-comparison-fold0001/`。
+
+## 第五十三轮：复用 Qlib 导出和收窄纸面回读的目录扫描
+
+线性基线两折完成，walk-forward attempt `e42373ba-3352-4c85-93e7-871e5a00fb84` 为 `folds_passed`，退出码 0；`/usr/bin/time -l` 记录 12,558.88 秒、最大 RSS 12,161,581,056 bytes、peak memory footprint 33,708,192,376 bytes。该运行与 LightGBM 一样使用隔离测试根和测试密钥；后来已生成逐折配对比较，尚无年度汇总或正式质量结论。
+
+Research Chain 在同名 dataset 已有 Qlib export 时，从当前输入重算全部预期文件摘要和导出身份，不落 staging 文件；匹配时重新核验质量决定、provider URI、完整目录和文件内容，再复用已发布 generation。不存在匹配项时沿用不可变导出发布；该情况下可能多一次内存内编码。结果 reconciliation 的纸面四类 store 在单次回读内各建立一次 generation 路径索引，结束时再次扫描并拒绝目录变化；仍对每个制品验证 manifest、外部质量报告和数据内容，目录歧义仍拒绝。同步更新被 `evidence-index.json` 锚定的 runner 源码摘要。
+
+本机合成对照中，903 个文件的已存在 export 重写加严格读回耗时 0.376 秒，身份重算并严格复用耗时 0.194 秒；200 次纸面路径定位原逐次遍历耗时 8.630 秒，含前后清点的索引路径耗时 0.065 秒。仅测量单次小规模执行，不能外推 83 万文件或全年端到端加速；model training 前及最终 reconciliation 的全文件校验依然执行。真实全量耗时和峰值仍待测量。
+
+验证基于 HEAD `334a12c84bc22698d065e215f846365a1f93c5b4` 的未提交工作树：独立临时目录、单线程 BLAS 下 `.venv/bin/python -m pytest` → `1673 passed, 38 skipped`，`.venv-qlib/bin/python -m pytest` → `1710 passed, 1 skipped`；既有 pandas 和 Qlib/NumPy deprecation warning 仍存在。没有运行 release certification matrix。
+
+## 第四十九轮：收窄大样本预处理的额外内存
+
+`FeaturePreprocessorBuilder._apply` 的 rank 路径按特征计算 count/rank 临时列；完整 ordered feature set 将结果写入一个连续 float64 输出矩阵，再与键列一次拼接，避免逐列插入造成高度碎片。它不再同时持有全宽的 counts、ranks、ranked_values 和重复输入副本。`build()` 直接把只读输入交给 `_apply` 做输出复核，避免先复制一份完整输入。预处理 frame fingerprint 对已按 instrument/date 排序的输入跳过全宽排序复制；v3 指纹的日期串改为 NumPy 向量化格式化，序列化身份保持不变。
+
+定向回归验证 rank 结果、ties/nulls、输入 frame 不被修改，以及排序与未排序 frame 都得到旧的稳定行序指纹；v3 fingerprint golden digest 仍相同。定向测试 26 passed。全量验证：`.venv/bin/python -m pytest` → `1661 passed, 38 skipped, 329 warnings`；`.venv-qlib/bin/python -m pytest` → `1698 passed, 1 skipped, 332 warnings`。警告为既有 pandas `SettingWithCopyWarning` 和 Qlib/NumPy timedelta deprecation。
+
+此前两次完整 walk-forward 重跑均在 fold1 dataset preparation 阶段停止。PID 62294 有明确 exit 137/SIGKILL；后续 PID 8253 在读取本地约 3.1 GB Parquet 时从进程表消失，但终端未返回可核实的退出码，故不能把第二次也记作 exit 137。两次均没有 fold1 stage 02、fold1 研究结果或新 batch-pass 记录；fold0 已有不可变结果未改写。一次中间诊断启动因临时 helper 缺少 `re` import 在 preflight 拒绝，没有发布副作用。上述中断说明完整两折诊断尚未完成，不代表模型失败或质量结论。
+
+续跑复用了 fold0 已通过的阶段，并完成其 Research Chain：stage 00–08（含 `paper_execution`）均 passed，result `2cff50e0979e6fcbaf367db7847fb0b39c7b1b976959d364680e3ceb63b50ecc` 的最终状态与全部 20 项输入 read-back 均 passed。fold1 的 request 解析与因子计算（stage 00–01）passed；进程随后以 exit 137/SIGKILL 结束，stage 02 `dataset_preparation` 未持久化，walk-forward attempt 未生成。运行日志在 fold1 数据集阶段显示 128+ rank 列逐列插入触发 Pandas fragmentation warnings；rank 输出现在改为连续矩阵一次拼接，并新增回归检查该路径不发出碎片警告。当前源代码指纹已变化，旧 request 不能直接续跑；需重建并用测试审阅密钥重签两折诊断请求后再运行。当前没有运行中的重跑；fold0 的旧源码结果完成，fold1 与两折批次仍未完成。全流程使用本地测试数据与测试密钥，无网络行情调用。验证基于 HEAD `334a12c84bc22698d065e215f846365a1f93c5b4` 的未提交工作树；未运行 release certification matrix。
+
+## 第四十八轮：推理阶段复用已校验静态数据帧
+
+Research Chain 的模型训练阶段已通过 `DatasetWriter.read()` 得到 owner-verified dataset frame；现在把该帧继续交给推理阶段，只转换请求的决策日期并用 Qlib `StaticDataLoader` 评分，避免推理再次从 provider 全量打开 83 万个 `.bin`。静态帧按 export 的 instrument/date inventory 计算缺失组合数，保留 `unscorable_rows` 的旧含义而不分配稠密 instrument×date 矩阵。直接调用者仍使用原 `.bin` 路径；续跑时重新读取 dataset 并严格重哈希 export。新鲜 Research Chain 复用刚由 trainer 完成的完整 export SHA-256 校验，避免推理阶段重复扫描同一批文件。
+
+Qlib 0.9.7 的 LightGBM 集成回归比较同一模型、同一日期的 `.bin` 与静态推理：逐标的分数 DataFrame 完全相等，`unscorable_rows` 相等；另锁定静态路由跳过第二次 export 内容哈希、仍记录 Qlib 初始化/数据加载/评分计时，以及新鲜 runner 将 frame 与训练阶段校验状态传入推理。直接 `.bin` 推理依旧完成完整文件哈希。完整全 A 测试结果：`.venv/bin/python -m pytest` → 1660 passed, 38 skipped, 329 warnings；`.venv-qlib/bin/python -m pytest` → 1697 passed, 1 skipped, 332 warnings。独立 walk-forward 回读仍在执行，故尚无新路径全量端到端耗时，不据单元回归推断加速比例。
+
+此前启动的 LightGBM 两折 walk-forward 批次在本轮代码修改前执行。fold0、fold1 的 Research Chain result 与 attempt telemetry 均为 passed，耗时分别为 6,090.16 秒和 7,705.57 秒；它们仍走旧的 `.bin` 推理方式，不能作为本次优化的前后对照。walk-forward 最终 attempt 为 failed，failed_fold 是 fold1；fold0 lineage 回读通过。fold1 的 Research Chain 结果绑定源码指纹 668aac712909288977f8155778fb48cf5eb3d506df14e77a826ab368b9e38e51，而 wrapper 最终观测到当前工作树指纹 0c853698deb1d73bd5a6e8535d5a17910072e6425ee4d061a5a2223920fa4ea5，因 `research environment code_fingerprint does not match observed bytes` 被 fail-closed 拒绝。失败 attempt 为 gitignored 路径 `data/trading-grade-history/derived/walk-forward-plan-20240102-20261030/walk_forward/attempts/plan=12b84e7fb0856333ac627d2b4ff2e38f4baaa74c501d0c40086ea916c53f5f8d/attempt=2028a1ae-8008-4875-ba2f-0a05d6e673ee.json`。没有 folds_passed 批次或正式 OOS 结论。下一次完整计时须先固定源码工作树，并按当前指纹重建、评审两折请求。
+
+代码基于 HEAD `334a12c84bc22698d065e215f846365a1f93c5b4` 的未提交工作树。没有运行 release certification matrix。
+
+## 第四十七轮：Qlib 静态训练帧替代逐标的 `.bin` 加载
+
+在 Research Chain 中复用 `DatasetWriter.read()` 已验证的受治理 dataset frame，并通过 Qlib `StaticDataLoader` 构造训练 handler；不传入该帧的直接调用继续走 `.bin` 的 `QlibDataLoader` 路径。训练前仍对 833,611 个 export 文件逐一做 SHA-256 校验，因此静态帧 hand-off 不会绕过 export 完整性门禁。遥测新增 `static_frame_conversion` 阶段。
+
+用全量数据验证两种 loader 的 train frame：2,229,842 行源 dataset、5,276 个标的、157 个特征，训练窗口 `2024-04-03..2025-04-18`；准备后两者均为 1,196,803 行 × 158 列（189,094,874 个值），索引、列顺序、dtype 和逐值完全相同，SHA-256 均为 `f3936a69534849e3227d6115c5c7908b9808ef5e3931bacdbfe69b923f326788`。静态帧显式转为 Qlib `.bin` 使用的 float32，避免 pandas 默认 float64 造成摘要差异。
+
+全窗口 loader 诊断中，Qlib `.bin` 的数据读取与 handler prepare 为 322.02 秒；静态路由在包含一次独立 Parquet 读取的对照脚本中为 8.07 秒，其中 handler 本身 1.04 秒。随后用真正 `DatasetWriter.read()` 的 owning frame 直调 LightGBM trainer：owning dataset read 169.78 秒，833,611 文件完整摘要校验 397.66 秒，静态帧转换 4.10 秒，Qlib handler 构建 0.01 秒，train split prepare 0.49 秒，拟合 16.56 秒；trainer 总计 446.07 秒。模型仍为 26,214 bytes，checksum 与旧 `.bin` 训练完全相同（`ce6d2b117122bfa78a2b02742c64a16772bd6514a37c6ae33bf68824a0f0a02f`）。这是隔离内存诊断，并非完整 Research Chain 受控前后对照；未发布 artifact、未改 run state，也不据此宣称端到端加速比例。
+
+`.venv-qlib/bin/python -m pytest tests/test_model_end_to_end.py::TestEndToEndPipeline::test_full_chain_from_factor_to_prediction tests/test_research_chain_phase5.py::test_attempt_telemetry_covers_real_stages_without_changing_results -q` → `2 passed`；该定向验证包含小样本逐字节相同的静态与 `.bin` 模型 artifact 比较。完整两套测试矩阵待本轮结束前运行。代码基于 HEAD `334a12c84bc22698d065e215f846365a1f93c5b4` 的未提交工作树。
+
+下一项是完整 Research Chain 受控运行，分别记录 dataset owning read、export、发布校验、训练前文件校验、静态训练、持久化及最终 reconciliation 耗时；若读盘校验仍为主瓶颈，再单独评估并行化校验且保留 fail-closed 语义。
+
+## 第四十六轮：消除 Qlib 训练路径的重复 export 扫描
+
+审查新鲜执行路径后确认，同一份 833,611 文件 export 在 exporter 发布前、export owner read-back、runner 组装 model stage、model adapter 和 trainer、结果 reconciliation 等边界重复做全内容读取。现在 `QlibDatasetExporter.read()` 默认仍逐文件校验 SHA-256；显式 `verify_content=False` 只保留质量报告、完整文件路径集合、文件存在和字节大小门禁。新鲜 Research Chain 直接把 export 阶段已验证的 manifest/snapshot 交给 model stage；续跑时做一次结构性读取；`QlibRuntimeTrainer` 在 Qlib 打开文件前仍逐项完整哈希，最终 reconciliation 仍严格哈希。新路径将完整文件摘要扫描从六次收敛到三次，外加一轮结构/大小清点；没有移除发布前、训练前或最终 reconciliation 的完整性门禁。
+
+新增回归锁定新鲜链路的 exporter read 次数（一次 `verify_content=False`、一次最终严格读取），并以同尺寸篡改验证 trainer 的训练前 SHA-256 核验会拒绝损坏文件；默认 exporter read 仍拒绝同尺寸篡改。训练遥测现覆盖文件摘要校验、Qlib 初始化、训练窗口加载、split prepare、LightGBM 拟合和序列化。
+
+用既有测试根的完整已发布 export 直接运行 `QlibRuntimeTrainer(kernels=4)`：833,611 个文件、5,276 个标的、157 个特征，LightGBM 4.7.0，训练区间 `2024-04-03..2025-04-18`。阶段耗时依次为摘要核验 374.48 秒、Qlib 初始化 0.01 秒、训练窗口数据加载 364.27 秒、split prepare 0.36 秒、模型拟合 18.00 秒、序列化小于 0.01 秒；训练器总耗时 784.45 秒（其余约 27 秒在阶段计时之外的契约/清单准备）。模型字节数 26,214，SHA-256 与此前诊断相同，为 `ce6d2b117122bfa78a2b02742c64a16772bd6514a37c6ae33bf68824a0f0a02f`。这是隔离的内存训练诊断，不是完整 Research Chain 执行；未发布模型、未改 run state、未生成预测或 OOS/质量结论。该次并非受控前后对照，不据此宣称端到端加速比例。
+
+最终验证：`.venv/bin/python -m pytest` → `1659 passed, 38 skipped, 329 warnings`；`.venv-qlib/bin/python -m pytest` → `1696 passed, 1 skipped, 332 warnings`；摘要篡改、延迟内容读取和 exporter hand-off 定向回归通过；`git diff --check` 通过。代码仍基于 HEAD `334a12c84bc22698d065e215f846365a1f93c5b4` 的未提交工作树；未运行 release certification matrix。下一项读取提速可优先评估静态/批量数据加载与单次摘要校验的并行实现，但必须保持 `.bin` 与受治理数据逐值一致以及现有 fail-closed 门禁。
+
+## 第四十五轮：完成全量 Qlib LightGBM 训练诊断
+
+在第 44 轮的既有全量导出上直接运行 `QlibRuntimeTrainer(kernels=4)`。训练器重新核验 833,611 个清单文件的摘要与大小，随后按已声明 train split 构造 `DataHandlerLP` 并完成 LightGBM 拟合/序列化；训练器调用总计 833.82 秒。LightGBM 4.7.0 生成 26,214 bytes 模型字节，SHA-256 为 `ce6d2b117122bfa78a2b02742c64a16772bd6514a37c6ae33bf68824a0f0a02f`。输出仅在内存中生成并丢弃，没有发布 artifact 或更改 run state，也未计算预测、OOS 指标或质量结论。
+
+轻量契约校验确认重建的 model definition generation 与已有 model-run 一致，dataset、export、receipt generation 与该 run 逐项相符，Qlib export 质量报告签名可验证。旧签名请求绑定优化前源码指纹，因此没有绕过门禁重放完整 CLI；这次只验证现有已发布输入上的 trainer 读取与拟合，不等同于完整 Research Chain run。首次从 stdin 启动因 macOS `spawn` 无法导入 `<stdin>` 而终止，没有发布副作用；改用带 main guard 的 `/tmp` 脚本后成功。
+
+833.82 秒包含文件摘要核验、train-only Qlib 加载、`DataHandlerLP` 准备与 LightGBM 拟合/序列化，没有这些子阶段的独立计时。后续先为各阶段增加单独测时，并审查完整链路对同一 export 的重复校验；优化必须保留至少一次完整内容校验以及已发布质量报告/文件清单门禁。若仍需进一步提速，再评估把已校验的 dataset Parquet 帧通过 Qlib `StaticDataLoader` 接入 `DataHandlerLP`，先证明其训练帧与 `.bin` 路径逐值一致。
+
+## 第四十四轮：收窄 Qlib 训练读取窗口并测并行度
+
+`QlibRuntimeTrainer` 现在先解析 manifest 声明的 train split，再构造 `DataHandlerLP`，因此 handler 不再加载验证/测试窗口后再丢弃。`uq-research-run --qlib-kernels N` 将每标的读取 worker 数暴露为正整数参数，默认 4；底层 trainer 的直接调用仍默认 1，避免改变现有嵌入式调用的并行开销。
+
+对第 43 轮全量 export 的前 256 个标的，用 Qlib 0.9.7、157 个特征和标签读取全日历，1/2/4/8 workers 分别耗时 37.70/26.38/24.89/33.03 秒；四种设置返回 111,411 行、158 列，Pandas frame hash 完全相同。32 个标的时并行启动成本高于串行，故 worker 数需按数据规模调整。4 workers 的进程树 RSS 求和峰值约 1.38 GiB（包括共享页，作为容量估算而非私有内存精确值）。该微基准不代表完整训练的加速比例，尚未重跑全量模型阶段。验证脚本仅在 `/tmp`，没有新增仓库数据或生成文件。
+
+随后以相同 Qlib 0.9.7 导出对全部 5,276 个标的、157 特征加标签，在声明的训练区间 `2024-04-03..2025-04-18` 运行 4-worker `QlibDataLoader.load()`：返回 1,230,325 行、158 列，耗时 365.766 秒，frame hash 为 `2c8609bc00669636d1ac248cde4c69330e79a251e923789d17b9834a57c8f29`；进程树 RSS 求和采样峰值约 3.24 GiB（计入共享页）。这是完整 Qlib 输入读取基准，不含 manifest 校验、`DataHandlerLP` 后处理和模型拟合；不能与第 43 轮被中断的整个 model-stage attempt 直接计算加速比。
+
+验证：`.venv-qlib/bin/python -m pytest` → `1695 passed, 1 skipped, 332 warnings`；`.venv/bin/python -m pytest` → `1658 passed, 38 skipped, 329 warnings`。定向 Qlib/CLI 回归 8 passed，`git diff --check` 通过。测试基于 HEAD `334a12c84bc22698d065e215f846365a1f93c5b4` 的当前未提交工作树；没有运行 release certification matrix。
+
+## 第四十三轮：全量 Qlib 导出测时与诊断型两折 OOS
+
+在测试数据根 `data/trading-grade-history/test-key-smoke/annual-oos-diagnostic/` 对已发布 dataset generation `2b98c1755923febb1556312540b3b5f626eaf9b216e4c0acfe4d014c02250f2c` 运行全量 Qlib 导出。输入为 2,229,842 行、157 个特征、5,276 个标的、463 个日历 session；导出清单含 833,611 个文件，generation 为 `e9ebde03534910da9ddbb7704122892519885b534e213d4951b66e8ab3120763`。写入与发布耗时 247.49 秒，峰值 RSS 9,193,897,984 bytes（约 8.56 GiB）：feature 写入 101.83 秒、目录清点 26.25 秒、review binding 19.17 秒、发布前逐文件回读 66.15 秒、durable publish 34.05 秒。另有 dataset 只读校验耗时 193.98 秒，不计入导出用时。
+
+用 `.venv-qlib` 中 Qlib 0.9.7 对该 snapshot 初始化，并读取 3 个标的的 `$QLIB_BETA10` 与 `$LABEL`，返回 1,205 行、每列 1,147 个非空值，runtime smoke 通过。旧 attempt 的 `file_inventory` 为 207.78 秒；该 attempt 中断且不是同一完整流程，当前 26.25 秒仅作阶段观察，不据此宣称受控加速比例。
+
+随后启动完整 LightGBM walk-forward：resolve、因子、dataset、Qlib export/init 四个阶段通过；`QlibRuntimeTrainer` 在构建 `DataHandlerLP` 时逐标的读取 `.bin`。运行约 28 分钟后只到排序后的第 801/5,276 个标的目录，尚未开始模型拟合；按“尽快跑通诊断”的口径主动中断，attempt 记录为 `failed / KeyboardInterrupt`，没有 model stage 输出或正式结果。排查还发现：适配器在已存在 generation 时仍先重写整份 staging 导出，最后才碰到 immutable conflict；这条重复写入路径以及 Qlib 全量读取成本应在下次受治理重跑前处理。
+
+为先取得诊断结果，运行现有 `requests/run_direct_oos_diagnostic.py`。两折 OOS 覆盖 264 个 session、397 个日历日（2025-08-07..2026-09-07）。LightGBM 的 mean daily IC / rank IC / top-20 5 日前瞻收益分别为 0.01107 / 0.02106 / 0.002004；Ridge 线性基准分别为 0.01601 / 0.03378 / 0.001022；按日配对的 top-20 前瞻收益差为 +0.000982。该诊断使用重叠 5 日前瞻标签，不含交易成本或连续权益曲线；报告将 `formal_quality_conclusion` 与 `governed_qlib_export_and_backtest_chain_completed` 均标为 false，不能作为正式模型结论。完整 JSON 位于 gitignored 测试根 `reports/annual-oos-direct-diagnostic.json`。
+
+## 第四十二轮：Qlib 导出写入期计算文件摘要
+
+`QlibDatasetExporter` 现在在生成 feature-bin 的同一缓冲区上计算 SHA-256，并把相对路径、摘要和字节数追加到待发布的 `manifest.files`；日历、证券列表和特征映射也从实际写出的 UTF-8 字节计算清单项。`file_inventory` 以有序递归遍历 staging 来核对文件路径、大小和零字节文件，不再逐个重读 bin 做首轮哈希，也不再把全部发现的 `Path` 对象汇总在内存。发布前磁盘 read-back 仍对全部文件核对 SHA-256，随后 durable fsync、manifest contract version、generation identity 和 Qlib 目录布局均保持不变。身份仍绑定完整 `manifest.files` 数组，因此该清单数组继续驻留内存；改为分片清单属于另一个 contract 设计。
+
+新增回归确认导出过程每个 bin 只在发布前 read-back 时从磁盘读取一次，并逐项核对清单摘要/大小；另注入写入后字节变化，确认发布前校验拒绝并清理 staging。`.venv/bin/python -m pytest tests/test_model_qlib_export.py -q` 通过；完整 `.venv/bin/python -m pytest` → `1656 passed, 34 skipped`；完整 `.venv-qlib/bin/python -m pytest` → `1689 passed, 1 skipped`。`git diff --check` 通过。基于 HEAD `334a12c84bc22698d065e215f846365a1f93c5b4` 的未提交工作树；未运行新的全 A 导出，因此实际加速仍待完整实验测量。
+
+此前 attempt telemetry 记录的部分运行耗时为 1,789.61 秒：`dataset_preparation` 1,185.37 秒、`feature_files` 100.28 秒、`file_inventory` 207.78 秒后失败/中断。该记录可作变更前的阶段参考，不是完整 Qlib 导出基线，也不能据此宣称优化后的加速比例。
 
 ## 第四十一轮：隔离重发 canonical-v2 行情与质量报告
 

@@ -24,6 +24,62 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _write_export_file(staging: Path, path: Path, content: bytes) -> dict[str, Any]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return {
+        "path": path.relative_to(staging).as_posix(),
+        "checksum_sha256": hashlib.sha256(content).hexdigest(),
+        "byte_size": len(content),
+    }
+
+
+def _iter_files_sorted(root: Path) -> Iterator[Path]:
+    """Yield files in Path sort order without retaining the whole tree in memory."""
+    with os.scandir(root) as entries:
+        children = sorted(entries, key=lambda entry: entry.name)
+    for child in children:
+        path = Path(child.path)
+        if child.is_dir(follow_symlinks=False):
+            yield from _iter_files_sorted(path)
+        elif child.is_file(follow_symlinks=False) or (child.is_symlink() and child.is_file()):
+            yield path
+
+
+def _verify_export_files(snapshot: Path, entries: list[dict[str, Any]], *, verify_content: bool) -> None:
+    """Check exact inventory and file contents without retaining the filesystem tree."""
+    expected = sorted(entries, key=lambda entry: Path(entry["path"]).parts)
+    index = 0
+    first_tampered: str | None = None
+    for path in _iter_files_sorted(snapshot):
+        if path.name == "manifest.json":
+            continue
+        relative = path.relative_to(snapshot).as_posix()
+        if index >= len(expected) or expected[index]["path"] != relative:
+            raise ContractError("Qlib export file list mismatch")
+        start = index
+        while index < len(expected) and expected[index]["path"] == relative:
+            index += 1
+        if first_tampered is not None:
+            continue
+        try:
+            size = path.stat().st_size
+            if any(entry["byte_size"] != size for entry in expected[start:index]):
+                first_tampered = relative
+                continue
+            digest = file_sha256_bytes(path.read_bytes()) if verify_content else None
+        except OSError:
+            first_tampered = relative
+            continue
+        if any(verify_content and entry["checksum_sha256"] != digest
+               for entry in expected[start:index]):
+            first_tampered = relative
+    if index != len(expected):
+        raise ContractError("Qlib export file list mismatch")
+    if first_tampered is not None:
+        raise ContractError(f"tampered Qlib export file: {first_tampered}")
+
+
 @contextmanager
 def _timed_export_step(
     name: str, callback: Callable[[str, float, str], None] | None,
@@ -46,6 +102,8 @@ def _write_qlib_feature_files(
     mapping: dict[str, str],
     calendar_dates: list[str],
     feature_dir: Path,
+    file_entries: list[dict[str, Any]],
+    write_files: bool = True,
 ) -> None:
     """Write Qlib ``.bin`` files once per instrument/field.
 
@@ -53,7 +111,8 @@ def _write_qlib_feature_files(
     and rewrote each file. That is O(rows x fields) file I/O even though the
     final layout is only one array per instrument/field. Group by instrument,
     align each field to the governed calendar, validate, then write exactly
-    once.
+    once. Append each file's checksum and size to ``file_entries`` from the
+    same in-memory bytes that are written.
     """
     if frame.empty:
         raise ContractError("cannot export empty dataset")
@@ -69,7 +128,10 @@ def _write_qlib_feature_files(
         date.strftime("%Y-%m-%d"): index
         for index, date in enumerate(calendar)
     }
-    working = frame[required].copy()
+    # The common governed input already has exactly these columns.  Its
+    # feature blocks are read-only here; assigning normalized keys below only
+    # changes the shallow working frame.
+    working = frame.copy(deep=False) if list(frame.columns) == required else frame[required].copy()
     working["instrument"] = working["instrument"].astype(str).str.lower()
     working["datetime"] = pd.to_datetime(working["datetime"])
     date_keys = working["datetime"].dt.strftime("%Y-%m-%d")
@@ -96,22 +158,34 @@ def _write_qlib_feature_files(
                 f"Qlib provider export requires finite numeric values: {target_column}"
             )
 
+    staging = feature_dir.parent
     for instrument, group in working.groupby("instrument", sort=True):
         instrument_dir = feature_dir / instrument
-        instrument_dir.mkdir(parents=True, exist_ok=True)
+        if write_files:
+            instrument_dir.mkdir(parents=True, exist_ok=True)
         positions = group["_calendar_index"].to_numpy(dtype=np.int64)
         start = int(positions.min())
         end = int(positions.max())
         length = end - start + 1
         offsets = positions - start
-        for source_column, target_column in mapping.items():
+        for source_column, target_column in sorted(
+            mapping.items(), key=lambda item: f"{item[1].lower()}.day.bin",
+        ):
             values = group[source_column].to_numpy(dtype=np.float32, copy=False)
             array = np.full(length, np.nan, dtype=np.float32)
             array[offsets] = values
             artifact = np.empty(length + 1, dtype="<f")
             artifact[0] = start
             artifact[1:] = array
-            artifact.tofile(instrument_dir / f"{target_column.lower()}.day.bin")
+            path = instrument_dir / f"{target_column.lower()}.day.bin"
+            checksum = hashlib.sha256(memoryview(artifact).cast("B")).hexdigest()
+            if write_files:
+                artifact.tofile(path)
+            file_entries.append({
+                "path": path.relative_to(staging).as_posix(),
+                "checksum_sha256": checksum,
+                "byte_size": artifact.nbytes,
+            })
 
 
 class QlibDatasetExporter:
@@ -129,6 +203,78 @@ class QlibDatasetExporter:
     @property
     def exporter_fingerprint(self) -> str:
         return _sha256_text(f"QlibDatasetExporter:{self.EXPORTER_VERSION}")
+
+    def find_reusable_export(
+        self, *, dataset_name: str, frame: pd.DataFrame,
+        feature_mapping: dict[str, str], label_column: str, label_mapping: str,
+        calendar_dates: list[str], instruments: list[str], provider_uri: str,
+        quality_decision: Any,
+    ) -> tuple[dict[str, Any], Path] | None:
+        """Derive the exact export identity without writing bins, then strictly read it.
+
+        An existing directory is only a hint. The identity is recomputed from
+        the current input and every existing file is verified before reuse.
+        """
+        dataset_dir = self.export_root / f"dataset={dataset_name}"
+        if not dataset_dir.is_dir() or not any(dataset_dir.glob("generation=*")):
+            return None
+        if frame.empty or not feature_mapping or not label_column or not label_mapping:
+            raise ContractError("invalid Qlib export input")
+        if not calendar_dates or not instruments:
+            raise ContractError("Qlib export requires calendar dates and instruments")
+        calendar_bytes = ("\n".join(calendar_dates) + "\n").encode("utf-8")
+        instruments_bytes = ("\n".join(
+            f"{inst}\t0\t{calendar_dates[-1]}" for inst in instruments
+        ) + "\n").encode("utf-8")
+        mapping = {**feature_mapping, label_column: label_mapping}
+        mapping_bytes = (json.dumps(mapping, sort_keys=True, indent=2) + "\n").encode("utf-8")
+
+        def entry(path: str, content: bytes) -> dict[str, Any]:
+            return {"path": path, "checksum_sha256": hashlib.sha256(content).hexdigest(),
+                    "byte_size": len(content)}
+
+        entries = [entry("calendars/day.txt", calendar_bytes),
+                   entry("feature_mapping.json", mapping_bytes)]
+        _write_qlib_feature_files(
+            frame, mapping=mapping, calendar_dates=calendar_dates,
+            feature_dir=self.export_root / ".identity-only" / "features",
+            file_entries=entries, write_files=False,
+        )
+        entries.append(entry("instruments/all.txt", instruments_bytes))
+        manifest: dict[str, Any] = {
+            "contract_version": 2,
+            "export_layout": {"root": ""},
+            "files": entries,
+            "provider_uri_sha256": _sha256_text(provider_uri),
+            "calendar_checksum_sha256": hashlib.sha256(calendar_bytes).hexdigest(),
+            "instruments_checksum_sha256": hashlib.sha256(instruments_bytes).hexdigest(),
+            "feature_mapping_checksum_sha256": hashlib.sha256(mapping_bytes).hexdigest(),
+            "exporter_fingerprint": self.exporter_fingerprint,
+            "serialization_profile_id": "parquet-v1",
+            "quality_report_checksum_sha256": "0" * 64,
+            "empty_cache_precondition": True,
+            "generation_id": "0" * 64,
+            "manifest_digest_sha256": "0" * 64,
+        }
+        exclusions = {"export_layout", "quality_report_checksum_sha256", "provider_uri_sha256"}
+        generation_id, _ = model_manifest_identities(
+            manifest, schema_name="qlib_dataset_export", exclude_fields=exclusions,
+            digest_exclude_fields=exclusions,
+        )
+        if not (dataset_dir / f"generation={generation_id}").exists():
+            return None
+        subject = sha256_json({
+            key: value for key, value in manifest.items()
+            if key not in exclusions | {"generation_id", "manifest_digest_sha256"}
+        })
+        decision = resolve_subject_quality_decision(
+            quality_decision, subject_generation_id=generation_id, subject_content_sha256=subject,
+        )
+        bind_reviewed_quality_decision(
+            decision, binding_type="qlib_dataset_export_v1", subject_generation_id=generation_id,
+            subject_content_sha256=subject,
+        )
+        return self.read(dataset_name, generation_id, provider_uri=provider_uri)
 
     def export(
         self,
@@ -165,11 +311,15 @@ class QlibDatasetExporter:
             with lock_path.open("a+") as lock:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
 
+                file_entries: list[dict[str, Any]] = []
+
                 # 1. Calendar file
                 calendar_content = "\n".join(calendar_dates) + "\n"
-                (staging / "calendars" / "day.txt").parent.mkdir(parents=True, exist_ok=True)
-                (staging / "calendars" / "day.txt").write_text(calendar_content)
-                calendar_checksum = file_sha256_bytes((staging / "calendars" / "day.txt").read_bytes())
+                calendar_bytes = calendar_content.encode("utf-8")
+                calendar_entry = _write_export_file(
+                    staging, staging / "calendars" / "day.txt", calendar_bytes,
+                )
+                calendar_checksum = hashlib.sha256(calendar_bytes).hexdigest()
 
                 # 2. Instruments file
                 instruments_content = "\n".join(
@@ -177,25 +327,32 @@ class QlibDatasetExporter:
                 ) + "\n"
                 inst_dir = staging / "instruments"
                 inst_dir.mkdir(parents=True, exist_ok=True)
-                (inst_dir / "all.txt").write_text(instruments_content)
-                instruments_checksum = file_sha256_bytes((inst_dir / "all.txt").read_bytes())
+                instruments_bytes = instruments_content.encode("utf-8")
+                instruments_entry = _write_export_file(
+                    staging, inst_dir / "all.txt", instruments_bytes,
+                )
+                instruments_checksum = hashlib.sha256(instruments_bytes).hexdigest()
 
                 # 3. Feature and label mapping file
                 complete_mapping = {**feature_mapping, label_column: label_mapping}
                 mapping_content = json.dumps(complete_mapping, sort_keys=True, indent=2) + "\n"
                 mapping_path = staging / "feature_mapping.json"
-                mapping_path.write_text(mapping_content)
-                mapping_checksum = file_sha256_bytes(mapping_path.read_bytes())
+                mapping_bytes = mapping_content.encode("utf-8")
+                mapping_entry = _write_export_file(staging, mapping_path, mapping_bytes)
+                mapping_checksum = hashlib.sha256(mapping_bytes).hexdigest()
 
                 # 4. Data parquet with Qlib-compatible columns
                 feature_dir = staging / "features"
+                file_entries.extend((calendar_entry, mapping_entry))
                 with _timed_export_step("feature_files", timing_callback):
                     _write_qlib_feature_files(
                         frame,
                         mapping=complete_mapping,
                         calendar_dates=calendar_dates,
                         feature_dir=feature_dir,
+                        file_entries=file_entries,
                     )
+                file_entries.append(instruments_entry)
 
                 manifest: dict[str, Any] = {
                     "contract_version": 2,
@@ -212,24 +369,27 @@ class QlibDatasetExporter:
                     "generation_id": "0" * 64,
                     "manifest_digest_sha256": "0" * 64,
                 }
-                # Check every file and build the list in one directory walk.
-                # A full-A export can contain hundreds of thousands of bins.
+                # Reconcile the write-time inventory against the staging tree.
+                # Feature checksums were computed from the exact buffers written;
+                # avoid reopening every small bin for a redundant first hash pass.
                 with _timed_export_step("file_inventory", timing_callback):
-                    complete_files = []
-                    for path in sorted(staging.rglob("*")):
-                        if path.is_file() and path.name != "manifest.json":
-                            size = path.stat().st_size
-                            if size == 0:
-                                raise ContractError(f"zero-byte export file: {path.name}")
-                            rel = path.relative_to(staging).as_posix()
-                            complete_files.append({
-                                "path": rel,
-                                "checksum_sha256": "0" * 64,
-                                "byte_size": size,
-                            })
-                    for entry in complete_files:
-                        entry["checksum_sha256"] = file_sha256_bytes((staging / entry["path"]).read_bytes())
-                manifest["files"] = complete_files
+                    expected_index = 0
+                    for path in _iter_files_sorted(staging):
+                        if path.name == "manifest.json":
+                            continue
+                        size = path.stat().st_size
+                        if size == 0:
+                            raise ContractError(f"zero-byte export file: {path.name}")
+                        rel = path.relative_to(staging).as_posix()
+                        if (expected_index >= len(file_entries)
+                                or file_entries[expected_index]["path"] != rel):
+                            raise ContractError(f"Qlib export file inventory mismatch: {rel}")
+                        if file_entries[expected_index]["byte_size"] != size:
+                            raise ContractError(f"Qlib export file size mismatch: {rel}")
+                        expected_index += 1
+                    if expected_index != len(file_entries):
+                        raise ContractError("Qlib export file inventory is incomplete")
+                manifest["files"] = file_entries
                 with _timed_export_step("review_binding", timing_callback):
                     export_generation_id,_=model_manifest_identities(
                         manifest,
@@ -299,7 +459,18 @@ class QlibDatasetExporter:
         generation_id: str,
         *,
         provider_uri: str | None = None,
+        verify_content: bool = True,
     ) -> tuple[dict[str, Any], Path]:
+        """Read an export, checking its manifest, report, file set and file sizes.
+
+        ``verify_content`` defaults to the full SHA-256 check. The Research Chain
+        may set it to false only when the immediate next consumer is
+        ``QlibRuntimeTrainer``, which independently hashes every manifest file
+        before loading it. This avoids two adjacent full-content scans while
+        retaining the structural and review gates here.
+        """
+        if not isinstance(verify_content, bool):
+            raise ContractError("Qlib export verify_content must be a boolean")
         snapshot = self.export_root / f"dataset={dataset_name}" / f"generation={generation_id}"
         manifest_path = snapshot / "manifest.json"
         if not snapshot.is_dir() or not manifest_path.is_file():
@@ -333,17 +504,7 @@ class QlibDatasetExporter:
         actual=sha256_json({k:v for k,v in report.items() if k!="report_checksum_sha256"})
         if checksum!=actual or report["binding_type"]!="qlib_dataset_export_v1" or report["bound_generation_id"]!=generation_id or report["status"] not in reviewed_allowed_statuses("qlib_dataset_export_v1"):
             raise ContractError("Qlib export quality report rejects read")
-        actual_paths: set[str] = set()
-        for path in sorted(snapshot.rglob("*")):
-            if path.is_file() and path.name != "manifest.json":
-                actual_paths.add(path.relative_to(snapshot).as_posix())
-        expected_paths = {entry["path"] for entry in manifest["files"]}
-        if actual_paths != expected_paths:
-            raise ContractError("Qlib export file list mismatch")
-        for entry in manifest["files"]:
-            path = snapshot / entry["path"]
-            if file_sha256_bytes(path.read_bytes()) != entry["checksum_sha256"] or path.stat().st_size != entry["byte_size"]:
-                raise ContractError(f"tampered Qlib export file: {entry['path']}")
+        _verify_export_files(snapshot, manifest["files"], verify_content=verify_content)
         return manifest, snapshot
 
 

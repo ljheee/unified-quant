@@ -1,6 +1,6 @@
 # Model Layer (Labels, Features, Dataset, Qlib, Training, Prediction)
 
-> Current behavior reference. Last checked: `2026-11-02` against the uncommitted worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`. PIT exposure storage and `feature_preprocessing.v2` are implemented and covered by isolated tests. The maintainer approved their passed-only review policies and the trust-anchor digest now pins the updated registry. Owning model stores apply the shared in-store symlink guard while permitting a store root spelled through a symlink. The full-window sample-construction candidate remains pending an independent quality decision. Separate test-key smoke artifacts under the ignored `data/trading-grade-history/test-key-smoke/` root cover sample publication, subset dataset publication, Qlib export/receipt, and Qlib Linear/LightGBM training with model-artifact read-back; the training receipt is `data/trading-grade-history/test-key-smoke/model-store/smoke-training-receipt.json`. They verify execution paths only and do not clear the external review gate or provide OOS evidence. No real PIT exposure source is available. Based on source code, configuration, tests, and release evidence; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-11-05` against the worktree based on HEAD `334a12c84bc22698d065e215f846365a1f93c5b4`. PIT exposure storage and `feature_preprocessing.v2` are implemented and covered by isolated tests. The maintainer approved their passed-only review policies and the trust-anchor digest now pins the updated registry. Owning model stores apply the shared in-store symlink guard while permitting a store root spelled through a symlink. The full-window sample-construction candidate remains pending an independent quality decision. Separate test-key smoke artifacts under the ignored `data/trading-grade-history/test-key-smoke/` root cover sample publication, subset dataset publication, Qlib export/receipt, and Qlib Linear/LightGBM training with model-artifact read-back; the training receipt is `data/trading-grade-history/test-key-smoke/model-store/smoke-training-receipt.json`. They verify execution paths only and do not clear the external review gate or provide OOS evidence. No real PIT exposure source is available. Based on source code, configuration, tests, and release evidence; unverified items are marked `UNKNOWN`.
 
 ## Responsibilities and Boundaries
 
@@ -38,11 +38,11 @@ Contract schemas live in `config/schemas/contracts/*.json` (71 files); manifests
 Producers exist in two forms: owning-layer APIs usable directly, and scripts for the families the research chain binds.
 
 1. **Labels.** `LabelBuilder` computes a 5-trading-day adjusted-close label over the *unfiltered* per-instrument series; eligibility (suspension, limit, listing age, delisting) is applied afterwards, so the horizon counts trading rows, not surviving rows. That ordering is pinned into the manifest by `_formula_sha256`, which includes the row basis in the formula identity. `LabelSetWriter` is the production publisher (`scripts/build_label_sets.py`), defaulting to per-instrument sets and supporting `--combined` for the single set the research chain binds.
-2. **Feature schema and preprocessing.** `FeaturePreprocessorBuilder` v1 retains `standardize_cross_section` and `rank_cross_section`. `FactorExposureStore` v1 publishes immutable Parquet panels with a source approval reference and an external quality decision; `available_at` must be timezone-aware and no later than 15:00 Asia/Shanghai on that row's session. `FactorNeutralizationPreprocessorBuilder` emits `feature_preprocessing.v2`, binds the exposure generation, manifest digest and data checksum, and produces `feature_schema.v2` with `transform_status=neutralized`. Research Chain keeps the existing `feature_preprocessing_binding` field and selects the validator/reviewer family from the bound manifest version; the dataset stage reads the exposure panel again and recomputes OLS before publication. The passed-only policies for `factor_exposure_panel_v1` and `feature_preprocessing_v2` are active in the review registry and pinned by the current trust-anchor digest. The raw Tushare pipeline now emits diagnostic-only market-cap/liquidity exposures, but its source snapshots have no historical provider vintages and the bundle is explicitly ineligible for strict PIT or owning-store promotion until source review. No approved real PIT exposure panel is available. The repository trust anchor uses a test-mode key, which `UQ_RUNTIME_MODE=production` rejects; production review still requires provisioned production trust material. `complete_rows` remains the shared row-drop rule; sample construction still happens before preprocessing and preprocessing never reads labels.
-3. **Sample construction and dataset.** `scripts/publish_sample_construction.py` joins the ordered factor panel to one label set, applies the declared row policy, and writes a `sample_construction_review_candidate` report plus deterministic Parquet with `--candidate-frame-out`. Candidate mode is review material only; it does not publish or sign. The normal publication path still requires the externally signed `sample_construction_v1` decision. `DatasetWriter` then requires its own externally reviewed quality report, validates the feature schema against the frame, validates splits, serializes, re-reads and reconciles. `SplitValidator` evaluates purge/embargo in **time order**, so a `[validation, train]` declaration is not mistaken for a leak.
+2. **Feature schema and preprocessing.** `FeaturePreprocessorBuilder` v1 retains `standardize_cross_section` and `rank_cross_section`. Rank transforms process one feature at a time; the full ordered-feature path writes normalized ranks into one contiguous float64 output matrix, then joins it to copied key columns once. This avoids a full input-panel copy, simultaneous full-panel count/rank temporaries, and one-block-per-feature output fragmentation. `build()` validates the output without first making a redundant copy of its input. Frame fingerprints keep the same stable `instrument, datetime` order and canonical v3 bytes; already sorted keys avoid sorting/copying all feature columns, and normalized timestamps use vectorized NumPy formatting. `FactorExposureStore` v1 publishes immutable Parquet panels with a source approval reference and an external quality decision; `available_at` must be timezone-aware and no later than 15:00 Asia/Shanghai on that row's session. `FactorNeutralizationPreprocessorBuilder` emits `feature_preprocessing.v2`, binds the exposure generation, manifest digest and data checksum, and produces `feature_schema.v2` with `transform_status=neutralized`. Research Chain keeps the existing `feature_preprocessing_binding` field and selects the validator/reviewer family from the bound manifest version; the dataset stage reads the exposure panel again and recomputes OLS before publication. The passed-only policies for `factor_exposure_panel_v1` and `feature_preprocessing_v2` are active in the review registry and pinned by the current trust-anchor digest. The raw Tushare pipeline now emits diagnostic-only market-cap/liquidity exposures, but its source snapshots have no historical provider vintages and the bundle is explicitly ineligible for strict PIT or owning-store promotion until source review. No approved real PIT exposure panel is available. The repository trust anchor uses a test-mode key, which `UQ_RUNTIME_MODE=production` rejects; production review still requires provisioned production trust material. `complete_rows` remains the shared row-drop rule; sample construction still happens before preprocessing and preprocessing never reads labels.
+3. **Sample construction and dataset.** `scripts/publish_sample_construction.py` joins the ordered factor panel to one label set, applies the declared row policy, and writes a `sample_construction_review_candidate` report plus deterministic Parquet with `--candidate-frame-out`. Candidate mode is review material only; it does not publish or sign. The normal publication path still requires the externally signed `sample_construction_v1` decision. Research Chain v6–v8 validates the sample's factor generations/partition-set, label, universe snapshot and membership-set bindings, then consumes that owner-verified sample frame directly; it does not reload the full factor panel or materialize the universe members again. Preprocessing output receives its label through a shallow frame copy that shares the feature/key blocks and allocates only the new label column. `DatasetWriter` then requires its own externally reviewed quality report, validates the feature schema against the frame, validates splits, serializes, re-reads and reconciles. `SplitValidator` evaluates purge/embargo in **time order**, so a `[validation, train]` declaration is not mistaken for a leak.
 4. **Qlib export/receipt.** `QlibDatasetExporter` produces a Qlib-initializable layout and an init receipt; it does not import or install Qlib. Identity fields (`generation_id`, `manifest_digest_sha256`) are finalized **before** the receipt is written to disk, because only a resume path reads the persisted receipt — which is exactly how an earlier defect stayed invisible.
-5. **Training.** `ModelTrainer` requires a reviewed definition, an explicitly declared `train_period` (fitting on the full frame would leak validation/test labels), and rejects non-finite features or labels before solving, so a NaN model can never be published with a legitimate checksum. `QlibRuntimeTrainer` trains through a verified governed export. The artifact's `runtime_version` binds the Qlib runtime; the research chain passes it to the runtime guard so a model trained under one Qlib version is never scored under another.
-6. **Prediction.** `PredictionBuilder` publishes prediction sets. `score_decision_dates` loads and scores reviewed `qlib_linear` and `qlib_lightgbm` artifacts; the Research Chain runner still does not select a model artifact for inference automatically (`docs/layer-architecture.md` §2).
+5. **Training.** `ModelTrainer` requires a reviewed definition, an explicitly declared `train_period` (fitting on the full frame would leak validation/test labels), and rejects non-finite features or labels before solving, so a NaN model can never be published with a legitimate checksum. `QlibRuntimeTrainer` verifies every governed export file and fits only the declared train interval. Research Chain passes the frame returned by `DatasetWriter.read` through Qlib `StaticDataLoader`; callers without that owner-verified frame retain the `.bin` `QlibDataLoader` path. Full-window parity against Qlib 0.9.7 produced identical train keys, ordered columns, dtypes and values for 1,196,803 rows × 158 columns. Static loading avoids opening hundreds of thousands of provider files for the training frame while preserving the export integrity check. `uq-research-run --qlib-kernels N` controls the legacy per-instrument reader count (default 4; must be positive); the static path does not use those workers. The artifact's `runtime_version` binds the Qlib runtime; the research chain passes it to the runtime guard so a model trained under one Qlib version is never scored under another.
+6. **Prediction.** `PredictionBuilder` publishes prediction sets. `score_decision_dates` loads and scores reviewed `qlib_linear` and `qlib_lightgbm` artifacts. On a fresh Research Chain run it receives the owner-verified dataset frame and uses Qlib `StaticDataLoader` only for the requested dates; it reuses the training stage's full export-content verification because scoring does not read the `.bin` files. A resumed run or standalone call without that same-run verification hashes the export before scoring and retains the `.bin` `QlibDataLoader` path. The static path computes the same `unscorable_rows` count from the export instrument/date inventory without allocating a dense instrument-by-date frame. The Research Chain runner's artifact routing boundary is described in `docs/layer-architecture.md` §2.
 
 ### LightGBM model and candidate paths
 
@@ -120,17 +120,64 @@ Two facts about `QlibDatasetExporter` that are not visible from a call site:
 a generation mismatch — do not add a second check for it.
 
 When a runner attempt supplies telemetry, the exporter reports elapsed time for
-feature-bin writing, file inventory/checksums, export identity and external
-review binding, staging readback, and durable publication. The callback records
-a failed feature-write or review-binding step before the exception propagates.
+feature-bin writing, file inventory, export identity and external review
+binding, staging readback, and durable publication. The callback records a
+failed feature-write or review-binding step before the exception propagates.
 These measurements stay in the attempt receipt and do not alter export bytes,
 manifest identity or external quality binding.
-The zero-byte check and file-list construction now share one directory walk;
-the subsequent content checksums, readback and durable fsync keep their own
-verification passes. The real full-A time effect has not been measured.
+
+The writer computes each file checksum from the exact serialized bytes in
+memory and registers its path, checksum and size in the pending manifest file
+list. When the dataset already has the required export columns in order, the
+exporter shares feature blocks with the verified input while normalizing keys
+in a separate shallow frame; it does not mutate the input. The inventory step
+recursively walks the staging tree in sorted order to
+reconcile paths, sizes and zero-byte files against that list without retaining
+all discovered `Path` objects; it does not reopen feature bins to hash them.
+The manifest's full `files` array still stays in memory because export identity
+binds every entry. The prepublish readback hashes every on-disk file before the
+atomic publish. `read()` defaults to a strict content-hash check. Its
+inventory and file checks walk the directory tree once without materializing
+all discovered paths; manifest entries can be in any order. Exact inventory,
+sizes and, in strict mode, every checksum remain required. Its
+`verify_content=False` mode still verifies the signed quality report, exact
+inventory, file existence and byte sizes, but skips file-content hashes; use it
+only when `QlibRuntimeTrainer` immediately follows and performs the full hash
+before choosing either loader. The Research Chain static path does not open the
+`.bin` files for the training frame, but still verifies them before fitting and
+binds the export into the model run. A fresh Research Chain passes the
+export-stage manifest/snapshot directly to training, avoiding redundant
+read-side scans. A resumed model stage does the structural read first and then
+the trainer hashes. Final result reconciliation retains a strict read. Direct
+exporter callers retain strict verification by default. This removes repeated
+adjacent scans without changing the manifest schema, identities or Qlib layout.
+
+When a dataset name already has published exports, the Research Chain first
+derives the exact candidate export identity from the current frame and the
+bytes that would be written, without creating staging bins. It validates the
+current quality decision and strictly reads any matching generation, including
+provider URI, inventory and all content hashes. A matching export is reused;
+an absent generation follows the ordinary immutable writer. If a dataset name
+has unrelated exports, deriving a new generation can therefore do the feature
+conversion twice. Direct `export()` retains its immutable overwrite refusal.
+
+When telemetry is supplied, the trainer separately measures full export-file
+verification, Qlib initialization, static-frame conversion when selected,
+train-window data loading, train split preparation, model fitting and artifact
+serialization. These timings remain in
+the attempt receipt and do not alter model or result identities. Full-scale
+stage durations are recorded in `trading-grade-progress.md` when measured.
 The research-chain adapter records its later owning export readback, cache and
 receipt binding, and stage-state publication in the same attempt telemetry;
 those steps are outside the exporter manifest.
+
+The full-window parity benchmark read 833,611 export files for verification in
+374.48 seconds. Qlib `DataHandlerLP` loading from those `.bin` files took
+322.02 seconds; `StaticDataLoader` produced the same `1,196,803 × 158` frame
+with a matching SHA-256 in 8.07 seconds, including the isolated benchmark's
+Parquet frame read. Static handler preparation alone took 1.04 seconds. This is
+a data-loading comparison, not a full Research Chain before/after run; complete
+export verification still takes about 374 seconds.
 
 **A retry of the same request and run does not republish.** ``ResearchChainRunner``
 resumes from the stage ledger (``_resume_from_passed_stages``): a stage recorded as passed is
@@ -173,6 +220,7 @@ because the identity is a content hash and does not encode the run.
 
 ## Verification Evidence
 
+- 2026-11-03 worktree based on HEAD `334a12c84bc22698d065e215f846365a1f93c5b4`: Qlib train-only handler bounds, configured worker count, and CLI forwarding/rejection were covered by targeted tests (8 passed); `.venv/bin/python -m pytest` → `1658 passed, 38 skipped, 329 warnings`; `.venv-qlib/bin/python -m pytest` → `1695 passed, 1 skipped, 332 warnings`. A separate Qlib 0.9.7 full-input read benchmark loaded 1,230,325 train rows across 5,276 instruments and 158 columns in 365.766 seconds at 4 workers; this excludes model fitting and export verification, so it is not a full model-stage timing.
 - `.venv/bin/python -m pytest` → `1191 passed, 25 skipped`; `.venv-qlib/bin/python -m pytest` → `1216 passed, 0 skipped`. Counts updated by the change that adds the read-time provider-URI verification section above.
 - The 2026-10-31 worktree at HEAD `cd1befb4b5fcbe954e16aea148cc2332dbc1dc21` ran `.venv/bin/python -m pytest` → `1537 passed, 33 skipped` and `.venv-qlib/bin/python -m pytest` → `1569 passed, 1 skipped`; `tests/test_factor_neutralization.py` covers the owning exposure/preprocessing v2 dataset replay path as well as residualization. The historical counts above remain tied to the earlier verification.
 - After trust-anchor activation and review fixes, sequential worktree suites passed: `.venv/bin/python -m pytest` → `1563 passed, 33 skipped`; `.venv-qlib/bin/python -m pytest` → `1595 passed, 1 skipped`. `tests/test_factor_neutralization.py` also asserts the two policies are active and the default anchor verifies the registry digest.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import copy
+from contextlib import ExitStack
 from dataclasses import asdict, dataclass, is_dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -249,6 +250,11 @@ class ResearchChainRunner:
                     plan, runner_identity=runner_identity,
                     quality_decisions=quality_decisions, created_at=created_at,
                     artifact_decision_provider=artifact_decision_provider,
+                    verified_export=(
+                        None if export_result is None else
+                        (export_result.export_manifest, export_result.snapshot_path)
+                    ),
+                    telemetry=telemetry,
                 )
                 plan = self._plan_with_stage_outputs(plan, model_result.published_state.manifest_path)
             if "prediction_publication" in completed:
@@ -260,6 +266,7 @@ class ResearchChainRunner:
                     quality_decisions=quality_decisions, created_at=created_at,
                     decision_dates=decision_dates,
                     scores_by_decision_date=scores_by_decision_date,
+                    telemetry=telemetry,
                 )
                 for prediction_result in prediction_results:
                     plan = self._plan_with_stage_outputs(plan, prediction_result.published_state.manifest_path)
@@ -656,6 +663,8 @@ class ResearchChainRunner:
         quality_decisions: Mapping[str, Any],
         created_at: str,
         artifact_decision_provider: Callable[[str], Mapping[str, Any]] | None,
+        verified_export: tuple[dict[str, Any], Path] | None = None,
+        telemetry: RunTelemetry | None = None,
     ) -> None:
         dataset_binding = self._binding(plan, "model_dataset")
         label_binding = self._binding(plan, "label_set")
@@ -668,6 +677,16 @@ class ResearchChainRunner:
             preprocessing_binding.generation_id
         )
         template = plan.request["model_definition_template"]
+        if verified_export is None:
+            # A resumed run has no in-memory export-stage result. Check the
+            # published report, inventory and sizes here; QlibRuntimeTrainer
+            # immediately performs the full content hash before loading.
+            verified_export = self.export_adapter.exporter.read(
+                plan.request["dataset_policy_template"]["dataset_name"],
+                export_binding.generation_id,
+                verify_content=False,
+            )
+        export_manifest, export_snapshot = verified_export
         definition = ModelDefinitionBuilder(
             run_content_generation_id="0" * 64, reviewed=True,
             code_fingerprint=template["code_fingerprint"],
@@ -691,10 +710,8 @@ class ResearchChainRunner:
             label_generation_id=label_binding.generation_id,
             universe_generation_id=universe_binding.generation_id,
             factor_generation_id=factor_binding.generation_id,
-            export_manifest=self.export_adapter.exporter.read(
-                plan.request["dataset_policy_template"]["dataset_name"],
-                export_binding.generation_id,
-            )[0],
+            export_manifest=export_manifest,
+            verified_export=(export_manifest, export_snapshot),
             receipt_manifest=self._read_receipt(receipt_binding),
             definition=definition,
             environment_lock_sha256=plan.request["environment"]["environment_lock_digest_sha256"],
@@ -710,6 +727,7 @@ class ResearchChainRunner:
             feature_columns=list(preprocessing["ordered_features"]),
             label_column="label",
             runner_identity=dict(runner_identity),
+            telemetry=telemetry,
             created_at=created_at,
         )
         self.model_adapter.last_result = result
@@ -724,6 +742,7 @@ class ResearchChainRunner:
         created_at: str,
         decision_dates: Sequence[str] | None,
         scores_by_decision_date: Mapping[str, pd.DataFrame] | None,
+        telemetry: RunTelemetry | None = None,
     ) -> None:
         dates = sorted(set(
             decision_dates or self._default_decision_dates(plan)
@@ -739,7 +758,7 @@ class ResearchChainRunner:
             # intact: the scores come from a published, reviewed model, not from
             # a file outside the chain.
             scores_by_decision_date = self._infer_scores_for_dates(
-                plan, dates, runner_identity=runner_identity
+                plan, dates, runner_identity=runner_identity, telemetry=telemetry,
             )
         if not scores_by_decision_date:
             raise ContractError("prediction stage requires governed scores")
@@ -806,6 +825,7 @@ class ResearchChainRunner:
         dates: Sequence[str],
         *,
         runner_identity: Mapping[str, str],
+        telemetry: RunTelemetry | None = None,
     ) -> dict[str, pd.DataFrame]:
         """Score `dates` by loading the model artifact this run published."""
         from ..models.inference import score_decision_dates
@@ -819,7 +839,25 @@ class ResearchChainRunner:
         artifact_binding = self._binding(plan, "model_artifact")
         run_binding = self._binding(plan, "model_run")
         template = plan.request["dataset_policy_template"]
-        artifact_manifest = self.model_adapter.last_result.artifact_manifest
+        model_result = self.model_adapter.last_result
+        artifact_manifest = model_result.artifact_manifest
+        run_manifest = getattr(model_result, "run_manifest", {})
+        expected_dataset_generation_id = run_manifest.get("model_dataset_generation_id")
+        verified_dataset = getattr(model_result, "verified_dataset", None)
+        export_content_verified = verified_dataset is not None
+        if expected_dataset_generation_id is not None:
+            dataset_binding = self._binding(plan, "model_dataset")
+            if expected_dataset_generation_id != dataset_binding.generation_id:
+                raise ContractError("model run dataset does not match the inference request")
+            if verified_dataset is None:
+                dataset_manifest, dataset_frame = self.dataset_adapter.dataset_writer.read(
+                    template["dataset_name"],
+                    template["semantic_version"],
+                    expected_dataset_generation_id,
+                )
+                if dataset_manifest["manifest_digest_sha256"] != dataset_binding.manifest_digest_sha256:
+                    raise ContractError("verified inference dataset binding mismatch")
+                verified_dataset = (dataset_manifest, dataset_frame)
         result = score_decision_dates(
             export_root=self.export_adapter.exporter.export_root,
             dataset_name=template["dataset_name"],
@@ -832,7 +870,13 @@ class ResearchChainRunner:
             # guard permanently receive `None`, so a training/inference runtime
             # mismatch was never checked on the research-chain path.
             expected_qlib_version=artifact_manifest["runtime_version"],
+            verified_dataset=verified_dataset,
+            expected_dataset_generation_id=expected_dataset_generation_id,
+            export_content_verified=export_content_verified,
+            timing_callback=None if telemetry is None else telemetry.substage,
         )
+        if getattr(model_result, "verified_dataset", None) is not None:
+            self.model_adapter.last_result = replace(model_result, verified_dataset=None)
         return result.scores
 
     def _run_portfolio(
@@ -1155,11 +1199,19 @@ class ResearchChainRunner:
             ]
             if not bindings:
                 raise ContractError(f"research stage output is missing: {stage}")
-            if stage == "paper_execution":
-                self._reconcile_paper_bindings(bindings)
-            for binding in bindings:
-                self._readback(binding)
-                readback_status[binding.output_family] = "passed"
+            with ExitStack() as stack:
+                if stage == "paper_execution":
+                    if self.paper_adapter is None:
+                        raise ContractError("paper stage result is unavailable for reconciliation")
+                    for name in ("config_store", "plan_store", "result_store", "state_store"):
+                        store = getattr(self.paper_adapter, name, None)
+                        indexed_reads = getattr(store, "indexed_reads", None)
+                        if callable(indexed_reads):
+                            stack.enter_context(indexed_reads())
+                    self._reconcile_paper_bindings(bindings)
+                for binding in bindings:
+                    self._readback(binding)
+                    readback_status[binding.output_family] = "passed"
             stage_records.append({
                 "stage": stage,
                 "status": "passed",

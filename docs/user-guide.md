@@ -343,9 +343,12 @@ v5–v8 请求额外要求的两类绑定**有**随仓库提供的生产者:
   --mode execute \
   --request-json /path/to/request-v8.json \
   --quality-decisions-json /path/to/quality-decisions.json \
+  --qlib-kernels 4 \
   --membership-root "$DATA_ROOT/a500-store" \
   --market-dataset-root "$DATA_ROOT/market-datasets"
 ```
+
+`--qlib-kernels` 设置 Qlib 训练时并行读取标的文件的 worker 数，默认 `4`，必须为正整数。降低它可以减少并行进程的内存占用；提高它不保证继续提速，建议在目标机器上先测量。
 
 - `--membership-root`:已发布的指数成分快照 store(数据集阶段按"当日可见成员"过滤因子,缺它直接报错,不会静默退回原始因子分区)。
 - `--market-dataset-root`:Phase 0.5 的 `MarketDatasetPublisher` store。研究窗口的交易日历由此处的 `trading_calendar_snapshot_v1` 家族导出;窗口没有覆盖到的日历快照会 fail-closed。

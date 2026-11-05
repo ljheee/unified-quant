@@ -1,6 +1,6 @@
 # Portfolio, Backtest, Risk Control Plane, and Paper Execution
 
-> Current behavior reference. Last checked: `2026-11-02` against the uncommitted worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`. v4 company-action behavior is synthetic-test verified only. The live 2023-01-01..2026-10-30 dividend backfill is complete, and a six-name 2024-2026 event-source pilot agrees; a full-universe event-source reconciliation has not been completed. Backtest market dataset v2 binds null-normalized rows, dtypes and its identity profile; v1 artifacts remain readable. Based on source code, configuration, and tests; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-11-05` against the uncommitted worktree based on HEAD `334a12c84bc22698d065e215f846365a1f93c5b4`. v4 company-action behavior is synthetic-test verified only. The live 2023-01-01..2026-10-30 dividend backfill is complete, and a six-name 2024-2026 event-source pilot agrees; a full-universe event-source reconciliation has not been completed. Backtest market dataset v2 binds null-normalized rows, dtypes and its identity profile; v1 artifacts remain readable. Based on source code, configuration, and tests; unverified items are marked `UNKNOWN`.
 
 ## Responsibilities and Boundaries
 
@@ -196,6 +196,13 @@ reader still accepts v1 manifests with their original identity rule, and it
 recomputes v2 generation identity from the checksum-verified Parquet frame.
 
 Risk families (`risk_policy`, `risk_event`/`risk_run`, `risk_state`, `risk_decision`, `risk_exception`) are immutable manifests under `$ROOT/<family>/generation=<id>/manifest.json`, plus one canonical serialization shared by every file artifact (`src/uq/risk/contracts.py:52`). Paper families (`execution_config`, `order_plan`, `execution_result`, `paper_portfolio_state`) follow the same pattern at `src/uq/execution/stores.py`.
+
+Research-chain reconciliation scopes paper-store path indexes to a single
+readback operation, checks the directory inventory again on exit, and refuses
+missing, ambiguous or changed generation paths. Each indexed read still checks
+the manifest identity, signed quality report and, where present, payload
+checksum and shape;
+ordinary standalone reads continue to locate each generation independently.
 
 A `ConfigPublicationBinding` is single-use: once it has authorized a config publication, a second call raises, so one risk decision cannot license two publications.
 

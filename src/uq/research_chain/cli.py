@@ -76,12 +76,28 @@ _EXIT_CODES = {
 }
 
 
+def _positive_int_argument(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def uq_research_run(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="uq-research-run")
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--mode", choices=("dry-run", "execute"), required=True)
     parser.add_argument("--request-json", type=Path, required=True)
+    parser.add_argument(
+        "--qlib-kernels",
+        type=_positive_int_argument,
+        default=4,
+        help="parallel instrument readers for Qlib training (default: 4)",
+    )
     parser.add_argument("--quality-decisions-json", type=Path)
     parser.add_argument("--scores-json", type=Path)
     parser.add_argument("--decision-provider-json", type=Path)
@@ -137,6 +153,7 @@ def uq_research_run(argv: list[str] | None = None) -> int:
                 membership_root=args.membership_root,
                 market_dataset_root=args.market_dataset_root,
                 paper_risk_documents_path=args.paper_risk_documents_json,
+                qlib_kernels=args.qlib_kernels,
             )
     except (ContractError, OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
         status = getattr(exc, "reason", "configuration_failure")
@@ -601,6 +618,7 @@ def _build_runner(
     membership_store: IndexMembershipStore | None = None,
     trading_calendar: Sequence[date] | None = None,
     paper_adapter: Any | None = None,
+    qlib_kernels: int = 1,
 ):
     factor_store = FactorStore(data_root, FactorRegistry(project_root))
     feature_store_root = data_root / "governed"
@@ -639,7 +657,7 @@ def _build_runner(
             run_store=run_store,
         ),
         model_adapter=ModelStageAdapter(
-            trainer=QlibRuntimeTrainer(),
+            trainer=QlibRuntimeTrainer(kernels=qlib_kernels),
             exporter=exporter,
             artifact_store=ArtifactStore(data_root),
             dataset_writer=dataset_writer,
@@ -686,6 +704,7 @@ def _execute(
     membership_root: Path | None = None,
     market_dataset_root: Path | None = None,
     paper_risk_documents_path: Path | None = None,
+    qlib_kernels: int = 1,
 ) -> dict[str, Any]:
     # `--decision-provider-json` is the production shape: every family is
     # resolved by an external reviewer for the subject the stage derives, so a
@@ -796,6 +815,7 @@ def _execute(
         membership_store=membership_store,
         trading_calendar=trading_calendar,
         paper_adapter=paper_adapter,
+        qlib_kernels=qlib_kernels,
     )
     resolver = ResearchChainRequestResolver(
         {

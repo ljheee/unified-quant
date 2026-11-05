@@ -1,6 +1,6 @@
 # Research Chain Orchestrator
 
-> Current behavior reference. Last checked: `2026-11-02` against the uncommitted worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`. Based on source code, configuration, tests, and release evidence; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-11-05` against the uncommitted worktree based on HEAD `334a12c84bc22698d065e215f846365a1f93c5b4`. Based on source code, configuration, tests, and release evidence; unverified items are marked `UNKNOWN`.
 
 ## Responsibilities and Boundaries
 
@@ -36,8 +36,16 @@ Entry point is the console script `uq-research-run` (`uq.research_chain.cli:uq_r
 1. validates the plan (`_validate_plan`), refusing contract versions 3/4 and verifying the stage-plan review for v2–v8;
 2. publishes the request and resolution state;
 3. **resumes** from stages already recorded `passed` (`src/uq/research_chain/runner.py:992` `_resume_from_passed_stages`), folding each stage's output bindings into the plan so a failure anywhere is retryable without hand-moving directories;
-4. re-hydrates the one hand-off that has no read-back path (`model_training` → `model_run`/`model_artifact`) from the published manifests, so a resumed run consumes the same bytes it published;
+4. passes the verified export-stage manifest and snapshot directly to model training on a fresh run, avoiding repeated exporter scans; after a resume it checks the export manifest, signed report, inventory and sizes. `ModelStageAdapter` reuses the owner-verified frame from `DatasetWriter.read`; the trainer hashes every export file, then uses Qlib `StaticDataLoader` on that frame. Fresh-run prediction uses the same verified frame for requested dates and reuses the trainer's completed export-content check, avoiding a redundant second hash pass; resumed and standalone inference retain strict export hashing and the `.bin` `QlibDataLoader` fallback when no verified frame is supplied. Final result reconciliation still performs a strict content read. The model-stage hand-off (`model_training` → `model_run`/`model_artifact`) is re-hydrated from published manifests on resume;
 5. runs the remaining stages through the owning adapters, then reconciles the result and publishes a result manifest.
+
+For an already-published Qlib export the export adapter can recompute its exact
+identity from the current input without writing staging bins, then strictly
+read the matching export before building the receipt. Final reconciliation
+still strictly reads the export. During paper-stage reconciliation each paper
+store builds a context-local generation-path index once, then rescans the
+inventory at the end; a changed inventory fails the reconciliation. Every
+individual manifest, quality report and payload is still read and verified.
 
 Cancellation/failure writes a failed state on the way out, which is what makes resume possible.
 
@@ -139,8 +147,12 @@ frame-local. `drop_unlabelled_factor_rows` now compares key sets with `pandas`
   publication. The export adapter separately measures owning readback, cache
   boundary plus receipt binding, and stage-state publication; an immutable
   export recovery gets its own retry readback measurement. These attempt-only
-  measurements leave manifest and result identities unchanged. Direct API callers can pass
-  `RunTelemetry` explicitly. Qlib-enabled
+  measurements leave manifest and result identities unchanged. Model training
+  also records file verification, Qlib initialization, static-frame conversion
+  when selected, train-window loading,
+  train-split preparation, model fitting and artifact serialization as
+  `model_training/*` substages. Direct API callers can pass `RunTelemetry`
+  explicitly. Qlib-enabled
   regression tests in `tests/test_research_chain_phase5.py` compare timed and
   untimed result manifests and exercise a failed export.
   Telemetry publication is on the successful run's critical path: a telemetry
