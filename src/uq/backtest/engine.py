@@ -67,6 +67,7 @@ class BacktestEngine:
         execution_facts: pd.DataFrame | None = None,
         corporate_action_events: pd.DataFrame | None = None,
         terminal_liquidation: bool = False,
+        scheduled_decision_dates: set[str] | None = None,
     ) -> tuple[dict[str, Any], dict[str, pd.DataFrame]]:
         """Run a deterministic daily backtest.
 
@@ -92,21 +93,32 @@ class BacktestEngine:
                 execution_facts=execution_facts, suspension_dates=suspension_dates,
                 risk_gate=risk_gate,
                 terminal_liquidation=terminal_liquidation,
+                scheduled_decision_dates=scheduled_decision_dates,
             )
             if config.get("contract_version") == 4:
                 from .engine_v3 import run_v4
-                if corporate_action_events is None or corporate_action_instruments:
+                from ..research_chain.owning_contracts import BacktestMarketDatasetStore
+                if corporate_action_events is None:
                     raise ContractError("v4 backtest requires its reviewed corporate-action event panel")
+                if corporate_action_instruments:
+                    raise ContractError("v4 excludes rights issues through its reviewed event panel")
+                binding = config["corporate_action_binding"]
+                BacktestMarketDatasetStore(self.root).read_frame(
+                    binding["dataset_generation_id"], binding["data_checksum_sha256"],
+                    dataset_type="corporate_action_events",
+                )
                 return run_v4(**arguments, corporate_action_events=corporate_action_events)
             if corporate_action_events is not None:
                 raise ContractError("corporate-action event accounting requires a v4 backtest config")
             return run_v3(**arguments, corporate_action_instruments=corporate_action_instruments)
+        if scheduled_decision_dates is not None:
+            raise ContractError("explicit scheduled decisions require a v3/v4 backtest config")
         if terminal_liquidation:
-            raise ContractError("terminal liquidation requires a v3 backtest config")
+            raise ContractError("terminal liquidation requires a v3/v4 backtest config")
         if config.get("contract_version", 1) not in {1, 2}:
             raise ContractError("unsupported backtest config version")
         if execution_facts is not None:
-            raise ContractError("execution facts require a v3 backtest config")
+            raise ContractError("execution facts require a v3/v4 backtest config")
         if corporate_action_events is not None:
             raise ContractError("corporate-action event accounting requires a v4 backtest config")
         cost_model = config["cost_model"]

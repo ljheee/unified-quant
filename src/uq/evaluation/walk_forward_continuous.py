@@ -315,6 +315,24 @@ class WalkForwardContinuousStore:
         return record
 
 
+def _fold_scheduled_decisions(
+    plan: dict, weight_partitions: dict[str, pd.DataFrame], interval: int,
+) -> set[str]:
+    """Preserve each reviewed fold's rebalance phase in one shared account."""
+    calendar_positions = {day: index for index, day in enumerate(plan['calendar_dates'])}
+    scheduled: set[str] = set()
+    for fold in plan['folds']:
+        fold_targets = [day for day in fold['test_dates'] if day in weight_partitions]
+        if not fold_targets:
+            raise ContractError('continuous replay fold has no reviewed target weights')
+        anchor = calendar_positions[fold_targets[0]]
+        scheduled.update(
+            day for day in fold_targets
+            if (calendar_positions[day] - anchor) % interval == 0
+        )
+    return scheduled
+
+
 def run_continuous_walk_forward_backtest(
     *, walk_forward_root: Path | str, attempt_path: Path | str,
     backtest_root: Path | str, backtest_config_generation_id: str,
@@ -365,11 +383,17 @@ def run_continuous_walk_forward_backtest(
     price_panel, facts, suspension_dates, corporate_actions = _read_continuous_inputs(
         replay_root, config, replay_dates,
     )
+    interval = config['execution_model']['rebalance_every_n_sessions']
+    scheduled_decisions = (
+        _fold_scheduled_decisions(plan, weight_partitions, interval) if interval > 1 else None
+    )
 
     sequence_generation = sha256_json({
         'kind': 'walk_forward_continuous_target_sequence',
         'plan_generation_id': plan['generation_id'], 'attempt_checksum_sha256': attempt['checksum_sha256'],
         'target_weight_sources': target_sources,
+        **({'scheduled_decision_dates': sorted(scheduled_decisions)}
+           if scheduled_decisions is not None else {}),
         'terminal_liquidation': {
             'decision_date': replay_dates[-2], 'execution_date': replay_dates[-1],
             'policy': 'force_flat_at_final_session_open_under_v3_execution_guards',
@@ -407,7 +431,7 @@ def run_continuous_walk_forward_backtest(
         config=config, portfolio_definition={'generation_id': sequence_generation},
         weight_partitions=weight_partitions, price_panel=price_panel, execution_facts=facts,
         suspension_dates=suspension_dates, corporate_action_instruments=corporate_actions,
-        terminal_liquidation=True,
+        terminal_liquidation=True, scheduled_decision_dates=scheduled_decisions,
     )
     target_bindings = [{
         'decision_date': source['decision_date'], 'generation_id': source['generation_id'],

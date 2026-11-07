@@ -426,6 +426,10 @@ class DatasetWriter:
             )
             builder.validate_frame_keys(frame)
             builder.validate_frame_keys(preprocessing_frame)
+        if contract_version == 2:
+            for candidate in (frame, preprocessing_frame):
+                if candidate.duplicated(["instrument", "datetime"]).any():
+                    raise ContractError("duplicate preprocessing keys")
         ordered_features = preprocessing_manifest["ordered_features"]
         if list(preprocessing_frame.columns) != ["instrument", "datetime", *ordered_features]:
             raise ContractError("preprocessing output columns do not match manifest")

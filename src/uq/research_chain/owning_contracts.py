@@ -1058,10 +1058,10 @@ class BacktestConfigStore:
     ``contract_version`` selects the contract variant: 1 (default) keeps the
     original single-generation ``price_source_binding``; 2 uses the partition-set
     form (cr.md 8.63); 3 binds raw prices and explicit pre-open execution facts,
-    liquidity, cost and risk rules. The review binding type stays ``backtest_config_v1``
-    for all three, because it names the reviewer's registered policy for this family rather
-    than the manifest's shape -- the operator's quality-decision document is
-    therefore the same for either version.
+    liquidity, cost and risk rules; 4 adds reviewed company-action events and
+    rights-issue coverage. The review binding type stays ``backtest_config_v1``
+    for all four variants because it names the reviewer's registered policy for
+    this family rather than the manifest's shape.
     """
 
     def __init__(self, root: Path | str) -> None:

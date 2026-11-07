@@ -16,6 +16,19 @@ from tests.test_research_chain_phase4 import _config_decision, _result_decision
 from tests.test_walk_forward import protocol
 
 
+def test_fold_rebalance_phase_resets_at_each_fold_boundary():
+    dates = [f'2025-01-{day:02d}' for day in range(6, 13)]
+    plan = {'calendar_dates': dates, 'folds': [
+        {'test_dates': dates[:3]}, {'test_dates': dates[3:6]},
+    ]}
+    targets = {day: pd.DataFrame({'instrument': [NAME], 'weight': [.1]}) for day in dates[:6]}
+    assert continuous._fold_scheduled_decisions(plan, targets, 2) == {
+        dates[0], dates[2], dates[3], dates[5],
+    }
+    with pytest.raises(ContractError, match='no reviewed target'):
+        continuous._fold_scheduled_decisions(plan, {day: targets[day] for day in dates[:3]}, 2)
+
+
 def test_fold_targets_are_reloaded_from_each_verified_backtest_and_cover_oos(monkeypatch, tmp_path):
     days = ['2025-01-06', '2025-01-07', '2025-01-08']
     plan = {'folds': [{'fold_id': 'fold-0000', 'test_dates': days[:2]},
@@ -97,6 +110,12 @@ def test_fold_targets_are_reloaded_from_each_verified_backtest_and_cover_oos(mon
     assert [source['decision_date'] for source in sources] == days
     assert all(frame['weight'].tolist() == [0.1] for frame in partitions.values())
     assert len(configs) == 2
+    monkeypatch.setattr(continuous, '_verified_target_weights', lambda _root, generation, day: (
+        {**expected_manifests[(generation, day)], 'manifest_digest_sha256': '0' * 64},
+        pd.DataFrame({'instrument': [NAME], 'weight': [0.1]}),
+    ))
+    with pytest.raises(ContractError, match='target-weight manifest binding mismatch'):
+        continuous._fold_targets(plan, attempt)
 
 
 @pytest.mark.parametrize(

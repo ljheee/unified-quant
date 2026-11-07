@@ -1,6 +1,6 @@
 # Portfolio, Backtest, Risk Control Plane, and Paper Execution
 
-> Current behavior reference. Last checked: `2026-11-05` against the uncommitted worktree based on HEAD `334a12c84bc22698d065e215f846365a1f93c5b4`. v4 company-action behavior is synthetic-test verified only. The live 2023-01-01..2026-10-30 dividend backfill is complete, and a six-name 2024-2026 event-source pilot agrees; a full-universe event-source reconciliation has not been completed. Backtest market dataset v2 binds null-normalized rows, dtypes and its identity profile; v1 artifacts remain readable. Based on source code, configuration, and tests; unverified items are marked `UNKNOWN`.
+> Current behavior reference. Last checked: `2026-11-07` against the uncommitted worktree based on HEAD `e6d9e8b4c21d156edac47d3c12d153bd9320d003`. Synthetic regressions cover the changes described below; live-source and release certification remain separate.
 
 ## Responsibilities and Boundaries
 
@@ -61,6 +61,14 @@ events; it does not model rights subscriptions, taxes beyond the supplied
 after-tax amount, or live corporate-action corrections. See
 `src/uq/backtest/corporate_actions.py`, `src/uq/backtest/engine_v3.py` (`run_v4`),
 and `tests/test_backtest_v4_corporate_action_engine.py`.
+The public v4 engine entry point re-reads the config-bound immutable event
+panel through `BacktestMarketDatasetStore`, checking its stored byte checksum.
+The v4 accounting function independently checks that the supplied in-memory
+panel has the same logical generation as the binding before computing NAV.
+The offline market-data publisher rejects an implemented dividend with no
+`ex_date` before accepting a complete-coverage attestation; it cannot silently
+drop that source row. The v4 engine rejects target weights naming a reviewed
+rights-exclusion instrument.
 
 **Backtest v3 risk controls.** The reviewed config may set `risk_constraints.max_drawdown_stop` and/or `risk_constraints.volatility_target`. Drawdown is measured from the highest close-marked NAV since the run began; crossing the configured threshold latches a stop, replaces desired weights with cash, and retries liquidation on each later session. Volatility targeting estimates sample standard deviation from completed daily portfolio returns over the configured lookback, annualizes by `sqrt(252)`, and scales target weights by `min(1, target / estimate)` only after the minimum history is available. It never increases exposure. Both controls are visible in daily metrics and summary fields. The stop cannot promise immediate liquidation when price bands, suspensions, participation or turnover prevent a fill. These are reviewed backtest/replay controls and do not replace the separate Risk Control Plane's policy/state/action governance or prove live risk.
 
@@ -75,7 +83,7 @@ unfilled statuses, and sets `terminal_liquidation` only when the final holdings 
 is zero. Version 1 receipts remain readable and retain their prior no-liquidation
 semantics. This is a post-OOS diagnostic session and is not counted as an OOS decision.
 
-**Valuing a held name across a suspension.** A per-session vendor panel carries only the rows the vendor returned, so a genuinely suspended name has *no row at all* — a `status`-only read cannot see it. The engine therefore keeps a `last_close_prices` map (distinct from `prev_close_prices`, which answers a different question: the next session's limit-test reference, cr.md FC-M7). A held name absent from the session is valued at its last traded close, which is what keeps the equity curve continuous while the execution branch records `skipped_suspended` for it (cr.md 8.64). Two fail-closed cases remain: the panel carries the name but its close is unusable, and the panel never carried it at all — the latter is defensive only, since a holding can only exist after a fill, which needs a valid open, and a session with a valid open for that name would have supplied a close.
+**Valuing a held name across a suspension.** A per-session vendor panel carries only the rows the vendor returned, so a genuinely suspended name can have *no row at all*. The engine keeps a `last_close` map for ordinary suspended-day valuation, distinct from the execution facts' `limit_reference_price` used for the next limit test. On a v4 ex-date with a reviewed dividend event, a suspended holding or stock receivable uses that published limit reference for valuation, even when the price panel has no row; the reference becomes the following suspended sessions' last close. Exposure reconstruction applies the same rule and checks the published NAV. A held name with an unusable close and no valid suspension/reference basis fails closed.
 
 **Risk.** `PortfolioPublicationRiskGate.gate` writes policy, optional state, decision and event evidence **before** deciding, then refuses publication unless the action is executable. Two action sets exist and are deliberately allowlist-shaped: `EXECUTABLE_ACTIONS = {allow, warn}` for portfolio publication and `ORDER_GATE_EXECUTABLE_ACTIONS = {allow, warn, resize}` for orders. A `resize` order is executed only as an allowed-shares constraint. Listing the executable set rather than the blocked set means `de_risk`, `flatten`, `halt_strategy`, `escalate_review`, or any action added to the enum later blocks the order instead of executing unexamined.
 
@@ -153,8 +161,9 @@ receivables and reconciles their NAV value before reporting economic exposure.
 It reports end-of-day single-name, industry and cash concentration plus a
 prior-session turnover liquidity proxy; missing classifications and prior
 liquidity remain explicit. When an ex-date close is unavailable for a suspended
-holding, v4 uses the published limit-reference price for action valuation; this
-is intentionally distinct from ordinary suspended-day last-close valuation.
+holding or stock claim, v4 uses the published limit-reference price for action
+valuation and saves it for later suspended sessions. Ordinary suspended days
+use the saved last close.
 This is a
 read-only diagnostic, documented in
 [training-evaluation.md](training-evaluation.md#actual-portfolio-exposures).

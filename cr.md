@@ -4308,3 +4308,151 @@ skipped, 332 warnings`. The checkpointed 2023-01-01..2026-04-18 dividend replay
 completed all 1,204 dates: 388 empty, 816 already present, 0 newly published, and 0
 content drift. The sample candidate remains unsigned and unpublished pending an
 independent `sample_construction_v1` quality decision.
+
+## 2026-10-31 — cd1befb + 22d2121 独立对抗审查（6 MAJOR / 11 MINOR；2026-11-06 补录，附 e6d9e8b 修复状态）
+
+本节记录对 `cd1befb` + `22d2121`（均为裸 commit message "feat:training-plan"，合计 223 文件
++31095/−792）的四路并行独立对抗审查。审查基线为 `22d2121`；因补录时 HEAD 已前进至 `e6d9e8b`
+（中间经 `84bcf28`、`334a12c` 两提交），每项发现附其在 `e6d9e8b` 的修复状态（逐文件 diff 核对，
+非推测）。总体判定：六个 MAJOR 修复前不可作主干可用声明。所有 MAJOR 经监工本人逐行走查确认，
+非转述代理结论。
+
+### 验证记录（审查基线 `22d2121`，摘要行亲见，L-0005 合规）
+
+- `.venv/bin/python -m pytest` → **1593 passed, 33 skipped**（87.06s）
+- `.venv-qlib/bin/python -m pytest` → **1625 passed, 1 skipped**（133.00s）
+- `tests/test_adv_review_fixes.py` → 39 passed（PS-0002 证据索引新鲜度）
+- 第二独立运行者交叉复核：1593/33（85.10s）、1625/1（130.83s），计数一致
+- `config/model-quality-trust-anchor.v1.json` 的 `registry_sha256` 与
+  `config/model-quality-reviews.v1.json` 字节 sha256 一致，公钥未变
+- cd1befb 落地树核对（L-0015）：= 已审工作树 + 精确落在上轮标记处的修复，无意外路径
+- 未运行：`scripts/run_gate.sh`（uv.lock 在 cd1befb 已变，发布前必须重跑完整认证矩阵）、
+  任何 publish/fetch 脚本、live vendor、远端矩阵
+
+### MAJOR（6 项）
+
+- **M1 — `engine_v3.py:561-568`（连带 `:236-242`/`:254-261`）：除息日停牌且行情面板无该行
+  （真实数据形态，`publish_backtest_market_data.py:136-143` 证实停牌标的只进停牌面板）时，
+  ex-date 参考价修正循环只遍历面板有行的标的，后续停牌日估值回退到除息前 last_close** →
+  幻影 NAV 与伪造日收益（复现参数：除息前 10 元、参考 6.67 元、150 股，停牌次日 NAV 虚增
+  +499.5 ≈ ±5% 假收益，零成交）。`exposures.py` 独立回放同病，交叉校验静默吻合无兜底。
+  修复方向：ex-date 修正应遍历"持有且有 ex 事件"的标的，而非只遍历面板行。
+  **e6d9e8b 状态：未修**（engine_v3.py 自 22d2121 起未变）。
+- **M2 — `benchmark_backtest.py:130,256` × `engine.py:98-99`：v4 基准把非空配股排除集作为
+  `corporate_action_instruments` 传入引擎，引擎守卫视任何非空集合为非法直接拒绝** → 窗口含
+  配股排除标的时 v4 基准启动即崩，且错误文案误导（声称缺面板，实为参数用错）。策略 v4 路径传
+  `set()` 所以能跑；fixture rights 集为空 + fake engine，从未驱动该分支。
+  **e6d9e8b 状态：未修**（benchmark_backtest.py、engine.py 均未变）。
+- **M3 — `engine_v3.py:187,270-271` × `walk_forward_continuous.py:362`：
+  `rebalance_every_n_sessions > 1` 时连续回放的调仓相位锚在 OOS 窗口首日，逐折回放锚在各折
+  首日** → 折 OOS 起点偏移不整除 n 时，该折部分经评审目标权重在连续回放中静默不执行，receipt
+  仍记 completed。全部 fixture n=1，分支零覆盖。
+  **e6d9e8b 状态：未修**（两文件均未变）。
+- **M4 — `publish_backtest_market_data.py:237-238`：已实施但缺 `ex_date` 的分红行被
+  `continue` 静默丢弃**，而 `:226` 强制绑定的评审文档 attest `dividend_coverage_complete=true`
+  → 面板声称覆盖完整但实际缺事件，回测永不计提该权益（L-0004 同类：断言了未执行的保证）。
+  fail-closed 应拒绝发布。**e6d9e8b 状态：未修**（该脚本未变）。
+- **M5 — 测试无牙（L-0018 类）：v4 全部"除息日停牌"分支（估值/应收估值/last_close 修正三处）
+  与引擎层 rights 排除拒绝分支零 fixture 驱动**——`tests/` 下 `unsupported_action_instruments`
+  零命中；删掉 `engine_v3.py:183-185` 的 `| unsupported_action_instruments` 套件仍全绿。
+  M1 正是藏在这里。**e6d9e8b 状态：未修**（无 v4 测试文件变更，HEAD 处 grep 复核仍 0 命中）。
+- **M6 — `owning_contracts.py:226-244` FactorExposureStore.publish 写路径完全没有
+  `reject_symlinks_within`**（守卫只在读路径），违反已晋升规则 PS-0001；family_root/lock/
+  staging 全裸露，且与同 commit 的 TushareDependencyStore（连 lock 都查）自我不一致。两名
+  独立审查者收敛到同一发现。**e6d9e8b 状态：已修**（`84bcf28`，即维护者记录的 D-M1：
+  family_root/directory/lock/staging 及质量报告 root/path 均已过守卫）。
+
+### MINOR（11 项；状态同样核对至 e6d9e8b）
+
+1. `tushare_factor_candidates.py` 候选 store 的 `publication.lock` 文件本身未过 symlink 守卫
+   （依赖 store `tushare_dependency.py:206` 查 lock）。**部分缓解但未闭合**：84bcf28 为 family
+   与 directory 加了守卫（:451/:497），lock 文件本身仍未查，两 store 不一致仍在。
+2. `dataset_writer.py:419-428`：`validate_frame_keys` 只在 v1 分支；v2 中性化路径可发布重复键
+   数据帧。**未修**（HEAD 处 :427-428 仍在 v1 else 分支内；e6d9e8b 重构了 transform 复核
+   但未扩展键守卫）。
+3. `factor_screening.py:344-361,426-428`：selection 六个拒绝分支（t 值/方向均值/正比例/覆盖率/
+   成本/上限）零 fixture 驱动。**未修**（文件未变）。
+4. `benchmark_backtest.py:138`：v3 基准的排除不按窗口日期过滤（策略路径 `adapters.py:1583-1593`
+   过滤），潜伏 universe 不一致。**未修**。
+5. `walk_forward_continuous.py:133-135`：目标权重 digest 失配拒绝分支无驱动（所有测试
+   monkeypatch 成一致）。**未修**。
+6. `training-evaluation.md` 评审族状态自相矛盾（原 :221 称 unavailable、:549 称 active）。
+   **部分缓解**：84bcf28 重写该页后原矛盾形态消失；但 :250 仍称 "factor-exposure review family
+   remains unavailable"，而注册表现已绑定 `factor_exposure_panel_v1`（policy reject_all /
+   allowed passed），两者关系需维护者复核确认该句是否已陈旧。
+7. **cr.md 账本不实（L-0016 类）**：cr.md（原 :4182 一带）声称"停牌除息日估值使用限价参考与
+   普通 last-close 口径不对称已进入对应子系统页"，HEAD 处 `grep 限价参考/limit_reference
+   docs/subsystems/portfolio-backtest-risk-execution.md` 仍零命中——**未修，声称仍不实**。
+8. 三处误导性拒绝文案：`engine.py:98-99` 两种失败共用一句、`:105` "requires v3"（v4 也支持）、
+   BacktestConfigStore docstring 仍写 "all three"。**未修**。
+9. `engine_v3.py` run_v4 不校验面板与 config binding 一致性（纵深缺口，当前链路经调用方
+   checksum 兜底，不可直接触发）。**未修**。
+10. 测试文件重复 import + `models/__init__.py` 的 `__all__` 未收录四个新名字（装饰性）。
+    **未逐项复核**（推定未处理）。
+11. （第四路新增，原记 D-M3）`data-sources-and-readiness.md` 页首钉父提交 cd1befb、计数
+    1588/1620 比 22d2121 实测各少 5。**已修**（84bcf28，维护者记录 D-M3；现钉 22d2121
+    工作树、计数 1651/1684 与实测一致）。
+
+### 观察项（摘要，状态核对至 e6d9e8b）
+
+- **证据记录 pin 漂移（L-0012 类）**：`walk-forward-continuous-implementation-v1.json` 14 个
+  pin 中 8 个不匹配任何已提交状态（诚实标注 `uncommitted_worktree` + `git_head=cd1befb`，
+  但提交落地后未重钉）；同类的 `backtest-v3-implementation-v1.json`、
+  `lightgbm-score-weighted-chain-v1.json` 对 `model_layer.py` 的 pin 同样不匹配任何已提交状态。
+  **e6d9e8b 仍未重钉**。
+- **新鲜度机械门禁覆盖洞**：`tests/test_adv_review_fixes.py:1159` 只 glob
+  `evidence/**/evidence-index.json`，上述按其他命名的交易级证据记录全部逃逸在机械检查外。
+  **未修**。
+- （原第四路 O5）`BacktestMarketDatasetStore` NaN 帧身份规则曾在 `dataset_version` 不变下原位
+  变化。**已解决**：84bcf28 将其正确版本化为 `backtest_market_dataset.v2.json`
+  （`identity_profile = rows-null-normalized-dtypes-v2`），v1 制品保持可读，v2 读路径重算身份。
+- 其余保留观察项（均按文件未变推定未处理）：`select_factor_candidates` 的"只用验证窗口"是流程
+  约束非机制约束；screen report 构建器绑定未重算的 checksum（当前唯一调用方路径安全）；
+  `_canonical_calendar` 对 symlink 分区静默 continue 而非拒绝；FactorExposureStore 无
+  read-back-before-rename（读路径全量重校验兜底）且同内容重发布 raise 不幂等（与 L-0021
+  防篡改语义一致，但与同 commit 新 store 不一致）；record_date 窗内/ex_date 窗外事件被丢弃
+  致期末 NAV 微低估（语义可辩护，建议书面确认）；两 commit message 均为裸 "feat:training-plan"
+  与仓库详述惯例不符；`tests/review_key.py` 共享系统临时 PEM 在并行跑两套环境时会撞（已记录
+  并改顺序执行，CI 各 cell 独立 runner 不受影响）。
+
+### 需维护者确认/裁决（状态核对至 e6d9e8b）
+
+1. **三处原位枚举拓宽仍无逐项裁决记录**：`backtest_market_dataset.v1.json`（+`corporate_action_events`，
+   整文件重排缩进；HEAD 处该拓宽仍保留，84bcf28 另以 v2 做了正确版本化，但 v1 原位拓宽未回退
+   也未补裁决记录）、`quality_decision.v1.json`（+2 binding）、`model_quality_report.v2.json`
+   （+1 policy）。属 §8.16 已裁决同类（纯追加），按先例纪律应留明确逐项裁决记录。
+2. v7/v8 结果/状态枚举拓宽、归档 checksum 口径、v4 公司行为语义、两个新评审族 + 锚更新——
+   此四项 cr.md 已有维护者批准记录，且锚的字节匹配经本轮独立核验 ✅。
+
+### 与既有记录的关系
+
+本节与维护者自记的 "2026-10-31 — Store integrity and identity review follow-up"（84bcf28 落地）
+是同一基线（22d2121）上的两轮独立记录：该节 D-M1 即本节 M6（已修）、D-M3 即本节 MINOR-11
+（已修）、O5 即本节观察项身份版本化（已解决）；本节 M1–M5 及其余 MINOR/观察项不在该节范围内，
+截至 e6d9e8b 保持开放。修复优先级维持：M1（幻影 NAV）> M2（v4 基准必崩）> M4（覆盖声明不实，
+一行修复）> M3（相位发散）> M5（补测试，与 M1 同轮）>（M6 已修）。
+
+## 2026-11-07 — 2026-10-31 对抗审查（本文件 4312–4433 行原节）修复跟进
+
+复核基线为 `e6d9e8b4c21d156edac47d3c12d153bd9320d003` 的未提交工作树；原节记录的是 `22d2121` 审查和截至 `e6d9e8b` 的历史状态，不回写旧审查结论。本轮改动的具体提交状态仍是**未提交**。与用户此前未提交的两份训练文档重写及历史快照共存，未改写或丢弃它们。
+
+- **M1 已修**：v4 除息日停牌且无行情行时，对持仓和股票应收按执行事实的限价参考更新 `last_close`，次日停牌估值沿用该价格；暴露回放同口径。新增无行情行、连续停牌的 NAV/暴露回归。
+- **M2 已修**：v4 基准仍用配股清单过滤 universe，但调用引擎时以受评审事件面板传递清单，不再把非空清单误传为 v3 参数。原 fake-engine 测试改为非空配股清单，并新增引擎层非空配股排除拒绝测试。
+- **M3 已修**：连续 v3 回放在 `rebalance_every_n_sessions > 1` 时按每折首个目标日重置调仓相位；确切决策日写入连续目标序列 identity，并交给单账户引擎。绑定连续 receipt 的基准复用已发布策略的日频调仓计划。新增相位重置与引擎执行测试。
+- **M4 已修**：已实施分红缺 `ex_date` 时拒绝发布，不再静默丢弃；新增发布入口回归。
+- **M5 已补主要测试**：除息日停牌且无行情行的 NAV/暴露测试、引擎层非空配股排除测试均驱动真实分支。M6 仍保持 `84bcf28` 已修状态。
+- **MINOR 已修**：1 锁文件 symlink 拒绝及回归；2 v2 数据集重复键拒绝及回归；3 六个筛选阈值拒绝及候选上限回归；4 v3 基准仅过滤配置窗口内公司行为，并以窗外事件回归验证；5 目标权重摘要失配回归；6 评审族文档状态；7 子系统页明确限价参考与普通 last-close 估值差异；8 v3/v4 错误文案及 BacktestConfigStore 版本说明。原节第 7 项“当时账本不实”的事实保留，本轮补了缺失说明。
+- **MINOR 10 已修**：删除重复测试 import，并补齐 `uq.models.__all__` 的四个已导入公开名称。
+- **仍开放**：MINOR 9（引擎直调 v4 事件面板和配置绑定的纵深验证，当前发布路径由 owning store 校验）；观察项中的证据 pin 历史漂移、非 `evidence-index.json` 新鲜度门禁、流程约束和 `record_date` 窗内而 `ex_date` 窗外的语义裁决仍未处理。原节末三项 schema 原位拓宽的逐项维护者裁决尚未获得，不擅自替维护者作出。
+
+本轮验证：`.venv/bin/python -m pytest` 在 HEAD `e6d9e8b4c21d156edac47d3c12d153bd9320d003` 的最终未提交工作树上为 **1687 passed, 38 skipped, 329 warnings**（89.48s）；`git diff --check` 通过。未运行 Qlib 环境全量测试（本轮不改 Qlib 行为）、live vendor、真实制品发布或 release gate；这些检查不能由合成测试代替。
+
+## 2026-11-07 — 上轮遗留项闭合：v4 绑定、证据 pin 与 schema 追加
+
+基线仍为 `e6d9e8b4c21d156edac47d3c12d153bd9320d003` 上的未提交工作树。该节承接上轮修复跟进，不倒改 2026-10-31 的原始审查事实。
+
+1. **MINOR 9：已修。** `BacktestEngine.run` 的 v4 分支在执行前通过 `BacktestMarketDatasetStore.read_frame` 重新校验配置绑定的发布代次和 Parquet 字节摘要；`engine_v3.run_v4` 同时用 v1/v2 各自的逻辑身份规则核对传入面板与绑定的代次。现有生产调用方仍通过 owning store 获取面板。测试夹具改为先发布事件面板，再绑定真实 generation/checksum；篡改面板、碎股和非空配股排除分别驱动拒绝分支。v1/v2 旧版面板仍按各自身份规则识别。
+2. **历史证据 pin：已用不可变历史 + 当前快照闭合。** 三份旧记录（`walk-forward-continuous-implementation-v1`、`backtest-v3-implementation-v1`、`lightgbm-score-weighted-chain-v1`）均声明的是过去未提交工作树；逐项复核发现它们的 7/20/30 个 pin 全部不等于各自 `git_head` 的已提交内容，因而不能把这些旧 pin 直接改成今天的源码哈希并声称当年通过了新验证。保留原文件作为历史，新增 `evidence/trading-grade/current-source-pins-20261107.json`，对三者涉及的 52 个去重文件记录当前工作树 sha256；`tests/test_trading_grade_source_pins.py` 要求集合恰好覆盖全部历史路径且每个当前 pin 与文件字节一致。当前记录标明 `git_head_at_capture` 和未提交工作树状态；未来落地后若源码再次变化，机械检查会失败，须重钉或另发更新快照。原历史记录不再被误当作当前 pin。
+3. **三处 schema 原位拓宽：逐项裁决为保留，兼容性纯追加。** 已对比 `22d2121^` 与当前 JSON 解析树：`backtest_market_dataset.v1.json` 仅在 `dataset_type` 增加 `corporate_action_events`；`quality_decision.v1.json` 仅在 `binding_type` 增加 `feature_preprocessing_v2`、`factor_exposure_panel_v1`；`model_quality_report.v2.json` 仅在 `binding_type` 增加上述两项、在 `policy` 增加 `pit_factor_neutralization_v1`。旧值未删除、其他键和约束未变。维护者此前已认可同类枚举纯追加，本轮又要求修掉遗留项，因此沿用该兼容性先例；不把它解释为旧制品语义或单位改变。`backtest_market_dataset.v2` 的空值/类型身份语义仍单独版本化，v1 旧制品继续可读。今后若改变旧值含义、单位或既有身份规则，必须另发版本。
+
+本节验证：HEAD `e6d9e8b4c21d156edac47d3c12d153bd9320d003` 的未提交工作树，`.venv/bin/python -m pytest` → **1689 passed, 38 skipped, 329 warnings**（88.65s）；`tests/test_backtest_v4_corporate_action_engine.py` 与 `tests/test_trading_grade_source_pins.py` 定向验证 6 passed；`git diff --check` 通过。未运行 Qlib 环境全量测试（未改 Qlib 行为）、live vendor、真实制品发布或 release gate；不作发布认证声明。

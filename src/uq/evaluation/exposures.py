@@ -264,6 +264,19 @@ def calculate_position_exposures(
         })
         last_close.update({instrument: close for instrument, (close, _) in current_prices.items()
                            if close is not None})
+        if version == 4:
+            claim_names = {instrument for instrument, _shares in share_claims.values()}
+            for action in action_events[day]:
+                instrument = str(action['instrument'])
+                current = current_prices.get(instrument)
+                if (action['event'] == 'ex_date_receivable'
+                        and (instrument in holdings or instrument in claim_names)
+                        and (current is None or current[0] is None)
+                        and suspended.get((day, instrument), False)):
+                    last_close[instrument] = _number(
+                        facts_lookup[(day, instrument)]['limit_reference_price'],
+                        label='ex-date reference', positive=True,
+                    )
         previous_liquidity = current_prices
     return {
         'profile': 'actual_v4_position_exposures_v1' if version == 4 else 'actual_v3_position_exposures_v1',

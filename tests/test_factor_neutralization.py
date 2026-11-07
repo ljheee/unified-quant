@@ -352,6 +352,15 @@ def test_pit_exposure_panel_publication_and_preprocessing_v2_readback(tmp_path):
         aligned,
         read_exposure_manifest,
     )
+    duplicate_dataset = output.copy()
+    duplicate_dataset.loc[duplicate_dataset.index[1], ["instrument", "datetime"]] = (
+        duplicate_dataset.loc[duplicate_dataset.index[0], ["instrument", "datetime"]].tolist()
+    )
+    with pytest.raises(ContractError, match="duplicate preprocessing keys"):
+        DatasetWriter(tmp_path)._validate_preprocessing(
+            dataset_manifest, duplicate_dataset, output_schema, published_preprocessing,
+            factors, input_schema, output, aligned, read_exposure_manifest,
+        )
     with pytest.raises(ContractError, match="does not match"):
         DatasetWriter(tmp_path)._validate_preprocessing(
             dataset_manifest,

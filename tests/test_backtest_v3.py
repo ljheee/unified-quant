@@ -91,6 +91,20 @@ def test_terminal_liquidation_flag_requires_a_boolean(tmp_path):
         run(tmp_path, config, prices, facts, terminal_liquidation=1)
 
 
+def test_reviewed_fold_schedule_can_reset_rebalance_phase(tmp_path):
+    config, prices, facts = inputs(tmp_path, execution={'rebalance_every_n_sessions': 2})
+    targets = {DAYS[0]: weights(.1), DAYS[1]: weights(0.)}
+    _, normal = run(tmp_path, config, prices, facts, targets=targets)
+    assert normal['daily_metrics']['rebalance_scheduled'].tolist() == [False, True, False]
+    _, phased = run(tmp_path, config, prices, facts, targets=targets,
+                    scheduled_decision_dates={DAYS[0], DAYS[1]})
+    assert phased['daily_metrics']['rebalance_scheduled'].tolist() == [False, True, True]
+    assert phased['fills']['side'].tolist() == ['buy', 'sell']
+    with pytest.raises(ContractError, match='subset of reviewed targets'):
+        run(tmp_path, config, prices, facts, targets=targets,
+            scheduled_decision_dates={DAYS[2]})
+
+
 def test_volume_participation_uses_prior_session_not_future_liquidity_and_partially_fills_both_sides(tmp_path):
     config, prices, facts = inputs(tmp_path, volume=1000.)
     targets = {DAYS[0]: weights(.9), DAYS[1]: weights(0.)}

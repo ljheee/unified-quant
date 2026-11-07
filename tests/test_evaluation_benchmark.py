@@ -373,6 +373,8 @@ def test_benchmark_backtest_reuses_strategy_schedule_config_and_result_publisher
                 return pd.DataFrame({"date": days})
             if dataset_type == "suspension":
                 return pd.DataFrame(columns=["date", "instrument", "suspended"])
+            if dataset_type == "corporate_action":
+                return pd.DataFrame({"date": ["2024-12-31"], "instrument": [NAME]})
             return pd.DataFrame(columns=["date", "instrument"])
 
     class UniverseStore:
@@ -514,10 +516,20 @@ def test_v4_benchmark_passes_complete_event_panel_to_common_engine(tmp_path, mon
         "source_approval_ref": "reviewed-dividend", "reason": "implemented_dividend",
         "window_start": None, "window_end": None, "coverage_complete": None,
     }
+    rights = rights_issue_coverage_row(start_date=DAYS[0], end_date=DAYS[-1],
+                                       source_approval_ref="reviewed-rights")
+    excluded = "000001.XSHE"
+    reason = "reviewed-rights-issue"
+    exclusion = {**rights, "event_type": "rights_issue_exclusion", "instrument": excluded,
+                 "reason": reason, "coverage_complete": None}
+    exclusion["event_id"] = sha256_json({
+        "event_type": "rights_issue_exclusion", "instrument": excluded,
+        "source_approval_ref": "reviewed-rights", "reason": reason,
+        "window_start": DAYS[0], "window_end": DAYS[-1],
+    })
     events = pd.DataFrame([
         dividend,
-        rights_issue_coverage_row(start_date=DAYS[0], end_date=DAYS[-1],
-                                  source_approval_ref="reviewed-rights"),
+        rights, exclusion,
         dividend_coverage_row(start_date=DAYS[0], end_date=DAYS[-1],
                               source_approval_ref="reviewed-dividend"),
     ], columns=ACTION_EVENT_COLUMNS)
@@ -554,7 +566,7 @@ def test_v4_benchmark_passes_complete_event_panel_to_common_engine(tmp_path, mon
             return {"universe_id": "a500", "members_artifact": {"checksum_sha256": "9" * 64}}
 
         def read_members(self, *_args, **_kwargs):
-            return pd.DataFrame({"instrument": [NAME]})
+            return pd.DataFrame({"instrument": [NAME, excluded]})
 
     class RawPrices:
         def __init__(self, _root):

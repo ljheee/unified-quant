@@ -83,6 +83,7 @@ def run_v3(
     corporate_action_instruments: set[str] | None = None,
     risk_gate: Callable[[dict, dict], dict] | None = None,
     terminal_liquidation: bool = False,
+    scheduled_decision_dates: set[str] | None = None,
 ) -> tuple[dict, dict[str, pd.DataFrame]]:
     return _run_versioned(
         contract_version=3, config=config, portfolio_definition=portfolio_definition,
@@ -91,6 +92,7 @@ def run_v3(
         corporate_action_instruments=corporate_action_instruments,
         corporate_action_events=None, risk_gate=risk_gate,
         terminal_liquidation=terminal_liquidation,
+        scheduled_decision_dates=scheduled_decision_dates,
     )
 
 
@@ -101,6 +103,7 @@ def run_v4(
     suspension_dates: set[tuple[str, str]] | None = None,
     risk_gate: Callable[[dict, dict], dict] | None = None,
     terminal_liquidation: bool = False,
+    scheduled_decision_dates: set[str] | None = None,
 ) -> tuple[dict, dict[str, pd.DataFrame]]:
     return _run_versioned(
         contract_version=4, config=config, portfolio_definition=portfolio_definition,
@@ -108,6 +111,7 @@ def run_v4(
         execution_facts=execution_facts, suspension_dates=suspension_dates,
         corporate_action_instruments=None, corporate_action_events=corporate_action_events,
         risk_gate=risk_gate, terminal_liquidation=terminal_liquidation,
+        scheduled_decision_dates=scheduled_decision_dates,
     )
 
 
@@ -120,6 +124,7 @@ def _run_versioned(
     corporate_action_events: pd.DataFrame | None,
     risk_gate: Callable[[dict, dict], dict] | None,
     terminal_liquidation: bool,
+    scheduled_decision_dates: set[str] | None,
 ) -> tuple[dict, dict[str, pd.DataFrame]]:
     ModelContractLoader.validate(f'backtest_config_v{contract_version}', config)
     if config.get('contract_version') != contract_version:
@@ -128,6 +133,21 @@ def _run_versioned(
     if contract_version == 4:
         if corporate_action_events is None or corporate_action_instruments:
             raise ContractError('v4 requires a reviewed corporate-action event panel')
+        from ..research_chain.owning_contracts import BacktestMarketDatasetStore
+        from .corporate_actions import ACTION_EVENT_COLUMNS
+        if (not isinstance(corporate_action_events, pd.DataFrame)
+                or corporate_action_events.columns.tolist() != ACTION_EVENT_COLUMNS):
+            raise ContractError('v4 corporate-action event panel has an invalid schema')
+        binding = config['corporate_action_binding']
+        if not any(
+            BacktestMarketDatasetStore._generation_identity(
+                corporate_action_events, dataset_type='corporate_action_events',
+                window_start=config['start_date'], window_end=config['end_date'],
+                dataset_version=version,
+            ) == binding['dataset_generation_id']
+            for version in ('1.0.0', '2.0.0')
+        ):
+            raise ContractError('v4 corporate-action event panel differs from config binding')
     elif corporate_action_events is not None:
         raise ContractError('corporate-action event accounting requires a v4 backtest config')
     if type(terminal_liquidation) is not bool:
@@ -185,6 +205,10 @@ def _run_versioned(
             raise ContractError('unsupported corporate-action instruments must remain excluded for the window')
     execution = config['execution_model']
     first_decision = min(dates.index(day) for day in weight_partitions)
+    if scheduled_decision_dates is not None:
+        if (not isinstance(scheduled_decision_dates, set) or not scheduled_decision_dates
+                or not scheduled_decision_dates <= set(weight_partitions)):
+            raise ContractError('scheduled decisions must be a nonempty subset of reviewed targets')
     holdings: dict[str, int] = {}
     last_close: dict[str, float] = {}
     cash = float(config['initial_capital'])
@@ -267,7 +291,8 @@ def _run_versioned(
 
     for index, day in enumerate(dates):
         decision_day = dates[index - 1] if index else None
-        scheduled = (decision_day in weight_partitions and
+        scheduled = (decision_day in scheduled_decision_dates if scheduled_decision_dates is not None
+                     else decision_day in weight_partitions and
                      (index - 1 - first_decision) % execution['rebalance_every_n_sessions'] == 0)
         terminal_liquidation_due = terminal_liquidation and index == len(dates) - 1
         drawdown_stop_triggered = False
@@ -562,10 +587,14 @@ def _run_versioned(
             close = market_price(day, instrument, 'close')
             if close is not None:
                 last_close[instrument] = close
-            elif (action_schedule is not None and fact(day, str(instrument))['suspended']
-                  and any(event['instrument'] == str(instrument)
-                          for event in action_schedule['ex_events'].get(day, []))):
-                last_close[str(instrument)] = float(fact(day, str(instrument))['limit_reference_price'])
+        if action_schedule is not None:
+            claim_names = {action_by_id[event_id]['instrument'] for event_id in stock_receivables}
+            for event in action_schedule['ex_events'].get(day, []):
+                instrument = event['instrument']
+                if ((instrument in holdings or instrument in claim_names)
+                        and market_price(day, instrument, 'close') is None
+                        and bool(fact(day, instrument)['suspended'])):
+                    last_close[instrument] = float(fact(day, instrument)['limit_reference_price'])
     artifacts = {'equity_curve': pd.DataFrame(equity), 'daily_metrics': pd.DataFrame(daily),
                  'fills': pd.DataFrame(fills, columns=_FILL_COLUMNS)}
     if contract_version == 4:

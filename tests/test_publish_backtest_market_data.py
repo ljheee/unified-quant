@@ -505,3 +505,36 @@ def test_v4_publishes_complete_implemented_dividend_and_rights_coverage_panel(tm
     review.write_text(json.dumps(incomplete), encoding="utf-8")
     with pytest.raises(ContractError, match="complete dividend and rights coverage"):
         module._corporate_action_events_frame(event_root, SESSIONS[0], SESSIONS[2], SESSIONS, review)
+
+
+@pytest.mark.parametrize("missing_ex_date", [None, float("nan")])
+def test_v4_rejects_implemented_dividend_with_missing_ex_date(
+    tmp_path: Path, missing_ex_date,
+) -> None:
+    from uq.contracts.dividend_events import DividendEventStore
+
+    announcement = dt.date(2026, 1, 2)
+    root = tmp_path / "dividend-store"
+    DividendEventStore(root).publish(
+        ann_date=announcement, source="test:dividend",
+        source_fetched_at=dt.datetime(2026, 1, 2, 9, tzinfo=dt.timezone(dt.timedelta(hours=8))),
+        frame=pd.DataFrame([{
+            "ts_code": "600000.SH", "end_date": "2025-12-31", "div_proc": "实施",
+            "ex_date": missing_ex_date, "record_date": "2026-01-05", "pay_date": "2026-01-07",
+            "div_listdate": None, "cash_div": 0.02, "cash_div_tax": 0.02,
+            "stk_div": 0.0, "stk_bo_rate": 0.0, "stk_co_rate": 0.0,
+            "ann_date": announcement.isoformat(), "imp_ann_date": announcement.isoformat(),
+        }]),
+    )
+    review = tmp_path / "corporate-action-review.json"
+    review.write_text(json.dumps({
+        "window_start": SESSIONS[0].isoformat(), "window_end": SESSIONS[2].isoformat(),
+        "coverage_complete": True, "source_approval_ref": "rights-review",
+        "dividend_coverage_complete": True, "dividend_source_approval_ref": "dividend-review",
+        "exclusions": [],
+    }), encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("publish_backtest_market_data", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with pytest.raises(ContractError, match="lacks ex_date"):
+        module._corporate_action_events_frame(root, SESSIONS[0], SESSIONS[2], SESSIONS, review)

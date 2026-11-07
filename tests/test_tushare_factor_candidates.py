@@ -183,6 +183,27 @@ def test_staged_candidate_payloads_are_read_back_before_rename(tmp_path, monkeyp
     assert not list(family.glob(".staging_*"))
 
 
+def test_candidate_publisher_rejects_symlinked_publication_lock(tmp_path):
+    bars_root = tmp_path / "bars"
+    first, decision = date(2024, 1, 2), date(2024, 1, 3)
+    _calendar_partition(bars_root, first)
+    _calendar_partition(bars_root, decision)
+    source_root = tmp_path / "source"
+    _raw_store(source_root, "20240102")
+    bundle = build_tushare_factor_candidates(
+        source_root=source_root, bars_root=bars_root, start_date=decision, end_date=decision,
+    )
+    root = tmp_path / "candidate-store"
+    family = root / "tushare_factor_candidates"
+    family.mkdir(parents=True)
+    outside = tmp_path / "outside.lock"
+    outside.write_text("untouched", encoding="utf-8")
+    (family / "publication.lock").symlink_to(outside)
+    with pytest.raises(ContractError, match="symbolic links"):
+        TushareFactorCandidateStore(root).publish(bundle)
+    assert outside.read_text(encoding="utf-8") == "untouched"
+
+
 def _screen_report():
     report = {
         "window": {"start_date": "2024-01-01", "end_date": "2024-02-25", "session_count": 40},
@@ -253,6 +274,37 @@ def test_factor_selection_blocks_candidates_when_pairwise_history_is_missing():
     decisions = {item["feature"]: item for item in result["decisions"]}
     assert "pairwise_collinearity_unmeasured" in decisions["a"]["reasons"]
     assert "pairwise_collinearity_unmeasured" in decisions["b"]["reasons"]
+
+
+@pytest.mark.parametrize("field,value,reason", [
+    ("valid_rank_ic_sessions", 20, "insufficient_rank_ic_sessions"),
+    ("mean_rank_ic", -0.01, "non_positive_direction_adjusted_mean_rank_ic"),
+    ("rank_ic_t_statistic", 0.5, "rank_ic_t_statistic_below_threshold"),
+    ("positive_rank_ic_fraction", 0.4, "positive_rank_ic_fraction_below_threshold"),
+    ("feature_coverage_sessions", 20, "feature_coverage_below_threshold"),
+    ("mean_turnover_cost_proxy_bps_of_nav", 11.0,
+     "turnover_cost_proxy_missing_or_above_threshold"),
+])
+def test_factor_selection_records_each_threshold_rejection(field, value, reason):
+    report = _screen_report()
+    report["feature_summary"][0][field] = value
+    report["generation_id"] = sha256_json({
+        key: item for key, item in report.items() if key != "generation_id"
+    })
+    selected = select_factor_candidates(report, policy=_selection_policy())
+    decisions = {item["feature"]: item for item in selected["decisions"]}
+    assert decisions["a"]["status"] == "rejected"
+    assert reason in decisions["a"]["reasons"]
+
+
+def test_factor_selection_records_selected_candidate_limit():
+    report = _screen_report()
+    policy = _selection_policy()
+    policy["maximum_selected_features"] = 1
+    selected = select_factor_candidates(report, policy=policy)
+    decisions = {item["feature"]: item for item in selected["decisions"]}
+    assert selected["selected_candidates"] == ["a"]
+    assert "maximum_selected_features_reached" in decisions["c"]["reasons"]
 
 
 def test_candidate_screen_report_binds_bundle_labels_calendar_and_environment(tmp_path, monkeypatch):

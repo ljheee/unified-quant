@@ -60,7 +60,7 @@ def publish_benchmark_backtest(
     engine and result publisher run.
     """
     root = Path(data_root)
-    strategy, config, _ = _verified_result(root, strategy_result_generation_id)
+    strategy, config, strategy_frames = _verified_result(root, strategy_result_generation_id)
     if (strategy.get("contract_version") not in {3, 4}
             or config.get("contract_version") != strategy.get("contract_version")):
         raise ContractError("benchmark publication requires a reviewed v3/v4 strategy result and config")
@@ -91,6 +91,20 @@ def publish_benchmark_backtest(
         raise ContractError("benchmark calendar does not exactly cover the reviewed config window")
     if not set(schedule_dates) <= set(calendar_dates):
         raise ContractError("strategy rebalance dates fall outside the governed calendar")
+    scheduled_decisions = None
+    if (walk_forward_root is not None
+            and config["execution_model"]["rebalance_every_n_sessions"] > 1):
+        daily = strategy_frames.get("daily_metrics")
+        if (daily is None or list(daily["date"].astype(str)) != calendar_dates
+                or "rebalance_scheduled" not in daily):
+            raise ContractError("continuous benchmark requires the strategy's reviewed daily schedule")
+        scheduled_decisions = {
+            calendar_dates[index - 1]
+            for index, scheduled in enumerate(daily["rebalance_scheduled"])
+            if index and scheduled
+        }
+        if not scheduled_decisions or not scheduled_decisions <= set(schedule_dates):
+            raise ContractError("continuous benchmark schedule differs from reviewed targets")
 
     universe_store = UniverseSnapshotStore(root)
     universe_generation = config["universe_binding"]["snapshot_generation_id"]
@@ -135,7 +149,11 @@ def publish_benchmark_backtest(
             config["corporate_action_binding"]["data_checksum_sha256"],
             dataset_type="corporate_action", required_columns={"date", "instrument"},
         )
-        corporate_action_instruments = set(corporate["instrument"].astype(str))
+        corporate_action_instruments = set(
+            corporate.loc[
+                corporate["date"].astype(str).between(start_date, end_date), "instrument"
+            ].astype(str)
+        )
     allowed_instruments -= corporate_action_instruments
     if not allowed_instruments:
         raise ContractError("benchmark strategy universe is empty after corporate-action exclusions")
@@ -255,9 +273,10 @@ def publish_benchmark_backtest(
         price_panel=price_panel,
         execution_facts=execution_facts,
         suspension_dates=suspension_dates,
-        corporate_action_instruments=corporate_action_instruments,
+        corporate_action_instruments=(corporate_action_instruments if config['contract_version'] == 3 else set()),
         corporate_action_events=corporate_action_events,
         terminal_liquidation=terminal_liquidation,
+        scheduled_decision_dates=scheduled_decisions,
     )
     target_bindings = [
         {

@@ -1,6 +1,6 @@
 # Training Evaluation Diagnostics
 
-> Current behavior reference. Last checked: `2026-11-02` against the uncommitted worktree based on HEAD `22d2121c2eeab5c6b4b792dcfce7dc388b50b56b`. Verification counts are refreshed after the current change set; historical test totals remain tied to their recorded revisions.
+> Current behavior reference. Last checked: `2026-11-07` against the uncommitted worktree based on HEAD `e6d9e8b4c21d156edac47d3c12d153bd9320d003`. Synthetic regressions cover the changes described below; live-source and release certification remain separate.
 
 This subsystem adds recomputable research diagnostics and a fixed walk-forward
 protocol for the trading-grade training plan. Its metric readers consume
@@ -36,6 +36,9 @@ order gate. This is additional evidence, not a production approval.
   publish a benchmark backtest on a reviewed strategy result's v3 config and
   rebalance dates (including a continuous walk-forward result), re-reading raw
   prices, calendar, execution facts and market guards through their owning stores.
+  The v3 exclusion set uses only company-action rows inside the reviewed window;
+  the v4 rights-exclusion set filters constituents but is carried by the reviewed
+  event panel, not passed as a separate v3 exclusion argument to the engine.
 - `config/schemas/contracts/research_evaluation.v1.json`: new diagnostic
   contract. Existing backtest, dataset and prediction contracts are unchanged.
 - `scripts/run_walk_forward.py`, `walk_forward.py`, `walk_forward_runner.py`:
@@ -43,6 +46,10 @@ order gate. This is additional evidence, not a production approval.
 - `scripts/run_walk_forward_continuous_backtest.py`,
   `evaluation/walk_forward_continuous.py`: re-read verified OOS targets and replay
   them through one shared-capital v3 backtest with an immutable evidence receipt.
+  When the reviewed rebalance interval exceeds one session, the replay derives
+  scheduled decision dates separately for each fold, matching each fold's phase;
+  the schedule is bound into the target-sequence identity. A benchmark tied to
+  that continuous receipt reuses the reviewed strategy's daily schedule.
 - `scripts/run_backtest_stress.py`, `evaluation/stress.py`: externally reviewed
   v3 cost/capital replays and recomputable `backtest_stress.v1` diagnostics.
 - `scripts/reconcile_paper_backtest.py`, `evaluation/paper_reconciliation.py`:
@@ -247,8 +254,8 @@ names. The publisher does not fetch or approve sources: it requires owning PIT
 membership and exposure readers. It records the membership source's monthly
 precision and does not certify historical completeness. Market-cap/industry
 publication additionally requires a reviewed PIT exposure panel; the newly added
-factor-exposure review family remains unavailable until its trust-anchor policy
-is approved.
+factor-exposure review family has an active, trust-anchor-pinned policy; a real
+historical PIT exposure panel remains unavailable until its source is approved.
 
 Archive example (all inputs must already be published):
 

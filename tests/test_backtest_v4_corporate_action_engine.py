@@ -10,6 +10,7 @@ from uq.contracts.model_layer import ModelContractLoader
 from uq.errors import ContractError
 from uq.evaluation.exposures import calculate_position_exposures
 from uq.research_chain.owning_contracts import BacktestConfigStore
+from uq.research_chain.owning_contracts import BacktestMarketDatasetStore
 from tests.test_research_chain_phase4 import _config_decision, _result_decision
 
 DAYS = ["2025-01-06", "2025-01-07", "2025-01-08", "2025-01-09", "2025-01-10", "2025-01-13"]
@@ -65,9 +66,16 @@ def _inputs(root):
     fact_manifest = ExecutionFactsStore(root).publish(
         facts, source_id="synthetic-company-action-fixture", source_approval_ref="test-only",
     )
+    events = _action_panel()
+    published_events = BacktestMarketDatasetStore(root).publish(
+        events, dataset_type="corporate_action_events",
+        window_start=pd.Timestamp(DAYS[0]).date(), window_end=pd.Timestamp(DAYS[-1]).date(),
+        sources={"fixture": "synthetic-company-action-fixture"}, producer="test",
+    )
     binding = {
-        "dataset_type": "corporate_action_events", "dataset_generation_id": "d" * 64,
-        "data_checksum_sha256": "e" * 64,
+        "dataset_type": "corporate_action_events",
+        "dataset_generation_id": published_events["generation_id"],
+        "data_checksum_sha256": published_events["data_checksum_sha256"],
     }
     config = {
         "contract_version": 4, "schema_version": "1.0.0", "backtest_name": "v4-actions",
@@ -105,7 +113,27 @@ def _inputs(root):
     }
     config = BacktestConfigStore(root).publish(config, quality_decision=_config_decision())
     ModelContractLoader.validate("backtest_config_v4", config)
-    return config, prices, facts, _action_panel()
+    return config, prices, facts, events
+
+
+def _config_with_events(root, config, events):
+    from uq.contracts.model_layer import model_manifest_identities
+
+    published = BacktestMarketDatasetStore(root).publish(
+        events, dataset_type="corporate_action_events",
+        window_start=pd.Timestamp(DAYS[0]).date(), window_end=pd.Timestamp(DAYS[-1]).date(),
+        sources={"fixture": "synthetic-company-action-fixture"}, producer="test",
+    )
+    changed = dict(config)
+    changed["corporate_action_binding"] = {
+        "dataset_type": "corporate_action_events",
+        "dataset_generation_id": published["generation_id"],
+        "data_checksum_sha256": published["data_checksum_sha256"],
+    }
+    changed["generation_id"], changed["manifest_digest_sha256"] = model_manifest_identities(
+        changed, schema_name="backtest_config_v4", exclude_fields=set(),
+    )
+    return changed
 
 
 def test_v4_accounts_ex_date_receivables_settlement_and_listing_t1(tmp_path):
@@ -167,9 +195,87 @@ def test_v4_requires_reviewed_event_panel_and_refuses_fractional_entitlements(tm
         )
     fractional = events.copy()
     fractional.loc[fractional["event_type"] == "dividend", "stock_div_per_share"] = .333
+    fractional_config = _config_with_events(tmp_path, config, fractional)
     with pytest.raises(ContractError, match="not a whole number"):
+        BacktestEngine(tmp_path).run(
+            config=fractional_config, portfolio_definition={"generation_id": "b" * 64},
+            weight_partitions={DAYS[0]: pd.DataFrame({"instrument": [NAME], "weight": [.1]})},
+            price_panel=prices, execution_facts=facts, corporate_action_events=fractional,
+        )
+
+
+def test_v4_suspended_ex_date_without_price_row_keeps_reference_through_next_session(tmp_path):
+    config, prices, facts, events = _inputs(tmp_path)
+    facts.loc[facts["date"].isin(DAYS[2:4]), "suspended"] = True
+    prices = prices.drop(index=[(DAYS[2], NAME), (DAYS[3], NAME)])
+    other = pd.DataFrame([
+        {"date": day, "instrument": "000001.XSHE", "open": 5., "close": 5., "volume": 10000.}
+        for day in DAYS[2:4]
+    ]).set_index(["date", "instrument"])
+    prices = pd.concat([prices, other]).sort_index()
+    # Rebind the changed facts through the owning store, as the engine does in production.
+    published = ExecutionFactsStore(tmp_path / "rebound").publish(
+        facts, source_id="synthetic-suspension-fixture", source_approval_ref="test-only",
+    )
+    config["execution_facts_binding"] = facts_binding(published)
+    from uq.contracts.model_layer import model_manifest_identities
+    config["generation_id"], config["manifest_digest_sha256"] = model_manifest_identities(
+        config, schema_name="backtest_config_v4", exclude_fields=set(),
+    )
+    weights = {DAYS[0]: pd.DataFrame({"instrument": [NAME], "weight": [.1]})}
+    _manifest, frames = BacktestEngine(tmp_path).run(
+        config=config, portfolio_definition={"generation_id": "b" * 64},
+        weight_partitions=weights, price_panel=prices, execution_facts=facts,
+        corporate_action_events=events,
+    )
+    equity = frames["equity_curve"].set_index("date")
+    assert equity.loc[DAYS[2], "portfolio_value"] == pytest.approx(10010.5)
+    assert equity.loc[DAYS[3], "portfolio_value"] == pytest.approx(10010.5)
+    exposures = calculate_position_exposures(
+        config=config, equity=frames["equity_curve"], fills=frames["fills"],
+        raw_prices=prices.reset_index().rename(columns={"date": "session_date"}),
+        execution_facts=facts, corporate_actions=frames["corporate_actions"],
+    )
+    assert exposures["daily"][3]["portfolio_value_cny"] == pytest.approx(10010.5)
+
+
+def test_v4_refuses_targets_in_reviewed_rights_exclusion_panel(tmp_path):
+    from uq.contracts.gate_contracts import sha256_json
+
+    config, prices, facts, events = _inputs(tmp_path)
+    coverage = events.loc[events["event_type"] == "rights_issue_coverage"].iloc[0].to_dict()
+    exclusion = {**coverage, "event_type": "rights_issue_exclusion",
+                 "instrument": NAME, "reason": "reviewed-rights-issue",
+                 "coverage_complete": None}
+    exclusion["event_id"] = sha256_json({
+        "event_type": "rights_issue_exclusion", "instrument": NAME,
+        "source_approval_ref": coverage["source_approval_ref"],
+        "reason": exclusion["reason"], "window_start": DAYS[0], "window_end": DAYS[-1],
+    })
+    events = pd.concat([events, pd.DataFrame([exclusion])], ignore_index=True)
+    config = _config_with_events(tmp_path, config, events)
+    with pytest.raises(ContractError, match="excluded for the window"):
         BacktestEngine(tmp_path).run(
             config=config, portfolio_definition={"generation_id": "b" * 64},
             weight_partitions={DAYS[0]: pd.DataFrame({"instrument": [NAME], "weight": [.1]})},
-            price_panel=prices, execution_facts=facts, corporate_action_events=fractional,
+            price_panel=prices, execution_facts=facts, corporate_action_events=events,
+        )
+
+
+def test_v4_rejects_event_panel_different_from_bound_owning_artifact(tmp_path):
+    config, prices, facts, events = _inputs(tmp_path)
+    changed = events.copy()
+    changed.loc[changed["event_type"] == "dividend", "cash_div_after_tax"] = 0.2
+    with pytest.raises(ContractError, match="differs from config binding"):
+        BacktestEngine(tmp_path).run(
+            config=config, portfolio_definition={"generation_id": "b" * 64},
+            weight_partitions={DAYS[0]: pd.DataFrame({"instrument": [NAME], "weight": [.1]})},
+            price_panel=prices, execution_facts=facts, corporate_action_events=changed,
+        )
+    with pytest.raises(ContractError, match="invalid schema"):
+        BacktestEngine(tmp_path).run(
+            config=config, portfolio_definition={"generation_id": "b" * 64},
+            weight_partitions={DAYS[0]: pd.DataFrame({"instrument": [NAME], "weight": [.1]})},
+            price_panel=prices, execution_facts=facts,
+            corporate_action_events=pd.DataFrame({"instrument": [NAME]}),
         )

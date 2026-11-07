@@ -235,7 +235,9 @@ def _corporate_action_events_frame(
         implemented = events.loc[events["div_proc"].astype(str) == "实施"]
         for source in implemented.to_dict(orient="records"):
             ex_date = source.get("ex_date")
-            if not ex_date or not start.isoformat() <= str(ex_date) <= end.isoformat():
+            if ex_date is None or pd.isna(ex_date) or ex_date == "":
+                raise ContractError("implemented dividend lacks ex_date; complete coverage cannot be attested")
+            if not start.isoformat() <= str(ex_date) <= end.isoformat():
                 continue
             if announcement.isoformat() > str(ex_date):
                 raise ContractError("implemented dividend was announced after its ex-date")

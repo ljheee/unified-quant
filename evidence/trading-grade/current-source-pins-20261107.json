@@ -1,0 +1,223 @@
+{
+  "captured_on": "2026-11-07",
+  "git_head_at_capture": "e6d9e8b4c21d156edac47d3c12d153bd9320d003",
+  "historical_record_note": "The superseded records document earlier uncommitted worktrees; their source hashes must not be rewritten as current verification.",
+  "kind": "trading_grade_current_source_pins",
+  "record_version": 1,
+  "source_files": [
+    {
+      "path": "config/schemas/contracts/backtest_config.v3.json",
+      "sha256": "a1ac6019d275e395dff4262c6d35a2cc88b456f26963c5f0067bc63c5d271848"
+    },
+    {
+      "path": "config/schemas/contracts/backtest_execution_facts.v1.json",
+      "sha256": "0b6439e4ebdb6777f0594d0ef7ea01b728e5d0d2342e574c53baca938c57d691"
+    },
+    {
+      "path": "config/schemas/contracts/backtest_result.v3.json",
+      "sha256": "206fb849e226b79f0485288eb5855e29d2c7f1a082fcc861cc0d2c20ee370932"
+    },
+    {
+      "path": "config/schemas/contracts/backtest_stress.v1.json",
+      "sha256": "62b2ec0389fdc8d4324bf9cfb4fb9616d0f58e236710a53b7255d8a76a550541"
+    },
+    {
+      "path": "config/schemas/contracts/model_definition.v2.json",
+      "sha256": "76bc2dd51872d372fdc2558e5ad9517ab05baf2e402034cd83c8c09a83832e9c"
+    },
+    {
+      "path": "config/schemas/contracts/model_definition_template.v2.json",
+      "sha256": "c88fe19dc23ff524f870e679c4dde64cddbf63903911e836d6568cd7a9322ba0"
+    },
+    {
+      "path": "config/schemas/contracts/portfolio_definition.v2.json",
+      "sha256": "f0936810a24c237f06d746f5201c6c78c85bca202009a685c319d80dcff935c3"
+    },
+    {
+      "path": "config/schemas/contracts/portfolio_definition_template.v2.json",
+      "sha256": "086d2b8b319f5a0f81ffdc717c19c36ab1d376ffcdf966ab5f3d2c674d08b5d7"
+    },
+    {
+      "path": "config/schemas/contracts/research_run_request_v7.json",
+      "sha256": "ffedc3ecc4616819d7304e486e134e2802fecc9da4f4930519dd1235af2edd80"
+    },
+    {
+      "path": "config/schemas/contracts/research_run_result.v1.json",
+      "sha256": "04f6472d3fc961e81e4c290469b0b90a6804b2fe0c7ee9708ec7581ba9a538f8"
+    },
+    {
+      "path": "config/schemas/contracts/research_run_state.v1.json",
+      "sha256": "b035d346f21b33b4f931e7ea9e651ec8713f599d36269f118fa19c00fc60e8e6"
+    },
+    {
+      "path": "docs/subsystems/README.md",
+      "sha256": "f6c72d25e899988a7eaf56100dcd1167e75c13c9a2970afb5411e71f16a9fbaf"
+    },
+    {
+      "path": "docs/subsystems/model-layer.md",
+      "sha256": "4e8f19b0c943f675940afc1698ad4a3011bb3cc642158217eef11304f9588335"
+    },
+    {
+      "path": "docs/subsystems/portfolio-backtest-risk-execution.md",
+      "sha256": "4db36d5aa038bd6941171531ce589121a9bebcd395d8850647d9d733d896079f"
+    },
+    {
+      "path": "docs/subsystems/research-chain.md",
+      "sha256": "a87ce40ddab3267ab3e280335a7e86f25e2770b2a6aba670d574dc7e6b79871e"
+    },
+    {
+      "path": "docs/trading-grade-progress.md",
+      "sha256": "dd23983e24aa1ef055eaff06a87d49bb708fbea5ebf419e6d78b99d54c2c92dc"
+    },
+    {
+      "path": "docs/trading-grade-training-plan.md",
+      "sha256": "32db89bf570b29379a4432f93c181384c53b214e805367ad745e88b6657c3e8d"
+    },
+    {
+      "path": "docs/user-guide.md",
+      "sha256": "73088a6bcb30ddddd5bfd063c493c7917a6cb7168ff966d7c97dc089c7db3cda"
+    },
+    {
+      "path": "evidence/paper-execution-research-integration/phase-0/evidence-index.json",
+      "sha256": "7a0cba430c2e2887ed4fade8aa37c8a537509fb4da2dfd0b63db3cbc185e6ad4"
+    },
+    {
+      "path": "scripts/publish_backtest_config.py",
+      "sha256": "5003f87b5e3f7ff367ca86589b155b096ff7dd96e84e78761df34a11cdacdfae"
+    },
+    {
+      "path": "scripts/publish_backtest_execution_facts.py",
+      "sha256": "6becf05f3fc9ace0d44406cd8daa8449ab7d525af75467a8f0707af2f1c1e642"
+    },
+    {
+      "path": "scripts/run_backtest_stress.py",
+      "sha256": "ed5372e6ba25fb12a31459299256a49c946ceb962f2fbe0fd8ad2bb59d9e7fad"
+    },
+    {
+      "path": "scripts/run_walk_forward_continuous_backtest.py",
+      "sha256": "c7334f376183b679ea7cfc216f3743f103334b174e67f4c1f97c4c2ec85486bc"
+    },
+    {
+      "path": "src/uq/backtest/engine.py",
+      "sha256": "75e495aaa9b9380abbe37da27a60283b07ad6b2d9cf2fb881763d5e362a53dfc"
+    },
+    {
+      "path": "src/uq/backtest/engine_v3.py",
+      "sha256": "835ffb871729f2eb85e92b3a2042d5a1d7427543687171a4329af03ee7e334de"
+    },
+    {
+      "path": "src/uq/backtest/execution_facts.py",
+      "sha256": "46fa14c9859d8cb4fb3ceaddf0e56ebd6096da20b309c595f6697bdebe75aa09"
+    },
+    {
+      "path": "src/uq/contracts/model_layer.py",
+      "sha256": "857c24481c7eb8e5a55000664d0fe896509b15cd2d69115fb0c712cd31fa678a"
+    },
+    {
+      "path": "src/uq/evaluation/benchmark.py",
+      "sha256": "bfa1f0d3caf669178e053d9de5bf3b6c5b2651b0fd9acccea0864ef528b1c8e1"
+    },
+    {
+      "path": "src/uq/evaluation/report.py",
+      "sha256": "d351190c32f493abda150fe3f4af710ae35100a340e00e43ce6904c0860f745a"
+    },
+    {
+      "path": "src/uq/evaluation/stress.py",
+      "sha256": "b65f7e0dcc7fade40dcbcfab7bac0a56720138b0b75df258d43cf012db522b10"
+    },
+    {
+      "path": "src/uq/evaluation/walk_forward_continuous.py",
+      "sha256": "3a56c82991afb9d6710cd9ac2a01f92b91a2f6e38fda4bdfd2f50270b1d59c47"
+    },
+    {
+      "path": "src/uq/evaluation/walk_forward_runner.py",
+      "sha256": "9a9345c9b8036d3ff621c55f3f5ef73656c763e9d6f5bfee70d8c4c1b873a271"
+    },
+    {
+      "path": "src/uq/models/definition.py",
+      "sha256": "b08237e47a173a2487b65b7ab28fd77825cbbda999ff3465475f23fafe6096bb"
+    },
+    {
+      "path": "src/uq/models/factor_neutralization.py",
+      "sha256": "d7dff486db13c7b74c3ef321783b852ee4dfaa0a795cb197ec504a5c4e44bfdd"
+    },
+    {
+      "path": "src/uq/models/inference.py",
+      "sha256": "a6cb5d900793461550fea24da2478a8841b7f0fd680585bee4711b45d7d737d7"
+    },
+    {
+      "path": "src/uq/models/qlib_runtime.py",
+      "sha256": "da3cb38f057a36a042ac346d1bbe6f2d089b0815dc16ad4415a685beb9e23ca3"
+    },
+    {
+      "path": "src/uq/portfolio/builder.py",
+      "sha256": "4c6ace2327f5301c0352bd954a6c8bf34920157f5d6e70fb6ba069ca1d456b86"
+    },
+    {
+      "path": "src/uq/research_chain/adapters.py",
+      "sha256": "81b965090a40a3ce3977b2aee9c04ebbb3394ef2be020cf90060f0e0de3733c6"
+    },
+    {
+      "path": "src/uq/research_chain/cli.py",
+      "sha256": "de1034f5a3b9a3874b5a132345dfc115e0415d628ff1247f738d5c2b31181a07"
+    },
+    {
+      "path": "src/uq/research_chain/contracts.py",
+      "sha256": "7c0286b0a8ef4ae106ead9fa064643a07053a8e2a3d7b34fea8e254d7c7a4417"
+    },
+    {
+      "path": "src/uq/research_chain/owning_contracts.py",
+      "sha256": "84aba5202efb4a8a119ec744d10e10d3b87a01b95bb7bae5f3a5d46c850e7177"
+    },
+    {
+      "path": "src/uq/research_chain/resolver.py",
+      "sha256": "955e904bda9c66a2d4637232ef6d0297b4aec23f1dc6ac9ad317ac6aec27f581"
+    },
+    {
+      "path": "src/uq/research_chain/runner.py",
+      "sha256": "3c6140cc29949ef80b8bd397b71e95fb93fce57aa235f9f20391849ac36822c6"
+    },
+    {
+      "path": "tests/test_backtest_execution_facts.py",
+      "sha256": "22a2fd01c606880091ea417280ee3be103349d6ea47a82baa2ef668329650a8e"
+    },
+    {
+      "path": "tests/test_backtest_stress.py",
+      "sha256": "1f31181437adb8952fd65b1854650342b620d872419ab34c5f45ab620fae7d0e"
+    },
+    {
+      "path": "tests/test_backtest_v3.py",
+      "sha256": "7e6700a542b19a99b0efd690aada28994062afa7935e6a95cf8c53515b40d29f"
+    },
+    {
+      "path": "tests/test_paper_execution_research_integration_phase0r.py",
+      "sha256": "d79c58b4cc4d05024daf5a0d0426d5ed7057a7e4b792d6cfb0d923835c0fdfb6"
+    },
+    {
+      "path": "tests/test_portfolio_layer.py",
+      "sha256": "86a5286b6a118d8ce1bcef1ce129264e2cdb5e91f6bb413d86ed7faa2fc5e4b0"
+    },
+    {
+      "path": "tests/test_research_v4_contract.py",
+      "sha256": "23ab23d68f83844b3b40b8f0904e8ecdbb3278024de8ad9b677616c9ce5684b8"
+    },
+    {
+      "path": "tests/test_research_v7_lightgbm.py",
+      "sha256": "7b105cbe9f5eb7b086f650cbeb9656b0fb018ba01429e7be42dceff7b1f0066d"
+    },
+    {
+      "path": "tests/test_walk_forward_runner.py",
+      "sha256": "513cb7b64d5e75ab417d2efb96075cd07f22bb10dd89c673aa8539819c62ef9e"
+    },
+    {
+      "path": "uv.lock",
+      "sha256": "399c2e87998584929a480e59af486f93fde33bb13fc58738b1cb089c74bc07f5"
+    }
+  ],
+  "supersedes": [
+    "evidence/trading-grade/walk-forward-continuous-implementation-v1.json",
+    "evidence/trading-grade/backtest-v3-implementation-v1.json",
+    "evidence/trading-grade/lightgbm-score-weighted-chain-v1.json"
+  ],
+  "worktree_status": "uncommitted_worktree_snapshot; source bytes validated independently of HEAD"
+}

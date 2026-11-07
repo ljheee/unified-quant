@@ -450,6 +450,7 @@ class TushareFactorCandidateStore:
         lock_path = family / "publication.lock"
         reject_symlinks_within(self.root, family, label="Tushare candidate store path")
         family.mkdir(parents=True, exist_ok=True)
+        reject_symlinks_within(self.root, lock_path, label="Tushare candidate store lock")
         with lock_path.open("a+") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
             if directory.exists():
